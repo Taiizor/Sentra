@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::execution::{
     backend::{ExecutionBackend, FailClosedBackend},
     error::{ExecutionError, ExecutionErrorKind},
-    model::{BackendCapabilities, ExecutionRequest, ExecutionResult, ExecutionStatus},
+    model::{BackendCapabilities, ExecutionRequest, ExecutionResult},
 };
 
 /// High-level execution coordinator for the Sentra Core Engine.
@@ -74,18 +74,8 @@ impl ExecutionEngine {
         // Step 4: Dispatch to backend.
         let result = self.backend.execute(request)?;
 
-        // Step 5: Post-execution invariant checks.
-        // A cancelled or timed-out task MUST NOT be marked as successful completion.
-        if matches!(
-            result.status,
-            ExecutionStatus::TimedOut | ExecutionStatus::Cancelled
-        ) && result.status.is_success()
-        {
-            return Err(ExecutionError::new(
-                ExecutionErrorKind::BackendFault,
-                "Backend reported contradictory status: timeout or cancellation marked as success",
-            ));
-        }
+        // Step 5: Exhaustive post-execution invariant and correlation checks (remediates F-551-01 and F-551-05).
+        result.validate_for_request(request)?;
 
         Ok(result)
     }

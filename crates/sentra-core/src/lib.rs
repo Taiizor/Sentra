@@ -28,6 +28,8 @@ pub mod execution;
 pub mod persistence;
 /// Security policy engine, decisions, and approval brokers.
 pub mod policy;
+/// Integrated Core Service coordination foundation.
+pub mod service;
 /// Session lifecycle, state machine, and metadata.
 pub mod session;
 /// Canonical workspace boundaries, indirection quarantine and metadata-only discovery.
@@ -52,6 +54,11 @@ pub use execution::{
 pub use policy::{
     ApprovalAuthority, ApprovalBroker, ApprovalGrant, ApprovalRequest, BudgetPolicyConfig, CostUsd,
     DenialReason, OperationAction, PolicyDecision, PolicyEngine,
+};
+pub use service::{
+    CancellationPhase, CancellationReason, CancellationReport, CoreService, CoreServiceConfig,
+    CoreServiceHarness, ServiceError, ServiceErrorKind, ServicePolicyDecision, TaskExecutionReport,
+    TaskExecutionRequest,
 };
 pub use session::{
     AssessmentCompleteness, OperatingMode, SessionMetadata, SessionState, SessionStateMachine,

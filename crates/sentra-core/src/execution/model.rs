@@ -197,3 +197,78 @@ pub struct ExecutionResult {
     /// Completion timestamp.
     pub completed_at: TimestampUtc,
 }
+
+impl ExecutionResult {
+    /// Centralized result-validation contract remediating F-551-01 and F-551-05.
+    ///
+    /// Exhaustively validates backend result consistency against the originating request:
+    /// 1. Correlation check: `result.execution_id == request.execution_id`.
+    /// 2. Completed consistency: `ExecutionStatus::Completed` must have consistent successful outcome
+    ///    (`exit_code == Some(0)` or `None`; never a non-zero exit code).
+    /// 3. Failed consistency: `ExecutionStatus::Failed` must not report `exit_code == Some(0)`.
+    /// 4. TimedOut consistency: `ExecutionStatus::TimedOut` must not report `exit_code == Some(0)`.
+    /// 5. Cancelled consistency: `ExecutionStatus::Cancelled` must not report `exit_code == Some(0)`.
+    /// 6. Temporal consistency: `completed_at` must not precede `request.created_at`.
+    pub fn validate_for_request(&self, request: &ExecutionRequest) -> Result<(), ExecutionError> {
+        // F-551-05: Correlation check
+        if self.execution_id != request.execution_id {
+            return Err(ExecutionError::correlation_mismatch(
+                request.execution_id,
+                self.execution_id,
+            ));
+        }
+
+        // Temporal order check: completion cannot occur before request creation
+        if self.completed_at < request.created_at {
+            return Err(ExecutionError::new(
+                ExecutionErrorKind::BackendFault,
+                format!(
+                    "Contradictory execution result: completed_at ({}) precedes request created_at ({})",
+                    self.completed_at, request.created_at
+                ),
+            ));
+        }
+
+        // F-551-01: Exhaustive status and exit code consistency
+        match self.status {
+            ExecutionStatus::Completed => {
+                if let Some(code) = self.exit_code
+                    && code != 0
+                {
+                    return Err(ExecutionError::new(
+                        ExecutionErrorKind::BackendFault,
+                        format!(
+                            "Contradictory execution result: status is Completed but exit_code is non-zero ({code})"
+                        ),
+                    ));
+                }
+            }
+            ExecutionStatus::Failed => {
+                if self.exit_code == Some(0) {
+                    return Err(ExecutionError::new(
+                        ExecutionErrorKind::BackendFault,
+                        "Contradictory execution result: status is Failed but exit_code is Some(0)",
+                    ));
+                }
+            }
+            ExecutionStatus::TimedOut => {
+                if self.exit_code == Some(0) {
+                    return Err(ExecutionError::new(
+                        ExecutionErrorKind::BackendFault,
+                        "Contradictory execution result: status is TimedOut but exit_code is Some(0)",
+                    ));
+                }
+            }
+            ExecutionStatus::Cancelled => {
+                if self.exit_code == Some(0) {
+                    return Err(ExecutionError::new(
+                        ExecutionErrorKind::BackendFault,
+                        "Contradictory execution result: status is Cancelled but exit_code is Some(0)",
+                    ));
+                }
+            }
+        }
+
+        Ok(())
+    }
+}

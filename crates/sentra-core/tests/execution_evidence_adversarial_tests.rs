@@ -254,13 +254,67 @@ fn execution_engine_handles_contradictory_mock_backend() {
         },
     );
 
-    let res = engine.dispatch(&req).unwrap();
-    // Audit observation (Finding F-551-01):
-    // In engine.rs, `matches!(result.status, TimedOut | Cancelled) && result.status.is_success()`
-    // evaluates to false because `is_success()` checks `matches!(self, Completed)`.
-    // Therefore, TimedOut with Some(0) is currently passed through to the caller.
-    assert_eq!(res.status, ExecutionStatus::TimedOut);
-    assert_eq!(res.exit_code, Some(0));
+    // Remediates F-551-01: Contradictory result (TimedOut with exit_code Some(0)) MUST produce typed BackendFault
+    let err = engine.dispatch(&req).unwrap_err();
+    assert_eq!(err.kind, ExecutionErrorKind::BackendFault);
+    assert!(err.is_backend_fault());
+    assert!(
+        err.message.contains(
+            "Contradictory execution result: status is TimedOut but exit_code is Some(0)"
+        )
+    );
+}
+
+/// Mock backend returning an ExecutionResult with a mismatched execution_id.
+struct MismatchedCorrelationMockBackend;
+
+impl ExecutionBackend for MismatchedCorrelationMockBackend {
+    fn name(&self) -> &'static str {
+        "mismatched-correlation-mock"
+    }
+
+    fn capabilities(&self) -> BackendCapabilities {
+        BackendCapabilities {
+            backend_name: self.name(),
+            supports_untrusted: false,
+            supports_synthetic: true,
+            isolated_vm_available: false,
+            host_execution: false,
+            docker_wsl_execution: false,
+            description: "Mock backend that emits mismatched execution IDs",
+        }
+    }
+
+    fn execute(&self, _request: &ExecutionRequest) -> Result<ExecutionResult, ExecutionError> {
+        Ok(ExecutionResult {
+            // Deliberately returns a forged / different execution ID
+            execution_id: ExecutionId::for_test_sequence(99999),
+            status: ExecutionStatus::Completed,
+            exit_code: Some(0),
+            resource_usage: ResourceUsage::zero(),
+            evidence_descriptors: Vec::new(),
+            completed_at: TimestampUtc::now(),
+        })
+    }
+}
+
+#[test]
+fn execution_engine_detects_and_rejects_correlation_mismatch() {
+    let engine = ExecutionEngine::new(Arc::new(MismatchedCorrelationMockBackend));
+    let req = sample_exec_request(
+        ExecutionScope::SyntheticFixture,
+        OperationAction::ExecuteTool {
+            tool_id: "synthetic:noop".to_string(),
+            untrusted: false,
+            arguments: vec![],
+        },
+    );
+
+    // Remediates F-551-05: Mismatched execution_id MUST produce typed CorrelationMismatch error
+    let err = engine.dispatch(&req).unwrap_err();
+    assert_eq!(err.kind, ExecutionErrorKind::CorrelationMismatch);
+    assert!(err.is_correlation_mismatch());
+    assert!(err.message.contains("Execution ID correlation mismatch"));
 }
 
 // -----------------------------------------------------------------------------
