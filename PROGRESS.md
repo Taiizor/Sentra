@@ -4,6 +4,10 @@ Last updated: 2026-11-06.
 
 ## Current status
 
+**Phase 1 Increment 5.4.3.1: independent persistence regression & security review complete. Approved. Phase 1 remains in progress; Phase 2 has NOT started.** The [independent review](docs/phase1/INCREMENT_5_4_3_1_INDEPENDENT_REVIEW.md) validates that Increment 5.4.3 remediates findings F-542-01 (budget settlement ambiguity eliminated via `SettlementStatus` domain enum) and F-542-04 (runtime foreign-key validation via `PRAGMA foreign_key_check` and fail-closed halting) with zero regressions. All 10 budget settlement invariants and 10 SQLite integrity invariants were verified. Total test suite passes 161 unique tests (156 runtime + 5 compile-fail doctests, 0 failed) with all three validation suites (`persistence`, `authorization`, `workspace`) passing cleanly (exit 0). Zero code modifications, manifest changes, or Git mutations were issued.
+
+### Status at Increment 5.4.3 entry (historical)
+
 **Phase 1 Increment 5.4.3: persistence security findings remediation complete. Phase 1 remains in progress; Phase 2 has NOT started.** The [remediation report](docs/phase1/INCREMENT_5_4_3_PERSISTENCE_REMEDIATION.md) details targeted resolutions for findings F-542-01 (ambiguous budget settlement status replaced by explicit `SettlementStatus` domain enum with completed, cancelled with usage, cancelled uncertain, and uncertain partial variants) and F-542-04 (runtime foreign-key validation added via `PRAGMA foreign_key_check` with fail-closed halting, typed `ForeignKeyViolation` and `IntegrityReport` models, and open-time enforcement). Five new automated integration tests were added; the complete test suite passes 161 unique tests (156 runtime + 5 compile-fail doctests, 0 failed), with all three validation scripts (`persistence`, `authorization`, `workspace`) passing cleanly (exit 0). No dependencies were added, Cargo operated strictly offline, and zero Git mutations were issued.
 
 ### Status at Increment 5.4.2.1 entry (historical)
