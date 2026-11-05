@@ -1,10 +1,10 @@
 use std::{
-    sync::{Arc, Barrier, Mutex},
+    sync::{Arc, Barrier},
     thread,
 };
 
 use sentra_core::{
-    common::{Clock, MockClock},
+    common::MockClock,
     domain::{
         classification::SecurityClassification,
         error::DomainError,
@@ -13,7 +13,7 @@ use sentra_core::{
     },
     policy::{
         action::OperationAction,
-        approval::{ApprovalBroker, ApprovalGrant, ApprovalRequest},
+        approval::{ApprovalAuthority, ApprovalBroker},
         budget::{BudgetPolicyConfig, CostUsd},
         decision::{DenialReason, PolicyDecision},
         engine::PolicyEngine,
@@ -31,6 +31,17 @@ fn create_test_session() -> SessionMetadata {
         "sha256:target_revision_rev1",
     )
     .expect("valid session metadata")
+}
+
+fn registered_engine(
+    session: &SessionMetadata,
+    config: BudgetPolicyConfig,
+) -> (PolicyEngine, ApprovalAuthority) {
+    let (engine, authority) = PolicyEngine::with_authority(config);
+    authority
+        .set_session_context(session, "target-rev-1", SecurityClassification::Public)
+        .unwrap();
+    (engine, authority)
 }
 
 // ============================================================================
@@ -154,143 +165,97 @@ fn test_uuid_version_variant_and_production_fail_closed() {
 
 #[test]
 fn test_concurrent_single_use_approval_consumption_exact_winner() {
-    // Spin up 20 threads simultaneously trying to consume the exact same approval grant
-    let broker = Arc::new(ApprovalBroker::new());
-    let session_id = SessionId::new();
-    let clock = MockClock::new(TimestampUtc::from_epoch_secs(1_700_000_000));
-
-    let request = ApprovalRequest::new(
-        session_id,
-        "operator_admin",
-        "action:exec:tool:args=[3#foo]",
-        "rev_commit_1",
-        "Sensitive analysis approval",
-        None,
-        clock.now(),
-        3600,
-    );
-    let req_id = broker.submit_request(request.clone());
-
-    let grant = ApprovalGrant::new(
-        req_id,
-        session_id,
-        "operator_admin",
-        clock.now(),
-        &request.action_digest,
-        &request.target_revision,
-        "token_concurrent_race_test",
-    );
-
+    let (broker, authority) = ApprovalBroker::with_authority();
+    let broker = Arc::new(broker);
+    let session = create_test_session();
+    authority
+        .set_session_context(&session, "target-rev-1", SecurityClassification::Internal)
+        .unwrap();
+    let now = TimestampUtc::from_epoch_secs(1_700_000_000);
+    let clock = MockClock::new(now);
+    let action = OperationAction::ExecuteTool {
+        tool_id: "test-tool".into(),
+        untrusted: true,
+        arguments: vec!["foo".into()],
+    };
+    let request = broker
+        .request_approval(&session, SecurityClassification::Internal, &action, &clock)
+        .unwrap();
+    let grant = authority
+        .issue_grant(&request.request_id, "operator_admin", &clock)
+        .unwrap();
     const THREAD_COUNT: usize = 20;
     let barrier = Arc::new(Barrier::new(THREAD_COUNT));
-    let success_count = Arc::new(Mutex::new(0usize));
-    let reused_count = Arc::new(Mutex::new(0usize));
-    let other_error_count = Arc::new(Mutex::new(0usize));
-
     let mut handles = Vec::new();
-
     for _ in 0..THREAD_COUNT {
-        let broker_clone = Arc::clone(&broker);
-        let grant_clone = grant.clone();
-        let barrier_clone = Arc::clone(&barrier);
-        let success_clone = Arc::clone(&success_count);
-        let reused_clone = Arc::clone(&reused_count);
-        let other_clone = Arc::clone(&other_error_count);
-        let clock_now = clock.now();
-
+        let broker = Arc::clone(&broker);
+        let grant = grant.clone();
+        let session = session.clone();
+        let action = action.clone();
+        let barrier = Arc::clone(&barrier);
         handles.push(thread::spawn(move || {
-            // Synchronize all threads at the starting line
-            barrier_clone.wait();
-
-            // All threads race to consume the grant simultaneously
-            let clock_inst = MockClock::new(clock_now);
-            match broker_clone.verify_and_consume(&grant_clone, &clock_inst) {
-                Ok(()) => {
-                    let mut cnt = success_clone.lock().unwrap();
-                    *cnt += 1;
-                }
-                Err(DenialReason::ApprovalReused(_)) => {
-                    let mut cnt = reused_clone.lock().unwrap();
-                    *cnt += 1;
-                }
-                Err(_) => {
-                    let mut cnt = other_clone.lock().unwrap();
-                    *cnt += 1;
-                }
-            }
+            barrier.wait();
+            broker.verify_and_consume(
+                Some(&grant),
+                &session,
+                SecurityClassification::Internal,
+                &action,
+                &MockClock::new(now),
+            )
         }));
     }
-
-    for h in handles {
-        h.join().expect("thread join failed");
-    }
-
-    let successes = *success_count.lock().unwrap();
-    let reuses = *reused_count.lock().unwrap();
-    let others = *other_error_count.lock().unwrap();
-
+    let results: Vec<_> = handles
+        .into_iter()
+        .map(|handle| handle.join().unwrap())
+        .collect();
+    assert_eq!(results.iter().filter(|r| r.is_ok()).count(), 1);
     assert_eq!(
-        successes, 1,
-        "Exactly ONE concurrent thread must succeed in consuming the grant"
+        results
+            .iter()
+            .filter(|r| matches!(r, Err(DenialReason::ApprovalReused(_))))
+            .count(),
+        THREAD_COUNT - 1
     );
-    assert_eq!(
-        reuses,
-        THREAD_COUNT - 1,
-        "All other concurrent threads must receive ApprovalReused"
-    );
-    assert_eq!(others, 0, "No other error must occur");
 }
 
 #[test]
 fn test_failed_validation_does_not_consume_grant() {
-    let broker = ApprovalBroker::new();
-    let session_id = SessionId::new();
+    let session = create_test_session();
+    let (engine, authority) = registered_engine(&session, Default::default());
+    let broker = engine.broker();
     let clock = MockClock::new(TimestampUtc::from_epoch_secs(1_700_000_000));
-
-    let request = ApprovalRequest::new(
-        session_id,
-        "operator_admin",
-        "action:exec:tool",
-        "rev_a",
-        "Test request",
-        None,
-        clock.now(),
-        3600,
-    );
-    let req_id = broker.submit_request(request.clone());
-
-    // 1. Attempt consumption with wrong target revision
-    let bad_grant = ApprovalGrant::new(
-        req_id,
-        session_id,
-        "operator_admin",
-        clock.now(),
-        &request.action_digest,
-        "wrong_revision",
-        "token_valid_key",
-    );
-    let fail_result = broker.verify_and_consume(&bad_grant, &clock);
+    let action = OperationAction::ExecuteTool {
+        tool_id: "test-tool".into(),
+        untrusted: true,
+        arguments: vec![],
+    };
+    let request = broker
+        .request_approval(&session, SecurityClassification::Internal, &action, &clock)
+        .unwrap();
+    let grant = authority
+        .issue_grant(&request.request_id, "operator_admin", &clock)
+        .unwrap();
+    let mut bad = grant.clone();
+    bad.target_revision = "wrong_revision".into();
     assert!(matches!(
-        fail_result,
-        Err(DenialReason::ApprovalMismatched(_))
+        broker.verify_and_consume(
+            Some(&bad),
+            &session,
+            SecurityClassification::Internal,
+            &action,
+            &clock
+        ),
+        Err(DenialReason::InvalidApprovalGrant(_))
     ));
-
-    // 2. Since validation failed, the grant must NOT be consumed!
-    // A corrected grant with the right target revision should now succeed!
-    let good_grant = ApprovalGrant::new(
-        req_id,
-        session_id,
-        "operator_admin",
-        clock.now(),
-        &request.action_digest,
-        "rev_a",
-        "token_valid_key",
-    );
-    let success_result = broker.verify_and_consume(&good_grant, &clock);
     assert_eq!(
-        success_result,
-        Ok(()),
-        "Corrected grant must succeed because previous failure did not consume it"
+        broker.verify_and_consume(
+            Some(&grant),
+            &session,
+            SecurityClassification::Internal,
+            &action,
+            &clock
+        ),
+        Ok(())
     );
 }
 
@@ -300,8 +265,8 @@ fn test_failed_validation_does_not_consume_grant() {
 
 #[test]
 fn test_bell_lapadula_flow_enforcement_prevents_write_down() {
-    let engine = PolicyEngine::new();
     let session = create_test_session();
+    let (engine, _authority) = registered_engine(&session, Default::default());
     let clock = MockClock::new(TimestampUtc::from_epoch_secs(1_700_000_000));
 
     // Attempt to export Confidential data to a destination marked Public
@@ -334,8 +299,8 @@ fn test_bell_lapadula_flow_enforcement_prevents_write_down() {
 
 #[test]
 fn test_classification_check_never_accidentally_grants_unknown_operation() {
-    let engine = PolicyEngine::new();
     let session = create_test_session();
+    let (engine, _authority) = registered_engine(&session, Default::default());
     let clock = MockClock::new(TimestampUtc::from_epoch_secs(1_700_000_000));
 
     // Unknown operation with Public data must STILL be denied immediately (Default-Deny priority)
@@ -417,8 +382,8 @@ fn test_budget_threshold_boundary_precision() {
         max_auto_budget: CostUsd::from_micro_usd(1_000_000), // Exactly $1.000000
         ..Default::default()
     };
-    let engine = PolicyEngine::with_config(config);
     let session = create_test_session();
+    let (engine, _authority) = registered_engine(&session, config);
     let clock = MockClock::new(TimestampUtc::from_epoch_secs(1_700_000_000));
 
     // At or below threshold: Granted

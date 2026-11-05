@@ -1,6 +1,9 @@
 use std::fmt;
 
-use crate::{domain::classification::SecurityClassification, policy::budget::CostUsd};
+use crate::{
+    domain::{DomainError, classification::SecurityClassification},
+    policy::budget::CostUsd,
+};
 
 /// Operation actions that can be requested within a Sentra session.
 #[derive(Clone, Debug, PartialEq)]
@@ -74,33 +77,67 @@ impl OperationAction {
         }
     }
 
+    /// Reject missing or inconsistent operation parameters before authorization.
+    /// This does not resolve filesystem paths or authorize target execution.
+    pub fn validate(&self) -> Result<(), DomainError> {
+        let name = |value: &str| !value.trim().is_empty() && !value.chars().any(char::is_control);
+        let valid = match self {
+            Self::DiscoverMetadata { relative_path } => name(relative_path),
+            Self::ExecuteTool {
+                tool_id, arguments, ..
+            } => name(tool_id) && arguments.iter().all(|value| !value.contains('\0')),
+            Self::InvokeProvider { model_id, .. } => name(model_id),
+            Self::ExportReport { destination, .. } => name(destination),
+            Self::ModifyCheckout {
+                file_count,
+                target_paths,
+            } => {
+                *file_count != 0
+                    && *file_count == target_paths.len()
+                    && target_paths.iter().all(|path| name(path))
+            }
+            Self::UnknownOperation { .. } => false,
+        };
+        if valid {
+            Ok(())
+        } else {
+            Err(DomainError::ActionMalformed(
+                "missing or inconsistent operation parameters".into(),
+            ))
+        }
+    }
+
     /// Computes a deterministic canonical action descriptor string representing this action's identity and parameters.
     ///
     /// NOTE: This is a canonical structured descriptor, NOT a cryptographic hash or signature.
     /// In Phase 1 Increment 5.2, authorization integrity is maintained by trusted in-memory state in
     /// `ApprovalBroker`. Cryptographic hashing (SHA-256) is scheduled for Increment 5.4.
     ///
-    /// Argument and path lists use length-prefixed encoding (`len#value`) to prevent delimiter-injection
-    /// collisions (e.g. distinguishing `["a,b", "c"]` from `["a", "b,c"]`).
+    /// Version 2 frames every variable string and list, including resource identifiers.
+    /// Checkout path order is intentionally insignificant; argument order is significant.
     pub fn action_digest(&self) -> String {
+        let field = |value: &str| format!("{}#{value}", value.len());
+        let list = |values: &[String]| {
+            format!(
+                "{}[{}]",
+                values.len(),
+                values.iter().map(|value| field(value)).collect::<String>()
+            )
+        };
         match self {
             Self::DiscoverMetadata { relative_path } => {
-                format!("action:discover:{}#{}", relative_path.len(), relative_path)
+                format!("action:v2:discover:{}", field(relative_path))
             }
             Self::ExecuteTool {
                 tool_id,
                 untrusted,
                 arguments,
             } => {
-                let args_encoded: Vec<String> = arguments
-                    .iter()
-                    .map(|a| format!("{}#{}", a.len(), a))
-                    .collect();
                 format!(
-                    "action:exec:{}:untrusted={}:args=[{}]",
-                    tool_id,
+                    "action:v2:exec:{}:untrusted={}:args={}",
+                    field(tool_id),
                     untrusted,
-                    args_encoded.join(",")
+                    list(arguments)
                 )
             }
             Self::InvokeProvider {
@@ -108,8 +145,8 @@ impl OperationAction {
                 estimated_cost,
             } => {
                 format!(
-                    "action:provider:{}:microusd={}",
-                    model_id,
+                    "action:v2:provider:{}:microusd={}",
+                    field(model_id),
                     estimated_cost.as_micro_usd()
                 )
             }
@@ -120,12 +157,11 @@ impl OperationAction {
             } => {
                 let dst_class_str = match destination_classification {
                     Some(c) => c.as_str(),
-                    None => "UNSPECIFIED",
+                    None => "NONE",
                 };
                 format!(
-                    "action:export:{}#{}:external={}:dst_class={}",
-                    destination.len(),
-                    destination,
+                    "action:v2:export:{}:external={}:dst_class={}",
+                    field(destination),
                     is_external,
                     dst_class_str
                 )
@@ -136,18 +172,14 @@ impl OperationAction {
             } => {
                 let mut sorted_paths = target_paths.clone();
                 sorted_paths.sort();
-                let paths_encoded: Vec<String> = sorted_paths
-                    .iter()
-                    .map(|p| format!("{}#{}", p.len(), p))
-                    .collect();
                 format!(
-                    "action:modify_checkout:files={}:paths=[{}]",
+                    "action:v2:modify_checkout:files={}:paths={}",
                     file_count,
-                    paths_encoded.join(",")
+                    list(&sorted_paths)
                 )
             }
             Self::UnknownOperation { operation_name } => {
-                format!("action:unknown:{}", operation_name)
+                format!("action:v2:unknown:{}", field(operation_name))
             }
         }
     }

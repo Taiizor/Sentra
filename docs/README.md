@@ -2,6 +2,8 @@
 
 Sentra is in Phase 1, with partial Core library foundations and technical experiments. The product CLI, production persistence and execution integrations are not implemented; see the [current workspace validation and security limits](phase1/INCREMENT_5_3_WORKSPACE_VALIDATION.md). Start with the root [README](../README.md), [vision](../VISION.md), [requirements](../REQUIREMENTS.md), [architecture](../ARCHITECTURE.md), and [roadmap](../ROADMAP.md).
 
+The [5.3.1 approval-binding review](phase1/INCREMENT_5_3_1_SECURITY_REVIEW.md) records the current correction to the historical approval defect and its remaining integration limits.
+
 | Specification | Scope |
 | --- | --- |
 | [Operating modes](OPERATING_MODES.md) | Continuous review and deep-research workflows |

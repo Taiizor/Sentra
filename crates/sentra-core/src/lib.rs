@@ -34,8 +34,8 @@ pub use domain::{
     SessionTransitionError, TaskId, TimestampUtc,
 };
 pub use policy::{
-    ApprovalBroker, ApprovalGrant, ApprovalRequest, BudgetPolicyConfig, CostUsd, DenialReason,
-    OperationAction, PolicyDecision, PolicyEngine,
+    ApprovalAuthority, ApprovalBroker, ApprovalGrant, ApprovalRequest, BudgetPolicyConfig, CostUsd,
+    DenialReason, OperationAction, PolicyDecision, PolicyEngine,
 };
 pub use session::{
     AssessmentCompleteness, OperatingMode, SessionMetadata, SessionState, SessionStateMachine,
