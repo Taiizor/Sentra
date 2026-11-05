@@ -1,0 +1,940 @@
+{
+  "schema_version": "1",
+  "milestone": "Phase 1 / Milestone 2 / SQLite engine reliability",
+  "started_at_utc": "2026-11-05T14:11:27.614Z",
+  "run_id": "1793887887236-3f43b82e",
+  "environment": {
+    "bun": "1.4.4",
+    "platform": "win32",
+    "architecture": "x64",
+    "os_release": "10.0.26300",
+    "windows_host": {
+      "powershell": "7.6.9",
+      "os": "Microsoft Windows 10.0.26300",
+      "filesystem": "NTFS",
+      "drive_type": "Fixed"
+    },
+    "sqlite": {
+      "version": "3.53.4",
+      "source_id": "2026-07-24 19:02:57 bf7c7f30031888f4e796e429ab3978879485813aaca6f641c7b33e4e09459bcc"
+    },
+    "compile_options": [
+      {
+        "compile_options": "ATOMIC_INTRINSICS=1"
+      },
+      {
+        "compile_options": "COMPILER=clang-23.1.1"
+      },
+      {
+        "compile_options": "DEFAULT_AUTOVACUUM"
+      },
+      {
+        "compile_options": "DEFAULT_CACHE_SIZE=-2000"
+      },
+      {
+        "compile_options": "DEFAULT_FILE_FORMAT=4"
+      },
+      {
+        "compile_options": "DEFAULT_JOURNAL_SIZE_LIMIT=-1"
+      },
+      {
+        "compile_options": "DEFAULT_MMAP_SIZE=0"
+      },
+      {
+        "compile_options": "DEFAULT_PAGE_SIZE=4096"
+      },
+      {
+        "compile_options": "DEFAULT_PCACHE_INITSZ=20"
+      },
+      {
+        "compile_options": "DEFAULT_RECURSIVE_TRIGGERS"
+      },
+      {
+        "compile_options": "DEFAULT_SECTOR_SIZE=4096"
+      },
+      {
+        "compile_options": "DEFAULT_SYNCHRONOUS=2"
+      },
+      {
+        "compile_options": "DEFAULT_WAL_AUTOCHECKPOINT=1000"
+      },
+      {
+        "compile_options": "DEFAULT_WAL_SYNCHRONOUS=2"
+      },
+      {
+        "compile_options": "DEFAULT_WORKER_THREADS=0"
+      },
+      {
+        "compile_options": "DIRECT_OVERFLOW_READ"
+      },
+      {
+        "compile_options": "ENABLE_COLUMN_METADATA"
+      },
+      {
+        "compile_options": "ENABLE_DBSTAT_VTAB"
+      },
+      {
+        "compile_options": "ENABLE_FTS3"
+      },
+      {
+        "compile_options": "ENABLE_FTS3_PARENTHESIS"
+      },
+      {
+        "compile_options": "ENABLE_FTS5"
+      },
+      {
+        "compile_options": "ENABLE_GEOPOLY"
+      },
+      {
+        "compile_options": "ENABLE_MATH_FUNCTIONS"
+      },
+      {
+        "compile_options": "ENABLE_PERCENTILE"
+      },
+      {
+        "compile_options": "ENABLE_PREUPDATE_HOOK"
+      },
+      {
+        "compile_options": "ENABLE_RBU"
+      },
+      {
+        "compile_options": "ENABLE_RTREE"
+      },
+      {
+        "compile_options": "ENABLE_SESSION"
+      },
+      {
+        "compile_options": "ENABLE_UPDATE_DELETE_LIMIT"
+      },
+      {
+        "compile_options": "MALLOC_SOFT_LIMIT=1024"
+      },
+      {
+        "compile_options": "MAX_ATTACHED=10"
+      },
+      {
+        "compile_options": "MAX_COLUMN=2000"
+      },
+      {
+        "compile_options": "MAX_COMPOUND_SELECT=500"
+      },
+      {
+        "compile_options": "MAX_DEFAULT_PAGE_SIZE=8192"
+      },
+      {
+        "compile_options": "MAX_EXPR_DEPTH=1000"
+      },
+      {
+        "compile_options": "MAX_FUNCTION_ARG=1000"
+      },
+      {
+        "compile_options": "MAX_LENGTH=1000000000"
+      },
+      {
+        "compile_options": "MAX_LIKE_PATTERN_LENGTH=50000"
+      },
+      {
+        "compile_options": "MAX_MMAP_SIZE=0x7fff0000"
+      },
+      {
+        "compile_options": "MAX_PAGE_COUNT=0xfffffffe"
+      },
+      {
+        "compile_options": "MAX_PAGE_SIZE=65536"
+      },
+      {
+        "compile_options": "MAX_SQL_LENGTH=1000000000"
+      },
+      {
+        "compile_options": "MAX_TRIGGER_DEPTH=1000"
+      },
+      {
+        "compile_options": "MAX_VARIABLE_NUMBER=250000"
+      },
+      {
+        "compile_options": "MAX_VDBE_OP=250000000"
+      },
+      {
+        "compile_options": "MAX_WORKER_THREADS=8"
+      },
+      {
+        "compile_options": "MUTEX_W32"
+      },
+      {
+        "compile_options": "SYSTEM_MALLOC"
+      },
+      {
+        "compile_options": "TEMP_STORE=1"
+      },
+      {
+        "compile_options": "THREADSAFE=1"
+      }
+    ],
+    "working_directory": "E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/sqlite",
+    "disposable_root": "E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/sqlite/artifacts/1793887887236-3f43b82e",
+    "child_environment": [
+      "SystemRoot",
+      "WINDIR",
+      "TEMP",
+      "TMP"
+    ]
+  },
+  "input_sha256": {
+    "validate.js": "526563ed5bd255b0e036813b8941c8dc3f0656135fb6ac7c36bc8dbc47e0369b",
+    "worker.js": "8b8346b3f5d70f0adb51cda31f1cb706028c614727bb2db5e3105bc7ce1d593e",
+    "common.js": "19440072bd24da021f0f1c276d122bb40f8f210fdba255993c05a8bdc2f93e9d"
+  },
+  "configuration": {
+    "journal_mode": "WAL",
+    "synchronous": "FULL",
+    "wal_autocheckpoint": 0,
+    "default_busy_timeout_ms": 500,
+    "repetitions_per_crash_case": 3
+  },
+  "dependency_policy": "Only the existing Bun runtime, built-in bun:sqlite and node-compatible built-ins; no downloads or package installation",
+  "results": [
+    {
+      "id": "T01",
+      "name": "Transaction commit, explicit rollback and statement failure",
+      "status": "Passed",
+      "evidence": {
+        "error": {
+          "name": "SQLiteError",
+          "message": "UNIQUE constraint failed: items.id",
+          "code": "SQLITE_CONSTRAINT_PRIMARYKEY",
+          "errno": 1555
+        },
+        "explicit_rollback_required": true,
+        "integrity": [
+          {
+            "integrity_check": "ok"
+          }
+        ]
+      },
+      "elapsed_ms": 36
+    },
+    {
+      "id": "T02",
+      "name": "WAL snapshots and blocked/successful checkpoints",
+      "status": "Passed",
+      "evidence": {
+        "passive": {
+          "busy": 0,
+          "log": 4,
+          "checkpointed": 3
+        },
+        "blocked": {
+          "busy": 1,
+          "log": 4,
+          "checkpointed": 3
+        },
+        "completed": {
+          "busy": 0,
+          "log": 0,
+          "checkpointed": 0
+        },
+        "retained_wal_bytes": 16512,
+        "integrity": [
+          {
+            "integrity_check": "ok"
+          }
+        ]
+      },
+      "elapsed_ms": 137
+    },
+    {
+      "id": "T03",
+      "name": "Kill an uncommitted writer",
+      "status": "Passed",
+      "evidence": {
+        "repetitions": [
+          {
+            "repetition": 0,
+            "termination": {
+              "pid": 27080,
+              "termination_requested": true,
+              "exit_code": 143,
+              "ready": {
+                "event": "ready",
+                "pid": 27080,
+                "mode": "uncommitted",
+                "in_transaction": true,
+                "wal_bytes": 428512,
+                "pending_rows": 50
+              },
+              "stdout": "{\"event\":\"ready\",\"pid\":27080,\"mode\":\"uncommitted\",\"in_transaction\":true,\"wal_bytes\":428512,\"pending_rows\":50}\n",
+              "stderr": ""
+            },
+            "wal_bytes_before_reopen": 428512,
+            "recovered_rows": 1,
+            "integrity": [
+              {
+                "integrity_check": "ok"
+              }
+            ]
+          },
+          {
+            "repetition": 1,
+            "termination": {
+              "pid": 2900,
+              "termination_requested": true,
+              "exit_code": 143,
+              "ready": {
+                "event": "ready",
+                "pid": 2900,
+                "mode": "uncommitted",
+                "in_transaction": true,
+                "wal_bytes": 428512,
+                "pending_rows": 50
+              },
+              "stdout": "{\"event\":\"ready\",\"pid\":2900,\"mode\":\"uncommitted\",\"in_transaction\":true,\"wal_bytes\":428512,\"pending_rows\":50}\n",
+              "stderr": ""
+            },
+            "wal_bytes_before_reopen": 428512,
+            "recovered_rows": 1,
+            "integrity": [
+              {
+                "integrity_check": "ok"
+              }
+            ]
+          },
+          {
+            "repetition": 2,
+            "termination": {
+              "pid": 17424,
+              "termination_requested": true,
+              "exit_code": 143,
+              "ready": {
+                "event": "ready",
+                "pid": 17424,
+                "mode": "uncommitted",
+                "in_transaction": true,
+                "wal_bytes": 428512,
+                "pending_rows": 50
+              },
+              "stdout": "{\"event\":\"ready\",\"pid\":17424,\"mode\":\"uncommitted\",\"in_transaction\":true,\"wal_bytes\":428512,\"pending_rows\":50}\n",
+              "stderr": ""
+            },
+            "wal_bytes_before_reopen": 428512,
+            "recovered_rows": 1,
+            "integrity": [
+              {
+                "integrity_check": "ok"
+              }
+            ]
+          }
+        ],
+        "exact_instruction_at_termination": "Not observed; readiness barriers establish before/after COMMIT or active batch workload, not an fsync/power-loss cut"
+      },
+      "elapsed_ms": 300
+    },
+    {
+      "id": "T04",
+      "name": "Kill a writer after acknowledged COMMIT",
+      "status": "Passed",
+      "evidence": {
+        "repetitions": [
+          {
+            "repetition": 0,
+            "termination": {
+              "pid": 24240,
+              "termination_requested": true,
+              "exit_code": 143,
+              "ready": {
+                "event": "ready",
+                "pid": 24240,
+                "mode": "committed",
+                "in_transaction": false,
+                "wal_bytes": 4152,
+                "committed_rows": 20
+              },
+              "stdout": "{\"event\":\"ready\",\"pid\":24240,\"mode\":\"committed\",\"in_transaction\":false,\"wal_bytes\":4152,\"committed_rows\":20}\n",
+              "stderr": ""
+            },
+            "wal_bytes_before_reopen": 4152,
+            "recovered_rows": 21,
+            "integrity": [
+              {
+                "integrity_check": "ok"
+              }
+            ]
+          },
+          {
+            "repetition": 1,
+            "termination": {
+              "pid": 18072,
+              "termination_requested": true,
+              "exit_code": 143,
+              "ready": {
+                "event": "ready",
+                "pid": 18072,
+                "mode": "committed",
+                "in_transaction": false,
+                "wal_bytes": 4152,
+                "committed_rows": 20
+              },
+              "stdout": "{\"event\":\"ready\",\"pid\":18072,\"mode\":\"committed\",\"in_transaction\":false,\"wal_bytes\":4152,\"committed_rows\":20}\n",
+              "stderr": ""
+            },
+            "wal_bytes_before_reopen": 4152,
+            "recovered_rows": 21,
+            "integrity": [
+              {
+                "integrity_check": "ok"
+              }
+            ]
+          },
+          {
+            "repetition": 2,
+            "termination": {
+              "pid": 19252,
+              "termination_requested": true,
+              "exit_code": 143,
+              "ready": {
+                "event": "ready",
+                "pid": 19252,
+                "mode": "committed",
+                "in_transaction": false,
+                "wal_bytes": 4152,
+                "committed_rows": 20
+              },
+              "stdout": "{\"event\":\"ready\",\"pid\":19252,\"mode\":\"committed\",\"in_transaction\":false,\"wal_bytes\":4152,\"committed_rows\":20}\n",
+              "stderr": ""
+            },
+            "wal_bytes_before_reopen": 4152,
+            "recovered_rows": 21,
+            "integrity": [
+              {
+                "integrity_check": "ok"
+              }
+            ]
+          }
+        ],
+        "exact_instruction_at_termination": "Not observed; readiness barriers establish before/after COMMIT or active batch workload, not an fsync/power-loss cut"
+      },
+      "elapsed_ms": 294
+    },
+    {
+      "id": "T05",
+      "name": "Kill an active batch-writing process",
+      "status": "Passed",
+      "evidence": {
+        "repetitions": [
+          {
+            "repetition": 0,
+            "termination": {
+              "pid": 12204,
+              "termination_requested": true,
+              "exit_code": 143,
+              "ready": {
+                "event": "ready",
+                "pid": 12204,
+                "mode": "batches",
+                "in_transaction": false,
+                "wal_bytes": 4152,
+                "first_committed_batch": 1
+              },
+              "stdout": "{\"event\":\"ready\",\"pid\":12204,\"mode\":\"batches\",\"in_transaction\":false,\"wal_bytes\":4152,\"first_committed_batch\":1}\n",
+              "stderr": ""
+            },
+            "wal_bytes_before_reopen": 24752,
+            "recovered_rows": 49,
+            "integrity": [
+              {
+                "integrity_check": "ok"
+              }
+            ]
+          },
+          {
+            "repetition": 1,
+            "termination": {
+              "pid": 12148,
+              "termination_requested": true,
+              "exit_code": 143,
+              "ready": {
+                "event": "ready",
+                "pid": 12148,
+                "mode": "batches",
+                "in_transaction": false,
+                "wal_bytes": 4152,
+                "first_committed_batch": 1
+              },
+              "stdout": "{\"event\":\"ready\",\"pid\":12148,\"mode\":\"batches\",\"in_transaction\":false,\"wal_bytes\":4152,\"first_committed_batch\":1}\n",
+              "stderr": ""
+            },
+            "wal_bytes_before_reopen": 32992,
+            "recovered_rows": 65,
+            "integrity": [
+              {
+                "integrity_check": "ok"
+              }
+            ]
+          },
+          {
+            "repetition": 2,
+            "termination": {
+              "pid": 3108,
+              "termination_requested": true,
+              "exit_code": 143,
+              "ready": {
+                "event": "ready",
+                "pid": 3108,
+                "mode": "batches",
+                "in_transaction": false,
+                "wal_bytes": 4152,
+                "first_committed_batch": 1
+              },
+              "stdout": "{\"event\":\"ready\",\"pid\":3108,\"mode\":\"batches\",\"in_transaction\":false,\"wal_bytes\":4152,\"first_committed_batch\":1}\n",
+              "stderr": ""
+            },
+            "wal_bytes_before_reopen": 32992,
+            "recovered_rows": 65,
+            "integrity": [
+              {
+                "integrity_check": "ok"
+              }
+            ]
+          }
+        ],
+        "exact_instruction_at_termination": "Not observed; readiness barriers establish before/after COMMIT or active batch workload, not an fsync/power-loss cut"
+      },
+      "elapsed_ms": 361
+    },
+    {
+      "id": "T06",
+      "name": "integrity_check after commit, reopen and checkpoint",
+      "status": "Passed",
+      "evidence": {
+        "before": [
+          {
+            "integrity_check": "ok"
+          }
+        ],
+        "after": [
+          {
+            "integrity_check": "ok"
+          }
+        ]
+      },
+      "elapsed_ms": 28
+    },
+    {
+      "id": "T07",
+      "name": "SQLite VACUUM INTO snapshot backup and restore to a new database",
+      "status": "Passed",
+      "evidence": {
+        "method": "VACUUM main INTO bound destination; new restore file, not in-place file replacement",
+        "snapshot_rows": [
+          {
+            "id": 0,
+            "batch": 0,
+            "value": "baseline"
+          },
+          {
+            "id": 1,
+            "batch": 0,
+            "value": "at-backup"
+          }
+        ],
+        "source_rows_after_backup": 3,
+        "integrity": [
+          {
+            "integrity_check": "ok"
+          }
+        ]
+      },
+      "elapsed_ms": 68
+    },
+    {
+      "id": "T08",
+      "name": "Three process writers with a concurrent reader",
+      "status": "Passed",
+      "evidence": {
+        "writers": [
+          {
+            "pid": 3612,
+            "termination_requested": false,
+            "exit_code": 0,
+            "ready": {
+              "event": "ready",
+              "pid": 3612,
+              "mode": "concurrent",
+              "in_transaction": false,
+              "wal_bytes": 8272,
+              "writer": 1
+            },
+            "stdout": "{\"event\":\"ready\",\"pid\":3612,\"mode\":\"concurrent\",\"in_transaction\":false,\"wal_bytes\":8272,\"writer\":1}\n{\"event\":\"done\",\"writer\":1,\"rows\":80}\n",
+            "stderr": ""
+          },
+          {
+            "pid": 18076,
+            "termination_requested": false,
+            "exit_code": 0,
+            "ready": {
+              "event": "ready",
+              "pid": 18076,
+              "mode": "concurrent",
+              "in_transaction": false,
+              "wal_bytes": 8272,
+              "writer": 2
+            },
+            "stdout": "{\"event\":\"ready\",\"pid\":18076,\"mode\":\"concurrent\",\"in_transaction\":false,\"wal_bytes\":8272,\"writer\":2}\n{\"event\":\"done\",\"writer\":2,\"rows\":80}\n",
+            "stderr": ""
+          },
+          {
+            "pid": 19096,
+            "termination_requested": false,
+            "exit_code": 0,
+            "ready": {
+              "event": "ready",
+              "pid": 19096,
+              "mode": "concurrent",
+              "in_transaction": false,
+              "wal_bytes": 8272,
+              "writer": 3
+            },
+            "stdout": "{\"event\":\"ready\",\"pid\":19096,\"mode\":\"concurrent\",\"in_transaction\":false,\"wal_bytes\":8272,\"writer\":3}\n{\"event\":\"done\",\"writer\":3,\"rows\":80}\n",
+            "stderr": ""
+          }
+        ],
+        "read_samples": [
+          0,
+          4,
+          8,
+          12,
+          12,
+          16,
+          20,
+          24,
+          24,
+          28,
+          28,
+          32,
+          36,
+          36,
+          40,
+          44,
+          44,
+          48,
+          52,
+          52,
+          56,
+          60,
+          64,
+          68,
+          72,
+          80,
+          84,
+          88,
+          92,
+          96,
+          104,
+          108,
+          112,
+          116,
+          120,
+          120,
+          124,
+          128,
+          128,
+          132,
+          136,
+          136,
+          140,
+          148,
+          152,
+          152,
+          152,
+          152,
+          156,
+          160,
+          160,
+          160,
+          160,
+          160,
+          160,
+          160,
+          160,
+          160,
+          164,
+          164,
+          168,
+          172,
+          172,
+          176,
+          176,
+          180,
+          184,
+          184,
+          188,
+          192,
+          192,
+          196,
+          196,
+          200,
+          204,
+          204,
+          208,
+          208,
+          212,
+          216,
+          220,
+          220,
+          224,
+          224,
+          228,
+          228,
+          232,
+          232,
+          236,
+          240,
+          240,
+          240
+        ],
+        "final_rows": 240,
+        "integrity": [
+          {
+            "integrity_check": "ok"
+          }
+        ]
+      },
+      "elapsed_ms": 476
+    },
+    {
+      "id": "T09",
+      "name": "Transactional schema migration survives reopen",
+      "status": "Passed",
+      "evidence": {
+        "version": 2,
+        "integrity": [
+          {
+            "integrity_check": "ok"
+          }
+        ]
+      },
+      "elapsed_ms": 29
+    },
+    {
+      "id": "T10",
+      "name": "Failed schema migration rolls back DDL and user_version",
+      "status": "Passed",
+      "evidence": {
+        "error": {
+          "name": "SQLiteError",
+          "message": "table items already exists",
+          "code": "SQLITE_ERROR",
+          "errno": 1
+        },
+        "explicit_rollback_required": true,
+        "integrity": [
+          {
+            "integrity_check": "ok"
+          }
+        ]
+      },
+      "elapsed_ms": 28
+    },
+    {
+      "id": "T11",
+      "name": "Process termination during a pending schema migration",
+      "status": "Passed",
+      "evidence": {
+        "termination": {
+          "pid": 19900,
+          "termination_requested": true,
+          "exit_code": 143,
+          "ready": {
+            "event": "ready",
+            "pid": 19900,
+            "mode": "migration",
+            "in_transaction": true,
+            "wal_bytes": 0,
+            "pending_version": 2
+          },
+          "stdout": "{\"event\":\"ready\",\"pid\":19900,\"mode\":\"migration\",\"in_transaction\":true,\"wal_bytes\":0,\"pending_version\":2}\n",
+          "stderr": ""
+        },
+        "integrity": [
+          {
+            "integrity_check": "ok"
+          }
+        ]
+      },
+      "elapsed_ms": 88
+    },
+    {
+      "id": "T12",
+      "name": "Writer lock and finite busy timeout",
+      "status": "Passed",
+      "evidence": {
+        "error": {
+          "name": "SQLiteError",
+          "message": "database is locked",
+          "code": "SQLITE_BUSY",
+          "errno": 5
+        },
+        "busy_timeout_ms": 175,
+        "observed_ms": 253,
+        "integrity": [
+          {
+            "integrity_check": "ok"
+          }
+        ]
+      },
+      "elapsed_ms": 289
+    },
+    {
+      "id": "T13",
+      "name": "Stale WAL read transaction cannot silently upgrade to a writer",
+      "status": "Passed",
+      "evidence": {
+        "error": {
+          "name": "SQLiteError",
+          "message": "database is locked",
+          "code": "SQLITE_BUSY_SNAPSHOT",
+          "errno": 517
+        },
+        "recovery": "rollback stale snapshot and retry in a fresh transaction",
+        "integrity": [
+          {
+            "integrity_check": "ok"
+          }
+        ]
+      },
+      "elapsed_ms": 44
+    },
+    {
+      "id": "T14",
+      "name": "SQLITE_FULL via a bounded database page limit",
+      "status": "Passed",
+      "evidence": {
+        "error": {
+          "name": "SQLiteError",
+          "message": "database or disk is full",
+          "code": "SQLITE_FULL",
+          "errno": 13
+        },
+        "initial_pages": 2,
+        "maximum_pages": 6,
+        "engine_auto_rollback": true,
+        "physical_disk_filled": false,
+        "integrity": [
+          {
+            "integrity_check": "ok"
+          }
+        ]
+      },
+      "elapsed_ms": 24
+    },
+    {
+      "id": "T15",
+      "name": "Read-only connection rejects writes without changing the database",
+      "status": "Passed",
+      "evidence": {
+        "error": {
+          "name": "SQLiteError",
+          "message": "attempt to write a readonly database",
+          "code": "SQLITE_READONLY",
+          "errno": 8
+        },
+        "integrity": [
+          {
+            "integrity_check": "ok"
+          }
+        ]
+      },
+      "elapsed_ms": 25
+    },
+    {
+      "id": "T16",
+      "name": "Filesystem open failure is reported as SQLITE_CANTOPEN",
+      "status": "Passed",
+      "evidence": {
+        "error": {
+          "name": "SQLiteError",
+          "message": "unable to open database file",
+          "code": "SQLITE_CANTOPEN_ISDIR",
+          "errno": 526
+        }
+      },
+      "elapsed_ms": 1
+    },
+    {
+      "id": "T17",
+      "name": "Corruption detection on a disposable copy preserves the original",
+      "status": "Passed",
+      "evidence": {
+        "error": {
+          "name": "SQLiteError",
+          "message": "file is not a database",
+          "code": "SQLITE_NOTADB",
+          "errno": 26
+        },
+        "damage": "header and b-tree cell count in two closed disposable copies only",
+        "structural_observation": {
+          "error": {
+            "name": "SQLiteError",
+            "message": "database disk image is malformed",
+            "code": "SQLITE_CORRUPT",
+            "errno": 11
+          }
+        },
+        "original_integrity": [
+          {
+            "integrity_check": "ok"
+          }
+        ]
+      },
+      "elapsed_ms": 36
+    },
+    {
+      "id": "T18",
+      "name": "Unicode, spaces, CRLF text and Windows file paths",
+      "status": "Passed",
+      "evidence": {
+        "path": "E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/sqlite/artifacts/1793887887236-3f43b82e/Unicode space ü 中文/database.sqlite",
+        "utf8_sha256": "fcd7b0123ce1426029ea1660a91cef56b2a8f39510d5c1217d96c7b66e14de67",
+        "integrity": [
+          {
+            "integrity_check": "ok"
+          }
+        ]
+      },
+      "elapsed_ms": 28
+    },
+    {
+      "id": "T19",
+      "name": "Physical volume exhaustion",
+      "status": "Blocked",
+      "reason": "Filling the host volume would affect unrelated files; the safe SQLITE_FULL page-limit test is T14, not a physical-disk simulation."
+    },
+    {
+      "id": "T20",
+      "name": "Injected SQLITE_IOERR at write/fsync boundaries",
+      "status": "Not Tested",
+      "reason": "No fault-injecting SQLite VFS or isolated failing device is provisioned; CANTOPEN and READONLY are tested separately and are not relabeled as IOERR."
+    },
+    {
+      "id": "T21",
+      "name": "Power loss or kernel/VM failure during storage writes",
+      "status": "Not Tested",
+      "reason": "Only owned writer processes were terminated; no host/VM interruption or power-loss test is authorized or provisioned."
+    },
+    {
+      "id": "T22",
+      "name": "Production Rust SQLite binding and database/blob atomicity",
+      "status": "Not Tested",
+      "reason": "No Rust binding or production persistence layer is selected; SQLite transactions do not make external blob promotion atomic."
+    }
+  ],
+  "finished_at_utc": "2026-11-05T14:11:29.912Z",
+  "summary": {
+    "Passed": 18,
+    "Failed": 0,
+    "Blocked": 1,
+    "Not Tested": 3
+  },
+  "assessment_recorded": true,
+  "tested_subset_passed": true,
+  "all_scenarios_passed": false
+}
