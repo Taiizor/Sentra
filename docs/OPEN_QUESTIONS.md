@@ -1,14 +1,14 @@
 # Open Questions, Assumptions, and Decision Gates
 
-Owner entries are accountable roles to be assigned, not claims that those people already exist. No unresolved item authorizes implementation or weakens a security invariant. Phase 1 still requires explicit owner approval.
+Owner entries are accountable roles to be assigned, not claims that those people already exist. No unresolved item authorizes implementation or weakens a security invariant. The owner explicitly authorized Phase 1 on 2026-11-05; Phase 2 remains unauthorized. The [initial validation report](phase1/README.md) records partial results and outstanding gates.
 
 ## Decision register
 
 | ID | Question / assumption | Owner role | Deadline and evidence | Safe default / reversal |
 | --- | --- | --- | --- | --- |
-| OQ-01 | Is Rust the right core language on this Windows host? | Core maintainer | P1 before workspace expansion: V-01 compile/link, process, storage, packaging results | Keep ADR-0002 proposed; evaluate Go/C# if gates fail |
-| OQ-02 | Are MSVC linker/Windows SDK prerequisites installed and sufficient? | Core maintainer | First P1 build spike; no matching tools version was returned by current discovery probe | Do not claim build readiness or install workloads during P0 |
-| OQ-03 | Can local Hyper-V provide the required dedicated Linux VM topology? | Execution maintainer | P1 topology spike; verify edition, features, resources, image, network, automation and reset | Block untrusted execution; evaluate explicitly approved dedicated VM endpoint |
+| OQ-01 | Is Rust the right core language on this Windows host? | Core maintainer | Initial x64 std-only build/run/tests/lints pass; full V-01 process, storage, native dependency and worker evidence remains pending before production workspace expansion | Keep ADR-0002 proposed; no general support claim from the smoke test |
+| OQ-02 | Are MSVC linker/Windows SDK prerequisites installed and sufficient? | Core maintainer | Prerelease discovery and link arguments identify MSVC 14.52.37025; x64 smoke passes; SDK selection/native crate integration remain unvalidated | Do not infer absence from PATH or non-prerelease discovery; no ARM64 or general native dependency claim |
+| OQ-03 | Can local Hyper-V provide the required dedicated Linux VM topology? | Execution maintainer | Hypervisor/services/module observed; feature/VM queries blocked by current permissions; provisioning, image, network, automation and reset not tested | No host changes without explicit approval; block untrusted execution and retain the approved dedicated-VM alternative |
 | OQ-04 | Can selected backend enforce containment/egress and cleanup? | Security/execution maintainer | P2 before real targets: full containment and credential canary suite | No real builds, tests, scanners, or PoCs on an unvalidated backend |
 | OQ-05 | What should OSS-CRS provide versus Sentra's own research scheduler? | Research maintainer | Before custom P3 harness/campaign infrastructure: fixed-corpus interoperability/baseline comparison | Prefer coarse-grained reuse; remove duplicated functionality if upstream fits |
 | OQ-06 | Which provider endpoints satisfy tool-call, usage, privacy, and cancellation requirements? | AI/security maintainer | P2: two-backend conformance, including validated local/private option | No mandatory provider; hosted egress off until explicitly approved |
@@ -40,4 +40,4 @@ Owner entries are accountable roles to be assigned, not claims that those people
 
 ## What blocks what
 
-Phase 0 can finish with these questions explicitly recorded. Owner approval blocks entry to Phase 1. Rust/toolchain/storage results block expanding the selected implementation foundation. Worker containment blocks real target execution. Provider/retention decisions block confidential egress/collection. License and disclosure-channel choices block public distribution. Windows-native, kernel, distributed hosting, and binary-only decisions do not block the narrow initial pilots.
+Phase 0 is closed and the Phase 1 authorization gate is satisfied. Remaining Rust/process/native dependency/storage results block expanding the selected implementation foundation. Worker containment blocks real target execution. Provider/retention decisions block confidential egress/collection. License and disclosure-channel choices block public distribution. Windows-native, kernel, distributed hosting, and binary-only decisions do not block the narrow initial pilots. Phase 1 is not complete and Phase 2 remains unauthorized.

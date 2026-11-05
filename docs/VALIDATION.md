@@ -1,6 +1,6 @@
 # Technical Validation and Evaluation Plan
 
-This plan describes future experiments. Phase 0 performed documentation checks and read-only environment inspection only. No application test, model evaluation, sandbox exercise, or benchmark has run.
+This document defines the validation plan. Phase 0 performed documentation checks and read-only environment inspection only; no application tests, model evaluations, sandbox exercises or benchmarks ran in that phase. Phase 1 is now explicitly authorized. Its [initial execution report](phase1/README.md) records the x64 probe checks that actually ran, the incomplete full Rust gate, and the remaining unvalidated experiments. No production core/CLI or sandbox suite has run yet.
 
 ## Phase 1 technical spikes
 

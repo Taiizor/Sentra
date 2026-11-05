@@ -1,0 +1,336 @@
+{
+  "schema_version": "1",
+  "experiment": "phase1-rust-msvc-probe",
+  "observed_at_utc": "2026-11-05T13:52:50.0856122+00:00",
+  "powershell": "7.6.9",
+  "host_os": "Microsoft Windows 10.0.26300",
+  "host_architecture": "X64",
+  "command_timeout_seconds": 30,
+  "third_party_dependencies": [],
+  "input_sha256": {
+    "manifest": "cf9542747416000ca3c9bb30bb63f5aaa0eace37f5616c608bd100e587237c9e",
+    "source": "a2dce190c3496fbd29682283e0754260f94ddfe9e55e3a67d6e1c1b09325ca62",
+    "runner": "808d7a3b79aa85b8348fb720c9c009cae4e20702c9f2e147075095ebfbc7eaad"
+  },
+  "windows_sdk_root": "D:/Windows Kits/10",
+  "installed_windows_sdk_versions": [
+    "10.0.22621.0",
+    "10.0.26100.0",
+    "10.0.28000.0"
+  ],
+  "network_policy": "Cargo offline; no networking code in the probe; no network capture performed",
+  "results": [
+    {
+      "name": "rustc-version",
+      "executable": "C:/Users/Taiizor/.cargo/bin/rustc.exe",
+      "arguments": [
+        "-vV"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "expected_stdout": "",
+      "stdout_matches": true,
+      "timed_out": false,
+      "elapsed_ms": 76,
+      "stdout": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.0\nLLVM version: 23.1.1\n",
+      "stderr": ""
+    },
+    {
+      "name": "cargo-version",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "-vV"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "expected_stdout": "",
+      "stdout_matches": true,
+      "timed_out": false,
+      "elapsed_ms": 69,
+      "stdout": "cargo 1.99.0 (5f94df478 2026-08-27)\nrelease: 1.99.0\ncommit-hash: 5f94df4789f005f9a352888e8355ffc645b7ed0e\ncommit-date: 2026-08-27\nhost: x86_64-pc-windows-msvc\nlibgit2: 1.9.6 (sys:0.21.0 vendored)\nlibcurl: 8.21.0-DEV (sys:0.4.90+curl-8.21.0 vendored ssl:Schannel)\nos: Windows 10.0.26300 (Windows 11 Education) [64-bit]\n",
+      "stderr": ""
+    },
+    {
+      "name": "installed-targets",
+      "executable": "C:/Users/Taiizor/.cargo/bin/rustup.exe",
+      "arguments": [
+        "target",
+        "list",
+        "--installed"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "expected_stdout": "",
+      "stdout_matches": true,
+      "timed_out": false,
+      "elapsed_ms": 60,
+      "stdout": "x86_64-pc-windows-msvc\n",
+      "stderr": ""
+    },
+    {
+      "name": "rustfmt-version",
+      "executable": "C:/Users/Taiizor/.cargo/bin/rustfmt.exe",
+      "arguments": [
+        "--version"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "expected_stdout": "",
+      "stdout_matches": true,
+      "timed_out": false,
+      "elapsed_ms": 78,
+      "stdout": "rustfmt 1.10.0-stable (b940084d7e 2026-09-28)\n",
+      "stderr": ""
+    },
+    {
+      "name": "clippy-version",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "clippy",
+        "--version"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "expected_stdout": "",
+      "stdout_matches": true,
+      "timed_out": false,
+      "elapsed_ms": 155,
+      "stdout": "clippy 0.1.99 (b940084d7e 2026-09-28)\n",
+      "stderr": ""
+    },
+    {
+      "name": "format",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "fmt",
+        "--manifest-path",
+        "E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/rust-msvc/Cargo.toml",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "expected_stdout": "",
+      "stdout_matches": true,
+      "timed_out": false,
+      "elapsed_ms": 207,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "name": "x64-check",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "check",
+        "--offline",
+        "--manifest-path",
+        "E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/rust-msvc/Cargo.toml",
+        "--all-targets",
+        "--target",
+        "x86_64-pc-windows-msvc"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "expected_stdout": "",
+      "stdout_matches": true,
+      "timed_out": false,
+      "elapsed_ms": 100,
+      "stdout": "",
+      "stderr": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s\n"
+    },
+    {
+      "name": "x64-clippy",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "clippy",
+        "--offline",
+        "--manifest-path",
+        "E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/rust-msvc/Cargo.toml",
+        "--all-targets",
+        "--target",
+        "x86_64-pc-windows-msvc",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "expected_stdout": "",
+      "stdout_matches": true,
+      "timed_out": false,
+      "elapsed_ms": 301,
+      "stdout": "",
+      "stderr": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.15s\n"
+    },
+    {
+      "name": "x64-build",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "build",
+        "--offline",
+        "--manifest-path",
+        "E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/rust-msvc/Cargo.toml",
+        "--target",
+        "x86_64-pc-windows-msvc"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "expected_stdout": "",
+      "stdout_matches": true,
+      "timed_out": false,
+      "elapsed_ms": 755,
+      "stdout": "",
+      "stderr": "   Compiling sentra-rust-msvc-probe v0.0.0 (E:\\MyProject\\Mix\\GitHub\\Sentra\\experiments\\phase1\\rust-msvc)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.68s\n"
+    },
+    {
+      "name": "x64-test",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "test",
+        "--offline",
+        "--manifest-path",
+        "E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/rust-msvc/Cargo.toml",
+        "--target",
+        "x86_64-pc-windows-msvc"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "expected_stdout": "",
+      "stdout_matches": true,
+      "timed_out": false,
+      "elapsed_ms": 130,
+      "stdout": "\nrunning 3 tests\ntest tests::accepts_empty_input ... ok\ntest tests::counts_unicode_text_with_crlf ... ok\ntest tests::rejects_nul_input ... ok\n\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s\n     Running unittests src\\main.rs (target\\x86_64-pc-windows-msvc\\debug\\deps\\sentra_rust_msvc_probe-9739453555a73839.exe)\n"
+    },
+    {
+      "name": "x64-run-unicode-crlf",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "run",
+        "--offline",
+        "--manifest-path",
+        "E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/rust-msvc/Cargo.toml",
+        "--target",
+        "x86_64-pc-windows-msvc",
+        "--",
+        "E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/rust-msvc/artifacts/Unicode input ü/fixture.txt"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "expected_stdout": "lines=2",
+      "stdout_matches": true,
+      "timed_out": false,
+      "elapsed_ms": 9231,
+      "stdout": "lines=2\n",
+      "stderr": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.04s\n     Running `target\\x86_64-pc-windows-msvc\\debug\\sentra-rust-msvc-probe.exe \"E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/rust-msvc/artifacts/Unicode input ü/fixture.txt\"`\n"
+    },
+    {
+      "name": "x64-run-missing-argument",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "run",
+        "--offline",
+        "--manifest-path",
+        "E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/rust-msvc/Cargo.toml",
+        "--target",
+        "x86_64-pc-windows-msvc",
+        "--"
+      ],
+      "exit_code": 2,
+      "expected_exit_code": 2,
+      "expected_stdout": "",
+      "stdout_matches": true,
+      "timed_out": false,
+      "elapsed_ms": 117,
+      "stdout": "",
+      "stderr": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s\n     Running `target\\x86_64-pc-windows-msvc\\debug\\sentra-rust-msvc-probe.exe`\nusage: sentra-rust-msvc-probe <utf8-file>\nerror: process didn't exit successfully: `target\\x86_64-pc-windows-msvc\\debug\\sentra-rust-msvc-probe.exe` (exit code: 2)\n"
+    },
+    {
+      "name": "x64-run-missing-file",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "run",
+        "--offline",
+        "--manifest-path",
+        "E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/rust-msvc/Cargo.toml",
+        "--target",
+        "x86_64-pc-windows-msvc",
+        "--",
+        "E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/rust-msvc/artifacts/missing.txt"
+      ],
+      "exit_code": 1,
+      "expected_exit_code": 1,
+      "expected_stdout": "",
+      "stdout_matches": true,
+      "timed_out": false,
+      "elapsed_ms": 116,
+      "stdout": "",
+      "stderr": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s\n     Running `target\\x86_64-pc-windows-msvc\\debug\\sentra-rust-msvc-probe.exe E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/rust-msvc/artifacts/missing.txt`\nprobe failed: Sistem belirtilen dosyayı bulamıyor. (os error 2)\nerror: process didn't exit successfully: `target\\x86_64-pc-windows-msvc\\debug\\sentra-rust-msvc-probe.exe E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/rust-msvc/artifacts/missing.txt` (exit code: 1)\n"
+    },
+    {
+      "name": "x64-link-args",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "rustc",
+        "--offline",
+        "--manifest-path",
+        "E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/rust-msvc/Cargo.toml",
+        "--target",
+        "x86_64-pc-windows-msvc",
+        "--",
+        "--print",
+        "link-args"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "expected_stdout": "",
+      "stdout_matches": true,
+      "timed_out": false,
+      "elapsed_ms": 545,
+      "stdout": "\"D:\\\\Program Files\\\\Microsoft Visual Studio\\\\2026\\\\Insiders\\\\VC\\\\Tools\\\\MSVC\\\\14.52.37025\\\\bin\\\\HostX64\\\\x64\\\\link.exe\" \"/NOLOGO\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\rustcGPW0sh\\\\symbols.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.05i4i32wk0cficdson6ojfo11.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.0b3e780xh6lp3piy9gi966v2m.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.0es6ssj7aj3gqw1rpyp0ew98c.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.0yyl5ezdnx46hdh2jfzd3p92e.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.15qb7mcwzphfvevmksru2bncu.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.18uqemxftlawesb85cbdriyhj.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.1r5j19bdq5qn0ksxhdy461zh0.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.20hck3fd91xjygilf7zlsk506.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.25rvdclirzdj0s3bno8oxozji.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.27koransbbuvryfuaewd0lxxt.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.2heildigaq8jrl3v62956491v.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.338jesijkj4pu6u6zom93mu87.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.38qs69za53qw3djbm43n98kbp.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.3i6cslicntjjysjd2jf2qchs9.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.3lwgr8m0lrqh9hxttg75gdlyw.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.408m37d8vej11b9ritz4mq3to.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.4bqriaopo7wc3dub3nmbko178.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.4cxmpixylzjp6rkdz0heck4uw.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.4mzs8lygq8hev9e29b7cxg2gy.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.52ou0svxltlugcvvmt926wvdz.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.56xkulwnorco1bdg9uruenv79.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.580nk55dywfrlydzfaw5gcxhf.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.5a59w4at5rpat8jwitgdotaps.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.5qq1cmpli255qlawazxf6q0cz.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.684b4plemkk62d1tktzke92zp.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.6g40q0n4md2u2jbj32yw4gcjl.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.6gagu9kr3z1i6y2tzzjaxwwlc.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.6lez3a6auia91byyzvib27r99.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.6wgugrim93zp4l5dytby5grx0.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.72vgjc2phs77tdwg10tmzc1qg.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.7khpdy3jse3sx1hdjgsmi8jjw.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.7y0xl1ysp2oro3zj4deae58nj.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.8amws4rxlc079zdxjfow7he37.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.8p6hmel2r74brayjh1mqdhzxx.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.8ttsu1592go36mnik9dfo3i6e.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.98gaqq58zt55bpp2wtm5o64rh.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.9tr8kr1wprbcay4ksc5miwewd.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.9u1jaslil1fn6uyopn2wmviz8.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.a227uf6pqwhgr3cw3bl1r3fni.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.a9plg1c3nwsr2f9fw1bymrmu8.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.ac4sfbklpxkwvzu3d9pnd2amx.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.adtyvjm4h7fucrzgref9acy5n.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.aoedpedd2809mkz7yhjd9aqhb.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.aygh7x8j3ypha4pn8rs8u3xo9.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.besi0bn2108nyhjev75jh25cr.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.bhpevieo2ipo3phvh9ptiir1l.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.bkrx8huv94ayxfp39hixima38.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.bmidei8q953a4af3hwzjwogpk.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.bq2lkdud1yfxynm4fllze6al6.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.bry9zqcql22g864qqgt15ca74.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.bt4idiu4atofhw7o4v61a193x.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.bxibwi1kdnieyzqk1ltsqdy40.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.c7h1toj7ro0wrbrn0viwvcroh.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.cc7qu1gbuvzmhphf7y6lyddtk.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.ccoq5cceir2lceik6opdl9wdz.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.cfqlgflv2j1ddsdoxq0dclsfj.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.cj3638uhuek4v6zuai6a7rgmg.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.dcio2zphc9vgwfuumlezbuwed.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.dd2p4nhhg0ljxen2vgh1dm4uh.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.dolnd4vi9e8q4thbumk6623cn.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.eaw5vlxzwe40xzbtzi6ac9kol.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.eb9s22gdyv1v0nfsxt2wf0vdf.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.ej7yusnkb5dm5aw3z87zhg6g3.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.ekrq55cdym5mcutxpli2w8x6u.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.eo0uw07s3tzcko4fw6r9rzi9u.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.eq3p2l5pxvcowthnir434a9a6.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.etmzzn04dnsp1thr5egkjsexz.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.f4q9vowoigjn4fh215zq2dt3g.04tz6fn.rcgu.o\" \"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.0eh8ez0eky3272koawh8bpl4d.04tz6fn.rcgu.o\" \"C:\\\\Users\\\\Taiizor\\\\.rustup\\\\toolchains\\\\stable-x86_64-pc-windows-msvc\\\\lib\\\\rustlib\\\\x86_64-pc-windows-msvc\\\\lib\\\\libstd-512d688ad63bc3c4.rlib\" \"C:\\\\Users\\\\Taiizor\\\\.rustup\\\\toolchains\\\\stable-x86_64-pc-windows-msvc\\\\lib\\\\rustlib\\\\x86_64-pc-windows-msvc\\\\lib\\\\libpanic_unwind-9a6982b5613ae144.rlib\" \"C:\\\\Users\\\\Taiizor\\\\.rustup\\\\toolchains\\\\stable-x86_64-pc-windows-msvc\\\\lib\\\\rustlib\\\\x86_64-pc-windows-msvc\\\\lib\\\\libcfg_if-61530a3e12046ff9.rlib\" \"C:\\\\Users\\\\Taiizor\\\\.rustup\\\\toolchains\\\\stable-x86_64-pc-windows-msvc\\\\lib\\\\rustlib\\\\x86_64-pc-windows-msvc\\\\lib\\\\libwindows_link-52ff9cba00c16b00.rlib\" \"C:\\\\Users\\\\Taiizor\\\\.rustup\\\\toolchains\\\\stable-x86_64-pc-windows-msvc\\\\lib\\\\rustlib\\\\x86_64-pc-windows-msvc\\\\lib\\\\librustc_demangle-b90cf45bba421ef1.rlib\" \"C:\\\\Users\\\\Taiizor\\\\.rustup\\\\toolchains\\\\stable-x86_64-pc-windows-msvc\\\\lib\\\\rustlib\\\\x86_64-pc-windows-msvc\\\\lib\\\\libstd_detect-2e160def0ea9d132.rlib\" \"C:\\\\Users\\\\Taiizor\\\\.rustup\\\\toolchains\\\\stable-x86_64-pc-windows-msvc\\\\lib\\\\rustlib\\\\x86_64-pc-windows-msvc\\\\lib\\\\libhashbrown-127e4acb9a2b8e23.rlib\" \"C:\\\\Users\\\\Taiizor\\\\.rustup\\\\toolchains\\\\stable-x86_64-pc-windows-msvc\\\\lib\\\\rustlib\\\\x86_64-pc-windows-msvc\\\\lib\\\\librustc_std_workspace_alloc-76c33a2f4e55dbc7.rlib\" \"C:\\\\Users\\\\Taiizor\\\\.rustup\\\\toolchains\\\\stable-x86_64-pc-windows-msvc\\\\lib\\\\rustlib\\\\x86_64-pc-windows-msvc\\\\lib\\\\libunwind-aa4157fe466f159e.rlib\" \"C:\\\\Users\\\\Taiizor\\\\.rustup\\\\toolchains\\\\stable-x86_64-pc-windows-msvc\\\\lib\\\\rustlib\\\\x86_64-pc-windows-msvc\\\\lib\\\\librustc_std_workspace_core-d884e447843196b3.rlib\" \"C:\\\\Users\\\\Taiizor\\\\.rustup\\\\toolchains\\\\stable-x86_64-pc-windows-msvc\\\\lib\\\\rustlib\\\\x86_64-pc-windows-msvc\\\\lib\\\\liballoc-a363f509dabb8931.rlib\" \"C:\\\\Users\\\\Taiizor\\\\.rustup\\\\toolchains\\\\stable-x86_64-pc-windows-msvc\\\\lib\\\\rustlib\\\\x86_64-pc-windows-msvc\\\\lib\\\\libcore-4783344a2f21d44d.rlib\" \"C:\\\\Users\\\\Taiizor\\\\.rustup\\\\toolchains\\\\stable-x86_64-pc-windows-msvc\\\\lib\\\\rustlib\\\\x86_64-pc-windows-msvc\\\\lib\\\\libcompiler_builtins-a775fe6e194ff2d3.rlib\" \"kernel32.lib\" \"kernel32.lib\" \"kernel32.lib\" \"ntdll.lib\" \"userenv.lib\" \"ws2_32.lib\" \"dbghelp.lib\" \"/defaultlib:msvcrt\" \"/NXCOMPAT\" \"/OUT:E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\rust-msvc\\\\target\\\\x86_64-pc-windows-msvc\\\\debug\\\\deps\\\\sentra_rust_msvc_probe.exe\" \"/OPT:REF,NOICF\" \"/DEBUG\" \"/PDBALTPATH:%_PDB%\" \"/NATVIS:C:\\\\Users\\\\Taiizor\\\\.rustup\\\\toolchains\\\\stable-x86_64-pc-windows-msvc\\\\lib\\\\rustlib\\\\etc\\\\intrinsic.natvis\" \"/NATVIS:C:\\\\Users\\\\Taiizor\\\\.rustup\\\\toolchains\\\\stable-x86_64-pc-windows-msvc\\\\lib\\\\rustlib\\\\etc\\\\liballoc.natvis\" \"/NATVIS:C:\\\\Users\\\\Taiizor\\\\.rustup\\\\toolchains\\\\stable-x86_64-pc-windows-msvc\\\\lib\\\\rustlib\\\\etc\\\\libcore.natvis\" \"/NATVIS:C:\\\\Users\\\\Taiizor\\\\.rustup\\\\toolchains\\\\stable-x86_64-pc-windows-msvc\\\\lib\\\\rustlib\\\\etc\\\\libstd.natvis\"\n",
+      "stderr": "   Compiling sentra-rust-msvc-probe v0.0.0 (E:\\MyProject\\Mix\\GitHub\\Sentra\\experiments\\phase1\\rust-msvc)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.47s\n"
+    },
+    {
+      "name": "arm64-check",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "check",
+        "--offline",
+        "--manifest-path",
+        "E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/rust-msvc/Cargo.toml",
+        "--target",
+        "aarch64-pc-windows-msvc"
+      ],
+      "exit_code": 101,
+      "expected_exit_code": 0,
+      "expected_stdout": "",
+      "stdout_matches": true,
+      "timed_out": false,
+      "elapsed_ms": 168,
+      "stdout": "",
+      "stderr": "    Checking sentra-rust-msvc-probe v0.0.0 (E:\\MyProject\\Mix\\GitHub\\Sentra\\experiments\\phase1\\rust-msvc)\nerror[E0463]: can't find crate for `std`\n  |\n  = note: the `aarch64-pc-windows-msvc` target may not be installed\n  = help: consider downloading the target with `rustup target add aarch64-pc-windows-msvc`\n\nFor more information about this error, try `rustc --explain E0463`.\nerror: could not compile `sentra-rust-msvc-probe` (bin \"sentra-rust-msvc-probe\") due to 1 previous error\n"
+    },
+    {
+      "name": "msvc-prerelease-discovery",
+      "executable": "C:/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe",
+      "arguments": [
+        "-all",
+        "-prerelease",
+        "-products",
+        "*",
+        "-requires",
+        "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+        "-format",
+        "json"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "expected_stdout": "",
+      "stdout_matches": true,
+      "timed_out": false,
+      "elapsed_ms": 63,
+      "stdout": "[\r\n  {\r\n    \"instanceId\": \"dd5770bf\",\r\n    \"installDate\": \"2026-10-04T22:33:26Z\",\r\n    \"installationName\": \"VisualStudioPreview/18.12.0-insiders+12324.72\",\r\n    \"installationPath\": \"D:\\\\Program Files\\\\Microsoft Visual Studio\\\\2026\\\\Insiders\",\r\n    \"installationVersion\": \"18.12.12324.72\",\r\n    \"productId\": \"Microsoft.VisualStudio.Product.Enterprise\",\r\n    \"productPath\": \"D:\\\\Program Files\\\\Microsoft Visual Studio\\\\2026\\\\Insiders\\\\Common7\\\\IDE\\\\devenv.exe\",\r\n    \"state\": 4294967295,\r\n    \"isComplete\": true,\r\n    \"isLaunchable\": true,\r\n    \"isPrerelease\": true,\r\n    \"isRebootRequired\": false,\r\n    \"displayName\": \"Visual Studio Enterprise 2026\",\r\n    \"description\": \"�l�eklendirme, g�venlik ve h�z i�in tasarlanm��, karma��k ve y�ksek etkili geli�tirme i�in IDE.\",\r\n    \"channelId\": \"VisualStudio.18.Preview\",\r\n    \"channelUri\": \"https://aka.ms/vs/18/insiders/channel\",\r\n    \"enginePath\": \"C:\\\\Program Files (x86)\\\\Microsoft Visual Studio\\\\Installer\\\\resources\\\\app\\\\ServiceHub\\\\Services\\\\Microsoft.VisualStudio.Setup.Service\",\r\n    \"expirationDate\": \"2027-01-22T17:00:00+00:00\",\r\n    \"installedChannelId\": \"VisualStudio.18.Preview\",\r\n    \"installedChannelUri\": \"https://aka.ms/vs/18/insiders/channel\",\r\n    \"releaseNotes\": \"https://go.microsoft.com/fwlink/?LinkId=661465#18.12.0-ins\",\r\n    \"resolvedInstallationPath\": \"D:\\\\Program Files\\\\Microsoft Visual Studio\\\\2026\\\\Insiders\",\r\n    \"retirementDate\": \"2027-04-22T17:00:00+00:00\",\r\n    \"thirdPartyNotices\": \"https://go.microsoft.com/fwlink/?LinkId=661480\",\r\n    \"updateDate\": \"2026-10-28T03:11:07.4056702Z\",\r\n    \"catalog\": {\r\n      \"buildBranch\": \"oobinsiders\",\r\n      \"buildVersion\": \"18.12.12324.72\",\r\n      \"expirationDate\": \"01/22/2027 17:00:00 +00:00\",\r\n      \"id\": \"VisualStudioPreview/18.12.0-insiders+12324.72\",\r\n      \"includeBuildVersionInDisplayVersion\": \"True\",\r\n      \"localBuild\": \"build-lab\",\r\n      \"manifestName\": \"VisualStudioPreview\",\r\n      \"manifestType\": \"installer\",\r\n      \"productDisplayVersion\": \"Insiders [12324.72]\",\r\n      \"productLine\": \"Dev18\",\r\n      \"productLineVersion\": \"18\",\r\n      \"productMilestone\": \"Insiders\",\r\n      \"productMilestoneIsPreRelease\": \"True\",\r\n      \"productName\": \"Visual Studio\",\r\n      \"productPatchVersion\": \"0\",\r\n      \"productRelease\": \"RTW\",\r\n      \"productSemanticVersion\": \"18.12.0-insiders+12324.72\",\r\n      \"requiredEngineVersion\": \"4.12.34.54489\",\r\n      \"retirementDate\": \"04/22/2027 17:00:00 +00:00\"\r\n    },\r\n    \"properties\": {\r\n      \"campaignId\": \"\",\r\n      \"channelManifestId\": \"VisualStudio.18.Preview/18.12.0-insiders+12324.72\",\r\n      \"includeRecommended\": \"1\",\r\n      \"nickname\": \"\",\r\n      \"setupEngineFilePath\": \"C:\\\\Program Files (x86)\\\\Microsoft Visual Studio\\\\Installer\\\\setup.exe\"\r\n    }\r\n  }\r\n]\r\n",
+      "stderr": ""
+    }
+  ]
+}
