@@ -4,6 +4,10 @@ Last updated: 2026-11-05.
 
 ## Current status
 
+**Phase 1 Increment 5.3.2: cross-increment security regression & readiness review complete. Conditional Go for Increment 5.4. Phase 2: NOT authorized.** The [regression review](docs/phase1/INCREMENT_5_3_2_REGRESSION_REVIEW.md) establishes that the targeted authorization corrections in Increment 5.3.1 did not regress workspace containment or metadata discovery. All tests across authorization, domain, session, policy, security, and workspace suites pass (104 runtime tests + 2 compile-fail doctests, 0 failed). The three previously untested fixture and scale workspace tests (`junction`, `deny-acl`, and `scale_10000_file`) were executed and verified passed. Conditional Go is recommended for proceeding to Increment 5.4 (Core Engine Persistence with SQLite). Increment 5.4 has not started.
+
+### Status at Increment 5.3.1 entry (historical)
+
 **Phase 1 Increment 5.3.1: targeted approval-binding security correction complete. Phase 2: NOT authorized.** The [security review](docs/phase1/INCREMENT_5_3_1_SECURITY_REVIEW.md) closes the original in-process A-to-B defect with registered session/target context, broker-issued provenance and atomic exact-operation consumption. Final workspace verification records 103 Passed (101 runtime + 2 compile-fail doctests), 0 Failed and 3 explicitly Not Tested prior fixture/scale cases. All 27 new binding regressions and the original standalone probe pass. Phase 1 remains incomplete; strong filesystem identity, persistence, external human authentication and execution integration are not established by this correction. Increment 5.4 has not started.
 
 ### Status at Increment 5.3 entry (historical)
@@ -140,6 +144,21 @@ The [security review](docs/phase1/INCREMENT_5_3_1_SECURITY_REVIEW.md) records th
 - **Scope/Git:** workspace/domain/session/budget implementations and their tests, manifests/lockfile, prior raw evidence and all ADRs remain unchanged. Entry was clean develop at 5c6242f9d957abd226b59a550b3106056ad6998d, including parent 4267b42. External commits 97b49c8 and c60374d recorded the correction/refinement during work and were preserved; final HEAD/history/index/reference checks use a read-only snapshot after those operations. The agent issued no Git mutation or network operation and leaves its edits unstaged for owner control; externally committed edits are not reported as pending.
 
 No mandatory 5.3.1 acceptance item is Blocked. This closes the specified in-memory defect, not full Phase 1 security acceptance. No target operation/code/build script was executed. Stop remains at Increment 5.3.1; no Increment 5.4 or later work has started.
+
+## Phase 1 Increment 5.3.2 — Cross-increment security regression and readiness review
+
+The [regression review](docs/phase1/INCREMENT_5_3_2_REGRESSION_REVIEW.md) establishes cross-increment security and behavioral stability across domain models, session lifecycle, policy authorization, and workspace boundary discovery. No new features or production code modifications were introduced.
+
+- **Cross-increment regression verification:** Re-validated Increment 5.2/5.2.1, 5.3, and 5.3.1. All suites passed without regressions.
+- **Authorization regression suite:** `experiments/phase1/authorization/Validate.ps1` passed all 13 checks (103 tests passed, 0 failed, 3 ignored for workspace suite). Re-verified A-to-B exploit closure (`POLICY_CONTEXT_BINDING=Passed`), 27/27 authorization regressions, and 2/2 repeated concurrent barrier races (64 rounds and 32 rounds).
+- **Workspace suite and fixture execution:** `experiments/phase1/workspace/Validate.ps1` passed all 11 checks (104 tests passed, 0 failed, 0 not tested). The three previously untested cases were explicitly executed and verified:
+  1. `workspace_windows_junction_is_quarantined_without_target_traversal`: Passed. NTFS junction quarantined immediately without traversing target.
+  2. `workspace_windows_permission_denied_is_not_accepted`: Passed. Deny-ACL fixture returns fail-closed `IoError(PermissionDenied)`.
+  3. `workspace_scale_10000_file_measurement`: Passed across 3 benchmark repeats (~10.1 s elapsed, peak memory ~7.6 MB << 512 MB, entries=10,000, bytes=310,000, complete=true).
+- **Combined workspace toolchain compliance:** `cargo fmt --all -- --check`, `cargo check --workspace --all-targets`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, and `cargo test --workspace` all pass warning-free (101 unit/integration tests + 3 fixture tests via runner + 2 compile-fail doctests = 106 total tests).
+- **Cross-increment security analysis:** Validated that workspace path containment is strictly independent of policy approval; diagnostics redact paths and tokens; cross-operation grants are completely isolated; classification floor cannot be bypassed; target revision changes invalidate grants; and lock acquisitions are atomic and bounded.
+- **Repository and Git preservation:** Inspected clean branch `develop` at `9e838e9` (`Clarify security review and Git evidence`), preserving prior commits `97b49c8`, `c60374d`, and `9e838e9`. Zero Git mutations or network calls were issued.
+- **Readiness decision:** **Conditional Go** for proceeding to Increment 5.4 (Core Engine Persistence with SQLite). In-memory state and CSPRNG limitations remain documented. Increment 5.4 has not started.
 
 ## Completed Phase 0 work
 
