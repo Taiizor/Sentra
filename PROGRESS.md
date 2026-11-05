@@ -4,7 +4,7 @@ Last updated: 2026-11-05.
 
 ## Current status
 
-**Phase 0: complete and closed. Phase 1: explicitly authorized and in progress; Increment 5.2 Core Engine Domain Models, Session State Machine, and Policy Engine complete. Phase 2: NOT authorized.** The x64 Rust/MSVC, SQLite engine, mock AI provider contract, and VM/sandbox isolation validation experiments have executed. Milestone 4 closure review issued a Conditional Go recommendation. Increment 5.1 established the architecture and contracts. Increment 5.2 delivers the first production-code foundation in `crates/sentra-core`: domain primitives, immutable audit events, the 9-state session lifecycle state machine, security classifications, and the default-deny policy engine with human approval broker. Zero third-party dependencies are introduced. All 23 tests pass with warning-free rustfmt, check, and clippy (`-D warnings`). Workspace file discovery, SQLite persistence, and execution backends are not started. The agent has issued no history/reference-changing Git operation.
+**Phase 0: complete and closed. Phase 1: explicitly authorized and in progress; Increment 5.2.1 Security Hardening Review complete (33 tests passing, warning-free). Phase 2: NOT authorized.** The x64 Rust/MSVC, SQLite engine, mock AI provider contract, and VM/sandbox isolation validation experiments have executed. Milestone 4 closure review issued a Conditional Go recommendation. Increment 5.1 established architecture and contracts. Increment 5.2 implemented foundational domain models, the 9-state session lifecycle state machine, and policy engine. Increment 5.2.1 completes a rigorous security hardening review: eliminates delimiter injection in `action_digest` with length-prefixed encoding, binds canonical target paths to `ModifyCheckout`, eliminates floating-point NaN/negative budget bypasses with fixed-point `CostUsd` micro-dollar arithmetic, enforces thread-safe atomic single-use approval grant consumption in `ApprovalBroker` via `std::sync::Mutex`, explicitly separates production vs test UUIDs with fail-closed CSPRNG handling, and enforces Bell-LaPadula information flow rules. All 33 tests pass with warning-free rustfmt, check, and clippy (`-D warnings`). Workspace file discovery, SQLite persistence, and execution backends are not started. The agent has issued no history/reference-changing Git operation.
 
 ## Phase 1 initial milestone
 
@@ -91,6 +91,25 @@ The first production-code foundation for Sentra Core Engine is implemented in `c
 - **Repository state:** Clean `develop` at `c6d62a3` baseline. No commits, tags, pushes, fetches, or pulls were issued by the agent. All Increment 5.2 files remain in the working tree.
 
 Increment 5.2 does not implement file discovery, SQLite persistence, execution backends, or Phase 2 work.
+
+## Phase 1 Increment 5.2.1 — Security hardening review
+
+The [Security Hardening Review report](docs/phase1/INCREMENT_5_2_1_SECURITY_REVIEW.md) is complete and all confirmed weaknesses have been remediated. A focused security audit inspected the Increment 5.2 Rust implementation, identified 6 specific security findings, implemented narrow code corrections, and added 10 targeted regression tests.
+
+- **Action digest delimiter injection remediation:** `OperationAction::ExecuteTool` and `ModifyCheckout` previously relied on plain comma joining or omitted target paths. Implemented length-prefixed argument encoding (`len#value`) and canonical path sorting, mathematically preventing parameter collision and argument injection.
+- **Floating-point budget bypass remediation:** Replaced raw `f64` budget amounts with a validated, fixed-point `CostUsd` type storing integer micro-dollars (`u64`, 1 USD = 1,000,000 micro-USD). Eliminates IEEE-754 `NaN > 1.0 == false` automatic approval bypass vulnerabilities, negative costs, and floating-point precision loss. Added validated `BudgetPolicyConfig`.
+- **Atomic single-use approval consumption:** Synchronized `ApprovalBroker` using internal `std::sync::Mutex<BrokerInner>` and tracked `consumed_requests` alongside `consumed_tokens`. Verified under live concurrency using 20 simultaneous threads racing on a synchronization barrier: exactly 1 thread succeeds in consuming the grant, and all 19 other threads receive `DenialReason::ApprovalReused`. Failed validation does not consume grants.
+- **UUID production/test separation:** Standard library safe Rust cannot directly access OS CSPRNG without unsafe code or third-party dependencies. Separated deterministic test fixture generation from production generation: `Identifier::generate_production_v4()` and `SessionId::generate_production()` explicitly fail closed with `DomainError::EntropySourceUnavailable` rather than silently generating predictable pseudo-random values. Full production CSPRNG is deferred to Increment 5.4.
+- **Information flow and egress enforcement:** Verified Bell-LaPadula simple confidentiality rules: attempting to export data to a lower classification destination returns `DenialReason::ClassificationExceeded`. External egress of `Internal`, `Confidential`, or `Restricted` data requires human approval. Default-deny priority ensures classification checks never grant unknown operations.
+- **Verification outcomes:** All 33 tests pass across four integration test suites:
+  - `domain_tests.rs`: 9 passed
+  - `policy_tests.rs`: 9 passed
+  - `security_tests.rs`: 10 passed (targeting all 5 review areas)
+  - `session_tests.rs`: 5 passed
+- **Toolchain compliance:** `cargo fmt --check`, `cargo check --workspace`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, and `cargo test --workspace` all pass with 0 errors and 0 warnings.
+- **Repository state:** Clean `develop` at `c6d62a3` baseline. No commits, tags, pushes, fetches, or pulls were issued by the agent. All Increment 5.2.1 files remain in the working tree.
+
+Increment 5.2.1 does not implement file discovery, SQLite persistence, execution backends, or Phase 2 work.
 
 ## Completed Phase 0 work
 

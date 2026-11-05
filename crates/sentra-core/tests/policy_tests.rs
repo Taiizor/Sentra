@@ -4,6 +4,7 @@ use sentra_core::{
     policy::{
         action::OperationAction,
         approval::{ApprovalBroker, ApprovalGrant, ApprovalRequest},
+        budget::CostUsd,
         decision::{DenialReason, PolicyDecision},
         engine::PolicyEngine,
     },
@@ -24,7 +25,7 @@ fn create_test_session() -> SessionMetadata {
 
 #[test]
 fn test_default_deny_unknown_operation() {
-    let mut engine = PolicyEngine::new();
+    let engine = PolicyEngine::new();
     let session = create_test_session();
     let clock = MockClock::new(TimestampUtc::from_epoch_secs(1_700_000_000));
 
@@ -50,7 +51,7 @@ fn test_default_deny_unknown_operation() {
 
 #[test]
 fn test_safe_operation_auto_granted_for_non_restricted() {
-    let mut engine = PolicyEngine::new();
+    let engine = PolicyEngine::new();
     let session = create_test_session();
     let clock = MockClock::new(TimestampUtc::from_epoch_secs(1_700_000_000));
 
@@ -72,6 +73,7 @@ fn test_safe_operation_auto_granted_for_non_restricted() {
     let internal_export = OperationAction::ExportReport {
         destination: "artifacts/report.json".to_string(),
         is_external: false,
+        destination_classification: None,
     };
     let decision = engine.evaluate(
         &session,
@@ -85,7 +87,7 @@ fn test_safe_operation_auto_granted_for_non_restricted() {
     // AI model invocation within auto-budget ($0.50 <= $1.00) -> Granted
     let cheap_ai = OperationAction::InvokeProvider {
         model_id: "mock-fast".to_string(),
-        estimated_cost_usd: 0.50,
+        estimated_cost: CostUsd::from_usd_f64(0.50).unwrap(),
     };
     let decision = engine.evaluate(
         &session,
@@ -99,7 +101,7 @@ fn test_safe_operation_auto_granted_for_non_restricted() {
 
 #[test]
 fn test_restricted_classification_always_requires_approval() {
-    let mut engine = PolicyEngine::new();
+    let engine = PolicyEngine::new();
     let session = create_test_session();
     let clock = MockClock::new(TimestampUtc::from_epoch_secs(1_700_000_000));
 
@@ -127,7 +129,7 @@ fn test_restricted_classification_always_requires_approval() {
 
 #[test]
 fn test_sensitive_actions_require_approval() {
-    let mut engine = PolicyEngine::new();
+    let engine = PolicyEngine::new();
     let session = create_test_session();
     let clock = MockClock::new(TimestampUtc::from_epoch_secs(1_700_000_000));
 
@@ -150,7 +152,10 @@ fn test_sensitive_actions_require_approval() {
     );
 
     // 2. Checkout modification (S-10)
-    let modify_action = OperationAction::ModifyCheckout { file_count: 3 };
+    let modify_action = OperationAction::ModifyCheckout {
+        file_count: 3,
+        target_paths: vec!["src/main.rs".to_string(), "Cargo.toml".to_string()],
+    };
     assert!(
         engine
             .evaluate(
@@ -167,6 +172,7 @@ fn test_sensitive_actions_require_approval() {
     let export_external = OperationAction::ExportReport {
         destination: "https://remote.server/api/v1".to_string(),
         is_external: true,
+        destination_classification: None,
     };
     assert!(
         engine
@@ -183,7 +189,7 @@ fn test_sensitive_actions_require_approval() {
     // 4. Cost exceeding auto-budget ceiling ($2.50 > $1.00)
     let expensive_ai = OperationAction::InvokeProvider {
         model_id: "mock-expensive".to_string(),
-        estimated_cost_usd: 2.50,
+        estimated_cost: CostUsd::from_usd_f64(2.50).unwrap(),
     };
     assert!(
         engine
@@ -200,7 +206,7 @@ fn test_sensitive_actions_require_approval() {
 
 #[test]
 fn test_approval_grant_lifecycle_and_single_use_replay_prevention() {
-    let mut engine = PolicyEngine::new();
+    let engine = PolicyEngine::new();
     let session = create_test_session();
     let clock = MockClock::new(TimestampUtc::from_epoch_secs(1_700_000_000));
 
@@ -254,23 +260,24 @@ fn test_approval_grant_lifecycle_and_single_use_replay_prevention() {
         &clock,
     );
 
-    assert_eq!(
+    assert!(matches!(
         replayed_decision,
         PolicyDecision::Denied {
-            reason: DenialReason::ApprovalReused(
-                "token 'token_single_use_abc' was already consumed".to_string()
-            )
+            reason: DenialReason::ApprovalReused(_)
         }
-    );
+    ));
 }
 
 #[test]
 fn test_approval_grant_expiry() {
-    let mut engine = PolicyEngine::new();
+    let engine = PolicyEngine::new();
     let session = create_test_session();
     let clock = MockClock::new(TimestampUtc::from_epoch_secs(1_700_000_000));
 
-    let action = OperationAction::ModifyCheckout { file_count: 1 };
+    let action = OperationAction::ModifyCheckout {
+        file_count: 1,
+        target_paths: vec!["Cargo.lock".to_string()],
+    };
 
     let decision = engine.evaluate(
         &session,
@@ -316,7 +323,7 @@ fn test_approval_grant_expiry() {
 
 #[test]
 fn test_approval_grant_mismatch_rejections() {
-    let mut engine = PolicyEngine::new();
+    let engine = PolicyEngine::new();
     let session = create_test_session();
     let clock = MockClock::new(TimestampUtc::from_epoch_secs(1_700_000_000));
 
@@ -410,7 +417,7 @@ fn test_approval_grant_mismatch_rejections() {
 
 #[test]
 fn test_revoked_approval_request() {
-    let mut broker = ApprovalBroker::new();
+    let broker = ApprovalBroker::new();
     let session_id = SessionId::new();
     let clock = MockClock::new(TimestampUtc::from_epoch_secs(1_700_000_000));
 
@@ -463,7 +470,7 @@ fn test_capability_vs_policy_authorization_separation() {
         }
     }
 
-    let mut engine = PolicyEngine::new();
+    let engine = PolicyEngine::new();
     let session = create_test_session();
     let clock = MockClock::new(TimestampUtc::from_epoch_secs(1_700_000_000));
 
@@ -471,7 +478,10 @@ fn test_capability_vs_policy_authorization_separation() {
         available_capabilities: vec!["vm_exec", "fs_write", "network_egress"],
     };
 
-    let restricted_action = OperationAction::ModifyCheckout { file_count: 5 };
+    let restricted_action = OperationAction::ModifyCheckout {
+        file_count: 5,
+        target_paths: vec!["sensitive.rs".to_string()],
+    };
 
     // Case 1: Backend has capability ("fs_write"), but policy denies without approval!
     assert!(privileged_backend.has_capability("fs_write"));

@@ -1,7 +1,7 @@
 use std::fmt;
 
 use crate::domain::classification::SecurityClassification;
-use crate::policy::approval::ApprovalRequest;
+use crate::policy::{approval::ApprovalRequest, budget::CostUsd};
 
 /// The evaluated outcome of a policy authorization request.
 #[derive(Clone, Debug, PartialEq)]
@@ -64,9 +64,9 @@ pub enum DenialReason {
     /// Operation cost would exceed authorized auto-budget ceiling.
     BudgetExceeded {
         /// The requested USD amount.
-        requested_usd: f64,
+        requested: CostUsd,
         /// The active policy limit in USD.
-        limit_usd: f64,
+        limit: CostUsd,
     },
     /// Path escapes the authorized canonical workspace root.
     PathTraversalAttempt(String),
@@ -103,13 +103,10 @@ impl fmt::Display for DenialReason {
             Self::ApprovalMismatched(msg) => {
                 write!(f, "approval grant does not match action or revision: {msg}")
             }
-            Self::BudgetExceeded {
-                requested_usd,
-                limit_usd,
-            } => {
+            Self::BudgetExceeded { requested, limit } => {
                 write!(
                     f,
-                    "budget exceeded: requested ${requested_usd:.2} exceeds limit ${limit_usd:.2}"
+                    "budget exceeded: requested {requested} exceeds limit {limit}"
                 )
             }
             Self::PathTraversalAttempt(path) => {

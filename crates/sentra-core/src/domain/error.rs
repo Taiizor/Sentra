@@ -19,6 +19,10 @@ pub enum DomainError {
     ApprovalRejected(String),
     /// An operation action payload was malformed.
     ActionMalformed(String),
+    /// A monetary cost or budget calculation was invalid, negative, NaN, or out of range.
+    InvalidCost(String),
+    /// Cryptographically secure OS random source is unavailable in safe Rust std without external dependencies.
+    EntropySourceUnavailable(String),
 }
 
 impl fmt::Display for DomainError {
@@ -31,6 +35,10 @@ impl fmt::Display for DomainError {
             Self::PolicyViolation(msg) => write!(f, "policy violation: {msg}"),
             Self::ApprovalRejected(msg) => write!(f, "approval rejected: {msg}"),
             Self::ActionMalformed(msg) => write!(f, "malformed action: {msg}"),
+            Self::InvalidCost(msg) => write!(f, "invalid cost or budget: {msg}"),
+            Self::EntropySourceUnavailable(msg) => {
+                write!(f, "secure entropy source unavailable: {msg}")
+            }
         }
     }
 }
