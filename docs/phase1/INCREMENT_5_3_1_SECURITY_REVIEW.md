@@ -92,7 +92,7 @@ Run from the repository root:
 pwsh -NoProfile -File experiments/phase1/authorization/Validate.ps1
 ```
 
-The [final raw result](../../experiments/phase1/authorization/results/1793904491573.json) records all 13 exact command arrays, full stdout/stderr, exits, timeouts, individual tests, aggregate summaries, versions, zero dependencies and 37 input SHA-256 digests. Inputs did not change during execution. Environment: Windows 11 x64, reported build 10.0.26300; PowerShell 7.6.9; installed Rust/Cargo 1.99.0, x86_64-pc-windows-msvc. No dependency/toolchain download, network operation, API key, telemetry or host configuration change occurred.
+The [final raw result](../../experiments/phase1/authorization/results/1793904967368.json) records all 13 exact command arrays, full stdout/stderr, exits, timeouts, individual tests, aggregate summaries, versions, zero dependencies and 37 input SHA-256 digests. Inputs did not change during execution. The earlier 1793904491573 record is preserved; the final run strengthens the two compile-fail examples with their real method signatures, without changing runtime behavior or counts. Environment: Windows 11 x64, reported build 10.0.26300; PowerShell 7.6.9; installed Rust/Cargo 1.99.0, x86_64-pc-windows-msvc. No dependency/toolchain download, network operation, API key, telemetry or host configuration change occurred.
 
 | Check | Status | Actual outcome |
 | --- | --- | --- |
@@ -134,6 +134,6 @@ The earlier Failed JSON remains unchanged as historical evidence. The runner bui
 
 ## Repository and scope preservation
 
-Entry was clean develop at 5c6242f9d957abd226b59a550b3106056ad6998d, whose parent is the preserved 4267b42 hardening commit. No initial user changes were present. Changes stay in the working tree. Final verification compares branch, HEAD, history, every reference and index entry against the read-only entry snapshot and checks unchanged workspace/domain/session/dependency/ADR digests.
+Entry was clean develop at 5c6242f9d957abd226b59a550b3106056ad6998d, whose parent is the preserved 4267b42 hardening commit. No initial user changes were present. During this work, external commit 97b49c8d72c348b45722d1685cf5fcc9d3958697 recorded most of the correction and documentation; its parent is 5c6242f. It was inspected and preserved. Entry HEAD/index/reference targets therefore moved outside the agent's issued operations; they are not represented as unchanged throughout the increment. Final Git guards compare against that observed post-commit snapshot, while workspace/domain/session/dependency/ADR digests are still compared against entry. Remaining refinements stay in the working tree.
 
-No commit, amend, reset, rebase, cherry-pick, tag, push, fetch, pull, branch change, staging, unstaging, stash or revert operation was issued. No Git history, reference or index modification occurred. Accepted ADRs and the permanent Git policy are unchanged. Stop is at Increment 5.3.1; no subsequent increment is authorized or started.
+The agent issued no commit, amend, reset, rebase, cherry-pick, tag, push, fetch, pull, branch change, staging, unstaging, stash or revert operation and modified no Git history, reference or index. Author metadata alone does not identify the process that performed the external operation. Accepted ADRs and the permanent Git policy are unchanged. Stop is at Increment 5.3.1; no subsequent increment is authorized or started.
