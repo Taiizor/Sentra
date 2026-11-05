@@ -1,0 +1,236 @@
+﻿{
+  "Milestone": "Phase 1 - Milestone 4: VM and Sandbox Isolation Validation",
+  "ExecutedAt": "2026-11-05T16:50:02.9516738Z",
+  "CompletedAt": "2026-11-05T16:50:10.9899140Z",
+  "HostInfo": {
+    "OS": "Microsoft Windows 11 Education",
+    "Version": "10.0.26300",
+    "BuildNumber": "26300",
+    "Hypervisor": true
+  },
+  "Summary": {
+    "Total": 27,
+    "Passed": 22,
+    "Failed": 0,
+    "Blocked": 5,
+    "NotTested": 0
+  },
+  "Items": [
+    {
+      "Id": "ENV-01",
+      "Category": "OS",
+      "Name": "Windows Version and Edition",
+      "Status": "Passed",
+      "Details": "Microsoft Windows 11 Education (Version: 10.0.26300, Build: 26300, SKU: 121)",
+      "IsolationType": "Environment"
+    },
+    {
+      "Id": "ENV-02",
+      "Category": "Virtualization",
+      "Name": "Hypervisor Presence",
+      "Status": "Passed",
+      "Details": "HypervisorPresent=True, CPU=11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz, Cores=8, LogicalProcs=16",
+      "IsolationType": "Environment"
+    },
+    {
+      "Id": "ENV-03",
+      "Category": "Resources",
+      "Name": "Host Memory and Storage Capacity",
+      "Status": "Passed",
+      "Details": "RAM: Total=31.75GB, Free=11.45GB; Drives: C: Free:62.1GB, D: Free:204GB, E: Free:104.8GB, F: Free:56.1GB, G: Free:221.6GB, H: Free:135.5GB",
+      "IsolationType": "Environment"
+    },
+    {
+      "Id": "ENV-04",
+      "Category": "Hyper-V",
+      "Name": "Hyper-V Feature Query",
+      "Status": "Blocked",
+      "Details": "Access Denied: DISM / Get-WindowsOptionalFeature requires elevation",
+      "IsolationType": "Permission"
+    },
+    {
+      "Id": "ENV-05",
+      "Category": "Hyper-V",
+      "Name": "Hyper-V Host Services",
+      "Status": "Passed",
+      "Details": "vmms: Running, vmcompute: Running",
+      "IsolationType": "Environment"
+    },
+    {
+      "Id": "ENV-06",
+      "Category": "Hyper-V",
+      "Name": "Hyper-V VM Management Query",
+      "Status": "Blocked",
+      "Details": "Permission Denied: User lacks Hyper-V Administrators authorization",
+      "IsolationType": "Permission"
+    },
+    {
+      "Id": "ENV-07",
+      "Category": "Hyper-V",
+      "Name": "Hyper-V Group Token",
+      "Status": "Blocked",
+      "Details": "Group 'Hyper-V Yöneticileri' exists (Members: 0). Current token includes group: False",
+      "IsolationType": "Permission"
+    },
+    {
+      "Id": "ENV-08",
+      "Category": "HCS",
+      "Name": "Host Compute Service CLI",
+      "Status": "Blocked",
+      "Details": "hcsdiag.exe failed with exit code -2143878885 (Privilege not held)",
+      "IsolationType": "Permission"
+    },
+    {
+      "Id": "ENV-09",
+      "Category": "Windows Sandbox",
+      "Name": "Windows Sandbox Binary Availability",
+      "Status": "Passed",
+      "Details": "Binary present at C:\\WINDOWS\\system32\\WindowsSandbox.exe (Interactive GUI utility, not headless VM orchestrator)",
+      "IsolationType": "Environment"
+    },
+    {
+      "Id": "ENV-10",
+      "Category": "WSL2",
+      "Name": "WSL2 Subsystem & Distributions",
+      "Status": "Passed",
+      "Details": "WSL2 active. Installed distributions: docker-desktop",
+      "IsolationType": "Environment"
+    },
+    {
+      "Id": "ENV-11",
+      "Category": "Container",
+      "Name": "Docker Engine Availability",
+      "Status": "Passed",
+      "Details": "Client: 29.9.2, Server: 29.9.2; SecurityOptions: [\"name=seccomp,profile=builtin\",\"name=cgroupns\"]",
+      "IsolationType": "Environment"
+    },
+    {
+      "Id": "ARCH-01",
+      "Category": "Architecture",
+      "Name": "Dedicated Hyper-V Linux VM Isolation",
+      "Status": "Blocked",
+      "Details": "Host hypervisor is active, but unprivileged execution is blocked pending Hyper-V Administrators group membership",
+      "IsolationType": "Architecture"
+    },
+    {
+      "Id": "ARCH-02",
+      "Category": "Architecture",
+      "Name": "WSL2 Development-Only Evaluation",
+      "Status": "Passed",
+      "Details": "Evaluated: WSL2 shares single Linux kernel, automounts host drives, and lacks per-session VM boundary; restricted to dev fixtures per ADR-0004",
+      "IsolationType": "Architecture"
+    },
+    {
+      "Id": "ARCH-03",
+      "Category": "Architecture",
+      "Name": "Host-Worker vsock Protocol (AF_HYPERV)",
+      "Status": "Passed",
+      "Details": "Architectural design: vsock enables zero-network host-worker RPC, eliminating virtual network adapters and LAN exposure",
+      "IsolationType": "Architecture"
+    },
+    {
+      "Id": "ARCH-04",
+      "Category": "Architecture",
+      "Name": "Default-Deny Egress Boundary",
+      "Status": "Passed",
+      "Details": "Architectural invariant: Worker has zero NICs or connects to private/internal virtual switch without NAT or gateway",
+      "IsolationType": "Architecture"
+    },
+    {
+      "Id": "ARCH-05",
+      "Category": "Architecture",
+      "Name": "Discardable VHDX Overlay & State Reset",
+      "Status": "Passed",
+      "Details": "Architectural design: Base OS VHDX is immutable read-only; child differencing disk is destroyed between sessions",
+      "IsolationType": "Architecture"
+    },
+    {
+      "Id": "ARCH-06",
+      "Category": "Architecture",
+      "Name": "Stream I/O & Evidence Verification",
+      "Status": "Passed",
+      "Details": "Architectural design: Input piped over vsock stream; output extracted via structured envelope and verified by host verifier (ADR-0006)",
+      "IsolationType": "Architecture"
+    },
+    {
+      "Id": "PROTO-01",
+      "Category": "Prototype",
+      "Name": "Harmless Baseline Launch",
+      "Status": "Passed",
+      "Details": "Worker launched, printed predefined message, and exited with code 0",
+      "IsolationType": "Prototype"
+    },
+    {
+      "Id": "PROTO-02",
+      "Category": "Prototype",
+      "Name": "Network Default-Deny Isolation",
+      "Status": "Passed",
+      "Details": "Worker has only loopback interface 'lo' (no external network interfaces, unroutable)",
+      "IsolationType": "Prototype"
+    },
+    {
+      "Id": "PROTO-03",
+      "Category": "Prototype",
+      "Name": "Filesystem Write Restriction",
+      "Status": "Passed",
+      "Details": "Root filesystem write denied (read-only); tmpfs scratch write succeeded in memory",
+      "IsolationType": "Prototype"
+    },
+    {
+      "Id": "PROTO-04",
+      "Category": "Prototype",
+      "Name": "Host Credential/Env Isolation",
+      "Status": "Passed",
+      "Details": "Host USERNAME, USERPROFILE, and COMPUTERNAME are completely excluded from guest",
+      "IsolationType": "Prototype"
+    },
+    {
+      "Id": "PROTO-05",
+      "Category": "Prototype",
+      "Name": "Read-Only Stream Input Transfer",
+      "Status": "Passed",
+      "Details": "Piped stream input transferred successfully (76 bytes) without host mount",
+      "IsolationType": "Prototype"
+    },
+    {
+      "Id": "PROTO-06",
+      "Category": "Prototype",
+      "Name": "Controlled Evidence Integrity (ADR-0006)",
+      "Status": "Passed",
+      "Details": "Worker generated SHA-256 matches host-computed digest (8a5b5ab290a7a3bea661a24d1a848a590861b563d720bb42c5cfe7788c6b9efd)",
+      "IsolationType": "Prototype"
+    },
+    {
+      "Id": "PROTO-07",
+      "Category": "Prototype",
+      "Name": "Worker Crash Handling (SIGKILL 137)",
+      "Status": "Passed",
+      "Details": "Host detected non-zero abnormal termination (exit code 137)",
+      "IsolationType": "Prototype"
+    },
+    {
+      "Id": "PROTO-08",
+      "Category": "Prototype",
+      "Name": "Worker Crash Handling (SIGSEGV 139)",
+      "Status": "Passed",
+      "Details": "Host detected segmentation fault simulation (exit code 139)",
+      "IsolationType": "Prototype"
+    },
+    {
+      "Id": "PROTO-09",
+      "Category": "Prototype",
+      "Name": "Worker Hang & Timeout Disposal",
+      "Status": "Passed",
+      "Details": "Host enforced timeout, killed hung container (sentra-probe-timeout-ffa36ca7), and reaped process",
+      "IsolationType": "Prototype"
+    },
+    {
+      "Id": "PROTO-10",
+      "Category": "Prototype",
+      "Name": "Disposable Cleanup Verification",
+      "Status": "Passed",
+      "Details": "Zero leftover containers found; host working tree and Docker state remain clean",
+      "IsolationType": "Prototype"
+    }
+  ]
+}

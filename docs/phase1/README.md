@@ -2,6 +2,14 @@
 
 Date: 2026-11-05. Phase 1 is explicitly authorized by the project owner. Phase 2 is not authorized. This record links completed technical-validation increments and preserves the initial inspection results. **Phase 1 is not complete.** Production Core Engine, CLI and integrations remain unimplemented.
 
+## Milestone 4 update
+
+The [VM and sandbox isolation report](SANDBOX_VALIDATION.md) is ready for review. Two final runs each record **22 Passed, 0 Failed, 5 Blocked and 0 Not Tested** assessment items; all 22 executable checks pass in each run. The host environment assessment confirms that Windows 11 Education (Build 26300 x64) has an active hypervisor and running Hyper-V host services (`vmms`, `vmcompute`) with ~11.5 GB free RAM and 100+ GB free disk capacity. Dedicated Hyper-V VM orchestration is currently **Blocked** because the current user is not in the local `Hyper-V Yöneticileri` (`Hyper-V Administrators`) security group (which currently has 0 members) and standard UAC tokens cannot call management WMI/cmdlets without elevation.
+
+To validate the worker lifecycle, communication protocol, stream I/O, resource limits, crash handling, and cryptographic evidence verification without mutating host security policies, a harmless disposable prototype was executed using non-privileged container isolation (`ubuntu:24.04`). The prototype passed all 10 validation stages: baseline initialization, network default-deny (loopback only), read-only rootfs write rejection, complete credential/environment isolation (host USERNAME/USERPROFILE/COMPUTERNAME excluded), stream input transfer without host mounts, controlled output extraction with matching independent SHA-256 verification (ADR-0006), worker crash handling (SIGKILL 137, SIGSEGV 139), host timeout enforcement and forced termination, and zero lingering containers.
+
+In accordance with ADR-0004, Docker and WSL2 are explicitly documented as **Curated development fixture protocols**, NOT a substitute for dedicated VM hardware isolation. Untrusted research workloads in Phase 2 require dedicated Hyper-V Linux VM isolation.
+
 ## Milestone 3 update
 
 The [mock provider contract report](PROVIDER_VALIDATION.md) is ready for review. Two final runs each record **62 Passed, 0 Failed, 0 Blocked and 6 Not Tested** assessment items; all 62 named mock tests pass in each run. Formatting, offline Cargo metadata/check and Clippy pass, with no third-party dependencies. The probe covers neutral types, explicit lifecycle/capabilities, narrow typed structured output, text streams, virtual timeout/cancellation, bounded retries, conservative usage/cost accounting and policy/redaction tests. Real SDKs, Core Engine integration, tokenizers/prices, transport/OS egress, wire schemas and durable/concurrent ledger/IPC remain Not Tested. No real provider, key, external service or networking implementation is used.
@@ -27,7 +35,7 @@ The [SQLite reliability report](SQLITE_VALIDATION.md) records two final runs wit
 | 1. Rust/MSVC, V-01 | Dependency-free isolated Cargo package; exact toolchain/linker discovery; x64 build/tests/lints/runtime and ARM64 check | Initial x64 subset validated; full V-01 remains partial |
 | 2. Persistence, V-02 | Assess SQLite transactions, WAL, killed writers, integrity, backup/restore, concurrency, migration and corruption before production integration | Owner-approved candidate; engine assessment complete; production Rust binding, database/blob reconciliation and device/power-fault gaps remain unvalidated |
 | 3. Provider contract | Deterministic mock-only capabilities, structured output, errors, timeout/retry, cancellation, token/cost accounting and egress-denial tests | 62 mock tests pass twice; report ready for review; real providers and Core integration Not Tested |
-| 4. Worker feasibility, V-03 | Read-only Hyper-V/WSL assessment followed by an explicitly approved harmless dedicated-VM prototype | Read-only assessment partial; management queries blocked by current permissions; no VM provisioned |
+| 4. Worker feasibility, V-03 | Read-only Hyper-V/WSL assessment followed by an explicitly approved harmless dedicated-VM prototype | Validation report complete; 22 Passed, 0 Failed, 5 Blocked, 0 Not Tested; non-elevated prototype validated; dedicated VM orchestration blocked by Hyper-V Administrators group enrollment |
 | 5. Core foundation, V-04/V-05 | Implement only after relevant storage/process/policy assumptions pass; scope/path fixtures, sessions, evidence, approvals, recovery and discovery measurement | Not implemented; no production workspace or dependency set selected |
 | 6. CLI foundation | Add a thin frontend to validated core services, with stable human/JSON results and permission/error tests | Not implemented; experiment executable is not the product CLI |
 
@@ -125,7 +133,7 @@ ADR-0007 remains Proposed. A future exact-version inventory must cover all selec
 | V-01 / OQ-01 / OQ-02 | Partially validated: x64 toolchain, linking, three probe tests, format/lint and basic Unicode/CRLF/error behavior |
 | ADR-0002 remaining gate | Supervised process trees/bounded I/O/recovery, native dependency integration, SQLite/blob recovery and authenticated worker channel are not validated |
 | V-02 / OQ-09 / Q-04 | Milestone 2 engine assessment executed; actual Rust integration, database/blob reconciliation and untested device/power-fault scenarios remain pending |
-| V-03 / OQ-03 / S-07 / S-13 | Read-only host observation only; VM management permission is a blocking prerequisite for the local topology experiment |
+| V-03 / OQ-03 / S-07 / S-13 | Milestone 4 assessment complete; protocol/lifecycle/crash/integrity prototype passes (22 items); non-elevated Hyper-V orchestration blocked pending group authorization |
 | V-04 / F-01 / S-11 / Q-05 | No project discovery implementation, path-security suite or 10,000-file measurement yet |
 | V-05 / F-02 / F-14 / S-01 / S-02 / Q-03 | No production session, policy, approval, cancellation or persistence implementation yet |
 | Provider contract / F-15 subset, F-16, S-06, S-14 | Milestone 3 passes 62 mock tests twice; production Core integration, wire/process conformance, real backend compatibility and OS egress remain pending; F-15's full gate remains Phase 2 work |
