@@ -4,6 +4,10 @@ Last updated: 2026-11-05.
 
 ## Current status
 
+**Phase 1 Increment 5.3: metadata-only workspace implementation and filesystem validation ready for review. Phase 2: NOT authorized.** The [workspace report](docs/phase1/INCREMENT_5_3_WORKSPACE_VALIDATION.md) records 76 passing tests, actual Windows symlink/junction/permission fixtures and three 10,000-file measurements. A separate synthetic probe **Failed** for a preexisting PolicyEngine current-action approval-binding gap; composed authorization remains **Blocked**. No race-free filesystem isolation, content-access capability, persistence or execution backend is claimed. Increment 5.4 has not started.
+
+### Status at Increment 5.3 entry (historical)
+
 **Phase 0: complete and closed. Phase 1: explicitly authorized and in progress; Increment 5.2.1 Security Hardening Review complete (33 tests passing, warning-free). Phase 2: NOT authorized.** The x64 Rust/MSVC, SQLite engine, mock AI provider contract, and VM/sandbox isolation validation experiments have executed. Milestone 4 closure review issued a Conditional Go recommendation. Increment 5.1 established architecture and contracts. Increment 5.2 implemented foundational domain models, the 9-state session lifecycle state machine, and policy engine. Increment 5.2.1 completes a rigorous security hardening review: eliminates delimiter injection in `action_digest` with length-prefixed encoding, binds canonical target paths to `ModifyCheckout`, eliminates floating-point NaN/negative budget bypasses with fixed-point `CostUsd` micro-dollar arithmetic, enforces thread-safe atomic single-use approval grant consumption in `ApprovalBroker` via `std::sync::Mutex`, explicitly separates production vs test UUIDs with fail-closed CSPRNG handling, and enforces Bell-LaPadula information flow rules. All 33 tests pass with warning-free rustfmt, check, and clippy (`-D warnings`). Workspace file discovery, SQLite persistence, and execution backends are not started. The agent has issued no history/reference-changing Git operation.
 
 ## Phase 1 initial milestone
@@ -110,6 +114,19 @@ The [Security Hardening Review report](docs/phase1/INCREMENT_5_2_1_SECURITY_REVI
 - **Repository state:** Clean `develop` at `c6d62a3` baseline. No commits, tags, pushes, fetches, or pulls were issued by the agent. All Increment 5.2.1 files remain in the working tree.
 
 Increment 5.2.1 does not implement file discovery, SQLite persistence, execution backends, or Phase 2 work.
+
+## Phase 1 Increment 5.3 — Workspace boundary and metadata discovery
+
+The [validation report](docs/phase1/INCREMENT_5_3_WORKSPACE_VALIDATION.md) and [reproducible runner](experiments/phase1/workspace/Validate.ps1) record the implementation and exact limits. The workspace module preserves SessionId, SecurityClassification, zero third-party dependencies, edition 2024 and the unsafe-code prohibition. Existing session/policy/domain files were preserved; only the workspace module export was added to lib.rs.
+
+- **Implemented and tested:** canonical local Windows root; retained metadata handles and boundary-instance binding; component containment; traversal/ADS/DOS/UNC/device-prefix denial; conservative quarantine of every reparse point; opaque .git metadata; name-only Cargo detection; entry/depth/file-length/name-buffer limits and explicit incomplete inventories. There is no content-open or execution API and discovery issues no grants.
+- **Passed:** 76 unique executable cases: 33 existing tests, 3 new workspace unit tests and 40 Windows integration cases. Normal cargo test records 73 Passed and three explicitly ignored fixture/scale cases; the runner actually executes all three separately, with the scale case repeated three times. Format, offline check and warning-free Clippy pass.
+- **Q-05 fixture measurement:** 10,000 files / 310,000 bytes, two directories, Unicode/spaced names and depths 1–3; discovery 9,470 / 9,574 / 9,519 ms and observed process peak working sets 7,565,312 / 7,532,544 / 7,557,120 bytes. This is one Windows x64 NTFS host, not a 100-MiB/full-platform performance claim.
+- **Known security limits:** exact reparse tags, stable file IDs, strong handle-relative opens, adversarial ABA/hard-link aliasing, mapped providers and case-sensitive NTFS remain unvalidated. Retained metadata handles did not exclude writers. Metadata observations confer no later read/export/modify/execute permission; strong identity and authorization must be established at the future operation.
+- **Separate Failed security probe:** a valid grant for Restricted metadata action A is accepted by existing PolicyEngine::evaluate for action B. The broker checks the old request, not the current operation context. [Probe evidence](experiments/phase1/workspace/results/policy-context.json) is separate from the 76 passing cases. Policy code was not modified; current-context authorization integration is Blocked pending a focused correction and regression tests.
+- **Repository preservation:** entry develop/c849a8a contained 13 intentional hardening changes. External commit 4267b42 recorded those changes during this work; it was inspected and preserved. The agent issued no history/reference/index mutation. New 5.3 edits remain in the working tree. All seven ADRs and existing dependency manifests/lockfile remain unchanged.
+
+No target code, build script, scanner, Git command, package manager or provider was invoked by discovery. Only reviewed project tooling and synthetic test/probe executables ran. Temporary ACL changes applied solely to owned fixtures were restored; junctions were unlinked without traversing targets. Full Phase 1 acceptance is not claimed. Stop remains at Increment 5.3; no Increment 5.4 or Phase 2 work is authorized by this report.
 
 ## Completed Phase 0 work
 

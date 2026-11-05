@@ -24,6 +24,8 @@ pub mod domain;
 pub mod policy;
 /// Session lifecycle, state machine, and metadata.
 pub mod session;
+/// Canonical workspace boundaries, indirection quarantine and metadata-only discovery.
+pub mod workspace;
 
 pub use audit::{AuditEvent, AuditEventKind};
 pub use common::{Clock, MockClock, SystemClock};

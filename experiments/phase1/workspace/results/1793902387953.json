@@ -1,0 +1,689 @@
+{
+  "increment": "Phase 1 / Increment 5.3",
+  "observed_at_utc": "2026-11-05T18:14:28.5845851+00:00",
+  "environment": {
+    "powershell": "7.6.9",
+    "os": "Microsoft Windows 10.0.26300",
+    "architecture": "X64",
+    "cpu": "11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz",
+    "memory_bytes": 34091286528
+  },
+  "input_sha256": {
+    "Cargo.toml": "ed8c7a2be82195af0ec64bb0b33f355f66f47f9d8f04224f0a6a22dd39a2dd32",
+    "Cargo.lock": "be2d59d11d8eb1238c33c8370caf0273857ebed4615fe98e958525f3e66bdf01",
+    "crates/sentra-core/Cargo.toml": "3cf3ee1d3eb30d93a81a607a843480501154248f6ea41efc7a7bbfcf4ca566f2",
+    "experiments/phase1/workspace/Validate.ps1": "fd826d3230e16cfd7d1ea098762d8cbaf01f5304bba493a67910feba6ef0cf7a",
+    "crates/sentra-core/src/lib.rs": "0828054740439bfc7d4af6f9f0bd95579d828b5ee1df8c257810cf9360001b99",
+    "crates/sentra-core/src/audit/event.rs": "39b67aed6d79a3cd870f96ff7eb1cfab7b23b77dcb089da070e1f13fbc29b443",
+    "crates/sentra-core/src/audit/mod.rs": "0e96769b8ba9d29bba489f0985fcd0697f5c57ce189e78af0c450a2bfe244734",
+    "crates/sentra-core/src/common/clock.rs": "fb4832d4730294162d53210db4f92608d033bd7de0c9139f213d2db228a98358",
+    "crates/sentra-core/src/common/mod.rs": "c3b31f5c989c4eae942f930f2982b942b33891f27ca8fdc7b1768c61ec8c5274",
+    "crates/sentra-core/src/domain/classification.rs": "860f9bdad583489a80e57928f7beafafb31e4aae3e4b7fb908a60023f4b0930b",
+    "crates/sentra-core/src/domain/error.rs": "751ea216e4a840a84e954a15abee0d120f3e2737509cf02d6a4c7dcd640ee51c",
+    "crates/sentra-core/src/domain/id.rs": "f0372af022c6444bb42fda81e54682ae456674db76e284c9fa67c5fb6883bddf",
+    "crates/sentra-core/src/domain/mod.rs": "f1e35a5fb35edd813cf1bae63d935dea8f4c7b2e28b1613741a437a2bf726f01",
+    "crates/sentra-core/src/domain/time.rs": "a6dc1ee086339dc9906ed40fbb841cb70122ac36420512bb138d8cce64d25c00",
+    "crates/sentra-core/src/policy/action.rs": "12adb68db920d078f2f6337aa51ff149fccab2ba8a5972b9519c722410af7c35",
+    "crates/sentra-core/src/policy/approval.rs": "5a5643cdc88e6dfd9bb7e9d192d11bba3fd77686d9eea070067d120c0943423a",
+    "crates/sentra-core/src/policy/budget.rs": "9c9f5245fcbf9f531ef6c076a9a5496829c4447132f368baa3497f9f03ed6ee1",
+    "crates/sentra-core/src/policy/decision.rs": "2ea03bcdd4a58d4dc827f3cf4da984749c138d7553682b67f150b86d9efb97af",
+    "crates/sentra-core/src/policy/engine.rs": "6fd374177dc451718d372d8d5428e0099e6d2311b00f9edf4c076c8c5e0bb517",
+    "crates/sentra-core/src/policy/mod.rs": "ee8f722021c88a85920c4e14332708fc2796f018a930bfe1d5dfc604fb10b719",
+    "crates/sentra-core/src/session/machine.rs": "d540af726063cd5c108dd05c5bb729dc93d6ba2a9fb5d8733977f3736820cf11",
+    "crates/sentra-core/src/session/metadata.rs": "befa1d8d088ea3539d043fe407f3c75b865fb011d3ae05c12a96f66c85a43931",
+    "crates/sentra-core/src/session/mod.rs": "eb74a1d363dcb7a41ef5307fe1c1f2ea62fa63c05aa26f6845475378aa9c7fd6",
+    "crates/sentra-core/src/session/state.rs": "545eb479c42bff3ffde949ed2dda5abebf09ac172f52867bb6fdce1085d73e8c",
+    "crates/sentra-core/src/workspace/boundary.rs": "b513ec3f040fa2948d5720c2e04f560483565cf1831dfd993779b6cb392156f5",
+    "crates/sentra-core/src/workspace/discovery.rs": "0e54cf60dc7aab30caa934ccd0509949c2b5cb64be53a97d8f181a27c6cfef0d",
+    "crates/sentra-core/src/workspace/error.rs": "60ce8a1585d3250ba8639135b11ca99f4cc6895cb8251fafd1ed7caa8e133e2a",
+    "crates/sentra-core/src/workspace/mod.rs": "152d90a1c1bafb2e2e366af2175ee7bc4c8ae7bd5f882310c6266ab895e2a9e0",
+    "crates/sentra-core/src/workspace/model.rs": "461db7a3791607724d0d39183bf12ab64a67ac8b3ac2c15fe619b7b4aaa30653",
+    "crates/sentra-core/src/workspace/platform.rs": "9b5f51919bfd496600bdd0b5ae2eca1a097cf4bbd7c1f2fb39826270490186a0",
+    "crates/sentra-core/tests/domain_tests.rs": "e8e19591e1f841320facef1f714cec89ac5eff77f8cd7b5cce319f84c2fb0c26",
+    "crates/sentra-core/tests/policy_tests.rs": "d9349498840ed7e29a73a885b3e3d61e9acbb315f98d294e3d2276c5972d64f3",
+    "crates/sentra-core/tests/security_tests.rs": "f5616286409e05b718d2d4677cd8c620c5f4751f8ba14eb077c959b288f245e5",
+    "crates/sentra-core/tests/session_tests.rs": "9915e30233c9dd04ac8b0cddc2e3ffe8b040c4cbd2250c4e09c81f2a7b713d17",
+    "crates/sentra-core/tests/workspace_tests.rs": "ef5916280c643c921f72200d76bed5f5ca322f9c54a1773ef0b822e8fc4edfb9"
+  },
+  "inputs_unchanged_during_validation": true,
+  "fixtures": [
+    {
+      "name": "junction fixtures",
+      "status": "Passed",
+      "reason": "Owned internal and external junctions created without elevation."
+    },
+    {
+      "name": "permission-denied fixtures",
+      "status": "Passed",
+      "reason": "Read denial applied only to two owned disposable objects; originals retained for cleanup."
+    }
+  ],
+  "checks": [
+    {
+      "name": "rustc-version",
+      "executable": "C:/Users/Taiizor/.cargo/bin/rustc.exe",
+      "arguments": [
+        "-vV"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 102,
+      "peak_working_set_bytes": 11649024,
+      "stdout": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.0\nLLVM version: 23.1.1\n",
+      "stderr": "",
+      "tests": []
+    },
+    {
+      "name": "cargo-version",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "--version"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 71,
+      "peak_working_set_bytes": 11780096,
+      "stdout": "cargo 1.99.0 (5f94df478 2026-08-27)\n",
+      "stderr": "",
+      "tests": []
+    },
+    {
+      "name": "format",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 250,
+      "peak_working_set_bytes": 11833344,
+      "stdout": "",
+      "stderr": "",
+      "tests": []
+    },
+    {
+      "name": "check",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "check",
+        "--offline",
+        "--workspace"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 303,
+      "peak_working_set_bytes": 11599872,
+      "stdout": "",
+      "stderr": "    Checking sentra-core v0.1.0 (E:\\MyProject\\Mix\\GitHub\\Sentra\\crates\\sentra-core)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.22s\n",
+      "tests": []
+    },
+    {
+      "name": "clippy",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "clippy",
+        "--offline",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 827,
+      "peak_working_set_bytes": 12279808,
+      "stdout": "",
+      "stderr": "    Checking sentra-core v0.1.0 (E:\\MyProject\\Mix\\GitHub\\Sentra\\crates\\sentra-core)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.65s\n",
+      "tests": []
+    },
+    {
+      "name": "workspace-tests",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "test",
+        "--offline",
+        "--workspace"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 30860,
+      "peak_working_set_bytes": 12632064,
+      "stdout": "\nrunning 3 tests\ntest workspace::discovery::tests::unstable_directory_retracts_its_subtree_without_string_prefix_collisions ... ok\ntest workspace::platform::tests::reparse_and_unknown_attributes_override_ordinary_types ... ok\ntest workspace::platform::tests::replacement_by_symlink_between_check_and_open_is_rejected ... ok\n\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 9 tests\ntest test_deterministic_and_sequential_identifiers ... ok\ntest test_identifier_bytes_roundtrip ... ok\ntest test_identifier_invalid_strings ... ok\ntest test_security_classification_egress_and_parsing ... ok\ntest test_security_classification_ranking_and_pairwise_flow ... ok\ntest test_timestamp_expiry_and_arithmetic ... ok\ntest test_timestamp_invalid_rfc3339 ... ok\ntest test_timestamp_utc_roundtrip_and_rfc3339 ... ok\ntest test_typed_identifiers ... ok\n\ntest result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 9 tests\ntest test_approval_grant_expiry ... ok\ntest test_approval_grant_lifecycle_and_single_use_replay_prevention ... ok\ntest test_approval_grant_mismatch_rejections ... ok\ntest test_capability_vs_policy_authorization_separation ... ok\ntest test_default_deny_unknown_operation ... ok\ntest test_restricted_classification_always_requires_approval ... ok\ntest test_revoked_approval_request ... ok\ntest test_safe_operation_auto_granted_for_non_restricted ... ok\ntest test_sensitive_actions_require_approval ... ok\n\ntest result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 10 tests\ntest test_action_digest_argument_delimiter_injection_resistance ... ok\ntest test_action_digest_modify_checkout_target_binding_and_canonical_sorting ... ok\ntest test_bell_lapadula_flow_enforcement_prevents_write_down ... ok\ntest test_budget_threshold_boundary_precision ... ok\ntest test_classification_check_never_accidentally_grants_unknown_operation ... ok\ntest test_cost_usd_fixed_point_exact_arithmetic ... ok\ntest test_cost_usd_rejects_nan_infinity_and_negative_amounts ... ok\ntest test_failed_validation_does_not_consume_grant ... ok\ntest test_uuid_version_variant_and_production_fail_closed ... ok\ntest test_concurrent_single_use_approval_consumption_exact_winner ... ok\n\ntest result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n\n\nrunning 5 tests\ntest test_complete_9x9_transition_matrix ... ok\ntest test_metadata_validation ... ok\ntest test_state_machine_invalid_transition_invariants ... ok\ntest test_state_machine_valid_lifecycle_and_audit_emission ... ok\ntest test_terminal_states_are_permanent ... ok\n\ntest result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 40 tests\ntest workspace_classification_is_preserved_and_does_not_issue_grants ... ok\ntest workspace_absolute_case_alias_uses_filesystem_semantics ... ok\ntest workspace_directory_change_invalidates_retained_observation ... ok\ntest workspace_discovery_normal_nested_and_empty_directories ... ok\ntest workspace_external_directory_symlink_hides_outside_metadata ... ok\ntest workspace_file_size_limit_quarantines_without_content_read ... ok\ntest workspace_entry_limit_distinguishes_exact_capacity_from_overflow ... ok\ntest workspace_file_symlink_external_target_is_quarantined ... ok\ntest workspace_depth_limits_report_partial_instead_of_clean ... ok\ntest workspace_file_symlink_internal_target_is_quarantined ... ok\ntest workspace_git_directory_is_opaque_including_case_alias ... ok\ntest workspace_git_pointer_and_invalid_manifests_are_not_read ... ok\ntest workspace_limits_and_content_read_requests_are_validated ... ok\ntest workspace_inventory_byte_limit_stops_with_explicit_status ... ok\ntest workspace_internal_directory_symlink_is_not_traversed ... ok\ntest workspace_missing_leaf_is_not_a_valid_future_path ... ok\ntest workspace_metadata_changed_after_resolution_is_rejected ... ok\ntest workspace_missing_root_and_file_root_fail_typed ... ok\ntest workspace_nested_and_cyclic_symlinks_terminate_without_following ... ok\ntest workspace_nul_ads_reserved_names_and_win32_aliases_fail_closed ... ok\ntest workspace_nested_entries_cannot_exceed_global_budget ... ok\ntest workspace_observation_is_bound_to_root_instance_not_equal_path_string ... ok\ntest workspace_ordinary_diagnostics_redact_absolute_and_relative_payloads ... ok\ntest workspace_no_discovered_build_hook_script_or_executable_is_run ... ok\ntest workspace_oversized_path_is_rejected_before_io ... ok\ntest workspace_outside_sibling_and_string_prefix_collision_are_rejected ... ok\ntest workspace_parent_components_are_never_lexically_excused ... ok\ntest workspace_relative_root_is_resolved_against_actual_cwd ... ok\ntest workspace_preexisting_writer_changes_invalidate_retained_observation ... ok\ntest workspace_relative_absolute_dot_and_repeated_separators ... ok\ntest workspace_replacement_with_symlink_before_resolution_is_rejected ... ok\ntest workspace_scale_10000_file_measurement ... ignored, explicit 10,000-file benchmark; run experiments/phase1/workspace/Validate.ps1\ntest workspace_windows_junction_is_quarantined_without_target_traversal ... ignored, requires owned junction fixture; run experiments/phase1/workspace/Validate.ps1\ntest workspace_windows_permission_denied_is_not_accepted ... ignored, requires owned deny-ACL fixture; run experiments/phase1/workspace/Validate.ps1\ntest workspace_root_dot_is_canonicalized_without_changing_process_cwd ... ok\ntest workspace_root_and_root_ancestor_symlinks_are_rejected ... ok\ntest workspace_unc_devices_and_ambiguous_prefixes_fail_before_access ... ok\ntest workspace_retained_handles_deny_observed_rename_attempts ... ok\ntest workspace_valid_root_is_canonical_and_session_classified ... ok\ntest workspace_total_file_length_limit_reports_incomplete ... ok\n\ntest result: ok. 37 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.08s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+      "stderr": "   Compiling sentra-core v0.1.0 (E:\\MyProject\\Mix\\GitHub\\Sentra\\crates\\sentra-core)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.70s\n     Running unittests src\\lib.rs (target\\debug\\deps\\sentra_core-c027dc5c8fa9d493.exe)\n     Running tests\\domain_tests.rs (target\\debug\\deps\\domain_tests-55081acecca296f8.exe)\n     Running tests\\policy_tests.rs (target\\debug\\deps\\policy_tests-cff7e2ce048b37bf.exe)\n     Running tests\\security_tests.rs (target\\debug\\deps\\security_tests-5fabbeb61acd0772.exe)\n     Running tests\\session_tests.rs (target\\debug\\deps\\session_tests-ac84e635000d1c5e.exe)\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-dfc3e4565437b642.exe)\n   Doc-tests sentra_core\n",
+      "tests": [
+        {
+          "name": "workspace::discovery::tests::unstable_directory_retracts_its_subtree_without_string_prefix_collisions",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace::platform::tests::reparse_and_unknown_attributes_override_ordinary_types",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace::platform::tests::replacement_by_symlink_between_check_and_open_is_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "test_deterministic_and_sequential_identifiers",
+          "status": "Passed"
+        },
+        {
+          "name": "test_identifier_bytes_roundtrip",
+          "status": "Passed"
+        },
+        {
+          "name": "test_identifier_invalid_strings",
+          "status": "Passed"
+        },
+        {
+          "name": "test_security_classification_egress_and_parsing",
+          "status": "Passed"
+        },
+        {
+          "name": "test_security_classification_ranking_and_pairwise_flow",
+          "status": "Passed"
+        },
+        {
+          "name": "test_timestamp_expiry_and_arithmetic",
+          "status": "Passed"
+        },
+        {
+          "name": "test_timestamp_invalid_rfc3339",
+          "status": "Passed"
+        },
+        {
+          "name": "test_timestamp_utc_roundtrip_and_rfc3339",
+          "status": "Passed"
+        },
+        {
+          "name": "test_typed_identifiers",
+          "status": "Passed"
+        },
+        {
+          "name": "test_approval_grant_expiry",
+          "status": "Passed"
+        },
+        {
+          "name": "test_approval_grant_lifecycle_and_single_use_replay_prevention",
+          "status": "Passed"
+        },
+        {
+          "name": "test_approval_grant_mismatch_rejections",
+          "status": "Passed"
+        },
+        {
+          "name": "test_capability_vs_policy_authorization_separation",
+          "status": "Passed"
+        },
+        {
+          "name": "test_default_deny_unknown_operation",
+          "status": "Passed"
+        },
+        {
+          "name": "test_restricted_classification_always_requires_approval",
+          "status": "Passed"
+        },
+        {
+          "name": "test_revoked_approval_request",
+          "status": "Passed"
+        },
+        {
+          "name": "test_safe_operation_auto_granted_for_non_restricted",
+          "status": "Passed"
+        },
+        {
+          "name": "test_sensitive_actions_require_approval",
+          "status": "Passed"
+        },
+        {
+          "name": "test_action_digest_argument_delimiter_injection_resistance",
+          "status": "Passed"
+        },
+        {
+          "name": "test_action_digest_modify_checkout_target_binding_and_canonical_sorting",
+          "status": "Passed"
+        },
+        {
+          "name": "test_bell_lapadula_flow_enforcement_prevents_write_down",
+          "status": "Passed"
+        },
+        {
+          "name": "test_budget_threshold_boundary_precision",
+          "status": "Passed"
+        },
+        {
+          "name": "test_classification_check_never_accidentally_grants_unknown_operation",
+          "status": "Passed"
+        },
+        {
+          "name": "test_cost_usd_fixed_point_exact_arithmetic",
+          "status": "Passed"
+        },
+        {
+          "name": "test_cost_usd_rejects_nan_infinity_and_negative_amounts",
+          "status": "Passed"
+        },
+        {
+          "name": "test_failed_validation_does_not_consume_grant",
+          "status": "Passed"
+        },
+        {
+          "name": "test_uuid_version_variant_and_production_fail_closed",
+          "status": "Passed"
+        },
+        {
+          "name": "test_concurrent_single_use_approval_consumption_exact_winner",
+          "status": "Passed"
+        },
+        {
+          "name": "test_complete_9x9_transition_matrix",
+          "status": "Passed"
+        },
+        {
+          "name": "test_metadata_validation",
+          "status": "Passed"
+        },
+        {
+          "name": "test_state_machine_invalid_transition_invariants",
+          "status": "Passed"
+        },
+        {
+          "name": "test_state_machine_valid_lifecycle_and_audit_emission",
+          "status": "Passed"
+        },
+        {
+          "name": "test_terminal_states_are_permanent",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_classification_is_preserved_and_does_not_issue_grants",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_absolute_case_alias_uses_filesystem_semantics",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_directory_change_invalidates_retained_observation",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_discovery_normal_nested_and_empty_directories",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_external_directory_symlink_hides_outside_metadata",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_file_size_limit_quarantines_without_content_read",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_entry_limit_distinguishes_exact_capacity_from_overflow",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_file_symlink_external_target_is_quarantined",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_depth_limits_report_partial_instead_of_clean",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_file_symlink_internal_target_is_quarantined",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_git_directory_is_opaque_including_case_alias",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_git_pointer_and_invalid_manifests_are_not_read",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_limits_and_content_read_requests_are_validated",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_inventory_byte_limit_stops_with_explicit_status",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_internal_directory_symlink_is_not_traversed",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_missing_leaf_is_not_a_valid_future_path",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_metadata_changed_after_resolution_is_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_missing_root_and_file_root_fail_typed",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_nested_and_cyclic_symlinks_terminate_without_following",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_nul_ads_reserved_names_and_win32_aliases_fail_closed",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_nested_entries_cannot_exceed_global_budget",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_observation_is_bound_to_root_instance_not_equal_path_string",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_ordinary_diagnostics_redact_absolute_and_relative_payloads",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_no_discovered_build_hook_script_or_executable_is_run",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_oversized_path_is_rejected_before_io",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_outside_sibling_and_string_prefix_collision_are_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_parent_components_are_never_lexically_excused",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_relative_root_is_resolved_against_actual_cwd",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_preexisting_writer_changes_invalidate_retained_observation",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_relative_absolute_dot_and_repeated_separators",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_replacement_with_symlink_before_resolution_is_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_scale_10000_file_measurement",
+          "status": "Not Tested"
+        },
+        {
+          "name": "workspace_windows_junction_is_quarantined_without_target_traversal",
+          "status": "Not Tested"
+        },
+        {
+          "name": "workspace_windows_permission_denied_is_not_accepted",
+          "status": "Not Tested"
+        },
+        {
+          "name": "workspace_root_dot_is_canonicalized_without_changing_process_cwd",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_root_and_root_ancestor_symlinks_are_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_unc_devices_and_ambiguous_prefixes_fail_before_access",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_retained_handles_deny_observed_rename_attempts",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_valid_root_is_canonical_and_session_classified",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_total_file_length_limit_reports_incomplete",
+          "status": "Passed"
+        }
+      ]
+    },
+    {
+      "name": "windows-fixture-tests",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "test",
+        "--offline",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "workspace_windows_",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 124,
+      "peak_working_set_bytes": 11718656,
+      "stdout": "\nrunning 2 tests\ntest workspace_windows_junction_is_quarantined_without_target_traversal ... ok\ntest workspace_windows_permission_denied_is_not_accepted ... ok\n\ntest result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 38 filtered out; finished in 0.00s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-dfc3e4565437b642.exe)\n",
+      "tests": [
+        {
+          "name": "workspace_windows_junction_is_quarantined_without_target_traversal",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_windows_permission_denied_is_not_accepted",
+          "status": "Passed"
+        }
+      ]
+    },
+    {
+      "name": "benchmark-artifact",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "test",
+        "--offline",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "--no-run",
+        "--message-format=json"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 97,
+      "peak_working_set_bytes": 11730944,
+      "stdout": "{\"reason\":\"compiler-artifact\",\"package_id\":\"path+file:///E:/MyProject/Mix/GitHub/Sentra/crates/sentra-core#0.1.0\",\"manifest_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"sentra_core\",\"src_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\src\\\\lib.rs\",\"edition\":\"2024\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libsentra_core-71ed8b97c6c7039a.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libsentra_core-71ed8b97c6c7039a.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"path+file:///E:/MyProject/Mix/GitHub/Sentra/crates/sentra-core#0.1.0\",\"manifest_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\Cargo.toml\",\"target\":{\"kind\":[\"test\"],\"crate_types\":[\"bin\"],\"name\":\"workspace_tests\",\"src_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\tests\\\\workspace_tests.rs\",\"edition\":\"2024\",\"doc\":false,\"doctest\":false,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":true},\"features\":[],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\workspace_tests-dfc3e4565437b642.exe\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\workspace_tests-dfc3e4565437b642.pdb\"],\"executable\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\workspace_tests-dfc3e4565437b642.exe\",\"fresh\":true}\n{\"reason\":\"build-finished\",\"success\":true}\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s\n",
+      "tests": []
+    },
+    {
+      "name": "benchmark-1",
+      "executable": "E:/MyProject/Mix/GitHub/Sentra/target/debug/deps/workspace_tests-dfc3e4565437b642.exe",
+      "arguments": [
+        "--ignored",
+        "--exact",
+        "workspace_scale_10000_file_measurement",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 14663,
+      "peak_working_set_bytes": 7565312,
+      "stdout": "\nrunning 1 test\ntest workspace_scale_10000_file_measurement ... DISCOVERY_METRICS entries=10000 elapsed_ms=9470 bytes=310000 complete=true\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 14.63s\n\n",
+      "stderr": "",
+      "tests": [
+        {
+          "name": "workspace_scale_10000_file_measurement",
+          "status": "Passed"
+        }
+      ]
+    },
+    {
+      "name": "benchmark-2",
+      "executable": "E:/MyProject/Mix/GitHub/Sentra/target/debug/deps/workspace_tests-dfc3e4565437b642.exe",
+      "arguments": [
+        "--ignored",
+        "--exact",
+        "workspace_scale_10000_file_measurement",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 16235,
+      "peak_working_set_bytes": 7532544,
+      "stdout": "\nrunning 1 test\ntest workspace_scale_10000_file_measurement ... DISCOVERY_METRICS entries=10000 elapsed_ms=9574 bytes=310000 complete=true\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 14.89s\n\n",
+      "stderr": "",
+      "tests": [
+        {
+          "name": "workspace_scale_10000_file_measurement",
+          "status": "Passed"
+        }
+      ]
+    },
+    {
+      "name": "benchmark-3",
+      "executable": "E:/MyProject/Mix/GitHub/Sentra/target/debug/deps/workspace_tests-dfc3e4565437b642.exe",
+      "arguments": [
+        "--ignored",
+        "--exact",
+        "workspace_scale_10000_file_measurement",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 15674,
+      "peak_working_set_bytes": 7557120,
+      "stdout": "\nrunning 1 test\ntest workspace_scale_10000_file_measurement ... DISCOVERY_METRICS entries=10000 elapsed_ms=9519 bytes=310000 complete=true\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 14.30s\n\n",
+      "stderr": "",
+      "tests": [
+        {
+          "name": "workspace_scale_10000_file_measurement",
+          "status": "Passed"
+        }
+      ]
+    }
+  ],
+  "fixture_cleanup": "Passed",
+  "test_summary": {
+    "Passed": 76,
+    "Failed": 0,
+    "Not Tested": 0
+  },
+  "unique_tests": {
+    "workspace::discovery::tests::unstable_directory_retracts_its_subtree_without_string_prefix_collisions": "Passed",
+    "workspace::platform::tests::reparse_and_unknown_attributes_override_ordinary_types": "Passed",
+    "workspace::platform::tests::replacement_by_symlink_between_check_and_open_is_rejected": "Passed",
+    "test_deterministic_and_sequential_identifiers": "Passed",
+    "test_identifier_bytes_roundtrip": "Passed",
+    "test_identifier_invalid_strings": "Passed",
+    "test_security_classification_egress_and_parsing": "Passed",
+    "test_security_classification_ranking_and_pairwise_flow": "Passed",
+    "test_timestamp_expiry_and_arithmetic": "Passed",
+    "test_timestamp_invalid_rfc3339": "Passed",
+    "test_timestamp_utc_roundtrip_and_rfc3339": "Passed",
+    "test_typed_identifiers": "Passed",
+    "test_approval_grant_expiry": "Passed",
+    "test_approval_grant_lifecycle_and_single_use_replay_prevention": "Passed",
+    "test_approval_grant_mismatch_rejections": "Passed",
+    "test_capability_vs_policy_authorization_separation": "Passed",
+    "test_default_deny_unknown_operation": "Passed",
+    "test_restricted_classification_always_requires_approval": "Passed",
+    "test_revoked_approval_request": "Passed",
+    "test_safe_operation_auto_granted_for_non_restricted": "Passed",
+    "test_sensitive_actions_require_approval": "Passed",
+    "test_action_digest_argument_delimiter_injection_resistance": "Passed",
+    "test_action_digest_modify_checkout_target_binding_and_canonical_sorting": "Passed",
+    "test_bell_lapadula_flow_enforcement_prevents_write_down": "Passed",
+    "test_budget_threshold_boundary_precision": "Passed",
+    "test_classification_check_never_accidentally_grants_unknown_operation": "Passed",
+    "test_cost_usd_fixed_point_exact_arithmetic": "Passed",
+    "test_cost_usd_rejects_nan_infinity_and_negative_amounts": "Passed",
+    "test_failed_validation_does_not_consume_grant": "Passed",
+    "test_uuid_version_variant_and_production_fail_closed": "Passed",
+    "test_concurrent_single_use_approval_consumption_exact_winner": "Passed",
+    "test_complete_9x9_transition_matrix": "Passed",
+    "test_metadata_validation": "Passed",
+    "test_state_machine_invalid_transition_invariants": "Passed",
+    "test_state_machine_valid_lifecycle_and_audit_emission": "Passed",
+    "test_terminal_states_are_permanent": "Passed",
+    "workspace_classification_is_preserved_and_does_not_issue_grants": "Passed",
+    "workspace_absolute_case_alias_uses_filesystem_semantics": "Passed",
+    "workspace_directory_change_invalidates_retained_observation": "Passed",
+    "workspace_discovery_normal_nested_and_empty_directories": "Passed",
+    "workspace_external_directory_symlink_hides_outside_metadata": "Passed",
+    "workspace_file_size_limit_quarantines_without_content_read": "Passed",
+    "workspace_entry_limit_distinguishes_exact_capacity_from_overflow": "Passed",
+    "workspace_file_symlink_external_target_is_quarantined": "Passed",
+    "workspace_depth_limits_report_partial_instead_of_clean": "Passed",
+    "workspace_file_symlink_internal_target_is_quarantined": "Passed",
+    "workspace_git_directory_is_opaque_including_case_alias": "Passed",
+    "workspace_git_pointer_and_invalid_manifests_are_not_read": "Passed",
+    "workspace_limits_and_content_read_requests_are_validated": "Passed",
+    "workspace_inventory_byte_limit_stops_with_explicit_status": "Passed",
+    "workspace_internal_directory_symlink_is_not_traversed": "Passed",
+    "workspace_missing_leaf_is_not_a_valid_future_path": "Passed",
+    "workspace_metadata_changed_after_resolution_is_rejected": "Passed",
+    "workspace_missing_root_and_file_root_fail_typed": "Passed",
+    "workspace_nested_and_cyclic_symlinks_terminate_without_following": "Passed",
+    "workspace_nul_ads_reserved_names_and_win32_aliases_fail_closed": "Passed",
+    "workspace_nested_entries_cannot_exceed_global_budget": "Passed",
+    "workspace_observation_is_bound_to_root_instance_not_equal_path_string": "Passed",
+    "workspace_ordinary_diagnostics_redact_absolute_and_relative_payloads": "Passed",
+    "workspace_no_discovered_build_hook_script_or_executable_is_run": "Passed",
+    "workspace_oversized_path_is_rejected_before_io": "Passed",
+    "workspace_outside_sibling_and_string_prefix_collision_are_rejected": "Passed",
+    "workspace_parent_components_are_never_lexically_excused": "Passed",
+    "workspace_relative_root_is_resolved_against_actual_cwd": "Passed",
+    "workspace_preexisting_writer_changes_invalidate_retained_observation": "Passed",
+    "workspace_relative_absolute_dot_and_repeated_separators": "Passed",
+    "workspace_replacement_with_symlink_before_resolution_is_rejected": "Passed",
+    "workspace_scale_10000_file_measurement": "Passed",
+    "workspace_windows_junction_is_quarantined_without_target_traversal": "Passed",
+    "workspace_windows_permission_denied_is_not_accepted": "Passed",
+    "workspace_root_dot_is_canonicalized_without_changing_process_cwd": "Passed",
+    "workspace_root_and_root_ancestor_symlinks_are_rejected": "Passed",
+    "workspace_unc_devices_and_ambiguous_prefixes_fail_before_access": "Passed",
+    "workspace_retained_handles_deny_observed_rename_attempts": "Passed",
+    "workspace_valid_root_is_canonical_and_session_classified": "Passed",
+    "workspace_total_file_length_limit_reports_incomplete": "Passed"
+  },
+  "not_tested": [
+    "Real opaque reparse tags beyond symbolic links and junctions",
+    "Atomic handle-relative containment, stable file IDs and adversarial timestamp-preserving races",
+    "Mapped network drives, case-sensitive NTFS directories and arbitrary filesystem providers",
+    "Linux, macOS and ARM64"
+  ]
+}

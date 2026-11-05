@@ -2,6 +2,8 @@
 
 Status: Phase 0 design baseline. Components below are planned. Accepted design decisions do not imply that a backend, SDK, or security boundary has been implemented or tested.
 
+Implementation evidence: the [Increment 5.3 report](docs/phase1/INCREMENT_5_3_WORKSPACE_VALIDATION.md) covers the current domain/session/policy foundation and Windows metadata-only workspace boundary. Resolved observations do not confer content access or authorization. Strong filesystem identity remains unvalidated, and a separate preexisting current-context approval defect blocks composed authorization. The overall platform below remains the intended design.
+
 ## Shape of the platform
 
 Use a modular local control plane with a reusable core and CLI first. Keep policy enforcement, state transitions, and evidence admission in deterministic application services. AI agents propose bounded actions; they never obtain direct authority over the host, approvals, or verified finding status.

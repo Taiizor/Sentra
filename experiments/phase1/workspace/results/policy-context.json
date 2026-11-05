@@ -1,0 +1,13 @@
+{
+  "status": "Failed",
+  "increment": "5.3 inspection / preexisting policy S-02 gap",
+  "observed_at_utc": "2026-11-05T18:16:00.9289620+00:00",
+  "compile_exit_code": 0,
+  "probe_exit_code": 1,
+  "stdout": "POLICY_CONTEXT_BINDING=Failed: grant for metadata A accepted for metadata B",
+  "scope": "Synthetic in-memory metadata decisions only; no discovery, source reads, target execution or external operations",
+  "source_sha256": "878cc3d230bf7dd83aa7b6c83e9f041273cdbdbab7fee9d538aac9023106c55c",
+  "policy_engine_sha256": "6fd374177dc451718d372d8d5428e0099e6d2311b00f9edf4c076c8c5e0bb517",
+  "approval_broker_sha256": "5a5643cdc88e6dfd9bb7e9d192d11bba3fd77686d9eea070067d120c0943423a",
+  "reproduce": "Build sentra-core offline; compile PolicyContextProbe.rs with rustc --edition=2024 --extern sentra_core=<current rlib> -L dependency=target/debug/deps -o target/workspace-policy-context-probe.exe; run the owned synthetic probe"
+}

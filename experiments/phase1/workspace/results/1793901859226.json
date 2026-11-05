@@ -1,0 +1,242 @@
+{
+  "increment": "Phase 1 / Increment 5.3",
+  "observed_at_utc": "2026-11-05T18:06:23.8866297+00:00",
+  "environment": {
+    "powershell": "7.6.9",
+    "os": "Microsoft Windows 10.0.26300",
+    "architecture": "X64",
+    "cpu": "11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz",
+    "memory_bytes": 34091286528
+  },
+  "input_sha256": {
+    "Cargo.toml": "ed8c7a2be82195af0ec64bb0b33f355f66f47f9d8f04224f0a6a22dd39a2dd32",
+    "Cargo.lock": "be2d59d11d8eb1238c33c8370caf0273857ebed4615fe98e958525f3e66bdf01",
+    "crates/sentra-core/Cargo.toml": "3cf3ee1d3eb30d93a81a607a843480501154248f6ea41efc7a7bbfcf4ca566f2",
+    "crates/sentra-core/src/lib.rs": "0828054740439bfc7d4af6f9f0bd95579d828b5ee1df8c257810cf9360001b99",
+    "crates/sentra-core/tests/workspace_tests.rs": "55140ad1268cbdea4c7f9340a9ac4fb426ed8ab69facd2904d9f678adc31065a",
+    "experiments/phase1/workspace/Validate.ps1": "0009fb4e0faded135becc58c4491767f3528e3d773780db7645d6b7903532945",
+    "crates/sentra-core/src/workspace/boundary.rs": "14bf9127fa2e803da396c34ca022df599f6c3a34c1817bca2e3a8d1fb3cb09f0",
+    "crates/sentra-core/src/workspace/discovery.rs": "db8cdff8379ac2d63592d40212515c7cf15d6194c8ebaf91110491a3f90f8210",
+    "crates/sentra-core/src/workspace/error.rs": "60ce8a1585d3250ba8639135b11ca99f4cc6895cb8251fafd1ed7caa8e133e2a",
+    "crates/sentra-core/src/workspace/mod.rs": "152d90a1c1bafb2e2e366af2175ee7bc4c8ae7bd5f882310c6266ab895e2a9e0",
+    "crates/sentra-core/src/workspace/model.rs": "57e6902c7790a097a6d3d0dddc578e736daafe494eb8f05142385caada76144a",
+    "crates/sentra-core/src/workspace/platform.rs": "ac1bbec24a9d386c2646f2990370f17c8d13e683372b5618419ec350362d8f84"
+  },
+  "fixtures": [
+    {
+      "name": "junction fixtures",
+      "status": "Passed",
+      "reason": "Owned internal and external junctions created without elevation."
+    },
+    {
+      "name": "permission-denied fixtures",
+      "status": "Passed",
+      "reason": "Read denial applied only to two owned disposable objects; originals retained for cleanup."
+    }
+  ],
+  "checks": [
+    {
+      "name": "rustc-version",
+      "executable": "C:/Users/Taiizor/.cargo/bin/rustc.exe",
+      "arguments": [
+        "-vV"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 109,
+      "peak_working_set_bytes": null,
+      "stdout": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.0\nLLVM version: 23.1.1\n",
+      "stderr": ""
+    },
+    {
+      "name": "cargo-version",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "--version"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 74,
+      "peak_working_set_bytes": null,
+      "stdout": "cargo 1.99.0 (5f94df478 2026-08-27)\n",
+      "stderr": ""
+    },
+    {
+      "name": "format",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 235,
+      "peak_working_set_bytes": null,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "name": "check",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "check",
+        "--offline",
+        "--workspace"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 387,
+      "peak_working_set_bytes": null,
+      "stdout": "",
+      "stderr": "    Checking sentra-core v0.1.0 (E:\\MyProject\\Mix\\GitHub\\Sentra\\crates\\sentra-core)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.31s\n"
+    },
+    {
+      "name": "clippy",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "clippy",
+        "--offline",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 495,
+      "peak_working_set_bytes": null,
+      "stdout": "",
+      "stderr": "    Checking sentra-core v0.1.0 (E:\\MyProject\\Mix\\GitHub\\Sentra\\crates\\sentra-core)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.31s\n"
+    },
+    {
+      "name": "workspace-tests",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "test",
+        "--offline",
+        "--workspace"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 46629,
+      "peak_working_set_bytes": null,
+      "stdout": "\nrunning 2 tests\ntest workspace::platform::tests::reparse_and_unknown_attributes_override_ordinary_types ... ok\ntest workspace::platform::tests::replacement_by_symlink_between_check_and_open_is_rejected ... ok\n\ntest result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 9 tests\ntest test_deterministic_and_sequential_identifiers ... ok\ntest test_identifier_bytes_roundtrip ... ok\ntest test_identifier_invalid_strings ... ok\ntest test_security_classification_egress_and_parsing ... ok\ntest test_security_classification_ranking_and_pairwise_flow ... ok\ntest test_timestamp_expiry_and_arithmetic ... ok\ntest test_timestamp_invalid_rfc3339 ... ok\ntest test_timestamp_utc_roundtrip_and_rfc3339 ... ok\ntest test_typed_identifiers ... ok\n\ntest result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 9 tests\ntest test_approval_grant_expiry ... ok\ntest test_approval_grant_lifecycle_and_single_use_replay_prevention ... ok\ntest test_approval_grant_mismatch_rejections ... ok\ntest test_capability_vs_policy_authorization_separation ... ok\ntest test_default_deny_unknown_operation ... ok\ntest test_restricted_classification_always_requires_approval ... ok\ntest test_revoked_approval_request ... ok\ntest test_safe_operation_auto_granted_for_non_restricted ... ok\ntest test_sensitive_actions_require_approval ... ok\n\ntest result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 10 tests\ntest test_action_digest_argument_delimiter_injection_resistance ... ok\ntest test_action_digest_modify_checkout_target_binding_and_canonical_sorting ... ok\ntest test_bell_lapadula_flow_enforcement_prevents_write_down ... ok\ntest test_budget_threshold_boundary_precision ... ok\ntest test_classification_check_never_accidentally_grants_unknown_operation ... ok\ntest test_cost_usd_fixed_point_exact_arithmetic ... ok\ntest test_cost_usd_rejects_nan_infinity_and_negative_amounts ... ok\ntest test_failed_validation_does_not_consume_grant ... ok\ntest test_uuid_version_variant_and_production_fail_closed ... ok\ntest test_concurrent_single_use_approval_consumption_exact_winner ... ok\n\ntest result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n\n\nrunning 5 tests\ntest test_complete_9x9_transition_matrix ... ok\ntest test_metadata_validation ... ok\ntest test_state_machine_invalid_transition_invariants ... ok\ntest test_state_machine_valid_lifecycle_and_audit_emission ... ok\ntest test_terminal_states_are_permanent ... ok\n\ntest result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 39 tests\ntest workspace_classification_is_preserved_and_does_not_issue_grants ... ok\ntest workspace_absolute_case_alias_uses_filesystem_semantics ... ok\ntest workspace_discovery_normal_nested_and_empty_directories ... ok\ntest workspace_external_directory_symlink_hides_outside_metadata ... ok\ntest workspace_entry_limit_distinguishes_exact_capacity_from_overflow ... ok\ntest workspace_file_size_limit_quarantines_without_content_read ... ok\ntest workspace_depth_limits_report_partial_instead_of_clean ... ok\ntest workspace_file_symlink_external_target_is_quarantined ... ok\ntest workspace_file_symlink_internal_target_is_quarantined ... ok\ntest workspace_git_directory_is_opaque_including_case_alias ... ok\ntest workspace_git_pointer_and_invalid_manifests_are_not_read ... ok\ntest workspace_limits_and_content_read_requests_are_validated ... ok\ntest workspace_inventory_byte_limit_stops_with_explicit_status ... ok\ntest workspace_internal_directory_symlink_is_not_traversed ... ok\ntest workspace_metadata_changed_after_resolution_is_rejected ... ok\ntest workspace_missing_leaf_is_not_a_valid_future_path ... ok\ntest workspace_missing_root_and_file_root_fail_typed ... ok\ntest workspace_nested_and_cyclic_symlinks_terminate_without_following ... ok\ntest workspace_nul_ads_reserved_names_and_win32_aliases_fail_closed ... ok\ntest workspace_nested_entries_cannot_exceed_global_budget ... ok\ntest workspace_relative_root_is_resolved_against_actual_cwd ... ok\ntest workspace_scale_10000_file_measurement ... ignored, explicit 10,000-file benchmark; run experiments/phase1/workspace/Validate.ps1\ntest workspace_windows_junction_is_quarantined_without_target_traversal ... ignored, requires owned junction fixture; run experiments/phase1/workspace/Validate.ps1\ntest workspace_windows_permission_denied_is_not_accepted ... ignored, requires owned deny-ACL fixture; run experiments/phase1/workspace/Validate.ps1\ntest workspace_no_discovered_build_hook_script_or_executable_is_run ... ok\ntest workspace_oversized_path_is_rejected_before_io ... ok\ntest workspace_unc_devices_and_ambiguous_prefixes_fail_before_access ... ok\ntest workspace_root_dot_is_canonicalized_without_changing_process_cwd ... ok\ntest workspace_ordinary_diagnostics_redact_absolute_and_relative_payloads ... ok\ntest workspace_parent_components_are_never_lexically_excused ... ok\ntest workspace_valid_root_is_canonical_and_session_classified ... ok\ntest workspace_replacement_with_symlink_before_resolution_is_rejected ... ok\ntest workspace_root_and_root_ancestor_symlinks_are_rejected ... ok\ntest workspace_observation_is_bound_to_root_instance_not_equal_path_string ... ok\ntest workspace_preexisting_writer_changes_invalidate_retained_observation ... ok\ntest workspace_outside_sibling_and_string_prefix_collision_are_rejected ... ok\ntest workspace_total_file_length_limit_reports_incomplete ... ok\ntest workspace_relative_absolute_dot_and_repeated_separators ... ok\ntest workspace_retained_handles_deny_observed_rename_attempts ... ok\n\ntest result: ok. 36 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.07s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+      "stderr": "   Compiling sentra-core v0.1.0 (E:\\MyProject\\Mix\\GitHub\\Sentra\\crates\\sentra-core)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.66s\n     Running unittests src\\lib.rs (target\\debug\\deps\\sentra_core-c027dc5c8fa9d493.exe)\n     Running tests\\domain_tests.rs (target\\debug\\deps\\domain_tests-55081acecca296f8.exe)\n     Running tests\\policy_tests.rs (target\\debug\\deps\\policy_tests-cff7e2ce048b37bf.exe)\n     Running tests\\security_tests.rs (target\\debug\\deps\\security_tests-5fabbeb61acd0772.exe)\n     Running tests\\session_tests.rs (target\\debug\\deps\\session_tests-ac84e635000d1c5e.exe)\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-dfc3e4565437b642.exe)\n   Doc-tests sentra_core\n"
+    },
+    {
+      "name": "windows-fixture-tests",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "test",
+        "--offline",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "workspace_windows_",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "status": "Failed",
+      "exit_code": 101,
+      "timed_out": false,
+      "elapsed_ms": 128,
+      "peak_working_set_bytes": null,
+      "stdout": "\nrunning 2 tests\ntest workspace_windows_permission_denied_is_not_accepted ... FAILED\ntest workspace_windows_junction_is_quarantined_without_target_traversal ... ok\n\nfailures:\n\nfailures:\n    workspace_windows_permission_denied_is_not_accepted\n\ntest result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 37 filtered out; finished in 0.01s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-dfc3e4565437b642.exe)\n\nthread 'workspace_windows_permission_denied_is_not_accepted' (5704) panicked at crates\\sentra-core\\tests\\workspace_tests.rs:791:59:\ncalled `Result::unwrap_err()` on an `Ok` value: ResolvedWorkspacePath([redacted metadata observation])\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nerror: test failed, to rerun pass `-p sentra-core --test workspace_tests`\n"
+    },
+    {
+      "name": "benchmark-artifact",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "test",
+        "--offline",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "--no-run",
+        "--message-format=json"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 105,
+      "peak_working_set_bytes": null,
+      "stdout": "{\"reason\":\"compiler-artifact\",\"package_id\":\"path+file:///E:/MyProject/Mix/GitHub/Sentra/crates/sentra-core#0.1.0\",\"manifest_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"sentra_core\",\"src_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\src\\\\lib.rs\",\"edition\":\"2024\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libsentra_core-71ed8b97c6c7039a.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libsentra_core-71ed8b97c6c7039a.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"path+file:///E:/MyProject/Mix/GitHub/Sentra/crates/sentra-core#0.1.0\",\"manifest_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\Cargo.toml\",\"target\":{\"kind\":[\"test\"],\"crate_types\":[\"bin\"],\"name\":\"workspace_tests\",\"src_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\tests\\\\workspace_tests.rs\",\"edition\":\"2024\",\"doc\":false,\"doctest\":false,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":true},\"features\":[],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\workspace_tests-dfc3e4565437b642.exe\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\workspace_tests-dfc3e4565437b642.pdb\"],\"executable\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\workspace_tests-dfc3e4565437b642.exe\",\"fresh\":true}\n{\"reason\":\"build-finished\",\"success\":true}\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s\n"
+    },
+    {
+      "name": "benchmark-1",
+      "executable": "E:/MyProject/Mix/GitHub/Sentra/target/debug/deps/workspace_tests-dfc3e4565437b642.exe",
+      "arguments": [
+        "--ignored",
+        "--exact",
+        "workspace_scale_10000_file_measurement",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "status": "Failed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 27095,
+      "peak_working_set_bytes": null,
+      "stdout": "\nrunning 1 test\ntest workspace_scale_10000_file_measurement ... DISCOVERY_METRICS entries=10000 elapsed_ms=6510 bytes=310000 complete=true\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 38 filtered out; finished in 27.06s\n\n",
+      "stderr": ""
+    },
+    {
+      "name": "benchmark-2",
+      "executable": "E:/MyProject/Mix/GitHub/Sentra/target/debug/deps/workspace_tests-dfc3e4565437b642.exe",
+      "arguments": [
+        "--ignored",
+        "--exact",
+        "workspace_scale_10000_file_measurement",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "status": "Failed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 24016,
+      "peak_working_set_bytes": null,
+      "stdout": "\nrunning 1 test\ntest workspace_scale_10000_file_measurement ... DISCOVERY_METRICS entries=10000 elapsed_ms=5503 bytes=310000 complete=true\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 38 filtered out; finished in 23.98s\n\n",
+      "stderr": ""
+    },
+    {
+      "name": "benchmark-3",
+      "executable": "E:/MyProject/Mix/GitHub/Sentra/target/debug/deps/workspace_tests-dfc3e4565437b642.exe",
+      "arguments": [
+        "--ignored",
+        "--exact",
+        "workspace_scale_10000_file_measurement",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "status": "Failed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 23788,
+      "peak_working_set_bytes": null,
+      "stdout": "\nrunning 1 test\ntest workspace_scale_10000_file_measurement ... DISCOVERY_METRICS entries=10000 elapsed_ms=5490 bytes=310000 complete=true\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 38 filtered out; finished in 23.75s\n\n",
+      "stderr": ""
+    }
+  ],
+  "fixture_cleanup": "Passed",
+  "not_tested": [
+    "Real opaque reparse tags beyond symbolic links and junctions",
+    "Atomic handle-relative containment, stable file IDs and adversarial timestamp-preserving races",
+    "Mapped network drives, case-sensitive NTFS directories and arbitrary filesystem providers",
+    "Linux, macOS and ARM64"
+  ]
+}
