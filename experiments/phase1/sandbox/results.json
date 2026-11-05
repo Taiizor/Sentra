@@ -1,7 +1,7 @@
 ﻿{
   "Milestone": "Phase 1 - Milestone 4: VM and Sandbox Isolation Validation",
-  "ExecutedAt": "2026-11-05T16:50:02.9516738Z",
-  "CompletedAt": "2026-11-05T16:50:10.9899140Z",
+  "ExecutedAt": "2026-11-05T16:56:29.3672669Z",
+  "CompletedAt": "2026-11-05T16:56:47.5899063Z",
   "HostInfo": {
     "OS": "Microsoft Windows 11 Education",
     "Version": "10.0.26300",
@@ -37,7 +37,7 @@
       "Category": "Resources",
       "Name": "Host Memory and Storage Capacity",
       "Status": "Passed",
-      "Details": "RAM: Total=31.75GB, Free=11.45GB; Drives: C: Free:62.1GB, D: Free:204GB, E: Free:104.8GB, F: Free:56.1GB, G: Free:221.6GB, H: Free:135.5GB",
+      "Details": "RAM: Total=31.75GB, Free=12.44GB; Drives: C: Free:62.1GB, D: Free:204GB, E: Free:104.8GB, F: Free:56.1GB, G: Free:221.6GB, H: Free:135.5GB",
       "IsolationType": "Environment"
     },
     {
@@ -221,7 +221,7 @@
       "Category": "Prototype",
       "Name": "Worker Hang & Timeout Disposal",
       "Status": "Passed",
-      "Details": "Host enforced timeout, killed hung container (sentra-probe-timeout-ffa36ca7), and reaped process",
+      "Details": "Host enforced timeout, killed hung container (sentra-probe-timeout-af6bf2c4), and reaped process",
       "IsolationType": "Prototype"
     },
     {
