@@ -4,7 +4,7 @@ Last updated: 2026-11-05.
 
 ## Current status
 
-**Phase 0: complete and closed. Phase 1: explicitly authorized and in progress; initial technical-validation increment only. Phase 2: NOT authorized.** A dependency-free Rust/MSVC experiment is implemented and tested on x64. The product Core Engine and CLI are not implemented. Phase 1 is not complete; no full technology or isolation gate is claimed satisfied. The agent has issued no history/reference-changing Git operation.
+**Phase 0: complete and closed. Phase 1: explicitly authorized and in progress; Milestone 2 SQLite assessment ready for review. Phase 2: NOT authorized.** The x64 Rust/MSVC probe and SQLite engine experiments have executed. The product Core Engine, CLI and production persistence layer are not implemented. Phase 1 is not complete; no full Rust-binding, storage or isolation gate is claimed satisfied. The agent has issued no history/reference-changing Git operation.
 
 ## Phase 1 initial milestone
 
@@ -13,10 +13,23 @@ The [initial validation report](docs/phase1/README.md) records the execution pla
 - **Validated subset:** Rust/Cargo 1.99.0 with the actual MSVC 14.52.37025 linker; x64 build/run, three probe tests, format, warning-free Clippy, Unicode/spaced input path, CRLF and expected error exits.
 - **Partially validated:** the complete V-01 Rust gate and read-only host virtualization availability. The prerelease Visual Studio installation requires `vswhere -prerelease` for discovery.
 - **Blocked / not validated:** ARM64 check fails with E0463 because its standard library is not installed. Hyper-V management/feature queries require permissions unavailable to this session; no dedicated worker was provisioned or tested.
-- **Not started:** SQLite/native dependency integration and reliability, mock provider contract, production process/path/policy/session/evidence foundations, product CLI and their integration/security suites.
+- **Not started:** production Rust SQLite/native dependency integration, mock provider contract, production process/path/policy/session/evidence foundations, product CLI and their integration/security suites. SQLite engine reliability is now assessed separately in Milestone 2 below.
 - **Decisions preserved:** all seven ADRs are unchanged; ADR-0002 and ADR-0007 remain Proposed. No production dependency set, minimum Rust version, additional storage technology or weaker isolation profile was selected.
 
 The experiment and generated lockfile contain no third-party Cargo dependencies. No dependencies, toolchain components or virtualization software were installed. No API keys, external AI calls, telemetry, untrusted target execution, VM launch or host configuration changes were used. Cargo compilation ran offline; OS network isolation was not measured. Current edits remain in the working tree.
+
+## Phase 1 Milestone 2 — SQLite reliability
+
+The [SQLite validation report](docs/phase1/SQLITE_VALIDATION.md) is complete and ready for review. It recommends retaining SQLite as a suitable candidate for local single-operator metadata, conditional on validating the actual Rust binding, database/blob reconciliation and remaining failure modes. No production database abstraction or additional storage technology was introduced, and no subsequent milestone was started.
+
+- Two final runs of identical source digests each report **18 Passed, 0 Failed, 1 Blocked, 3 Not Tested** for the SQLite matrix. Each run actually terminates ten owned writer/migration processes and verifies recovery with integrity_check; three additional writer processes commit 240 rows alongside a reader.
+- Engine/environment: existing Bun 1.4.4, SQLite 3.53.4, Windows x64/NTFS; WAL, synchronous=FULL, explicit checkpoints and finite busy timeouts. No packages or runtime components were downloaded or installed, and no external services were accessed.
+- A constraint-statement failure leaves earlier writes pending in the live transaction; explicit rollback removes them. Two statement-only retries on the same stale WAL snapshot both return SQLITE_BUSY_SNAPSHOT (517); restarting the transaction refreshes reads and allows the write.
+- Safe capacity-limit, read-only, open-error and corruption tests pass. Physical volume exhaustion is Blocked; injected fsync/write IOERR, power loss and production Rust/database-blob integration are Not Tested. These are not relabeled as successful recovery coverage.
+- Formatting and syntax/import bundling pass. Semantic JavaScript type checking separately **Failed** with 102 diagnostics and missing Bun/Node declarations plus untyped-JavaScript inference issues. No dependency-policy change or diagnostic suppression was used to force a pass.
+- Milestone entry was clean `develop` at `9dbf5f7753e0a47e6723ad831be1f00b520fc875`. Concurrent commits `8d0fcd5` and `1fdedef` recorded experiment files/results outside the agent's issued Git operations; they were preserved. New completion edits remain in the working tree.
+
+All seven ADRs and architecture choices are unchanged. ADR-0002 and ADR-0007 remain Proposed. The report's suitability recommendation does not complete V-02, authorize the production Core Engine, or begin Phase 2.
 
 ## Completed Phase 0 work
 
@@ -61,7 +74,7 @@ The Phase 0 finalization modified only `AGENTS.md`, `ROADMAP.md`, `PROGRESS.md`,
 | Gate | Owner role | Required next evidence |
 | --- | --- | --- |
 | Phase 1 authorization | Project owner | Satisfied by explicit instruction on 2026-11-05; no Phase 2 or Git authorization implied |
-| Rust/MSVC and persistence feasibility | Core maintainer | Initial x64 subset passes; full V-01 and SQLite/native dependency/recovery gates remain pending |
+| Rust/MSVC and persistence feasibility | Core maintainer | Initial x64 and SQLite engine subsets pass; full V-01, actual Rust binding, database/blob reconciliation and remaining storage-fault gates remain pending |
 | Disposable Linux VM backend | Execution/security maintainer | Authenticated worker and containment suite before untrusted execution |
 | Provider independence and privacy | AI/security maintainer | Two backend conformance runs and measured egress controls |
 | OSI license and third-party licensing | Project owner / licensing reviewer | License selection and version-specific notices before public distribution |

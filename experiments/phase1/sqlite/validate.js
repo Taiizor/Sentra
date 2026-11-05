@@ -251,7 +251,8 @@ await test(
   "T01",
   "Transaction commit, explicit rollback and statement failure",
   () => {
-    const { db } = fixture("transactions");
+    const { path, db } = fixture("transactions");
+    const observer = openDatabase(path);
     try {
       db.exec(
         "BEGIN IMMEDIATE; INSERT INTO items(id,value) VALUES(1,'committed'); COMMIT;",
@@ -271,6 +272,17 @@ await test(
         true,
         "statement failure must not be mistaken for transaction rollback",
       );
+      const ownRowsAfterError = db
+        .query("SELECT id,value FROM items ORDER BY id")
+        .all();
+      const observerRowsAfterError = observer
+        .query("SELECT id,value FROM items ORDER BY id")
+        .all();
+      assert.deepEqual(ownRowsAfterError, [
+        { id: 1, value: "committed" },
+        { id: 3, value: "pending" },
+      ]);
+      assert.deepEqual(observerRowsAfterError, [{ id: 1, value: "committed" }]);
       db.exec("ROLLBACK");
       assert.deepEqual(
         db.query("SELECT id,value FROM items ORDER BY id").all(),
@@ -278,10 +290,17 @@ await test(
       );
       return {
         error,
+        in_transaction_after_statement_error: true,
+        own_rows_after_error: ownRowsAfterError,
+        observer_rows_after_error: observerRowsAfterError,
+        rows_after_explicit_rollback: db
+          .query("SELECT id,value FROM items ORDER BY id")
+          .all(),
         explicit_rollback_required: true,
         integrity: integrity(db),
       };
     } finally {
+      observer.close();
       db.close();
     }
   },
@@ -646,17 +665,44 @@ await test(
       stale.exec("BEGIN");
       assert.equal(count(stale), 1);
       db.exec("INSERT INTO items(id,value) VALUES(1,'new-snapshot')");
-      const error = expectSQLite(
-        () =>
-          stale.exec("INSERT INTO items(id,value) VALUES(2,'stale-upgrade')"),
-        5,
-      );
-      stale.exec(
-        "ROLLBACK; INSERT INTO items(id,value) VALUES(2,'fresh-retry')",
-      );
+      assert.equal(count(db), 2);
+      const attempts = [];
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        const error = expectSQLite(
+          () =>
+            stale.exec("INSERT INTO items(id,value) VALUES(2,'stale-upgrade')"),
+          5,
+        );
+        assert.equal(
+          error.errno,
+          517,
+          "must reproduce SQLITE_BUSY_SNAPSHOT specifically",
+        );
+        assert.equal(stale.inTransaction, true);
+        assert.equal(
+          count(stale),
+          1,
+          "statement-only retry retains the old read snapshot",
+        );
+        attempts.push({
+          attempt,
+          error,
+          in_transaction: stale.inTransaction,
+          visible_rows: count(stale),
+        });
+      }
+      stale.exec("ROLLBACK; BEGIN IMMEDIATE");
+      const freshRows = count(stale);
+      assert.equal(freshRows, 2);
+      stale.exec("INSERT INTO items(id,value) VALUES(2,'fresh-retry'); COMMIT");
       assert.equal(count(db), 3);
       return {
-        error,
+        interleaving:
+          "reader BEGIN and SELECT; separate connection COMMIT; two statement-only retries; reader ROLLBACK and BEGIN IMMEDIATE",
+        statement_only_attempts: attempts,
+        rows_after_transaction_restart: freshRows,
+        rows_after_successful_commit: count(db),
+        busy_timeout_ms: stale.query("PRAGMA busy_timeout").get().timeout,
         recovery: "rollback stale snapshot and retry in a fresh transaction",
         integrity: integrity(db),
       };

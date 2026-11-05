@@ -4,7 +4,7 @@
 
 Sentra is a planned independent, extensible platform for authorized security research on open-source and proprietary software. It will combine specialized AI agents, established analysis tools, isolated execution, evidence management, and independently verified remediation.
 
-**Status: Phase 0 complete; Phase 1 technical validation authorized and in progress.** The repository now includes a small isolated Rust/MSVC probe with recorded x64 results. The Core Engine, product CLI, scanner, sandbox, API and provider integrations are not implemented. Phase 1 is not complete and Phase 2 is not authorized. See the [initial Phase 1 validation report](docs/phase1/README.md).
+**Status: Phase 0 complete; Phase 1 technical validation in progress.** The isolated Rust/MSVC x64 probe has passed, and the [Milestone 2 SQLite reliability report](docs/phase1/SQLITE_VALIDATION.md) is ready for review with explicit remaining gaps. The Core Engine, product CLI, production persistence, scanner, sandbox, API and provider integrations are not implemented. Phase 1 is not complete; no next milestone or Phase 2 work has started. See the [Phase 1 execution record](docs/phase1/README.md).
 
 ## Two operating modes
 
