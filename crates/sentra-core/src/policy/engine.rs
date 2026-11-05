@@ -4,6 +4,7 @@ use crate::{
     policy::{
         action::OperationAction,
         approval::{ApprovalBroker, ApprovalGrant, ApprovalRequest},
+        budget::{BudgetPolicyConfig, CostUsd},
         decision::{DenialReason, PolicyDecision},
     },
     session::metadata::SessionMetadata,
@@ -14,7 +15,7 @@ use crate::{
 #[derive(Debug, Default)]
 pub struct PolicyEngine {
     approval_broker: ApprovalBroker,
-    max_auto_budget_usd: f64,
+    config: BudgetPolicyConfig,
 }
 
 impl PolicyEngine {
@@ -22,26 +23,34 @@ impl PolicyEngine {
     pub fn new() -> Self {
         Self {
             approval_broker: ApprovalBroker::new(),
-            max_auto_budget_usd: 1.00, // Operations exceeding $1.00 require human approval
+            config: BudgetPolicyConfig::default(),
         }
     }
 
-    /// Returns the maximum cost in USD that can be automatically approved without human grant.
-    pub fn max_auto_budget_usd(&self) -> f64 {
-        self.max_auto_budget_usd
+    /// Creates a policy engine with custom budget configuration.
+    pub fn with_config(config: BudgetPolicyConfig) -> Self {
+        Self {
+            approval_broker: ApprovalBroker::new(),
+            config,
+        }
     }
 
-    /// Sets the maximum cost in USD that can be automatically approved.
-    pub fn set_max_auto_budget_usd(&mut self, budget: f64) {
-        self.max_auto_budget_usd = budget;
+    /// Returns the maximum cost that can be automatically approved without human grant.
+    pub fn max_auto_budget(&self) -> CostUsd {
+        self.config.max_auto_budget
     }
 
-    /// Returns a mutable reference to the internal approval broker.
-    pub fn broker_mut(&mut self) -> &mut ApprovalBroker {
-        &mut self.approval_broker
+    /// Sets the maximum cost that can be automatically approved.
+    pub fn set_max_auto_budget(&mut self, budget: CostUsd) {
+        self.config.max_auto_budget = budget;
     }
 
-    /// Returns an immutable reference to the internal approval broker.
+    /// Returns a reference to the active budget policy configuration.
+    pub fn config(&self) -> &BudgetPolicyConfig {
+        &self.config
+    }
+
+    /// Returns a reference to the internal approval broker.
     pub fn broker(&self) -> &ApprovalBroker {
         &self.approval_broker
     }
@@ -49,14 +58,16 @@ impl PolicyEngine {
     /// Evaluates an operation request against session context, classification, and approval grants.
     ///
     /// Adheres strictly to the Default-Deny invariant:
-    /// - Unknown operations are denied immediately.
-    /// - Restricted data operations require explicit human approval.
-    /// - Inherently sensitive actions (tool execution, checkout modification, external export) require approval.
-    /// - If a valid, non-expired, unconsumed grant is provided, the action is Granted.
-    /// - If approval is required and no grant is provided, returns NeedsApproval.
-    /// - If an invalid, expired, or reused grant is provided, returns Denied.
+    /// 1. Unknown operations are unconditionally denied.
+    /// 2. Information flow violations (write-down to lower classification) are denied.
+    /// 3. Restricted data operations require explicit human approval.
+    /// 4. Inherently sensitive actions (tool execution, checkout modification, external export) require approval.
+    /// 5. Operations exceeding auto-budget threshold require approval.
+    /// 6. If approval is required and a valid grant is provided, the grant is atomically consumed and returns Granted.
+    /// 7. If approval is required and no grant is provided, returns NeedsApproval.
+    /// 8. If an invalid, expired, or reused grant is provided, returns Denied.
     pub fn evaluate(
-        &mut self,
+        &self,
         session: &SessionMetadata,
         classification: SecurityClassification,
         action: &OperationAction,
@@ -70,31 +81,57 @@ impl PolicyEngine {
             };
         }
 
-        // 2. Cost ceiling check: exceed max auto-budget triggers approval requirement
-        let mut requires_approval = action.is_sensitive();
-        if let OperationAction::InvokeProvider {
-            estimated_cost_usd, ..
+        // 2. Bell-LaPadula Information Flow Check:
+        // No write-down to lower classification levels
+        if let OperationAction::ExportReport {
+            destination_classification: Some(dst_class),
+            ..
         } = action
-            && *estimated_cost_usd > self.max_auto_budget_usd
+            && !classification.can_flow_to(dst_class)
+        {
+            return PolicyDecision::Denied {
+                reason: DenialReason::ClassificationExceeded {
+                    classification,
+                    detail: format!(
+                        "data at classification [{classification}] cannot flow down to [{dst_class}] under Bell-LaPadula rules"
+                    ),
+                },
+            };
+        }
+
+        // 3. Egress and Sensitivity checks
+        let mut requires_approval = action.is_sensitive();
+
+        // Check external egress rules
+        if let OperationAction::ExportReport { is_external, .. } = action
+            && *is_external
+            && classification.requires_approval_for_external_egress()
         {
             requires_approval = true;
         }
 
-        // 3. Security Classification check:
-        // Restricted data always requires human approval for any active processing or export
+        // 4. Cost ceiling check: exceed max auto-budget triggers approval requirement
+        if let OperationAction::InvokeProvider { estimated_cost, .. } = action
+            && *estimated_cost > self.config.max_auto_budget
+        {
+            requires_approval = true;
+        }
+
+        // 5. Security Classification check:
+        // Restricted data always requires human approval for ANY active processing or export
         if classification == SecurityClassification::Restricted {
             requires_approval = true;
         }
 
-        // 4. If approval is not required, grant immediately
+        // 6. If approval is not required, grant immediately
         if !requires_approval {
             return PolicyDecision::Granted;
         }
 
-        // 5. If approval IS required, evaluate the grant (if provided) or emit NeedsApproval
+        // 7. If approval IS required, evaluate the grant (if provided) or emit NeedsApproval
         match grant {
             Some(g) => {
-                // Verify grant through broker
+                // Atomically verify and consume grant through broker
                 match self.approval_broker.verify_and_consume(g, clock) {
                     Ok(()) => PolicyDecision::Granted,
                     Err(denial) => PolicyDecision::Denied { reason: denial },

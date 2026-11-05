@@ -1,5 +1,7 @@
 use std::fmt;
 
+use crate::{domain::classification::SecurityClassification, policy::budget::CostUsd};
+
 /// Operation actions that can be requested within a Sentra session.
 #[derive(Clone, Debug, PartialEq)]
 pub enum OperationAction {
@@ -22,7 +24,7 @@ pub enum OperationAction {
         /// Unique model identifier (e.g. mock-analysis-v1).
         model_id: String,
         /// Estimated cost in USD for this invocation.
-        estimated_cost_usd: f64,
+        estimated_cost: CostUsd,
     },
     /// Exporting findings, reports, or evidence.
     ExportReport {
@@ -30,11 +32,15 @@ pub enum OperationAction {
         destination: String,
         /// Whether the export egresses to an external system.
         is_external: bool,
+        /// Optional classification of the destination system for flow checks.
+        destination_classification: Option<SecurityClassification>,
     },
     /// Modifying files in the operator's checkout (sensitive action, S-10).
     ModifyCheckout {
         /// Number of files proposed to be modified.
         file_count: usize,
+        /// Explicit list of target file paths proposed for modification.
+        target_paths: Vec<String>,
     },
     /// An unknown or unrecognized operation (strictly denied by default).
     UnknownOperation {
@@ -63,49 +69,82 @@ impl OperationAction {
             Self::ExecuteTool { .. } => true,
             Self::ModifyCheckout { .. } => true,
             Self::ExportReport { is_external, .. } => *is_external,
-            Self::InvokeProvider {
-                estimated_cost_usd, ..
-            } => *estimated_cost_usd > 1.0,
+            Self::InvokeProvider { estimated_cost, .. } => *estimated_cost > CostUsd::ONE,
             Self::UnknownOperation { .. } => true,
         }
     }
 
-    /// Computes a deterministic digest string representing this action's identity and parameters.
-    /// This digest is cryptographically bound to approval grants (S-02).
+    /// Computes a deterministic canonical action descriptor string representing this action's identity and parameters.
+    ///
+    /// NOTE: This is a canonical structured descriptor, NOT a cryptographic hash or signature.
+    /// In Phase 1 Increment 5.2, authorization integrity is maintained by trusted in-memory state in
+    /// `ApprovalBroker`. Cryptographic hashing (SHA-256) is scheduled for Increment 5.4.
+    ///
+    /// Argument and path lists use length-prefixed encoding (`len#value`) to prevent delimiter-injection
+    /// collisions (e.g. distinguishing `["a,b", "c"]` from `["a", "b,c"]`).
     pub fn action_digest(&self) -> String {
         match self {
             Self::DiscoverMetadata { relative_path } => {
-                format!("action:discover:{}", relative_path)
+                format!("action:discover:{}#{}", relative_path.len(), relative_path)
             }
             Self::ExecuteTool {
                 tool_id,
                 untrusted,
                 arguments,
             } => {
+                let args_encoded: Vec<String> = arguments
+                    .iter()
+                    .map(|a| format!("{}#{}", a.len(), a))
+                    .collect();
                 format!(
-                    "action:exec:{}:untrusted={}:args={}",
+                    "action:exec:{}:untrusted={}:args=[{}]",
                     tool_id,
                     untrusted,
-                    arguments.join(",")
+                    args_encoded.join(",")
                 )
             }
             Self::InvokeProvider {
                 model_id,
-                estimated_cost_usd,
+                estimated_cost,
             } => {
                 format!(
-                    "action:provider:{}:cost={:.4}",
-                    model_id, estimated_cost_usd
+                    "action:provider:{}:microusd={}",
+                    model_id,
+                    estimated_cost.as_micro_usd()
                 )
             }
             Self::ExportReport {
                 destination,
                 is_external,
+                destination_classification,
             } => {
-                format!("action:export:{}:external={}", destination, is_external)
+                let dst_class_str = match destination_classification {
+                    Some(c) => c.as_str(),
+                    None => "UNSPECIFIED",
+                };
+                format!(
+                    "action:export:{}#{}:external={}:dst_class={}",
+                    destination.len(),
+                    destination,
+                    is_external,
+                    dst_class_str
+                )
             }
-            Self::ModifyCheckout { file_count } => {
-                format!("action:modify_checkout:files={}", file_count)
+            Self::ModifyCheckout {
+                file_count,
+                target_paths,
+            } => {
+                let mut sorted_paths = target_paths.clone();
+                sorted_paths.sort();
+                let paths_encoded: Vec<String> = sorted_paths
+                    .iter()
+                    .map(|p| format!("{}#{}", p.len(), p))
+                    .collect();
+                format!(
+                    "action:modify_checkout:files={}:paths=[{}]",
+                    file_count,
+                    paths_encoded.join(",")
+                )
             }
             Self::UnknownOperation { operation_name } => {
                 format!("action:unknown:{}", operation_name)

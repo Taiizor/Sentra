@@ -1,9 +1,12 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Mutex,
+};
 
 use crate::{
     common::clock::Clock,
     domain::{ApprovalId, SessionId, TimestampUtc},
-    policy::decision::DenialReason,
+    policy::{budget::CostUsd, decision::DenialReason},
 };
 
 /// Represents an explicit human approval request for a sensitive action (S-02, S-10).
@@ -22,7 +25,7 @@ pub struct ApprovalRequest {
     /// Human-readable explanation of why approval is needed.
     pub explanation: String,
     /// Optional upper cost limit in USD for this operation.
-    pub budget_limit_usd: Option<f64>,
+    pub budget_limit: Option<CostUsd>,
     /// UTC timestamp when the request was generated.
     pub created_at_utc: TimestampUtc,
     /// Expiration UTC timestamp after which the request is automatically invalid.
@@ -38,7 +41,7 @@ impl ApprovalRequest {
         action_digest: impl Into<String>,
         target_revision: impl Into<String>,
         explanation: impl Into<String>,
-        budget_limit_usd: Option<f64>,
+        budget_limit: Option<CostUsd>,
         created_at_utc: TimestampUtc,
         lifetime_seconds: u64,
     ) -> Self {
@@ -49,7 +52,7 @@ impl ApprovalRequest {
             action_digest: action_digest.into(),
             target_revision: target_revision.into(),
             explanation: explanation.into(),
-            budget_limit_usd,
+            budget_limit,
             created_at_utc,
             expires_at_utc: created_at_utc.add_seconds(lifetime_seconds),
         }
@@ -98,72 +101,89 @@ impl ApprovalGrant {
     }
 }
 
-/// In-memory Human Approval Broker managing pending requests, validation,
-/// expiration, and single-use replay protection (S-02).
 #[derive(Debug, Default)]
-pub struct ApprovalBroker {
+struct BrokerInner {
     pending_requests: BTreeMap<ApprovalId, ApprovalRequest>,
     consumed_tokens: BTreeSet<String>,
+    consumed_requests: BTreeSet<ApprovalId>,
     revoked_requests: BTreeSet<ApprovalId>,
+}
+
+/// In-memory Human Approval Broker managing pending requests, validation,
+/// expiration, and atomic single-use replay protection (S-02).
+///
+/// Thread-safe: internal state is synchronized via `std::sync::Mutex`, guaranteeing
+/// atomic validation and single-use consumption even under concurrent worker execution.
+#[derive(Debug, Default)]
+pub struct ApprovalBroker {
+    inner: Mutex<BrokerInner>,
 }
 
 impl ApprovalBroker {
     /// Creates a new empty ApprovalBroker.
     pub fn new() -> Self {
         Self {
-            pending_requests: BTreeMap::new(),
-            consumed_tokens: BTreeSet::new(),
-            revoked_requests: BTreeSet::new(),
+            inner: Mutex::new(BrokerInner::default()),
         }
     }
 
     /// Registers a pending approval request in the broker.
-    pub fn submit_request(&mut self, request: ApprovalRequest) -> ApprovalId {
+    pub fn submit_request(&self, request: ApprovalRequest) -> ApprovalId {
+        let mut inner = self.inner.lock().unwrap();
         let id = request.request_id;
-        self.pending_requests.insert(id, request);
+        inner.pending_requests.insert(id, request);
         id
     }
 
-    /// Returns a reference to a pending request by ID.
-    pub fn get_request(&self, request_id: &ApprovalId) -> Option<&ApprovalRequest> {
-        self.pending_requests.get(request_id)
+    /// Returns a copy of a pending request by ID.
+    pub fn get_request(&self, request_id: &ApprovalId) -> Option<ApprovalRequest> {
+        let inner = self.inner.lock().unwrap();
+        inner.pending_requests.get(request_id).cloned()
     }
 
     /// Explicitly revokes or denies a pending approval request.
-    pub fn revoke_request(&mut self, request_id: &ApprovalId) -> bool {
-        if self.pending_requests.remove(request_id).is_some() {
-            self.revoked_requests.insert(*request_id);
+    pub fn revoke_request(&self, request_id: &ApprovalId) -> bool {
+        let mut inner = self.inner.lock().unwrap();
+        if inner.pending_requests.remove(request_id).is_some() {
+            inner.revoked_requests.insert(*request_id);
             true
         } else {
             false
         }
     }
 
-    /// Verifies and consumes an approval grant.
+    /// Verifies and atomically consumes an approval grant.
     ///
     /// Invariants enforced:
     /// 1. Token must not have been previously consumed (Replay prevention).
-    /// 2. Request ID must exist in pending requests.
-    /// 3. Request must not have been revoked.
-    /// 4. Action digest in the grant must match the request's action digest.
-    /// 5. Target revision in the grant must match the request's target revision.
-    /// 6. Grant must not be expired according to the provided clock.
-    /// 7. On success, the token is permanently consumed and the pending request is removed.
+    /// 2. Request ID must not have been previously consumed (Double-spend prevention).
+    /// 3. Request must exist in pending requests.
+    /// 4. Request must not have been revoked.
+    /// 5. Action digest in the grant must match the request's action digest.
+    /// 6. Target revision in the grant must match the request's target revision.
+    /// 7. Session ID in the grant must match the request's session ID.
+    /// 8. Grant must not be expired according to the provided clock.
+    /// 9. On success, the token and request ID are atomically consumed and the pending request is removed.
+    /// 10. If validation fails, no state is modified.
     pub fn verify_and_consume<C: Clock>(
-        &mut self,
+        &self,
         grant: &ApprovalGrant,
         clock: &C,
     ) -> Result<(), DenialReason> {
-        // 1. Replay check
-        if self.consumed_tokens.contains(&grant.token) {
+        let mut inner = self.inner.lock().unwrap();
+
+        // 1. Replay check (by token or request_id)
+        if inner.consumed_tokens.contains(&grant.token)
+            || inner.consumed_requests.contains(&grant.request_id)
+        {
             return Err(DenialReason::ApprovalReused(format!(
-                "token '{}' was already consumed",
-                grant.token
+                "grant for request '{}' or token '{}' was already consumed",
+                grant.request_id, grant.token
             )));
         }
 
         // 2. Revocation check
-        if self.revoked_requests.contains(&grant.request_id) {
+        if inner.revoked_requests.contains(&grant.request_id) {
             return Err(DenialReason::InvalidApprovalGrant(format!(
                 "request '{}' was revoked",
                 grant.request_id
@@ -171,8 +191,8 @@ impl ApprovalBroker {
         }
 
         // 3. Pending request check
-        let request = match self.pending_requests.get(&grant.request_id) {
-            Some(req) => req,
+        let request = match inner.pending_requests.get(&grant.request_id) {
+            Some(req) => req.clone(),
             None => {
                 return Err(DenialReason::InvalidApprovalGrant(format!(
                     "no pending request found for ID '{}'",
@@ -214,9 +234,10 @@ impl ApprovalBroker {
             )));
         }
 
-        // Invariants satisfied: consume token and remove pending request
-        self.consumed_tokens.insert(grant.token.clone());
-        self.pending_requests.remove(&grant.request_id);
+        // Invariants satisfied: atomically consume token, mark request consumed, and remove pending request
+        inner.consumed_tokens.insert(grant.token.clone());
+        inner.consumed_requests.insert(grant.request_id);
+        inner.pending_requests.remove(&grant.request_id);
 
         Ok(())
     }

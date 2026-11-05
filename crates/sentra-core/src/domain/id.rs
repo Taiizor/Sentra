@@ -26,7 +26,19 @@ impl Identifier {
         &self.bytes
     }
 
+    /// Returns the 4-bit UUID version encoded in bits 4-7 of byte 6.
+    pub const fn version(&self) -> u8 {
+        (self.bytes[6] >> 4) & 0x0f
+    }
+
+    /// Returns the 2-bit UUID variant encoded in bits 6-7 of byte 8 (1 = RFC 4122 variant).
+    pub const fn variant(&self) -> u8 {
+        (self.bytes[8] >> 6) & 0x03
+    }
+
     /// Creates a deterministic identifier from a 64-bit sequence counter and a domain salt.
+    ///
+    /// Primarily intended for reproducible test fixtures and simulation environments.
     pub fn new_deterministic(domain_tag: u64, sequence: u64) -> Self {
         let mut bytes = [0u8; 16];
         bytes[0..8].copy_from_slice(&domain_tag.to_be_bytes());
@@ -37,7 +49,10 @@ impl Identifier {
         Self { bytes }
     }
 
-    /// Generates a sequential identifier using the monotonic atomic counter and system entropy.
+    /// Generates a sequential identifier using the monotonic atomic counter and system clock.
+    ///
+    /// NOTE: This generator is pseudo-random and monotonic for single-process in-memory sessions
+    /// and tests. It does NOT provide cryptographic unpredictability or multi-process collision resistance.
     pub fn new_sequential(domain_salt: u64) -> Self {
         let seq = GLOBAL_ID_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         let now_millis = std::time::SystemTime::now()
@@ -46,6 +61,18 @@ impl Identifier {
             .unwrap_or(0);
         let mixed = domain_salt ^ now_millis;
         Self::new_deterministic(mixed, seq)
+    }
+
+    /// Attempts to generate a cryptographically secure random UUIDv4.
+    ///
+    /// Under Phase 1 Increment 5.2 constraints (zero third-party dependencies and no unsafe code),
+    /// OS CSPRNG is not directly accessible through safe `std`. This method fails closed explicitly
+    /// rather than silently returning a predictable sequential value. Full CSPRNG UUIDv4 generation
+    /// is deferred to Increment 5.4 when the approved `uuid` / `getrandom` dependency is introduced.
+    pub fn generate_production_v4() -> Result<Self, DomainError> {
+        Err(DomainError::EntropySourceUnavailable(
+            "cryptographically secure OS CSPRNG source is unavailable in safe std; production UUID generation is deferred to Increment 5.4".to_string(),
+        ))
     }
 
     /// Parses a standard 36-character hyphenated UUID string.
@@ -169,9 +196,30 @@ macro_rules! define_typed_id {
                 self.0.as_bytes()
             }
 
-            #[doc = "Constructs a deterministic identifier from a sequence counter."]
+            #[doc = "Constructs a deterministic identifier from a sequence counter for reproducible testing."]
             pub fn from_sequence(seq: u64) -> Self {
                 Self(Identifier::new_deterministic($tag, seq))
+            }
+
+            #[doc = "Alias for `from_sequence`, clearly marking deterministic test usage."]
+            pub fn for_test_sequence(seq: u64) -> Self {
+                Self::from_sequence(seq)
+            }
+
+            #[doc = "Attempts to generate a cryptographically secure random production identifier."]
+            #[doc = "Fails closed until approved CSPRNG dependencies are available in Increment 5.4."]
+            pub fn generate_production() -> Result<Self, DomainError> {
+                Identifier::generate_production_v4().map(Self)
+            }
+
+            #[doc = "Returns the 4-bit UUID version."]
+            pub const fn version(&self) -> u8 {
+                self.0.version()
+            }
+
+            #[doc = "Returns the 2-bit UUID variant."]
+            pub const fn variant(&self) -> u8 {
+                self.0.variant()
             }
 
             #[doc = "Returns a reference to the inner Identifier."]
