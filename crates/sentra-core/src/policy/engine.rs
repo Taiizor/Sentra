@@ -3,7 +3,7 @@ use crate::{
     domain::classification::SecurityClassification,
     policy::{
         action::OperationAction,
-        approval::{ApprovalBroker, ApprovalGrant, ApprovalRequest},
+        approval::{ApprovalAuthority, ApprovalBroker, ApprovalGrant},
         budget::{BudgetPolicyConfig, CostUsd},
         decision::{DenialReason, PolicyDecision},
     },
@@ -19,7 +19,7 @@ pub struct PolicyEngine {
 }
 
 impl PolicyEngine {
-    /// Creates a new policy engine with default configurations.
+    /// Creates an unconfigured engine; missing trusted session context denies requests.
     pub fn new() -> Self {
         Self {
             approval_broker: ApprovalBroker::new(),
@@ -33,6 +33,19 @@ impl PolicyEngine {
             approval_broker: ApprovalBroker::new(),
             config,
         }
+    }
+
+    /// Bootstrap a configured evaluator and its separate privileged approval handle.
+    /// Keep the authority in the trusted controller, never in an untrusted request path.
+    pub fn with_authority(config: BudgetPolicyConfig) -> (Self, ApprovalAuthority) {
+        let (approval_broker, authority) = ApprovalBroker::with_authority();
+        (
+            Self {
+                approval_broker,
+                config,
+            },
+            authority,
+        )
     }
 
     /// Returns the maximum cost that can be automatically approved without human grant.
@@ -50,7 +63,7 @@ impl PolicyEngine {
         &self.config
     }
 
-    /// Returns a reference to the internal approval broker.
+    /// Returns the request/consume interface; it cannot register context or issue grants.
     pub fn broker(&self) -> &ApprovalBroker {
         &self.approval_broker
     }
@@ -63,7 +76,7 @@ impl PolicyEngine {
     /// 3. Restricted data operations require explicit human approval.
     /// 4. Inherently sensitive actions (tool execution, checkout modification, external export) require approval.
     /// 5. Operations exceeding auto-budget threshold require approval.
-    /// 6. If approval is required and a valid grant is provided, the grant is atomically consumed and returns Granted.
+    /// 6. Every supplied grant is checked and atomically consumed, including otherwise automatic operations.
     /// 7. If approval is required and no grant is provided, returns NeedsApproval.
     /// 8. If an invalid, expired, or reused grant is provided, returns Denied.
     pub fn evaluate(
@@ -79,6 +92,13 @@ impl PolicyEngine {
             return PolicyDecision::Denied {
                 reason: DenialReason::UnknownOperation(operation_name.clone()),
             };
+        }
+
+        if let Err(reason) = self
+            .approval_broker
+            .validate_context(session, classification, action)
+        {
+            return PolicyDecision::Denied { reason };
         }
 
         // 2. Bell-LaPadula Information Flow Check:
@@ -123,8 +143,8 @@ impl PolicyEngine {
             requires_approval = true;
         }
 
-        // 6. If approval is not required, grant immediately
-        if !requires_approval {
+        // 6. Preserve automatic rules only for trusted context with no presented receipt.
+        if !requires_approval && grant.is_none() {
             return PolicyDecision::Granted;
         }
 
@@ -132,28 +152,25 @@ impl PolicyEngine {
         match grant {
             Some(g) => {
                 // Atomically verify and consume grant through broker
-                match self.approval_broker.verify_and_consume(g, clock) {
+                match self.approval_broker.verify_and_consume(
+                    Some(g),
+                    session,
+                    classification,
+                    action,
+                    clock,
+                ) {
                     Ok(()) => PolicyDecision::Granted,
                     Err(denial) => PolicyDecision::Denied { reason: denial },
                 }
             }
             None => {
-                // Generate and register an ApprovalRequest
-                let request = ApprovalRequest::new(
-                    session.session_id,
-                    &session.operator_id,
-                    action.action_digest(),
-                    &session.policy_digest, // Using policy/scope digest as target revision baseline
-                    format!(
-                        "Human approval required for action: {}",
-                        action.action_name()
-                    ),
-                    None,
-                    clock.now(),
-                    3600, // 1 hour expiration window
-                );
-                self.approval_broker.submit_request(request.clone());
-                PolicyDecision::NeedsApproval { request }
+                match self
+                    .approval_broker
+                    .request_approval(session, classification, action, clock)
+                {
+                    Ok(request) => PolicyDecision::NeedsApproval { request },
+                    Err(reason) => PolicyDecision::Denied { reason },
+                }
             }
         }
     }

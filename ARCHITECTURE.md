@@ -2,7 +2,7 @@
 
 Status: Phase 0 design baseline. Components below are planned. Accepted design decisions do not imply that a backend, SDK, or security boundary has been implemented or tested.
 
-Implementation evidence: the [Increment 5.3 report](docs/phase1/INCREMENT_5_3_WORKSPACE_VALIDATION.md) covers the current domain/session/policy foundation and Windows metadata-only workspace boundary. Resolved observations do not confer content access or authorization. Strong filesystem identity remains unvalidated, and a separate preexisting current-context approval defect blocks composed authorization. The overall platform below remains the intended design.
+Implementation evidence: the [Increment 5.3 report](docs/phase1/INCREMENT_5_3_WORKSPACE_VALIDATION.md) covers the Windows metadata-only workspace boundary; resolved observations confer no content authority. The [5.3.1 security correction](docs/phase1/INCREMENT_5_3_1_SECURITY_REVIEW.md) closes the in-process approval-context defect using registered target/session context and a privileged issuance handle over the same atomic broker. Strong filesystem identity, real human authentication and external dispatch remain unvalidated. The overall platform below remains the intended design.
 
 ## Shape of the platform
 

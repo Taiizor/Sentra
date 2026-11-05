@@ -4,7 +4,7 @@ Last updated: 2026-11-05.
 
 ## Current status
 
-**Phase 1 Increment 5.3: metadata-only workspace implementation and filesystem validation ready for review. Phase 2: NOT authorized.** The [workspace report](docs/phase1/INCREMENT_5_3_WORKSPACE_VALIDATION.md) records 76 passing tests, actual Windows symlink/junction/permission fixtures and three 10,000-file measurements. A separate synthetic probe **Failed** for a preexisting PolicyEngine current-action approval-binding gap; composed authorization remains **Blocked**. No race-free filesystem isolation, content-access capability, persistence or execution backend is claimed. Increment 5.4 has not started.
+**Phase 1 Increment 5.3.1: targeted approval-binding security correction complete. Phase 2: NOT authorized.** The [security review](docs/phase1/INCREMENT_5_3_1_SECURITY_REVIEW.md) closes the original in-process A-to-B defect with registered session/target context, broker-issued provenance and atomic exact-operation consumption. Final workspace verification records 103 Passed (101 runtime + 2 compile-fail doctests), 0 Failed and 3 explicitly Not Tested prior fixture/scale cases. All 27 new binding regressions and the original standalone probe pass. Phase 1 remains incomplete; strong filesystem identity, persistence, external human authentication and execution integration are not established by this correction. Increment 5.4 has not started.
 
 ### Status at Increment 5.3 entry (historical)
 
@@ -127,6 +127,19 @@ The [validation report](docs/phase1/INCREMENT_5_3_WORKSPACE_VALIDATION.md) and [
 - **Repository preservation:** entry develop/c849a8a contained 13 intentional hardening changes. External commit 4267b42 recorded those changes during this work; it was inspected and preserved. The agent issued no history/reference/index mutation. New 5.3 edits remain in the working tree. All seven ADRs and existing dependency manifests/lockfile remain unchanged.
 
 No target code, build script, scanner, Git command, package manager or provider was invoked by discovery. Only reviewed project tooling and synthetic test/probe executables ran. Temporary ACL changes applied solely to owned fixtures were restored; junctions were unlinked without traversing targets. Full Phase 1 acceptance is not claimed. Stop remains at Increment 5.3; no Increment 5.4 or Phase 2 work is authorized by this report.
+
+## Phase 1 Increment 5.3.1 — Approval binding and authorization integrity
+
+The [security review](docs/phase1/INCREMENT_5_3_1_SECURITY_REVIEW.md) records the complete lifecycle audit, API changes, regression matrix and reproducible [raw results](experiments/phase1/authorization/results/1793904491573.json). The historical Failed 5.3 result above remains unchanged; its in-process binding blocker is now resolved within this correction's scope.
+
+- **Implemented:** private authoritative session/workspace/policy/revision snapshots; classification floor; explicit revision independent of policy_digest; context generations that invalidate stale/ABA approvals; separate privileged ApprovalAuthority over the same Mutex broker; issued receipt provenance; full current-operation comparison before atomic single-use consumption; expiry/revocation/poisoning denial; canonical v2 framing of every operation field/list. No cryptographic hash or signature was added.
+- **Tested:** 27 focused regressions, the original A/B probe, all 33 original domain/session/policy/security test intents, 37 normal workspace cases, four unit tests and two compile-fail interface checks. Final workspace aggregate is 103 Passed, 0 Failed, 3 ignored/Not Tested. Focused regressions pass separately. The two new race tests execute 64 + 32 barrier rounds in each of three commands, totaling 288 new rounds; the original 20-thread one-winner test also passes.
+- **Probe closure:** a genuinely issued A grant receives ApprovalMismatched for B; A still succeeds once; replay is denied. Copying all visible receipt fields, changing metadata/context or using a request ID alone cannot establish provenance. Failed mismatches preserve the matching grant.
+- **Quality:** format, offline all-target check, warning-free Clippy, workspace tests and all 13 recorded validation commands pass. All 37 input digests match final source. Zero dependencies, edition 2024 and forbid(unsafe_code) are preserved.
+- **Not Tested / remaining risk:** the three unchanged Windows fixture/scale tests were not rerun here; prior 5.3 evidence remains historical. Strong filesystem identity, remote human authentication, actual target revision acquisition, persistent/cross-process approvals and real dispatch remain separate gates. Actor/token strings are not authentication. The owner must retain the privileged authority and register real validated context.
+- **Scope/Git:** workspace/domain/session/budget implementations and their tests, manifests/lockfile, prior raw evidence and all ADRs remain unchanged. Entry was clean develop at 5c6242f9d957abd226b59a550b3106056ad6998d, including parent 4267b42. Branch, HEAD, history, index and references are preserved. Changes remain in the working tree; no network or forbidden Git operation was used.
+
+No mandatory 5.3.1 acceptance item is Blocked. This closes the specified in-memory defect, not full Phase 1 security acceptance. No target operation/code/build script was executed. Stop remains at Increment 5.3.1; no Increment 5.4 or later work has started.
 
 ## Completed Phase 0 work
 

@@ -1,9 +1,9 @@
-//! Reproduce the preexisting approval context gap without filesystem access or dispatch.
-//! Exit 1 reports a failed S-02 expectation, not an executed sensitive operation.
+//! Original A-to-B regression, using real broker issuance and trusted session setup.
+//! No filesystem operation or sensitive action is dispatched by this probe.
 #![forbid(unsafe_code)]
 
 use sentra_core::{
-    ApprovalGrant, MockClock, OperatingMode, OperationAction, PolicyDecision, PolicyEngine,
+    DenialReason, MockClock, OperatingMode, OperationAction, PolicyDecision, PolicyEngine,
     SecurityClassification, SessionId, SessionMetadata, TimestampUtc,
 };
 
@@ -19,7 +19,14 @@ fn main() {
         "synthetic-revision",
     )
     .unwrap();
-    let engine = PolicyEngine::new();
+    let (engine, authority) = PolicyEngine::with_authority(Default::default());
+    authority
+        .set_session_context(
+            &session,
+            "synthetic-target-revision",
+            SecurityClassification::Restricted,
+        )
+        .unwrap();
     let approved = OperationAction::DiscoverMetadata {
         relative_path: "approved-metadata".into(),
     };
@@ -35,15 +42,9 @@ fn main() {
     ) else {
         panic!("restricted request must require approval");
     };
-    let grant = ApprovalGrant::new(
-        request.request_id,
-        request.session_id,
-        "synthetic-human",
-        now,
-        &request.action_digest,
-        &request.target_revision,
-        "synthetic-token",
-    );
+    let grant = authority
+        .issue_grant(&request.request_id, "synthetic-human", &clock)
+        .unwrap();
     assert_ne!(approved.action_digest(), different.action_digest());
     let decision = engine.evaluate(
         &session,
@@ -52,9 +53,39 @@ fn main() {
         Some(&grant),
         &clock,
     );
-    if decision == PolicyDecision::Granted {
+    if !matches!(
+        decision,
+        PolicyDecision::Denied {
+            reason: DenialReason::ApprovalMismatched(_)
+        }
+    ) {
         println!("POLICY_CONTEXT_BINDING=Failed: grant for metadata A accepted for metadata B");
         std::process::exit(1);
     }
-    println!("POLICY_CONTEXT_BINDING=Passed: mismatched metadata action rejected");
+    assert!(
+        engine
+            .evaluate(
+                &session,
+                SecurityClassification::Restricted,
+                &approved,
+                Some(&grant),
+                &clock
+            )
+            .is_granted()
+    );
+    assert!(matches!(
+        engine.evaluate(
+            &session,
+            SecurityClassification::Restricted,
+            &approved,
+            Some(&grant),
+            &clock
+        ),
+        PolicyDecision::Denied {
+            reason: DenialReason::ApprovalReused(_)
+        }
+    ));
+    println!(
+        "POLICY_CONTEXT_BINDING=Passed: mismatched metadata action rejected; matching action accepted once; replay rejected"
+    );
 }

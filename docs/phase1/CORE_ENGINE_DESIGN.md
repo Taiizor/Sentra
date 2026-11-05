@@ -231,6 +231,8 @@ pub trait WorkspaceBoundary: Send + Sync {
 
 ### 3.3. Policy engine contracts
 
+Implementation refinement (5.3.1): the [security correction](INCREMENT_5_3_1_SECURITY_REVIEW.md) documents the concrete approval API. A separately retained privileged authority registers trusted session/workspace/revision/classification context and issues receipts through the same Mutex broker. Consumption requires the current operation context and verified issuance provenance; display DTOs and canonical descriptor strings alone are not approvals. The sketches below do not authorize caller-constructed grants or conflating target revision with policy_digest. No cryptographic dependency or signature is implemented by this refinement.
+
 ```rust
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum SecurityClassification {

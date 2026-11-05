@@ -1,9 +1,9 @@
 use sentra_core::{
-    common::{Clock, MockClock},
+    common::MockClock,
     domain::{classification::SecurityClassification, id::SessionId, time::TimestampUtc},
     policy::{
         action::OperationAction,
-        approval::{ApprovalBroker, ApprovalGrant, ApprovalRequest},
+        approval::ApprovalAuthority,
         budget::CostUsd,
         decision::{DenialReason, PolicyDecision},
         engine::PolicyEngine,
@@ -23,10 +23,18 @@ fn create_test_session() -> SessionMetadata {
     .expect("valid session metadata")
 }
 
+fn registered_engine(session: &SessionMetadata) -> (PolicyEngine, ApprovalAuthority) {
+    let (engine, authority) = PolicyEngine::with_authority(Default::default());
+    authority
+        .set_session_context(session, "target-rev-1", SecurityClassification::Public)
+        .unwrap();
+    (engine, authority)
+}
+
 #[test]
 fn test_default_deny_unknown_operation() {
-    let engine = PolicyEngine::new();
     let session = create_test_session();
+    let (engine, _authority) = registered_engine(&session);
     let clock = MockClock::new(TimestampUtc::from_epoch_secs(1_700_000_000));
 
     let unknown_action = OperationAction::UnknownOperation {
@@ -51,8 +59,8 @@ fn test_default_deny_unknown_operation() {
 
 #[test]
 fn test_safe_operation_auto_granted_for_non_restricted() {
-    let engine = PolicyEngine::new();
     let session = create_test_session();
+    let (engine, _authority) = registered_engine(&session);
     let clock = MockClock::new(TimestampUtc::from_epoch_secs(1_700_000_000));
 
     let safe_action = OperationAction::DiscoverMetadata {
@@ -101,8 +109,8 @@ fn test_safe_operation_auto_granted_for_non_restricted() {
 
 #[test]
 fn test_restricted_classification_always_requires_approval() {
-    let engine = PolicyEngine::new();
     let session = create_test_session();
+    let (engine, _authority) = registered_engine(&session);
     let clock = MockClock::new(TimestampUtc::from_epoch_secs(1_700_000_000));
 
     // Even read-only discover action requires human approval when data is Restricted
@@ -129,8 +137,8 @@ fn test_restricted_classification_always_requires_approval() {
 
 #[test]
 fn test_sensitive_actions_require_approval() {
-    let engine = PolicyEngine::new();
     let session = create_test_session();
+    let (engine, _authority) = registered_engine(&session);
     let clock = MockClock::new(TimestampUtc::from_epoch_secs(1_700_000_000));
 
     // 1. Tool execution (even on public code)
@@ -153,7 +161,7 @@ fn test_sensitive_actions_require_approval() {
 
     // 2. Checkout modification (S-10)
     let modify_action = OperationAction::ModifyCheckout {
-        file_count: 3,
+        file_count: 2,
         target_paths: vec!["src/main.rs".to_string(), "Cargo.toml".to_string()],
     };
     assert!(
@@ -206,8 +214,8 @@ fn test_sensitive_actions_require_approval() {
 
 #[test]
 fn test_approval_grant_lifecycle_and_single_use_replay_prevention() {
-    let engine = PolicyEngine::new();
     let session = create_test_session();
+    let (engine, authority) = registered_engine(&session);
     let clock = MockClock::new(TimestampUtc::from_epoch_secs(1_700_000_000));
 
     let action = OperationAction::ExecuteTool {
@@ -231,15 +239,9 @@ fn test_approval_grant_lifecycle_and_single_use_replay_prevention() {
     };
 
     // Human operator grants approval
-    let grant = ApprovalGrant::new(
-        request.request_id,
-        session.session_id,
-        "human_lead_auditor",
-        clock.now(),
-        &request.action_digest,
-        &request.target_revision,
-        "token_single_use_abc",
-    );
+    let grant = authority
+        .issue_grant(&request.request_id, "human_lead_auditor", &clock)
+        .unwrap();
 
     // Second evaluation with grant: Granted!
     let granted_decision = engine.evaluate(
@@ -270,8 +272,8 @@ fn test_approval_grant_lifecycle_and_single_use_replay_prevention() {
 
 #[test]
 fn test_approval_grant_expiry() {
-    let engine = PolicyEngine::new();
     let session = create_test_session();
+    let (engine, authority) = registered_engine(&session);
     let clock = MockClock::new(TimestampUtc::from_epoch_secs(1_700_000_000));
 
     let action = OperationAction::ModifyCheckout {
@@ -292,15 +294,9 @@ fn test_approval_grant_expiry() {
         other => panic!("expected NeedsApproval, got {:?}", other),
     };
 
-    let grant = ApprovalGrant::new(
-        request.request_id,
-        session.session_id,
-        "operator_admin",
-        clock.now(),
-        &request.action_digest,
-        &request.target_revision,
-        "token_time_travel",
-    );
+    let grant = authority
+        .issue_grant(&request.request_id, "human_lead_auditor", &clock)
+        .unwrap();
 
     // Advance clock past expiration window (3600 seconds = 1 hour, advance 4000 seconds)
     clock.advance_seconds(4000);
@@ -323,8 +319,8 @@ fn test_approval_grant_expiry() {
 
 #[test]
 fn test_approval_grant_mismatch_rejections() {
-    let engine = PolicyEngine::new();
     let session = create_test_session();
+    let (engine, authority) = registered_engine(&session);
     let clock = MockClock::new(TimestampUtc::from_epoch_secs(1_700_000_000));
 
     let action = OperationAction::ExecuteTool {
@@ -345,111 +341,66 @@ fn test_approval_grant_mismatch_rejections() {
         other => panic!("expected NeedsApproval, got {:?}", other),
     };
 
-    // 1. Action digest mismatch
-    let bad_action_grant = ApprovalGrant::new(
-        request.request_id,
-        session.session_id,
-        "operator_admin",
-        clock.now(),
-        "action:exec:different_tool",
-        &request.target_revision,
-        "token_1",
+    let grant = authority
+        .issue_grant(&request.request_id, "operator_admin", &clock)
+        .unwrap();
+    let mut bad_action_grant = grant.clone();
+    bad_action_grant.action_digest = "modified operation".into();
+    let mut bad_rev_grant = grant.clone();
+    bad_rev_grant.target_revision = "different-revision".into();
+    let mut bad_session_grant = grant.clone();
+    bad_session_grant.session_id = SessionId::new();
+    for bad in [bad_action_grant, bad_rev_grant, bad_session_grant] {
+        assert!(matches!(
+            engine.evaluate(
+                &session,
+                SecurityClassification::Internal,
+                &action,
+                Some(&bad),
+                &clock
+            ),
+            PolicyDecision::Denied {
+                reason: DenialReason::InvalidApprovalGrant(_)
+            }
+        ));
+    }
+    assert!(
+        engine
+            .evaluate(
+                &session,
+                SecurityClassification::Internal,
+                &action,
+                Some(&grant),
+                &clock
+            )
+            .is_granted()
     );
-    assert!(matches!(
-        engine.evaluate(
-            &session,
-            SecurityClassification::Internal,
-            &action,
-            Some(&bad_action_grant),
-            &clock
-        ),
-        PolicyDecision::Denied {
-            reason: DenialReason::ApprovalMismatched(_)
-        }
-    ));
-
-    // 2. Target revision mismatch
-    let bad_rev_grant = ApprovalGrant::new(
-        request.request_id,
-        session.session_id,
-        "operator_admin",
-        clock.now(),
-        &request.action_digest,
-        "sha256:different_revision",
-        "token_2",
-    );
-    assert!(matches!(
-        engine.evaluate(
-            &session,
-            SecurityClassification::Internal,
-            &action,
-            Some(&bad_rev_grant),
-            &clock
-        ),
-        PolicyDecision::Denied {
-            reason: DenialReason::ApprovalMismatched(_)
-        }
-    ));
-
-    // 3. Session mismatch
-    let bad_session_grant = ApprovalGrant::new(
-        request.request_id,
-        SessionId::new(),
-        "operator_admin",
-        clock.now(),
-        &request.action_digest,
-        &request.target_revision,
-        "token_3",
-    );
-    assert!(matches!(
-        engine.evaluate(
-            &session,
-            SecurityClassification::Internal,
-            &action,
-            Some(&bad_session_grant),
-            &clock
-        ),
-        PolicyDecision::Denied {
-            reason: DenialReason::ApprovalMismatched(_)
-        }
-    ));
 }
 
 #[test]
 fn test_revoked_approval_request() {
-    let broker = ApprovalBroker::new();
-    let session_id = SessionId::new();
+    let session = create_test_session();
+    let (engine, authority) = registered_engine(&session);
     let clock = MockClock::new(TimestampUtc::from_epoch_secs(1_700_000_000));
-
-    let request = ApprovalRequest::new(
-        session_id,
-        "operator_admin",
-        "action:exec:tool",
-        "rev1",
-        "Test request",
-        None,
-        clock.now(),
-        3600,
-    );
-    let req_id = broker.submit_request(request.clone());
-
-    // Revoke the request
-    assert!(broker.revoke_request(&req_id));
-
-    // Submitting a grant for revoked request is rejected
-    let grant = ApprovalGrant::new(
-        req_id,
-        session_id,
-        "operator_admin",
-        clock.now(),
-        &request.action_digest,
-        &request.target_revision,
-        "token_revoked",
-    );
-
-    let verify_result = broker.verify_and_consume(&grant, &clock);
+    let action = OperationAction::DiscoverMetadata {
+        relative_path: "metadata".into(),
+    };
+    let request = engine
+        .broker()
+        .request_approval(&session, SecurityClassification::Internal, &action, &clock)
+        .unwrap();
+    let grant = authority
+        .issue_grant(&request.request_id, "operator_admin", &clock)
+        .unwrap();
+    assert!(authority.revoke_request(&request.request_id).unwrap());
     assert!(matches!(
-        verify_result,
+        engine.broker().verify_and_consume(
+            Some(&grant),
+            &session,
+            SecurityClassification::Internal,
+            &action,
+            &clock
+        ),
         Err(DenialReason::InvalidApprovalGrant(_))
     ));
 }
@@ -470,8 +421,8 @@ fn test_capability_vs_policy_authorization_separation() {
         }
     }
 
-    let engine = PolicyEngine::new();
     let session = create_test_session();
+    let (engine, _authority) = registered_engine(&session);
     let clock = MockClock::new(TimestampUtc::from_epoch_secs(1_700_000_000));
 
     let privileged_backend = MockBackend {
@@ -479,7 +430,7 @@ fn test_capability_vs_policy_authorization_separation() {
     };
 
     let restricted_action = OperationAction::ModifyCheckout {
-        file_count: 5,
+        file_count: 1,
         target_paths: vec!["sensitive.rs".to_string()],
     };
 

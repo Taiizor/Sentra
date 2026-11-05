@@ -2,7 +2,11 @@
 
 Date: 2026-11-05. Phase 1 is explicitly authorized by the project owner. Phase 2 is not authorized. This record links technical-validation increments and preserves historical observations. **Phase 1 is not complete.** Core library foundations are partially implemented; persistence, CLI, execution and real provider integrations remain unimplemented.
 
-## Increment 5.3 update
+## Increment 5.3.1 update
+
+The [approval-binding security review](INCREMENT_5_3_1_SECURITY_REVIEW.md) is complete. The original A/B probe now requires an issued grant, rejects B with ApprovalMismatched, authorizes A once and rejects replay. Registered session/workspace/revision context, receipt provenance and atomic consumption enforce the complete current binding. Final checks record 103 Passed (101 runtime plus two compile-fail doctests), 0 Failed and three unchanged 5.3 fixture/scale cases Not Tested. All 27 new regressions pass; new barrier races ran 288 rounds across the workspace, focused and repeat commands. No dependency, unsafe code, workspace/domain/session change, network or Git mutation was introduced. The specific in-process defect is closed; production identity, filesystem and dispatch guarantees remain pending. Stop remains at 5.3.1; no 5.4 or Phase 2 work started.
+
+## Increment 5.3 update (historical)
 
 The [workspace validation report](INCREMENT_5_3_WORKSPACE_VALIDATION.md) is ready for review. Canonical root/instance binding, Windows reparse quarantine, metadata-only discovery and explicit limits/incompleteness are implemented in sentra-core, with 76 unique passing tests. Real internal/external junction and deny-ACL fixtures execute through the reviewed runner. Three 10,000-file Unicode/nested measurements meet the declared Q-05 fixture target; no race-free filesystem isolation or content-access authority is claimed. A separate synthetic probe Failed for the preexisting PolicyEngine current-operation grant-binding gap, so composed authorization is Blocked. Policy/session code, zero dependencies and ADR statuses are preserved. No Increment 5.4 or Phase 2 work started.
 

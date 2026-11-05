@@ -2,6 +2,8 @@
 
 Date: 2026-11-05. **Workspace implementation and filesystem validation are ready for review.** The Windows x64 filesystem suite passes; a separate probe exposes a preexisting approval-context defect. Overall authorization integration is **Blocked** until that defect is corrected. Phase 1 is incomplete. Increment 5.4 and Phase 2 have not started.
 
+Subsequent status: [Increment 5.3.1](INCREMENT_5_3_1_SECURITY_REVIEW.md) corrects and tests the specific in-process approval defect. This report and its Failed raw JSON preserve the historical 5.3 findings; the probe source now follows the corrected issuance API and verifies negative plus positive/replay behavior. Filesystem implementation/limitations and its original evidence remain unchanged. The earlier Blocked statement is not the current result of that corrected in-process binding gate.
+
 ## Scope and implementation
 
 The implementation follows the [Core Engine design](CORE_ENGINE_DESIGN.md), [Milestone 4 conditions](MILESTONE_4_REVIEW.md), existing domain types and the prior [5.2.1 review](INCREMENT_5_2_1_SECURITY_REVIEW.md). Earlier reports were checked against actual source. No accepted ADR, session state machine or policy implementation was changed.
