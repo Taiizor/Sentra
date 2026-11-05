@@ -4,7 +4,7 @@ Last updated: 2026-11-05.
 
 ## Current status
 
-**Phase 0: complete and closed. Phase 1: explicitly authorized and in progress; Milestone 3 mock provider contract assessment ready for review. Phase 2: NOT authorized.** The x64 Rust/MSVC, SQLite engine and mock provider experiments have executed. SQLite is the owner-approved persistence candidate, with unresolved production gates. The product Core Engine, CLI, production persistence and real AI adapters are not implemented. Phase 1 is not complete; no full Rust-binding, storage, isolation or live-provider gate is claimed satisfied. The agent has issued no history/reference-changing Git operation.
+**Phase 0: complete and closed. Phase 1: explicitly authorized and in progress; Milestone 4 VM and sandbox isolation validation ready for review. Phase 2: NOT authorized.** The x64 Rust/MSVC, SQLite engine, mock AI provider contract, and VM/sandbox isolation validation experiments have executed. SQLite is the owner-approved persistence candidate, with unresolved production gates. Dedicated Hyper-V VM execution remains the required untrusted workload boundary per ADR-0004; local unprivileged VM creation is blocked pending operator enrollment in the local `Hyper-V Yöneticileri` group. The product Core Engine, CLI, production persistence, real AI adapters, and production VM orchestration are not implemented. Phase 1 is not complete; no full Rust-binding, storage, isolation or live-provider gate is claimed satisfied. The agent has issued no history/reference-changing Git operation.
 
 ## Phase 1 initial milestone
 
@@ -43,6 +43,20 @@ The [provider validation report](docs/phase1/PROVIDER_VALIDATION.md) is complete
 - **Repository entry:** clean `develop` at `2689268f2676304de69bc2ef1767c79b951f76fd` (`Document SQLite reliability assessment`), also the local `origin/develop`. Earlier SQLite completion changes were committed outside the agent's issued operations and were preserved. New Milestone 3 changes remain in the working tree.
 
 Milestone 3 does not complete Phase 1 or satisfy the two-real-backend compatibility gate. No following milestone is started by this report.
+
+## Phase 1 Milestone 4 — VM and sandbox isolation validation
+
+The [VM and sandbox validation report](docs/phase1/SANDBOX_VALIDATION.md) is complete and ready for review. The feasibility and security boundaries of the proposed disposable VM worker architecture were assessed against Windows 11 host capabilities without elevating privileges or mutating host security configuration.
+
+- **Assessment outcome:** Two reproducible runs each record **22 Passed, 0 Failed, 5 Blocked, 0 Not Tested** assessment items across 27 investigated points. Raw outputs, host metadata, individual check statuses, and SHA-256 evidence digests are recorded in [results.json](experiments/phase1/sandbox/results.json).
+- **Environment findings:** Host is Windows 11 Education (Build `26300.9818` x64); hardware virtualization and Windows Hypervisor are active (`HypervisorPresent=True`, VBS running, `vmms` and `vmcompute` running); 31.75 GB total physical RAM (~11.5 GB free); 62 GB–221 GB free space across multiple NTFS drives. WSL2 kernel `6.18.54.1` is active with only `docker-desktop`. Docker Engine 29.9.2 is accessible via `docker-users` group membership.
+- **Permission blockers identified:** `Get-WindowsOptionalFeature` is blocked by DISM elevation requirements; `Get-VM` and `Get-VMSwitch` are blocked by Hyper-V authorization policy because the current user is not in the local `Hyper-V Yöneticileri` (`Hyper-V Administrators`) security group (which currently has 0 members); `hcsdiag.exe list` is blocked by missing compute privileges. These 5 blocked items are verified as security authorization constraints, not hardware or platform incompatibilities.
+- **Safe harmless prototype:** Executed using non-privileged container isolation (`ubuntu:24.04`) with `--network none`, `--read-only`, and `--tmpfs /tmp` to validate the worker execution protocol without weakening the VM isolation requirement. The prototype passed all 10 stages: baseline launch, network default-deny (loopback only), read-only rootfs write denial, host credential/env scrubbing (host USERNAME/USERPROFILE/COMPUTERNAME completely absent), stream input transfer without host mounts, controlled output extraction with matching independent SHA-256 verification (ADR-0006), worker crash detection (SIGKILL 137, SIGSEGV 139), host timeout enforcement and forced termination, and verified zero lingering containers.
+- **Architectural boundaries preserved:** In accordance with ADR-0004, Docker and WSL2 are strictly categorized as **Curated development fixture protocols**, not substitutes for dedicated VM hardware isolation. Untrusted research targets in Phase 2 require dedicated Hyper-V Linux VM isolation with vsock IPC and zero host network/filesystem exposure.
+- **Prerequisite for Phase 2 Hyper-V management:** Adding the operator account to `Hyper-V Yöneticileri` (`net localgroup "Hyper-V Yöneticileri" $env:USERNAME /add`) via a one-time elevated action will enable full non-elevated VM orchestration without granting ongoing administrative rights.
+- **Repository entry:** Clean `develop` at `4d3df24` (`Validate mock AI provider contract`). No commits, tags, pushes, fetches, or pulls were issued by the agent. All Milestone 4 files remain in the working tree.
+
+Milestone 4 does not authorize Phase 2 or untrusted code execution.
 
 ## Completed Phase 0 work
 
@@ -88,7 +102,7 @@ The Phase 0 finalization modified only `AGENTS.md`, `ROADMAP.md`, `PROGRESS.md`,
 | --- | --- | --- |
 | Phase 1 authorization | Project owner | Satisfied by explicit instruction on 2026-11-05; no Phase 2 or Git authorization implied |
 | Rust/MSVC and persistence feasibility | Core maintainer | Initial x64 and SQLite engine subsets pass; full V-01, actual Rust binding, database/blob reconciliation and remaining storage-fault gates remain pending |
-| Disposable Linux VM backend | Execution/security maintainer | Authenticated worker and containment suite before untrusted execution |
+| Disposable Linux VM backend | Execution/security maintainer | Protocol/lifecycle prototype passes 22 items; Hyper-V group enrollment prerequisite identified; full VM containment suite before Phase 2 untrusted execution |
 | Provider independence and privacy | AI/security maintainer | Mock contract passes 62 tests twice; production provider-free Core, two real-backend conformance runs and measured egress controls remain pending |
 | OSI license and third-party licensing | Project owner / licensing reviewer | License selection and version-specific notices before public distribution |
 | Private disclosure channel | Project owner / security maintainer | Published, tested reporting channel before release |
