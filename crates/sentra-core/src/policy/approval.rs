@@ -179,15 +179,17 @@ struct BrokerInner {
 /// It exposes no context-registration, grant-issuance or request-injection method.
 ///
 /// ```compile_fail
-/// use sentra_core::ApprovalBroker;
-/// let broker = ApprovalBroker::new();
-/// broker.submit_request(());
+/// use sentra_core::{ApprovalBroker, ApprovalRequest};
+/// fn inject(broker: &ApprovalBroker, request: ApprovalRequest) {
+///     broker.submit_request(request);
+/// }
 /// ```
 ///
 /// ```compile_fail
-/// use sentra_core::ApprovalBroker;
-/// let broker = ApprovalBroker::new();
-/// broker.issue_grant(());
+/// use sentra_core::{ApprovalBroker, ApprovalId, MockClock};
+/// fn issue(broker: &ApprovalBroker, id: &ApprovalId, clock: &MockClock) {
+///     broker.issue_grant(id, "human", clock);
+/// }
 /// ```
 #[derive(Clone, Default)]
 pub struct ApprovalBroker {
