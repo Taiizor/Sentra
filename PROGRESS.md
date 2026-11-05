@@ -4,7 +4,7 @@ Last updated: 2026-11-05.
 
 ## Current status
 
-**Phase 0: complete and closed. Phase 1: explicitly authorized and in progress; Milestone 4 closure review completed with a Conditional Go recommendation for Core Engine Foundation. Phase 2: NOT authorized.** The x64 Rust/MSVC, SQLite engine, mock AI provider contract, and VM/sandbox isolation validation experiments have executed. Milestone 4 closure review confirms that Core Engine Foundation development may proceed safely with untrusted execution strictly disabled and fail-closed. SQLite is the owner-approved persistence candidate, with unresolved production gates. Dedicated Hyper-V VM execution remains the required untrusted workload boundary per ADR-0004; local unprivileged VM creation is blocked pending operator enrollment in the local `Hyper-V Yöneticileri` group. The product Core Engine, CLI, production persistence, real AI adapters, and production VM orchestration are not implemented. Phase 1 is not complete; no full Rust-binding, storage, isolation or live-provider gate is claimed satisfied. The agent has issued no history/reference-changing Git operation.
+**Phase 0: complete and closed. Phase 1: explicitly authorized and in progress; Increment 5.1 Core Engine architecture and contracts design complete. Phase 2: NOT authorized.** The x64 Rust/MSVC, SQLite engine, mock AI provider contract, and VM/sandbox isolation validation experiments have executed. Milestone 4 closure review issued a Conditional Go recommendation. Increment 5.1 establishes the implementation-ready architecture, Rust trait contracts, domain models, session state machine, workspace canonicalization rules, SQLite recovery invariants, and mandatory fail-closed execution boundary. No production application code was implemented and no third-party dependencies were installed. Phase 1 is not complete; no full Rust-binding, storage, isolation or live-provider gate is claimed satisfied. The agent has issued no history/reference-changing Git operation.
 
 ## Phase 1 initial milestone
 
@@ -58,6 +58,19 @@ The [VM and sandbox validation report](docs/phase1/SANDBOX_VALIDATION.md) is com
 - **Repository entry:** Clean `develop` at `e56037f` (`Assess Phase 1 VM and sandbox isolation`). No commits, tags, pushes, fetches, or pulls were issued by the agent. All review files remain in the working tree.
 
 Milestone 4 does not authorize Phase 2 or untrusted code execution.
+
+## Phase 1 Increment 5.1 — Core Engine architecture and contracts
+
+The [Core Engine design document](docs/phase1/CORE_ENGINE_DESIGN.md) is complete and ready for review. In accordance with the Conditional Go mandate from Milestone 4 closure review, this increment defines the implementation-ready architecture, Rust trait contracts, domain models, and dependency plan for Core Engine Foundation without implementing production code.
+
+- **Module boundaries designed:** Seven discrete modules mapped with strict unidirectional dependencies: `session` (lifecycle & DAG), `workspace` (canonical root & symlink quarantine), `policy` (classification & default-deny authorization), `persistence` (SQLite repository with WAL/busy-retry rules), `provider` (optional, provider-neutral model gateway), `execution` (mandatory fail-closed backend stub), and `evidence` (host-side SHA-256 verification and envelope validation per ADR-0006).
+- **Mandatory fail-closed execution boundary:** `FailClosedBackend` is specified as the normative default execution backend. Any task dispatch for `UntrustedTargetWorkload` returns `Err(ExecutionBackendError::BackendUnavailable)`. No fallback to host execution or Docker/WSL2 is permitted. Accidental execution is prevented by requiring explicit `ExecutionScope` in the dispatch API.
+- **SQLite and provider integration rules:** Embeds Milestone 2 findings (explicit rollback on statement errors, full rollback and bounded backoff on `SQLITE_BUSY_SNAPSHOT`, `synchronous=FULL`, explicit WAL checkpointing) and Milestone 3 findings (narrow `DecisionV1` structured output, conservative cost reservations, optional AI).
+- **Dependency plan:** Minimal, audited dependency inventory proposed: `rusqlite` (bundled feature, MIT), `serde` / `serde_json` (MIT/Apache-2.0), `sha2` (MIT/Apache-2.0), `uuid` (MIT/Apache-2.0), and `chrono` (MIT/Apache-2.0). Complex runtimes (`tokio`), ORMs (`diesel`), and HTTP client frameworks (`reqwest`) are explicitly rejected for the foundation. No manifests were modified and no dependencies downloaded.
+- **Implementation roadmap:** Increment 5 is partitioned into five sequential sub-increments (5.2 through 5.6) with explicit acceptance criteria for each sub-increment.
+- **Repository entry:** Clean `develop` at `c6d62a3` (`Review Milestone 4 closure and core readiness`). No commits, tags, pushes, fetches, or pulls were issued by the agent. All Increment 5.1 design files remain in the working tree.
+
+Increment 5.1 does not implement production code or authorize Phase 2.
 
 ## Completed Phase 0 work
 
