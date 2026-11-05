@@ -12,7 +12,7 @@ fn create_valid_metadata() -> SessionMetadata {
     SessionMetadata::new(
         SessionId::new(),
         TimestampUtc::from_epoch_secs(1_700_000_000),
-        "E:/MyProject/Mix/GitHub/Sentra",
+        "/workspace/test-project",
         OperatingMode::DeepSecurityResearch,
         "operator_admin",
         "sha256:policy_abc123",
