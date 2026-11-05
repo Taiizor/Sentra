@@ -2,6 +2,10 @@
 
 Date: 2026-11-05. Phase 1 is explicitly authorized by the project owner. Phase 2 is not authorized. This report covers the requested initial inspection and first technical-validation increment, before substantial application implementation. **Phase 1 is not complete.**
 
+## Milestone 2 update
+
+The [SQLite reliability report](SQLITE_VALIDATION.md) is now ready for review: two final runs each record 18 Passed, 0 Failed, 1 Blocked and 3 Not Tested SQLite items. Real process termination, WAL/checkpoints, rollback, migrations, backup/restore, locking and safe error paths were exercised using the existing Bun SQLite engine. JavaScript semantic type checking Failed separately; formatting and syntax bundling pass. No Rust database binding or production persistence is implemented, no ADR status changed, and no next milestone or Phase 2 work started. The initial-increment observations below remain historical where later evidence is linked.
+
 ## Repository and instructions
 
 - Entry branch: `develop`; HEAD: `e3a2589c5380ddc26980ae1aec13010a0a729723`; local `origin/develop` at the same commit, ahead/behind 0/0. The entry working tree was clean.
@@ -15,7 +19,7 @@ Date: 2026-11-05. Phase 1 is explicitly authorized by the project owner. Phase 2
 | Increment | Experiment before dependent implementation | Required outcome / current state |
 | --- | --- | --- |
 | 1. Rust/MSVC, V-01 | Dependency-free isolated Cargo package; exact toolchain/linker discovery; x64 build/tests/lints/runtime and ARM64 check | Initial x64 subset validated; full V-01 remains partial |
-| 2. Persistence, V-02 | Pin a reviewed SQLite integration and test transactions, WAL, killed writers, integrity, backup/restore, concurrency, migration and corruption handling | Not started; no database abstraction or additional storage selected |
+| 2. Persistence, V-02 | Assess SQLite transactions, WAL, killed writers, integrity, backup/restore, concurrency, migration and corruption before production integration | Engine assessment ready for review; production Rust binding, database/blob reconciliation and device-fault gaps remain unvalidated |
 | 3. Worker feasibility, V-03 | Read-only Hyper-V/WSL assessment followed by an explicitly approved harmless dedicated-VM prototype | Read-only assessment partial; management queries blocked by current permissions; no VM provisioned |
 | 4. Provider contract | Deterministic mock-only capabilities, structured output, errors, timeout/retry, cancellation, token/cost accounting and egress-denial tests | Not started; no API keys, real providers or external data transfer required |
 | 5. Core foundation, V-04/V-05 | Implement only after relevant storage/process/policy assumptions pass; scope/path fixtures, sessions, evidence, approvals, recovery and discovery measurement | Not implemented; no production workspace or dependency set selected |
@@ -103,7 +107,7 @@ The safe next options are an owner-approved Hyper-V management/provisioning path
 | Cargo dependencies | Zero direct or transitive third-party crates; lockfile contains only the probe package |
 | Rust standard library/toolchain | Existing installed toolchain; exact versions recorded above; no toolchain installation or redistribution |
 | MSVC / Windows SDK | Existing installed native tools; local smoke use only; no installation, entitlement conclusion or redistribution |
-| SQLite / database binding | None introduced; executable/binding/license/version selection and reliability tests remain pending |
+| SQLite / database binding | No dependency introduced: Milestone 2 uses the existing Bun SQLite engine; production Rust binding/version/license review and integration remain pending |
 | Provider SDK / HTTP library | None introduced; mock contract work remains pending |
 
 ADR-0007 remains Proposed. A future exact-version inventory must cover all selected crates, native libraries and redistribution notices before use/distribution. This empty crate inventory does not satisfy that future review in advance.
@@ -114,21 +118,21 @@ ADR-0007 remains Proposed. A future exact-version inventory must cover all selec
 | --- | --- |
 | V-01 / OQ-01 / OQ-02 | Partially validated: x64 toolchain, linking, three probe tests, format/lint and basic Unicode/CRLF/error behavior |
 | ADR-0002 remaining gate | Supervised process trees/bounded I/O/recovery, native dependency integration, SQLite/blob recovery and authenticated worker channel are not validated |
-| V-02 / OQ-09 / Q-04 | SQLite integration, integrity, migration, concurrency, backup/restore, crash/corruption and blob reconciliation not started |
+| V-02 / OQ-09 / Q-04 | Milestone 2 engine assessment executed; actual Rust integration, database/blob reconciliation and untested device/power-fault scenarios remain pending |
 | V-03 / OQ-03 / S-07 / S-13 | Read-only host observation only; VM management permission is a blocking prerequisite for the local topology experiment |
 | V-04 / F-01 / S-11 / Q-05 | No project discovery implementation, path-security suite or 10,000-file measurement yet |
 | V-05 / F-02 / F-14 / S-01 / S-02 / Q-03 | No production session, policy, approval, cancellation or persistence implementation yet |
 | Provider contract / F-16 | Mock-only design/test increment pending; real provider compatibility in F-15 remains Phase 2 work |
 | Core / CLI | Not implemented; no product unit/integration/security suite has run |
 
-**Validated:** the narrow x64 standard-library probe and its listed checks. **Implemented and tested:** the isolated probe only. **Partially validated:** V-01 and host virtualization availability. **Not validated:** SQLite/native crate integration, provider contract, core/CLI, full process/path/permission/security behavior. **Blocked:** local VM management/provisioning under the current permissions, and ARM64 compilation under the currently installed targets.
+**Milestone 1 assessment:** the narrow x64 standard-library probe and its listed checks passed; only the isolated probe was implemented. V-01 and host virtualization availability remained partial; provider contract, core/CLI and full process/path/permission/security behavior were unvalidated. Local VM management and ARM64 compilation were blocked as described above. Milestone 2 adds SQLite engine evidence without validating the production Rust binding or the remaining storage gaps.
 
 Cargo offline mode and absence of networking code constrain this experiment; no packet capture or OS-enforced network-isolation test was performed. Public documentation was read, but no repository source, private data or findings were sent to an AI provider. No API keys, telemetry or cloud service was used.
 
 ## Increment quality checks
 
-The documentation checker passed for 33 Markdown documents, 192 local file/fragment links, 50 table structures and all 41 requirement-to-validation mappings. All seven ADR contents match their entry SHA-256 digests and their indexed statuses remain consistent. The new source, manifest and runner match the digests in the raw experiment evidence. PowerShell parser validation reports zero errors; Git whitespace checks pass. No unexpected non-document artifacts were found outside the explicitly declared experiment files and ignored build/fixture outputs.
+At Milestone 1, the documentation checker passed for 33 Markdown documents, 192 local file/fragment links, 50 table structures and all 41 requirement-to-validation mappings. All seven ADR contents matched their entry SHA-256 digests and indexed statuses. Source, manifest and runner matched the raw experiment evidence; PowerShell parser and Git whitespace checks passed. These counts describe that increment, not the later SQLite report.
 
 Branch, HEAD, full local history, reference targets and index entries match the entry snapshot. These are initial-increment checks, not the complete Phase 1 quality gate. The aggregate experiment runner still exits 1 for the unfulfilled ARM64 check, and no product core/CLI/security or SQLite tests are included in the three passing probe tests.
 
-No Git commit, amend, reset, rebase, cherry-pick, tag, push, fetch, pull, staging, stashing or history/reference-changing operation was performed. Changes remain in the working tree. Phase 1 is in progress, not complete; Phase 2 is not ready or authorized. The next bounded technical increment is SQLite reliability after its exact integration choice is reviewed, while the VM permission/configuration prerequisite is resolved separately.
+The agent has issued no Git commit, amend, reset, rebase, cherry-pick, tag, push, fetch, pull, staging, stashing or history/reference-changing operation. Subsequent externally performed commits are recorded in the progress ledger; new completion edits remain in the working tree. Phase 1 is in progress, not complete; Phase 2 is not ready or authorized. Milestone 2's SQLite report is ready for review; no following milestone was started, and the VM permission/configuration prerequisite remains unresolved.
