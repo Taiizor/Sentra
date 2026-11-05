@@ -21,6 +21,8 @@ pub enum ExecutionErrorKind {
     BackendFault,
     /// Recording the execution audit event failed.
     AuditFailure,
+    /// Execution correlation identifier mismatch between request and result (remediates F-551-05).
+    CorrelationMismatch,
 }
 
 /// Redacted typed execution error.
@@ -57,6 +59,27 @@ impl ExecutionError {
     /// Whether this error was caused by a policy or authorization denial.
     pub fn is_policy_denied(&self) -> bool {
         matches!(self.kind, ExecutionErrorKind::PolicyDenied)
+    }
+
+    /// Helper for execution identifier correlation mismatch (remediates F-551-05).
+    pub fn correlation_mismatch(
+        expected: crate::ExecutionId,
+        received: crate::ExecutionId,
+    ) -> Self {
+        Self::new(
+            ExecutionErrorKind::CorrelationMismatch,
+            format!("Execution ID correlation mismatch: expected {expected}, received {received}"),
+        )
+    }
+
+    /// Whether this error represents an execution ID correlation mismatch.
+    pub fn is_correlation_mismatch(&self) -> bool {
+        matches!(self.kind, ExecutionErrorKind::CorrelationMismatch)
+    }
+
+    /// Whether this error represents an internal backend fault or contradictory result.
+    pub fn is_backend_fault(&self) -> bool {
+        matches!(self.kind, ExecutionErrorKind::BackendFault)
     }
 }
 

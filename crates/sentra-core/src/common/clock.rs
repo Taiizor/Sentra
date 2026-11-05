@@ -61,3 +61,15 @@ impl Clock for MockClock {
         TimestampUtc::from_epoch_millis(self.millis.load(Ordering::SeqCst))
     }
 }
+
+impl<T: ?Sized + Clock> Clock for std::sync::Arc<T> {
+    fn now(&self) -> TimestampUtc {
+        (**self).now()
+    }
+}
+
+impl<T: ?Sized + Clock> Clock for &T {
+    fn now(&self) -> TimestampUtc {
+        (**self).now()
+    }
+}
