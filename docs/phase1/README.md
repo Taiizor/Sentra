@@ -1,8 +1,12 @@
 # Phase 1 Execution and Validation Record
 
-Date: 2026-11-05. Phase 1 is explicitly authorized by the project owner. Phase 2 is not authorized. This record links technical-validation increments and preserves historical observations. **Phase 1 is not complete.** Core library foundations are partially implemented; persistence, CLI, execution and real provider integrations remain unimplemented.
+Date: 2026-11-05. Phase 1 is explicitly authorized by the project owner. Phase 2 is not authorized. This record links technical-validation increments and preserves historical observations. **Phase 1 is not complete.** Core library foundations and an initial persistence adapter are implemented; CLI, execution and real provider integrations remain unimplemented.
 
-## Increment 5.3.1 update
+## Increment 5.4.2 update
+
+The owner-authorized [SQLite implementation](INCREMENT_5_4_2_SQLITE_IMPLEMENTATION.md) is ready for review. Actual bundled SQLite 3.46.0 compiles through cached MSVC dependencies offline. The final driver passes 13 checks; the workspace passes 153 tests, including 49 new native persistence cases. Separate-process single-use approval, full transaction rollback/retry, atomic audit/budgets, version 1 migrations and conservative WAL-aware in-place preservation are implemented and tested. Four ordinary-suite ignored entries are explained in the report, including the subprocess helper actually launched by parent tests. The actual Windows graph has 29 external packages; unfiltered offline metadata remains blocked on an unused syn 2.0.119 source. Physical faults/power loss, native backup/restore, blob reconciliation, cryptographic integrity and full application dispatch remain open. No ADR status change, host configuration change, networking or Git mutation. Increment 5.4.3 and Phase 2 have not started. All milestone observations below remain historical.
+
+## Increment 5.3.1 update (historical)
 
 The [approval-binding security review](INCREMENT_5_3_1_SECURITY_REVIEW.md) is complete. The original A/B probe now requires an issued grant, rejects B with ApprovalMismatched, authorizes A once and rejects replay. Registered session/workspace/revision context, receipt provenance and atomic consumption enforce the complete current binding. Final checks record 103 Passed (101 runtime plus two compile-fail doctests), 0 Failed and three unchanged 5.3 fixture/scale cases Not Tested. All 27 new regressions pass; new barrier races ran 288 rounds across the workspace, focused and repeat commands. No dependency, unsafe code, workspace/domain/session change, network or Git mutation was introduced. The specific in-process defect is closed; production identity, filesystem and dispatch guarantees remain pending. Stop remains at 5.3.1; no 5.4 or Phase 2 work started.
 

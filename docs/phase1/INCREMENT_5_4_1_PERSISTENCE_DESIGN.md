@@ -9,6 +9,8 @@ In accordance with Phase 1 constraints:
 - Workspace discovery and filesystem containment remain strictly independent of SQLite.
 - The persistence layer holds no authority to bypass policy evaluation or workspace security boundaries.
 
+**Implementation clarification (5.4.2):** The [implementation report](INCREMENT_5_4_2_SQLITE_IMPLEMENTATION.md) is authoritative for executed results and concrete APIs. It retains these six tables and existing domain types; adds validation constraints; uses private local receipts backed by trusted issuance/recovery; and preserves DB/WAL/SHM in place instead of attempting an unsafe archive. SQL below is the original design sketch, not the executable migration; see [schema_v1.sql](../../crates/sentra-core/src/persistence/schema_v1.sql). Registration of revisions remains a trusted-controller responsibility; filesystem changes are not automatically detected by this storage adapter. No ADR status changes.
+
 ---
 
 ## 1. Persistence Boundary & Architectural Responsibilities
@@ -81,13 +83,13 @@ PRAGMA wal_autocheckpoint = 1000;
 | PRAGMA | Configured Value | Architectural Justification |
 | --- | --- | --- |
 | `foreign_keys` | `ON` | Enforces relational integrity across sessions, audit events, and approval records. Default is OFF in SQLite; must be turned on per connection. |
-| `journal_mode` | `WAL` | Enables write-ahead logging. Readers never block writers, and writers never block readers. Survives process crashes. |
+| `journal_mode` | `WAL` | Permits concurrent readers and one writer; contention and checkpoint blockers still occur. Process-termination recovery needs actual tests. |
 | `synchronous` | `FULL` (2) | Ensures that every committed transaction is flushed to disk (fsync on WAL frame), guaranteeing durability against process crashes. |
 | `busy_timeout` | `5000` (ms) | Gives competing reader/writer operations a 5-second window to resolve transient lock contention before returning `SQLITE_BUSY`. |
 | `wal_autocheckpoint`| `1000` (pages) | Automatically triggers a passive checkpoint when the WAL file reaches 1,000 pages (~4 MiB), preventing unbounded WAL growth. |
 
 ### 2.3. WAL Checkpoint Policy & Clean Shutdown
-- **Runtime Checkpointing:** Relies on SQLite's default background checkpointing at 1,000 pages (`wal_autocheckpoint=1000`).
+- **Runtime Checkpointing:** SQLite's PASSIVE autocheckpoint hook runs on the committing connection at the 1,000-page threshold (`wal_autocheckpoint=1000`); it is not a background thread. Long readers can pin WAL frames.
 - **Session Completion Checkpoint:** When a session enters a terminal state (`Completed`, `Failed`, `Cancelled`), the repository executes `PRAGMA wal_checkpoint(PASSIVE)`.
 - **Clean Engine Shutdown:** Upon graceful shutdown of the CLI/daemon, the repository executes:
   ```sql
@@ -106,17 +108,14 @@ Core Engine persistence directly incorporates the empirical findings validated i
 
 - **Observed Behavior:** As established in test `T01`, SQLite constraint violations (such as `SQLITE_CONSTRAINT_PRIMARYKEY`) abort *only the failing statement*, leaving the surrounding transaction active and earlier uncommitted writes pending in memory.
 - **Contract:**
-  ```rust
-  // Conceptual contract in Rust
-  let mut tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-  match execute_statements(&mut tx) {
-      Ok(()) => tx.commit()?,
-      Err(err) => {
-          // Explicit rollback is mandatory; do NOT drop tx expecting auto-cleanup
-          let _ = tx.rollback();
-          return Err(PersistenceError::StatementFailed { source: err });
-      }
-  }
+  ```text
+  BEGIN IMMEDIATE
+  Execute the complete database operation.
+  On statement, business-condition or commit failure:
+    Explicitly ROLLBACK if SQLite has not already auto-aborted.
+    Retain the original error; report rollback failure separately and halt access.
+    Never commit earlier partial writes or rely on dropping a guard.
+  Otherwise COMMIT before returning success.
   ```
 - **Invariant:** A repository method will never catch a statement error and subsequently commit partial changes. If any statement in a logical unit fails, the entire transaction is rolled back immediately.
 
@@ -133,14 +132,14 @@ Core Engine persistence directly incorporates the empirical findings validated i
   5. **Re-read all dependent state** (e.g. current session state, sequence numbers, approval status) from the fresh snapshot.
   6. Re-evaluate whether the requested transition or consumption is still valid against the updated state.
   7. Re-execute the write operation.
-  8. Repeat up to a maximum of **5 retry attempts**. If retries are exhausted, fail closed with `PersistenceError::SnapshotContentionExhausted`.
+  8. Use a maximum of **five total attempts** (four retries). The concrete 5.4.2 API returns `RetryExhausted` with the original extended code and attempt count. Ordinary BUSY (5) is distinguished from BUSY_SNAPSHOT (517).
 - **Prohibition:** Never retry only the failed statement without restarting the transaction.
 
 ### 3.3. Process Termination & Durability Recovery Limits
-- **Crash Recovery:** When the host process terminates abnormally (SIGKILL, power fault, or panic), SQLite's WAL index and write-ahead log ensure that:
+- **Crash Recovery:** The tested process-termination boundary must distinguish committed and uncommitted work. Windows fixture termination is not a POSIX signal or a physical power-fault test:
   - Transactions committed prior to termination survive and are recovered automatically on next open.
   - Transactions uncommitted at termination are discarded automatically upon database reopen via WAL frame invalidation.
-- **Durability Boundary Disclosure:** `synchronous=FULL` guarantees durability against standard OS process crashes and kernel crashes where storage write caches flush cleanly. **It does not prove durability against catastrophic physical power loss on drives with volatile write caches without battery backup.** No power-loss claims are made.
+- **Durability Boundary Disclosure:** FULL/WAL are required configuration. The 5.4.2 tests observe process-termination recovery only; kernel crashes, physical power loss, device caches and write/fsync failures are not validated. No physical durability guarantee is inferred from a PRAGMA.
 
 ---
 
@@ -156,6 +155,7 @@ The persistence layer must preserve all security invariants validated in Increme
 - If a session's security context is re-registered (incrementing `context_generation`) or the target file revision changes on disk, any pending or issued approval records matching the old generation/revision are invalid and cannot be consumed.
 
 ### 4.2. Atomic Single-Use Consumption in SQLite
+The SQL sketch below is insufficient by itself: 5.4.2 requires a private trusted receipt plus same-transaction comparison of complete stored/caller context, action type/canonical identity, classification, issuance/provenance and time fields. A correlation ID or conditional ISSUED/expiry update alone never authorizes an operation.
 To prevent double-spending or replay of approval grants under concurrency:
 - The consumption of an approval grant and the recording of the authorized action must execute inside a **single atomic transaction**:
   ```sql
@@ -186,8 +186,8 @@ The persistence architecture explicitly distinguishes four authorization tiers:
 | Tier | Boundary Scope | Phase 1 Status | Persistence Guarantees |
 | --- | --- | --- | --- |
 | **Tier 1: In-Memory Broker** | Single process thread execution | **Validated (5.3.1)** | Mutex-synchronized, Arc-pointer provenance, single-use token consumption. |
-| **Tier 2: Persistent Storage** | Across process restarts on same host | **Specified in 5.4.1** | SQLite atomic transaction, generation check, expiration check, durable receipt status. |
-| **Tier 3: Cross-Process Concurrency** | Multiple CLI/daemon processes | **Design Only** | Coordinated via SQLite `BEGIN IMMEDIATE` and file locking. Unauthenticated multi-user is NOT supported. |
+| **Tier 2: Persistent Storage** | Across process restarts on same host | **Initial subset implemented/tested in 5.4.2** | Durable state; explicit privileged receipt recovery; no identifier-only authority or full dispatch claim. |
+| **Tier 3: Cross-Process Concurrency** | Local independent processes on the same approved database | **Owned two-process fixture tested in 5.4.2** | Exactly one consumption and atomic audit via IMMEDIATE; no CLI/daemon, distributed infrastructure or unauthenticated multi-user support. |
 | **Tier 4: Human Authentication** | Cryptographic operator identity | **Not Implemented** | Phase 1 assumes local operator console. Remote identity/signatures are deferred to Phase 2. |
 
 ---
@@ -211,7 +211,7 @@ CREATE TABLE schema_migrations (
 CREATE TABLE sessions (
     session_id TEXT PRIMARY KEY,               -- 36-char hyphenated UUID
     state TEXT NOT NULL,                       -- Created, Scoped, Planned, Running, WaitingForApproval, Paused, Completed, Failed, Cancelled
-    mode TEXT NOT NULL,                        -- Autonomous, Interactive, ScanOnly, VerifyOnly
+    mode TEXT NOT NULL,                        -- CONTINUOUS_REVIEW or DEEP_SECURITY_RESEARCH
     classification_floor TEXT NOT NULL,        -- Public, Internal, Confidential, Restricted
     context_generation INTEGER NOT NULL DEFAULT 1,
     target_revision TEXT NOT NULL,             -- Git commit hash or synthetic revision marker
@@ -341,11 +341,10 @@ If a database fails integrity verification or returns corruption error codes:
 2. **Immediate Fail-Closed Halt:**
    - All read and write operations are halted immediately.
    - No automatic in-place repair or destructive rewriting is attempted.
-3. **Diagnostic Quarantine:**
-   - The corrupted database and WAL files are quarantined by copying them to a timestamped diagnostic archive:
-     `sentra_corrupt_<timestamp>.db`
-   - A structured diagnostic log is emitted with error details.
-   - The operator is alerted to perform a restore from a valid backup snapshot or re-initialize the workspace session.
+3. **Diagnostic Quarantine (5.4.2 owner-directed clarification):**
+   - Halt managed operations and close the owned connection with checkpoint-on-close disabled. Preserve the DB, `-wal`, `-shm` and any `-journal` in their original locations.
+   - Other processes cannot be proven quiescent. No automatic copy, rename, deletion, repair, recreation or restore is attempted. Several renames are not atomic; a database-only archive could abandon committed WAL frames.
+   - Close/inspection failures are explicit and leave source data untouched. An operator-controlled consistent backup/recovery procedure is a later gate; no sensitive SQLite payload is included in ordinary diagnostics.
 
 ---
 

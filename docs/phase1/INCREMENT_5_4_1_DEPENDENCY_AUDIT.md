@@ -3,6 +3,8 @@
 Date: 2026-11-05. **Architecture and dependency audit complete. Zero dependency downloads. Zero Cargo manifest or lockfile modifications.**
 This report provides a strict, offline audit of candidate dependencies for the upcoming SQLite persistence foundation (Increment 5.4). It establishes exact crate candidates, licensing, transitive dependency trees, native C compilation requirements, Windows MSVC x64 compatibility, and `#![forbid(unsafe_code)]` compliance.
 
+**Increment 5.4.2 correction:** This was a cache/design assessment, not build evidence. The [implementation report](INCREMENT_5_4_2_SQLITE_IMPLEMENTATION.md) supersedes its selected-version/build claims: the executed bundled runtime is **SQLite 3.46.0**, the Windows graph has 29 external packages, and `pkg-config`/`vcpkg` are compiled build dependencies although the bundled route selects MSVC. Unfiltered offline metadata fails on unused `syn 2.0.119`; Windows-filtered metadata and builds succeed without downloads. An in-tree SHA-256 implementation is prohibited; ACID/WAL provide no storage-administrator tamper authentication. Proposed alternatives not selected here remain unvalidated.
+
 ---
 
 ## 1. Executive Summary & Audit Outcome
@@ -11,7 +13,7 @@ In accordance with `AGENTS.md`, ADR-0002, ADR-0007, and Phase 1 offline constrai
 
 1. **`rusqlite` with Bundled SQLite is Available Offline:**
    - Both `rusqlite 0.32.1` and `rusqlite 0.41.1`, along with their respective `libsqlite3-sys` companion crates (`0.30.1` and `0.39.1`), are **already present in the local Cargo cache** (`~/.cargo/registry/cache` and `~/.cargo/registry/src`).
-   - The bundled SQLite C amalgamation (`sqlite3.c`, version 3.45.3 in `0.30.1` and version 3.49.0 in `0.39.1`) is self-contained within `libsqlite3-sys`. Pre-generated bindgen bindings are included. No external `sqlite3.dll`, LLVM/Clang installation, or network connection is required.
+   - The selected bundled SQLite C amalgamation (`sqlite3.c`, version **3.46.0** in `0.30.1`, corrected by the 5.4.2 source/runtime inspection) is self-contained within `libsqlite3-sys`. Pre-generated bindgen bindings are included. No external `sqlite3.dll`, LLVM/Clang installation, or network connection was needed for the selected Windows x64 build. The unselected `0.39.1` alternative was not compiled in 5.4.2.
    - The native C compilation is handled by `cc = "1.10.0"` (cached locally) targeting the installed Windows MSVC toolchain (`cl.exe` v14.52.37025).
 
 2. **Serialization Dependencies are Available Offline:**
@@ -28,7 +30,7 @@ In accordance with `AGENTS.md`, ADR-0002, ADR-0007, and Phase 1 offline constrai
 4. **Cryptographic Hashing Dependency (`sha2`) is Absent from Local Cache:**
    - The `sha2` crate is **NOT present** in the local Cargo cache.
    - Because network downloads are prohibited in Phase 1, `sha2` must not be added to `Cargo.toml`.
-   - **Remediation:** Action digests are already represented by canonical V2 length-prefixed structured descriptors (`action_digest`), stored directly as `TEXT`. If cryptographic SHA-256 digest calculation is required for persistence or evidence envelopes in Increment 5.4, an in-tree safe standard-library SHA-256 implementation (~150 lines of pure safe Rust) will be utilized without modifying external dependencies.
+   - **Owner-directed correction in 5.4.2:** Store canonical V2 length-prefixed action identifiers as `TEXT`; they are not cryptographic integrity proofs. Do not implement SHA-256 in-tree. Cryptographic evidence and migration authentication remain deferred until an audited dependency is explicitly approved.
 
 ---
 
@@ -66,7 +68,7 @@ A read-only audit of the local Cargo registry cache (`C:\Users\Taiizor\.cargo\re
 | --- | --- | --- |
 | **Rust Edition** | 2021 | 2024 (MSRV 1.89.0) |
 | **Companion FFI Crate** | `libsqlite3-sys 0.30.1` | `libsqlite3-sys 0.39.1` |
-| **Bundled SQLite C Version** | 3.45.3 (9,089,040 bytes `sqlite3.c`) | 3.49.0 (9,582,521 bytes `sqlite3.c`) |
+| **Bundled SQLite C Version** | **3.46.0**, source/runtime verified in 5.4.2 | Unselected alternative; historical source estimate not execution validation |
 | **Default Features** | None (clean) | `["cache", "ffi-sqlite-wasm-rs"]` |
 | **Wasm Entanglement Risk** | **None.** Does not reference wasm crates. | **High if default features used.** `ffi-sqlite-wasm-rs` references `sqlite-wasm-rs` which is **absent** from the local cache. Requires mandatory `default-features = false`. |
 | **Direct Dependencies** | `bitflags 2.6.0`, `fallible-iterator 0.3`, `fallible-streaming-iterator 0.1`, `hashlink 0.9`, `libsqlite3-sys 0.30.1`, `smallvec 1.6.1` | `bitflags 2.6.0`, `fallible-iterator 0.3`, `fallible-streaming-iterator 0.1`, `hashlink 0.12`, `libsqlite3-sys 0.39.0`, `smallvec 1.6.1` |
@@ -76,7 +78,7 @@ A read-only audit of the local Cargo registry cache (`C:\Users\Taiizor\.cargo\re
 #### Native Compilation Requirements
 - Bundled SQLite does not link against dynamic system libraries (`sqlite3.dll`). Instead, `libsqlite3-sys/build.rs` compiles `sqlite3.c` directly into a static library during Cargo build.
 - Compiler requirement: Host C compiler. On Windows 11 x64, this is satisfied by Microsoft C/C++ Optimizing Compiler (`cl.exe` v14.52.37025 from Visual Studio 2026 Pre-release), which was validated in Phase 1 Milestone 1.
-- No `pkg-config`, `vcpkg`, or LLVM `bindgen` is invoked when `features = ["bundled"]` is used, because `bundled_bindings` supplies pre-generated Rust FFI bindings (`bindgen_bundled_version.rs`).
+- `pkg-config` and `vcpkg` are present and compiled as Rust build dependencies in the actual Windows feature graph. The selected bundled path compiles the included C source with MSVC and uses pre-generated bindings; no external SQLite/package-manager installation or LLVM bindgen execution was required. See the 5.4.2 native build log.
 
 #### Windows MSVC x64 Compatibility
 - SQLite has native support for Win32/MSVC APIs (`THREADSAFE=1`, `MUTEX_W32`, native Windows file locking).
@@ -135,10 +137,8 @@ A read-only audit of the local Cargo registry cache (`C:\Users\Taiizor\.cargo\re
 - The `sha2` crate is **NOT present** in the local Cargo cache. Attempting to add `sha2` to `Cargo.toml` would fail offline compilation.
 - **Analysis of Integrity Requirements:**
   - `action_digest` is currently a canonical V2 length-prefixed structured descriptor (`action_digest()`, e.g. `EXECUTE_TOOL|tool_id#7...`). It is stored directly as `TEXT` in the database.
-  - Database-level tampering prevention is guaranteed by SQLite's ACID transaction boundaries, `synchronous=FULL`, WAL journaling, and foreign-key constraints.
-  - If a cryptographic hash (SHA-256) is required for audit event chaining or evidence envelope verification before Phase 2:
-    - **In-Tree Safe Pure-Rust Implementation:** A self-contained, ~150-line pure safe Rust SHA-256 implementation (utilizing standard library array and bitwise operations, `#![forbid(unsafe_code)]`) can be placed in `sentra-core::common::crypto::sha256`.
-    - This provides standard SHA-256 computation without any third-party crate dependencies and without violating offline boundaries.
+  - ACID transactions, FULL synchronization, WAL and foreign keys support consistency/recovery; they do **not** authenticate records or resist a compromised database owner/administrator.
+  - Cryptographic hashing is deferred. The owner explicitly prohibits a custom SHA-256 implementation in 5.4.2. Its FNV-1a migration fingerprint detects accidental drift only; it is not tamper protection. No hash-linked evidence/audit implementation is claimed.
 
 ---
 
@@ -151,19 +151,19 @@ When manifest modification is authorized in Increment 5.4.2, the following minim
 ```toml
 [dependencies]
 # SQLite persistence engine with bundled C amalgamation
-rusqlite = { version = "0.32.1", features = ["bundled"] }
+rusqlite = { version = "=0.32.1", default-features = false, features = ["bundled"] }
 
 # Structured JSON serialization for metadata and audit payloads
-serde = { version = "1.0", features = ["derive"] }
-serde_json = { version = "1.0" }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
 ```
 
 ### Trade-Off Analysis
 
 | Option | Pros | Cons | Recommendation |
 | --- | --- | --- | --- |
-| **Option 1: `rusqlite 0.32.1` (`bundled`) + `serde`** | 100% offline cached; zero wasm risk; self-contained SQLite C amalgamation; safe FFI wrapper; `#![forbid(unsafe_code)]` preserved; zero external UUID/Chrono bloat. | Compiles C code during `cargo build` (requires MSVC `cl.exe`, ~5-10s one-time compilation). | **SELECTED (Optimal)** |
-| **Option 2: `rusqlite 0.41.1` (`bundled`)** | Slightly newer SQLite (3.49 vs 3.45). | Requires explicit `default-features = false` to avoid failing on missing `sqlite-wasm-rs`. Fragile feature configuration. | **Rejected in favor of 0.32.1** |
+| **Option 1: `rusqlite 0.32.1` (`bundled`) + `serde`** | Selected Windows graph builds offline; self-contained C; no external UUID/Chrono dependency. | Native compilation/FFI inside dependencies; 5.4.2 measured 68.6 s for its initial recorded native build; no general timing promise. | **SELECTED** |
+| **Option 2: `rusqlite 0.41.1` (`bundled`)** | Alternative cache candidate; not compiled for 5.4.2. | Unselected features/native behavior remain unvalidated here. | **Not selected** |
 | **Option 3: External Dynamic SQLite (`libsqlite3-sys` unbundled)** | No C compilation during build. | Requires host system `sqlite3.dll` / developer SDK. Violates zero-host-mutation rule and breaks deterministic reproducible builds. | **REJECTED (Violates ADR-0002/0007)** |
 | **Option 4: Pure-Rust Storage Engine (no SQLite)** | Zero C code; 100% pure Rust. | Extreme complexity; reinventing B-trees, WAL, concurrency, and crash recovery; directly violates ADR-0003. | **REJECTED** |
 
