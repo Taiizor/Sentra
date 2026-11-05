@@ -68,6 +68,17 @@ impl PolicyEngine {
         &self.approval_broker
     }
 
+    /// Synchronizes or installs a trusted session context and classification floor into the engine's approval broker.
+    pub fn register_session_context(
+        &self,
+        session: &SessionMetadata,
+        target_revision: &str,
+        minimum_classification: SecurityClassification,
+    ) -> Result<(), DenialReason> {
+        self.approval_broker
+            .set_session_context(session, target_revision, minimum_classification)
+    }
+
     /// Evaluates an operation request against session context, classification, and approval grants.
     ///
     /// Adheres strictly to the Default-Deny invariant:

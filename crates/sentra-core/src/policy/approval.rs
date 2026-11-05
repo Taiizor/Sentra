@@ -267,6 +267,34 @@ impl ApprovalBroker {
         (broker, authority)
     }
 
+    /// Install or synchronize a trusted workspace/session/revision snapshot and classification floor.
+    pub fn set_session_context(
+        &self,
+        session: &SessionMetadata,
+        target_revision: &str,
+        minimum_classification: SecurityClassification,
+    ) -> Result<(), DenialReason> {
+        if session.session_id.as_bytes().iter().all(|byte| *byte == 0)
+            || !valid_text(&session.workspace_root)
+            || !valid_text(&session.operator_id)
+            || !valid_text(&session.policy_digest)
+            || !valid_text(target_revision)
+        {
+            return Err(unavailable());
+        }
+        let mut inner = self.inner.lock().map_err(|_| unavailable())?;
+        inner.sessions.insert(
+            session.session_id,
+            SessionContext {
+                metadata: session.clone(),
+                revision: target_revision.into(),
+                minimum_classification,
+                generation: Arc::new(()),
+            },
+        );
+        Ok(())
+    }
+
     /// Validate registered context for an existing automatic, non-sensitive policy rule.
     pub(crate) fn validate_context(
         &self,

@@ -244,6 +244,13 @@ impl CoreService {
             )
             .map_err(ServiceError::persistence)?;
 
+        // Step 5: Synchronize session context with policy engine
+        let _ = self.policy_engine.register_session_context(
+            &metadata,
+            target_revision,
+            classification_floor,
+        );
+
         Ok(session_id)
     }
 
@@ -284,6 +291,13 @@ impl CoreService {
             .map_err(ServiceError::persistence)?;
 
         Ok(())
+    }
+
+    /// Returns the total committed and currently reserved cost for a session.
+    pub fn budget_used(&self, session_id: SessionId) -> Result<CostUsd, ServiceError> {
+        self.repository
+            .budget_used(session_id)
+            .map_err(ServiceError::persistence)
     }
 
     // -------------------------------------------------------------------------
@@ -339,6 +353,13 @@ impl CoreService {
                 "Cannot evaluate policy on a terminal session",
             ));
         }
+
+        // Ensure policy engine has current session context
+        let _ = self.policy_engine.register_session_context(
+            &session.metadata,
+            &session.target_revision,
+            session.classification_floor,
+        );
 
         // Security classification floor enforcement
         if classification < session.classification_floor {
@@ -467,16 +488,64 @@ impl CoreService {
         }
 
         // Step 1: Policy & Approval Verification
-        let requires_approval = req.action.is_sensitive() || req.scope.is_untrusted();
-        if requires_approval && req.grant.is_none() {
+        // 1a. Security classification floor enforcement (F-561-01)
+        if req.classification < session.classification_floor {
             return Err(ServiceError::policy_denied(format!(
-                "Action '{}' requires an approval grant",
-                req.action.action_name()
+                "Requested classification '{:?}' is below session classification floor '{:?}'",
+                req.classification, session.classification_floor
             )));
         }
 
-        // If a grant is provided, atomically consume it (guarantees single-use)
-        if let Some(ref g) = req.grant {
+        // 1b. Synchronize session context with policy engine
+        let _ = self.policy_engine.register_session_context(
+            &session.metadata,
+            &session.target_revision,
+            session.classification_floor,
+        );
+
+        // 1c. Mandatory policy evaluation at execution boundary (F-561-01)
+        let policy_decision = self.policy_engine.evaluate(
+            &session.metadata,
+            req.classification,
+            &req.action,
+            None,
+            &self.clock,
+        );
+
+        match policy_decision {
+            PolicyDecision::Denied { reason } => {
+                return Err(ServiceError::policy_denied(reason.to_string()));
+            }
+            PolicyDecision::NeedsApproval { request, .. } => {
+                if req.grant.is_none() {
+                    return Err(ServiceError::policy_denied(format!(
+                        "Action '{}' requires an approval grant: {}",
+                        req.action.action_name(),
+                        request.explanation
+                    )));
+                }
+            }
+            PolicyDecision::Granted => {
+                let requires_approval = req.action.is_sensitive() || req.scope.is_untrusted();
+                if requires_approval && req.grant.is_none() {
+                    return Err(ServiceError::policy_denied(format!(
+                        "Action '{}' requires an approval grant",
+                        req.action.action_name()
+                    )));
+                }
+            }
+        }
+
+        // Step 2: Atomic Budget Reservation & Single-Use Approval Consumption (F-561-02)
+        // If budget reservation fails (e.g. BudgetExceeded), the entire transaction rolls back
+        // and the approval grant is preserved unconsumed for future retries.
+        let reservation_id = Identifier::new_sequential(0x5345_4e54_5241_0007);
+        let model_id = match &req.action {
+            OperationAction::InvokeProvider { model_id, .. } => model_id.as_str(),
+            _ => "synthetic-task",
+        };
+
+        let grant_and_intent = if let Some(ref g) = req.grant {
             let intent = ApprovalIntent {
                 session: &session.metadata,
                 context_generation: session.context_generation,
@@ -484,32 +553,34 @@ impl CoreService {
                 classification: req.classification,
                 action: &req.action,
             };
-            let consume_event = EventId::new();
-            self.repository
-                .consume_approval(g, &intent, consume_event, &self.clock)
-                .map_err(|e| {
-                    ServiceError::approval_invalid(format!("Approval consumption failed: {e}"))
-                })?;
-        }
-
-        // Step 2: Reserve Budget
-        let reservation_id = Identifier::new_sequential(0x5345_4e54_5241_0007);
-        let event_id = EventId::new();
-        let model_id = match &req.action {
-            OperationAction::InvokeProvider { model_id, .. } => model_id.as_str(),
-            _ => "synthetic-task",
+            Some((g, intent))
+        } else {
+            None
         };
+
+        let prep_req = crate::persistence::PrepareExecutionRequest {
+            reservation_id,
+            session_id: req.session_id,
+            model_id,
+            amount: req.estimated_cost,
+            grant_and_intent: grant_and_intent.as_ref().map(|(g, intent)| (*g, intent)),
+            reservation_event: EventId::new(),
+            consumption_event: EventId::new(),
+        };
+
         self.repository
-            .reserve_budget(
-                reservation_id,
-                req.session_id,
-                model_id,
-                req.estimated_cost,
-                event_id,
-                &self.clock,
-            )
-            .map_err(|e| {
-                ServiceError::budget_exceeded(format!("Budget reservation failed: {e}"))
+            .reserve_budget_and_consume_approval(prep_req, &self.clock)
+            .map_err(|e| match e.kind {
+                crate::persistence::PersistenceErrorKind::BudgetExceeded => {
+                    ServiceError::budget_exceeded(format!("Budget reservation failed: {e}"))
+                }
+                crate::persistence::PersistenceErrorKind::InvalidApproval
+                | crate::persistence::PersistenceErrorKind::ApprovalReused
+                | crate::persistence::PersistenceErrorKind::ApprovalExpired
+                | crate::persistence::PersistenceErrorKind::ContextMismatch => {
+                    ServiceError::approval_invalid(format!("Approval consumption failed: {e}"))
+                }
+                _ => ServiceError::persistence(e),
             })?;
 
         // Step 3: Construct Execution Request
@@ -535,12 +606,17 @@ impl CoreService {
             Err(exec_err) => {
                 // On dispatch error (e.g. BackendUnavailable, BackendFault, CorrelationMismatch):
                 // Preserve conservative budget reservation! Zero budget is released.
-                let _ = self.authority.settle_budget(
+                // F-561-03: Never silently ignore budget settlement failure!
+                if let Err(settle_err) = self.authority.settle_budget(
                     reservation_id,
                     SettlementStatus::CancelledUncertain,
                     EventId::new(),
                     &self.clock,
-                );
+                ) {
+                    return Err(ServiceError::execution_with_settlement_failure(
+                        exec_err, settle_err,
+                    ));
+                }
 
                 return Err(ServiceError::execution(exec_err));
             }
@@ -553,12 +629,17 @@ impl CoreService {
                 Ok(artifact) => admitted_evidence.push(artifact),
                 Err(ev_err) => {
                     // Evidence validation failure: abort and settle budget conservatively
-                    let _ = self.authority.settle_budget(
+                    // F-561-03: Never silently ignore budget settlement failure!
+                    if let Err(settle_err) = self.authority.settle_budget(
                         reservation_id,
                         SettlementStatus::UncertainPartial,
                         EventId::new(),
                         &self.clock,
-                    );
+                    ) {
+                        return Err(ServiceError::evidence_with_settlement_failure(
+                            ev_err, settle_err,
+                        ));
+                    }
                     return Err(ServiceError::evidence(ev_err));
                 }
             }

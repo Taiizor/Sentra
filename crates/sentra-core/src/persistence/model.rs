@@ -189,6 +189,7 @@ impl Snapshot {
 
 /// Current intent supplied for comparison with authoritative persisted context.
 /// This struct itself conveys no approval or issuance provenance.
+#[derive(Clone, Debug, PartialEq)]
 pub struct ApprovalIntent<'a> {
     /// Expected session metadata, compared to the stored security snapshot.
     pub session: &'a SessionMetadata,

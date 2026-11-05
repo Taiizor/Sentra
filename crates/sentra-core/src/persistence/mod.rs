@@ -41,4 +41,4 @@ pub use model::{
     ApprovalIntent, AuditRecord, BudgetRecord, ConsumptionRecord, PersistentApprovalGrant,
     SessionRecord, SettlementStatus, TransitionRecord,
 };
-pub use repository::{PersistenceRepository, PersistentApprovalAuthority};
+pub use repository::{PersistenceRepository, PersistentApprovalAuthority, PrepareExecutionRequest};
