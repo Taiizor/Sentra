@@ -32,10 +32,13 @@ mod model;
 mod repository;
 mod transaction;
 
-pub use connection::{CheckpointResult, QuarantineReport, SqliteConnectionManager, SqliteSettings};
+pub use connection::{
+    CheckpointResult, ForeignKeyViolation, IntegrityReport, QuarantineReport,
+    SqliteConnectionManager, SqliteSettings,
+};
 pub use error::{PersistenceError, PersistenceErrorKind};
 pub use model::{
     ApprovalIntent, AuditRecord, BudgetRecord, ConsumptionRecord, PersistentApprovalGrant,
-    SessionRecord, TransitionRecord,
+    SessionRecord, SettlementStatus, TransitionRecord,
 };
 pub use repository::{PersistenceRepository, PersistentApprovalAuthority};

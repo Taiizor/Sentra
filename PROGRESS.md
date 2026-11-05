@@ -1,8 +1,12 @@
 # Progress
 
-Last updated: 2026-11-05.
+Last updated: 2026-11-06.
 
 ## Current status
+
+**Phase 1 Increment 5.4.3: persistence security findings remediation complete. Phase 1 remains in progress; Phase 2 has NOT started.** The [remediation report](docs/phase1/INCREMENT_5_4_3_PERSISTENCE_REMEDIATION.md) details targeted resolutions for findings F-542-01 (ambiguous budget settlement status replaced by explicit `SettlementStatus` domain enum with completed, cancelled with usage, cancelled uncertain, and uncertain partial variants) and F-542-04 (runtime foreign-key validation added via `PRAGMA foreign_key_check` with fail-closed halting, typed `ForeignKeyViolation` and `IntegrityReport` models, and open-time enforcement). Five new automated integration tests were added; the complete test suite passes 161 unique tests (156 runtime + 5 compile-fail doctests, 0 failed), with all three validation scripts (`persistence`, `authorization`, `workspace`) passing cleanly (exit 0). No dependencies were added, Cargo operated strictly offline, and zero Git mutations were issued.
+
+### Status at Increment 5.4.2.1 entry (historical)
 
 **Phase 1 Increment 5.4.2.1: independent SQLite persistence security and reliability audit complete. Conditionally approved for Increment 5.4.3 with targeted remediation. Phase 1 remains incomplete; Increment 5.4.3 and Phase 2 have NOT started.** The [security review](docs/phase1/INCREMENT_5_4_2_1_SECURITY_REVIEW.md) independently audits Increment 5.4.2 against realistic failure, concurrency, and recovery conditions. Zero critical or high defects were found. One medium design finding (F-542-01: ambiguous `cancellation_confirmed` boolean parameter in `settle_budget`), three low findings (F-542-02: unfiltered `cargo metadata` offline failure due to unused `syn 2` in lockfile; F-542-03: process-local quarantine halt scope; F-542-04: runtime `integrity_check` omits foreign-key checks), and three informational findings were classified. All core authorization bindings, atomic single-use consumption, explicit rollback error latches, bounded `SQLITE_BUSY_SNAPSHOT` retries, WAL durability, and in-place quarantine invariants were verified. The full suite passes 156 unique tests (151 runtime, 5 compile-fail doctests, 0 failed). No code or manifest modifications were made; Git state is preserved.
 
