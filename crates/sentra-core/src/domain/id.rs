@@ -276,3 +276,13 @@ define_typed_id!(
     0x5345_4e54_5241_0004,
     "Unique identifier for an audit trail event."
 );
+define_typed_id!(
+    EvidenceId,
+    0x5345_4e54_5241_0005,
+    "Unique identifier for an evidence artifact."
+);
+define_typed_id!(
+    ExecutionId,
+    0x5345_4e54_5241_0006,
+    "Unique identifier for an execution dispatch request."
+);

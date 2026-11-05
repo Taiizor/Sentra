@@ -4,6 +4,10 @@ Last updated: 2026-11-06.
 
 ## Current status
 
+**Phase 1 Increment 5.5: fail-closed execution engine and evidence verifier foundation complete. Phase 1 remains in progress; Phase 2 has NOT started.** The [implementation report](docs/phase1/INCREMENT_5_5_EXECUTION_EVIDENCE_FOUNDATION.md) details the fail-closed execution architecture, typed backend capabilities, and host-side evidence bounds verifier. Untrusted target workloads are strictly rejected fail-closed (`ExecutionError::untrusted_workload_disabled()`) as dedicated Hyper-V VM isolation remains unvalidated. Zero fallback execution paths (no host child processes, no Docker, no WSL2) exist. Evidence verification enforces a 50 MiB ceiling, exact payload length checks, media-type syntax and whitelisting, producer role format validation, and debug payload redaction. Offline Cargo cache audit confirmed `sha2` is absent; per strict instructions, no network download or manual/non-crypto hashing was introduced, and cryptographic verification explicitly fails closed with `CryptographicVerificationUnavailable`. 17 new tests were added (8 execution, 9 evidence); the full workspace passes 175 automated tests (170 runtime + 5 compile-fail doctests, 0 failed) and 3 dedicated fixture tests for 178 total unique tests. All persistence and authorization validation suites pass cleanly (exit 0). Zero Git mutations were issued.
+
+### Status at Increment 5.4.3.1 entry (historical)
+
 **Phase 1 Increment 5.4.3.1: independent persistence regression & security review complete. Approved. Phase 1 remains in progress; Phase 2 has NOT started.** The [independent review](docs/phase1/INCREMENT_5_4_3_1_INDEPENDENT_REVIEW.md) validates that Increment 5.4.3 remediates findings F-542-01 (budget settlement ambiguity eliminated via `SettlementStatus` domain enum) and F-542-04 (runtime foreign-key validation via `PRAGMA foreign_key_check` and fail-closed halting) with zero regressions. All 10 budget settlement invariants and 10 SQLite integrity invariants were verified. Total test suite passes 161 unique tests (156 runtime + 5 compile-fail doctests, 0 failed) with all three validation suites (`persistence`, `authorization`, `workspace`) passing cleanly (exit 0). Zero code modifications, manifest changes, or Git mutations were issued.
 
 ### Status at Increment 5.4.3 entry (historical)
@@ -210,6 +214,30 @@ The [security review](docs/phase1/INCREMENT_5_4_2_1_SECURITY_REVIEW.md) independ
 - **Transaction & recovery invariants:** Verified explicit rollback error latches preventing partial commits after statement errors; bounded `SQLITE_BUSY_SNAPSHOT` whole-transaction restarts (5 attempts); and in-place quarantine preserving `.db`, `-wal`, `-shm`, and `-journal` files without dangerous multi-file renames.
 - **Test suite reconciliation:** Mathematically verified exact test inventory: 148 runtime tests in `cargo test --workspace` + 3 Windows workspace fixture tests = 151 runtime tests + 5 compile-fail doctests = **156 unique tests**, with 0 failed. The single ignored test is the subprocess helper actively executed by three parent tests.
 - **Readiness decision:** **Conditionally approved — targeted remediation required**. Core persistence foundation is approved to proceed to Increment 5.4.3, with targeted remediation for `settle_budget` parameter semantics and foreign-key runtime checking scheduled for Increment 5.4.3. Increment 5.4.3 has not started.
+
+## Phase 1 Increment 5.4.3 — Persistence security findings remediation
+
+The [remediation report](docs/phase1/INCREMENT_5_4_3_PERSISTENCE_REMEDIATION.md) records targeted fixes for findings F-542-01 and F-542-04 from the independent audit.
+
+- **F-542-01 remediation:** Replaced ambiguous boolean parameter with `SettlementStatus` domain enum with four explicit variants: `Completed(CostUsd)`, `CancelledWithUsage(CostUsd)`, `CancelledUncertain`, and `UncertainPartial`. Ambiguous cancellation and partial outcomes preserve conservative reservation ceilings.
+- **F-542-04 remediation:** Added runtime foreign key validation via `PRAGMA foreign_key_check` with fail-closed halting, typed `ForeignKeyViolation` and `IntegrityReport` domain models, and automatic open-time validation.
+- **Verification:** 5 new automated regression tests; all 161 tests passed without regressions.
+
+## Phase 1 Increment 5.4.3.1 — Independent persistence regression & security review
+
+The [independent review](docs/phase1/INCREMENT_5_4_3_1_INDEPENDENT_REVIEW.md) verified the remediations under realistic failure and concurrency scenarios.
+
+- **Findings:** Verified that F-542-01 and F-542-04 were fully resolved with zero regressions. All 10 budget settlement invariants and 10 SQLite integrity invariants were verified. Total test suite passed 161 unique tests with zero failures.
+
+## Phase 1 Increment 5.5 — Fail-closed execution engine and evidence verifier foundation
+
+The [implementation report](docs/phase1/INCREMENT_5_5_EXECUTION_EVIDENCE_FOUNDATION.md) records the execution engine and evidence verification contracts.
+
+- **Fail-closed execution boundary:** `FailClosedBackend` rejects all workloads fail-closed. `UntrustedTargetWorkload` returns typed `ExecutionError::untrusted_workload_disabled()`. No fallback to host processes (`std::process::Command`), Docker, or WSL2.
+- **Synthetic test backend:** `SyntheticFixtureBackend` provides controlled testing for maintainer-curated synthetic actions only, strictly rejecting untrusted workloads.
+- **Evidence bounds & redaction:** `EvidenceVerifier` enforces 50 MiB ceiling, exact payload length matching, MIME media-type verification and whitelisting, producer role validation, and payload redaction in `Debug` output.
+- **Cryptographic verification offline constraint:** Offline Cargo cache lacks `sha2`. Strictly avoided network downloads and non-cryptographic hash substitutions; transit integrity verification explicitly fails closed with `CryptographicVerificationUnavailable`.
+- **Verification:** 17 new automated tests (8 execution, 9 evidence); full suite passes 178 unique invariant tests (175 automated workspace tests + 3 dedicated fixture tests) with zero failures and zero warnings.
 
 ## Completed Phase 0 work
 
