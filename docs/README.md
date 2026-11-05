@@ -1,0 +1,22 @@
+# Documentation Index
+
+Sentra is currently a documentation-only project. Start with the root [README](../README.md), [vision](../VISION.md), [requirements](../REQUIREMENTS.md), [architecture](../ARCHITECTURE.md), and [roadmap](../ROADMAP.md).
+
+| Specification | Scope |
+| --- | --- |
+| [Operating modes](OPERATING_MODES.md) | Continuous review and deep-research workflows |
+| [Agent model](AGENT_MODEL.md) | Responsibilities, capabilities, messages, and independence |
+| [Data model](DATA_MODEL.md) | Sessions, tasks, findings, evidence, approvals, and patches |
+| [Threat model](THREAT_MODEL.md) | Assets, adversaries, permission gates, and containment |
+| [Extensions](EXTENSIONS.md) | Adapter contracts, versioning, packaging, and MCP boundary |
+| [Validation](VALIDATION.md) | Technical spikes, evaluation design, and release evidence |
+| [Open questions](OPEN_QUESTIONS.md) | Assumptions, owner roles, decision gates, and safe defaults |
+| [Review record](REVIEW.md) | Phase 0 consistency and documentation checks |
+| [Research](research/README.md) | Existing systems, tooling, isolation, technology, and source register |
+| [ADRs](adr/README.md) | Architectural decisions and proposals |
+
+The root [AGENTS.md](../AGENTS.md) governs contributors and coding agents. The research-agent contract in [AGENT_MODEL.md](AGENT_MODEL.md) describes Sentra's planned product behavior; these are different subjects.
+
+Design precedence: owner instructions and phase authorization; requirements/security invariants; accepted ADRs; detailed architecture/contracts; roadmap; research recommendations. A conflict must be resolved explicitly by updating the affected documents. A proposed ADR cannot override an accepted security invariant.
+
+Terminology: **initial foundation** means Phase 1; **first review pilot** means Phase 2; **deep-research pilot** means Phase 3; **later platform interfaces** start in Phase 4. None is currently implemented.
