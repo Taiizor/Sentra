@@ -4,6 +4,10 @@ Last updated: 2026-11-06.
 
 ## Current status
 
+**Phase 1 Increment 5.5.1: independent execution & evidence security review complete. Approved. Phase 1 remains in progress; Phase 2 has NOT started.** The [independent review](docs/phase1/INCREMENT_5_5_1_INDEPENDENT_REVIEW.md) validates that Increment 5.5 enforces fail-closed execution boundaries and host-side evidence verification contracts under adversarial inputs, boundary tamper attempts, and uncertain execution outcomes. Untrusted target workloads are 100% fail-closed (`ExecutionError::untrusted_workload_disabled()`); zero fallback paths (no host processes, Docker, or WSL2) exist; synthetic fixtures are strictly isolated with hardcoded outcomes and disregard caller arguments; and SHA-256 verification fails closed offline without weak hash substitution. Classified 5 findings (0 Critical, 0 High, 2 Low, 1 Low/Arch, 2 Info), none blocking. 10 new adversarial integration tests were added; the full test suite passes 188 unique tests (180 automated runtime + 5 compile-fail doctests + 3 dedicated fixture tests, 0 failed), with all three validation scripts (`persistence`, `authorization`, `workspace`) passing cleanly (exit 0). Zero production code, public APIs, or Git references were modified.
+
+### Status at Increment 5.5 entry (historical)
+
 **Phase 1 Increment 5.5: fail-closed execution engine and evidence verifier foundation complete. Phase 1 remains in progress; Phase 2 has NOT started.** The [implementation report](docs/phase1/INCREMENT_5_5_EXECUTION_EVIDENCE_FOUNDATION.md) details the fail-closed execution architecture, typed backend capabilities, and host-side evidence bounds verifier. Untrusted target workloads are strictly rejected fail-closed (`ExecutionError::untrusted_workload_disabled()`) as dedicated Hyper-V VM isolation remains unvalidated. Zero fallback execution paths (no host child processes, no Docker, no WSL2) exist. Evidence verification enforces a 50 MiB ceiling, exact payload length checks, media-type syntax and whitelisting, producer role format validation, and debug payload redaction. Offline Cargo cache audit confirmed `sha2` is absent; per strict instructions, no network download or manual/non-crypto hashing was introduced, and cryptographic verification explicitly fails closed with `CryptographicVerificationUnavailable`. 17 new tests were added (8 execution, 9 evidence); the full workspace passes 175 automated tests (170 runtime + 5 compile-fail doctests, 0 failed) and 3 dedicated fixture tests for 178 total unique tests. All persistence and authorization validation suites pass cleanly (exit 0). Zero Git mutations were issued.
 
 ### Status at Increment 5.4.3.1 entry (historical)
@@ -238,6 +242,17 @@ The [implementation report](docs/phase1/INCREMENT_5_5_EXECUTION_EVIDENCE_FOUNDAT
 - **Evidence bounds & redaction:** `EvidenceVerifier` enforces 50 MiB ceiling, exact payload length matching, MIME media-type verification and whitelisting, producer role validation, and payload redaction in `Debug` output.
 - **Cryptographic verification offline constraint:** Offline Cargo cache lacks `sha2`. Strictly avoided network downloads and non-cryptographic hash substitutions; transit integrity verification explicitly fails closed with `CryptographicVerificationUnavailable`.
 - **Verification:** 17 new automated tests (8 execution, 9 evidence); full suite passes 178 unique invariant tests (175 automated workspace tests + 3 dedicated fixture tests) with zero failures and zero warnings.
+
+## Phase 1 Increment 5.5.1 — Independent execution & evidence security review
+
+The [independent review](docs/phase1/INCREMENT_5_5_1_INDEPENDENT_REVIEW.md) independently audited Increment 5.5 against adversarial inputs, boundary tampering, and cross-increment regression scenarios. Verification-only increment; zero production code, public APIs, or dependencies were changed.
+
+- **Boundary verification:** Re-verified default fail-closed behavior for untrusted target workloads across all backends and dispatch pathways. Confirmed zero fallback to host processes (`std::process::Command`), Docker, or WSL2.
+- **Synthetic isolation:** Adversarial probes verified that forged action identifiers, path traversals, NUL bytes, and shell injection strings are rejected with `InvalidRequest`. Confirmed that caller-provided arguments are completely disregarded and unexecuted.
+- **Evidence bounds & offline crypto:** Probed 50 MiB boundary arithmetic, exact length mismatch detection, MIME parameter strictness, and payload redactions in `Debug`. Confirmed syntactically valid SHA-256 strings fail closed offline without weak hash substitution.
+- **Findings classified:** Zero critical or high defects found. Identified 2 low findings (F-551-01: tautological check in `engine.rs` post-execution status validation; F-551-03: post-allocation payload size check in `EvidenceEnvelope`), 1 architectural finding (F-551-02: synchronous dispatch model lacking cancellation interface), and 2 informational findings (F-551-04: strict MIME whitespace rules; F-551-05: missing execution ID correlation check). None block Increment 5.5 closure.
+- **Test inventory & verification:** 10 new adversarial integration tests added to `tests/execution_evidence_adversarial_tests.rs`. Entire workspace passes 188 unique tests (180 automated runtime + 5 compile-fail doctests + 3 dedicated fixture tests, 0 failed). All validation scripts pass cleanly (exit 0).
+- **Readiness decision:** **Approved**.
 
 ## Completed Phase 0 work
 
