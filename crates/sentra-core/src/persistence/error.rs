@@ -47,6 +47,8 @@ pub enum PersistenceErrorKind {
     Conflict,
     /// A reservation exceeds the registered budget.
     BudgetExceeded,
+    /// Relational foreign-key constraint violation detected by runtime check.
+    ForeignKeyViolation,
 }
 
 /// Redacted typed persistence failure; original SQLite numbers remain inspectable.
@@ -89,7 +91,9 @@ impl PersistenceError {
     pub(super) fn must_halt(&self) -> bool {
         matches!(
             self.kind,
-            PersistenceErrorKind::Integrity | PersistenceErrorKind::RollbackFailed
+            PersistenceErrorKind::Integrity
+                | PersistenceErrorKind::RollbackFailed
+                | PersistenceErrorKind::ForeignKeyViolation
         )
     }
 }

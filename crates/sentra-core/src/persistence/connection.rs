@@ -61,6 +61,35 @@ pub struct QuarantineReport {
     pub preserved_in_place: bool,
 }
 
+/// A single foreign key violation detected by runtime validation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ForeignKeyViolation {
+    /// Table containing the invalid foreign key reference.
+    pub table: String,
+    /// Rowid of the offending row.
+    pub rowid: i64,
+    /// Referenced parent table.
+    pub parent: String,
+    /// Index of the violated foreign key constraint on the child table.
+    pub fkid: i64,
+}
+
+/// Structured database integrity report covering physical and relational checks.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct IntegrityReport {
+    /// Whether `PRAGMA integrity_check` reported "ok".
+    pub integrity_ok: bool,
+    /// List of foreign key violations discovered by `PRAGMA foreign_key_check`.
+    pub foreign_key_violations: Vec<ForeignKeyViolation>,
+}
+
+impl IntegrityReport {
+    /// Returns true if physical integrity is sound and there are zero foreign key violations.
+    pub fn is_valid(&self) -> bool {
+        self.integrity_ok && self.foreign_key_violations.is_empty()
+    }
+}
+
 struct State {
     connection: Option<Connection>,
     halted: bool,
@@ -213,7 +242,7 @@ fn validated_path(input: &Path) -> Result<(PathBuf, Vec<File>), PersistenceError
     Ok((path, pins))
 }
 
-fn integrity(connection: &Connection) -> Result<(), PersistenceError> {
+fn integrity_report(connection: &Connection) -> Result<IntegrityReport, PersistenceError> {
     let mut query = connection
         .prepare("PRAGMA integrity_check(10)")
         .map_err(PersistenceError::sql)?;
@@ -223,8 +252,43 @@ fn integrity(connection: &Connection) -> Result<(), PersistenceError> {
     let values: Vec<_> = rows
         .collect::<rusqlite::Result<_>>()
         .map_err(PersistenceError::sql)?;
-    if values != ["ok"] {
+    let integrity_ok = values == ["ok"];
+
+    let mut fk_query = connection
+        .prepare("PRAGMA foreign_key_check")
+        .map_err(PersistenceError::sql)?;
+    let fk_rows = fk_query
+        .query_map([], |row| {
+            Ok(ForeignKeyViolation {
+                table: row.get(0)?,
+                rowid: row.get(1)?,
+                parent: row.get(2)?,
+                fkid: row.get(3)?,
+            })
+        })
+        .map_err(PersistenceError::sql)?;
+    let foreign_key_violations: Vec<_> = fk_rows
+        .collect::<rusqlite::Result<_>>()
+        .map_err(PersistenceError::sql)?;
+
+    Ok(IntegrityReport {
+        integrity_ok,
+        foreign_key_violations,
+    })
+}
+
+fn integrity(connection: &Connection) -> Result<(), PersistenceError> {
+    let report = integrity_report(connection)?;
+    if !report.integrity_ok {
         return Err(PersistenceError::new(Kind::Integrity));
+    }
+    if !report.foreign_key_violations.is_empty() {
+        return Err(PersistenceError {
+            kind: Kind::ForeignKeyViolation,
+            sqlite_code: Some(report.foreign_key_violations.len() as i32),
+            rollback_code: None,
+            attempts: None,
+        });
     }
     Ok(())
 }
@@ -401,6 +465,27 @@ impl SqliteConnectionManager {
             state.halted = true;
         }
         result
+    }
+
+    /// Detailed runtime integrity report; any defect halts subsequent operations.
+    pub fn detailed_integrity_check(&self) -> Result<IntegrityReport, PersistenceError> {
+        let mut state = self
+            .0
+            .state
+            .lock()
+            .map_err(|_| PersistenceError::new(Kind::Poisoned))?;
+        if state.halted {
+            return Err(PersistenceError::new(Kind::Halted));
+        }
+        let conn = state
+            .connection
+            .as_ref()
+            .ok_or_else(|| PersistenceError::new(Kind::Closed))?;
+        let report = integrity_report(conn)?;
+        if !report.is_valid() {
+            state.halted = true;
+        }
+        Ok(report)
     }
 
     /// Attempt a checkpoint, returning progress even for a blocked PASSIVE checkpoint.

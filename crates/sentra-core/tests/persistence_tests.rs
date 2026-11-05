@@ -7,8 +7,8 @@ use sentra_core::{
     ApprovalId, Clock, CostUsd, EventId, Identifier, OperatingMode, OperationAction,
     SecurityClassification as Class, SessionId, SessionState, TimestampUtc,
     persistence::{
-        PersistenceError, PersistenceErrorKind as Kind, PersistenceRepository,
-        PersistentApprovalGrant, SqliteConnectionManager,
+        ForeignKeyViolation, IntegrityReport, PersistenceError, PersistenceErrorKind as Kind,
+        PersistenceRepository, PersistentApprovalGrant, SettlementStatus, SqliteConnectionManager,
     },
 };
 use std::{
@@ -963,8 +963,7 @@ fn budget_unknown_cancelled_or_partial_usage_retains_full_reservation() {
         .authority
         .settle_budget(
             identifier(1),
-            Some(CostUsd::from_micro_usd(2)),
-            false,
+            SettlementStatus::UncertainPartial,
             event(),
             &h.clock,
         )
@@ -980,7 +979,12 @@ fn budget_unknown_cancelled_or_partial_usage_retains_full_reservation() {
     );
     let unknown = h
         .authority
-        .settle_budget(identifier(1), None, true, event(), &h.clock)
+        .settle_budget(
+            identifier(1),
+            SettlementStatus::CancelledUncertain,
+            event(),
+            &h.clock,
+        )
         .unwrap();
     assert_eq!(unknown.actual, None);
     assert_eq!(unknown.state, "CANCELLED");
@@ -988,8 +992,7 @@ fn budget_unknown_cancelled_or_partial_usage_retains_full_reservation() {
         .authority
         .settle_budget(
             identifier(1),
-            Some(CostUsd::from_micro_usd(1)),
-            false,
+            SettlementStatus::UncertainPartial,
             event(),
             &h.clock,
         )
@@ -1007,8 +1010,7 @@ fn budget_unknown_cancelled_or_partial_usage_retains_full_reservation() {
         .authority
         .settle_budget(
             identifier(1),
-            Some(CostUsd::from_micro_usd(3)),
-            true,
+            SettlementStatus::CancelledWithUsage(CostUsd::from_micro_usd(3)),
             event(),
             &h.clock,
         )
@@ -1022,8 +1024,12 @@ fn budget_unknown_cancelled_or_partial_usage_retains_full_reservation() {
         3
     );
     denied(
-        h.authority
-            .settle_budget(identifier(1), Some(CostUsd::ZERO), true, event(), &h.clock),
+        h.authority.settle_budget(
+            identifier(1),
+            SettlementStatus::Completed(CostUsd::ZERO),
+            event(),
+            &h.clock,
+        ),
         Kind::Conflict,
     );
     h.repo
@@ -1038,7 +1044,12 @@ fn budget_unknown_cancelled_or_partial_usage_retains_full_reservation() {
         .unwrap();
     assert_eq!(
         h.authority
-            .settle_budget(identifier(2), None, true, event(), &h.clock)
+            .settle_budget(
+                identifier(2),
+                SettlementStatus::CancelledUncertain,
+                event(),
+                &h.clock,
+            )
             .unwrap()
             .actual,
         None
@@ -1083,8 +1094,7 @@ fn budget_overflow_invalid_values_overruns_and_unsafe_limit_reduction_are_denied
     denied(
         h.authority.settle_budget(
             identifier(1),
-            Some(CostUsd::from_micro_usd(9)),
-            true,
+            SettlementStatus::Completed(CostUsd::from_micro_usd(9)),
             event(),
             &h.clock,
         ),
@@ -1152,8 +1162,7 @@ fn budget_audit_failure_rolls_back_reservation_and_settlement() {
         h.authority
             .settle_budget(
                 identifier(1),
-                Some(CostUsd::from_micro_usd(2)),
-                true,
+                SettlementStatus::Completed(CostUsd::from_micro_usd(2)),
                 duplicate,
                 &h.clock
             )
@@ -1169,8 +1178,7 @@ fn budget_audit_failure_rolls_back_reservation_and_settlement() {
     h.authority
         .settle_budget(
             identifier(1),
-            Some(CostUsd::from_micro_usd(2)),
-            true,
+            SettlementStatus::Completed(CostUsd::from_micro_usd(2)),
             event(),
             &h.clock,
         )
@@ -1477,6 +1485,240 @@ fn migration_real_process_interruption_leaves_fresh_database_recoverable() {
     );
     drop(raw);
     manager.shutdown().unwrap();
+}
+
+#[test]
+fn budget_settlement_status_completed_releases_difference_and_finalizes() {
+    let h = Harness::budget(20);
+    h.repo
+        .reserve_budget(
+            identifier(1),
+            h.metadata.session_id,
+            "mock",
+            CostUsd::from_micro_usd(10),
+            event(),
+            &h.clock,
+        )
+        .unwrap();
+    assert_eq!(
+        h.repo
+            .budget_used(h.metadata.session_id)
+            .unwrap()
+            .as_micro_usd(),
+        10
+    );
+
+    // Settle with completed actual usage of 6 micro USD
+    let status = SettlementStatus::Completed(CostUsd::from_micro_usd(6));
+    assert_eq!(status.actual_cost(), Some(CostUsd::from_micro_usd(6)));
+    assert!(!status.is_cancelled());
+    assert!(status.is_terminal());
+
+    let record = h
+        .authority
+        .settle_budget(identifier(1), status, event(), &h.clock)
+        .unwrap();
+    assert_eq!(record.state, "SETTLED");
+    assert_eq!(record.actual, Some(CostUsd::from_micro_usd(6)));
+    assert_eq!(record.reserved, CostUsd::from_micro_usd(10));
+
+    // Budget used drops from 10 to 6 (4 released)
+    assert_eq!(
+        h.repo
+            .budget_used(h.metadata.session_id)
+            .unwrap()
+            .as_micro_usd(),
+        6
+    );
+
+    // Repeated settlement fails with Conflict
+    denied(
+        h.authority
+            .settle_budget(identifier(1), status, event(), &h.clock),
+        Kind::Conflict,
+    );
+
+    // Audit event was written
+    let events = h.repo.audit_events(h.metadata.session_id, 0, 100).unwrap();
+    let settle_event = events
+        .iter()
+        .find(|e| e.event_kind == "BudgetSettled")
+        .unwrap();
+    assert!(
+        settle_event
+            .details_json
+            .contains("\"status\":\"COMPLETED\"")
+    );
+    assert!(
+        settle_event
+            .details_json
+            .contains("\"final_usage_known\":true")
+    );
+}
+
+#[test]
+fn budget_settlement_status_cancelled_with_usage_and_helpers() {
+    let h = Harness::budget(30);
+    h.repo
+        .reserve_budget(
+            identifier(1),
+            h.metadata.session_id,
+            "mock",
+            CostUsd::from_micro_usd(15),
+            event(),
+            &h.clock,
+        )
+        .unwrap();
+
+    let status = SettlementStatus::CancelledWithUsage(CostUsd::from_micro_usd(5));
+    assert_eq!(status.actual_cost(), Some(CostUsd::from_micro_usd(5)));
+    assert!(status.is_cancelled());
+    assert!(status.is_terminal());
+
+    let record = h
+        .authority
+        .settle_budget(identifier(1), status, event(), &h.clock)
+        .unwrap();
+    assert_eq!(record.state, "CANCELLED");
+    assert_eq!(record.actual, Some(CostUsd::from_micro_usd(5)));
+
+    // Budget used is now 5 (10 released)
+    assert_eq!(
+        h.repo
+            .budget_used(h.metadata.session_id)
+            .unwrap()
+            .as_micro_usd(),
+        5
+    );
+
+    // Helper method checks for all variants
+    let uncertain = SettlementStatus::CancelledUncertain;
+    assert_eq!(uncertain.actual_cost(), None);
+    assert!(uncertain.is_cancelled());
+    assert!(uncertain.is_terminal());
+
+    let partial = SettlementStatus::UncertainPartial;
+    assert_eq!(partial.actual_cost(), None);
+    assert!(!partial.is_cancelled());
+    assert!(!partial.is_terminal());
+}
+
+#[test]
+fn runtime_integrity_check_detects_foreign_key_violations_and_halts_manager() {
+    let h = Harness::new();
+    h.manager.integrity_check().unwrap();
+
+    // Directly insert an orphan foreign-key violation with FK enforcement disabled
+    let raw = Connection::open(&h.dir.db).unwrap();
+    raw.execute_batch("PRAGMA foreign_keys = OFF;").unwrap();
+    // Non-existent session_id in audit_events violates FK to sessions
+    let orphan_event_id = EventId::for_test_sequence(99_999).to_string();
+    let dummy_session_id = Identifier::from_bytes([9u8; 16]).to_string();
+    raw.execute(
+        "INSERT INTO audit_events(event_id,session_id,sequence_number,event_kind,classification,timestamp,details_json) VALUES(?1,?2,999,'OrphanEvent','PUBLIC',?3,'{}')",
+        params![orphan_event_id, dummy_session_id, h.clock.now().to_rfc3339()],
+    )
+    .unwrap();
+    drop(raw);
+
+    // Manager integrity check must detect the foreign key violation
+    let err = h.manager.integrity_check().unwrap_err();
+    assert_eq!(err.kind, Kind::ForeignKeyViolation);
+    assert_eq!(err.sqlite_code, Some(1)); // exactly 1 violation
+
+    // The manager is now halted; subsequent writes fail closed
+    let write_result = h.repo.transition_session(
+        h.metadata.session_id,
+        SessionState::Created,
+        SessionState::Scoped,
+        event(),
+        &h.clock,
+    );
+    assert_eq!(write_result.unwrap_err().kind, Kind::Halted);
+
+    // Subsequent settings read also fails with Halted
+    assert_eq!(h.manager.settings().unwrap_err().kind, Kind::Halted);
+}
+
+#[test]
+fn detailed_integrity_check_reports_structured_fk_violations() {
+    let h = Harness::new();
+    let initial_report: IntegrityReport = h.manager.detailed_integrity_check().unwrap();
+    assert!(initial_report.integrity_ok);
+    assert!(initial_report.foreign_key_violations.is_empty());
+    assert!(initial_report.is_valid());
+
+    // Inject two foreign key violations across different tables with FK disabled
+    let raw = Connection::open(&h.dir.db).unwrap();
+    raw.execute_batch("PRAGMA foreign_keys = OFF;").unwrap();
+    let dummy_session_id = Identifier::from_bytes([7u8; 16]).to_string();
+    raw.execute(
+        "INSERT INTO budget_reservations(reservation_id,session_id,model_id,reserved_cost_micro_usd,state,reserved_at) VALUES(?1,?2,'orphan-model',500,'RESERVED',?3)",
+        params![identifier(99).to_string(), dummy_session_id, h.clock.now().to_rfc3339()],
+    )
+    .unwrap();
+    raw.execute(
+        "INSERT INTO session_security_snapshots(session_id,context_generation,project_root,operator_id,policy_id,registered_at,snapshot_json) VALUES(?1,1,'/orphan','op','pol',?2,'{}')",
+        params![dummy_session_id, h.clock.now().to_rfc3339()],
+    )
+    .unwrap();
+    drop(raw);
+
+    // Detailed integrity check must return structured report with both violations
+    let report: IntegrityReport = h.manager.detailed_integrity_check().unwrap();
+    assert!(report.integrity_ok);
+    assert_eq!(report.foreign_key_violations.len(), 2);
+    assert!(!report.is_valid());
+
+    let first: &ForeignKeyViolation = &report.foreign_key_violations[0];
+    assert_eq!(first.parent, "sessions");
+
+    let tables: Vec<&str> = report
+        .foreign_key_violations
+        .iter()
+        .map(|v| v.table.as_str())
+        .collect();
+    assert!(tables.contains(&"budget_reservations"));
+    assert!(tables.contains(&"session_security_snapshots"));
+
+    for violation in &report.foreign_key_violations {
+        assert_eq!(violation.parent, "sessions");
+    }
+
+    // Detailed integrity check halts the manager when violations exist
+    assert_eq!(h.manager.integrity_check().unwrap_err().kind, Kind::Halted);
+}
+
+#[test]
+fn open_database_with_existing_foreign_key_violation_fails_closed() {
+    let d = Directory::new();
+    let manager = SqliteConnectionManager::open(&d.db, &clock()).unwrap();
+    manager.shutdown().unwrap();
+
+    // With connection closed, corrupt the foreign key relational integrity
+    let raw = Connection::open(&d.db).unwrap();
+    raw.execute_batch("PRAGMA foreign_keys = OFF;").unwrap();
+    let dummy_session = Identifier::from_bytes([5u8; 16]).to_string();
+    raw.execute(
+        "INSERT INTO audit_events(event_id,session_id,sequence_number,event_kind,classification,timestamp,details_json) VALUES(?1,?2,1,'Corrupt','PUBLIC',?3,'{}')",
+        params![
+            EventId::for_test_sequence(88_888).to_string(),
+            dummy_session,
+            clock().now().to_rfc3339()
+        ],
+    )
+    .unwrap();
+    drop(raw);
+
+    // Opening the corrupted database must fail closed with ForeignKeyViolation
+    let open_result = SqliteConnectionManager::open(&d.db, &clock());
+    match open_result {
+        Err(err) => {
+            assert_eq!(err.kind, Kind::ForeignKeyViolation);
+            assert_eq!(err.sqlite_code, Some(1));
+        }
+        Ok(_) => panic!("expected open to fail on foreign key violation"),
+    }
 }
 
 #[test]

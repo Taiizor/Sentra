@@ -1,7 +1,7 @@
 use super::{
     ApprovalIntent, AuditRecord, BudgetRecord, ConsumptionRecord, PersistenceError,
-    PersistenceErrorKind as Kind, PersistentApprovalGrant, SessionRecord, SqliteConnectionManager,
-    TransitionRecord,
+    PersistenceErrorKind as Kind, PersistentApprovalGrant, SessionRecord, SettlementStatus,
+    SqliteConnectionManager, TransitionRecord,
     model::{self, MetadataDto, Snapshot, StoredApproval},
     transaction::ManagedTransaction,
 };
@@ -492,33 +492,94 @@ impl PersistentApprovalAuthority {
         })
     }
 
-    /// Reconcile only trusted final usage. Unconfirmed cancellation never releases
+    /// Reconcile final budget usage via explicit settlement status.
+    /// Unconfirmed cancellation or uncertain partial usage never releases
     /// an upper bound; confirmed cancellation without usage also remains unknown.
     pub fn settle_budget(
         &self,
         id: Identifier,
-        actual: Option<CostUsd>,
-        cancellation_confirmed: bool,
+        status: SettlementStatus,
         event: EventId,
         clock: &impl Clock,
     ) -> Result<BudgetRecord, PersistenceError> {
-        if let Some(actual) = actual {
+        if let Some(actual) = status.actual_cost() {
             model::integer(actual.as_micro_usd())?;
         }
         self.repository.manager.write(|tx| {
-            let (session,reserved,old_actual,old_state): (String,i64,Option<i64>,String)=tx.optional("SELECT session_id,reserved_cost_micro_usd,actual_cost_micro_usd,state FROM budget_reservations WHERE reservation_id=?1",[id.to_string()],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?)))?.ok_or_else(||error(Kind::Conflict))?;
-            if old_actual.is_some() { return Err(error(Kind::Conflict)); }
-            let session=SessionId::from_bytes(*model::parse_id(&session).map_err(corrupt)?.as_bytes());
-            let (_,record)=read_snapshot(tx,session)?.ok_or_else(||error(Kind::Conflict))?;
-            let reserved=model::unsigned(reserved).map_err(corrupt)?;
-            let final_actual=if cancellation_confirmed {actual} else {None};
-            if final_actual.is_some_and(|cost|cost.as_micro_usd()>reserved) {return Err(model::invalid());}
-            let new_state=if final_actual.is_some() {"SETTLED"} else if cancellation_confirmed {"CANCELLED"} else {old_state.as_str()};
-            let now=model::time_text(clock.now())?;
-            let final_int=final_actual.map(|cost|model::integer(cost.as_micro_usd())).transpose()?;
-            tx.execute("UPDATE budget_reservations SET state=?1,actual_cost_micro_usd=?2,settled_at=?3 WHERE reservation_id=?4 AND actual_cost_micro_usd IS NULL",params![new_state,final_int,if final_actual.is_some(){Some(&now)}else{None},id.to_string()])?;
-            audit(tx,session,event,(if final_actual.is_some(){"BudgetSettled"}else{"BudgetUsageUnknown"},record.classification_floor),&now,None,&serde_json::json!({"reservation_id":id.to_string(),"final_usage_known":final_actual.is_some()}))?;
-            Ok(BudgetRecord {reservation_id:id,reserved:CostUsd::from_micro_usd(reserved),actual:final_actual,state:new_state.into()})
+            let (session, reserved, old_actual, old_state): (String, i64, Option<i64>, String) = tx
+                .optional(
+                    "SELECT session_id,reserved_cost_micro_usd,actual_cost_micro_usd,state FROM budget_reservations WHERE reservation_id=?1",
+                    [id.to_string()],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+                )?
+                .ok_or_else(|| error(Kind::Conflict))?;
+            if old_actual.is_some() {
+                return Err(error(Kind::Conflict));
+            }
+            let session =
+                SessionId::from_bytes(*model::parse_id(&session).map_err(corrupt)?.as_bytes());
+            let (_, record) =
+                read_snapshot(tx, session)?.ok_or_else(|| error(Kind::Conflict))?;
+            let reserved = model::unsigned(reserved).map_err(corrupt)?;
+            let final_actual = status.actual_cost();
+            if final_actual.is_some_and(|cost| cost.as_micro_usd() > reserved) {
+                return Err(model::invalid());
+            }
+            let new_state = match status {
+                SettlementStatus::Completed(_) => "SETTLED",
+                SettlementStatus::CancelledWithUsage(_) | SettlementStatus::CancelledUncertain => {
+                    "CANCELLED"
+                }
+                SettlementStatus::UncertainPartial => old_state.as_str(),
+            };
+            let now = model::time_text(clock.now())?;
+            let final_int = final_actual
+                .map(|cost| model::integer(cost.as_micro_usd()))
+                .transpose()?;
+            let settled_time = match status {
+                SettlementStatus::Completed(_) | SettlementStatus::CancelledWithUsage(_) => {
+                    Some(&now)
+                }
+                SettlementStatus::CancelledUncertain | SettlementStatus::UncertainPartial => None,
+            };
+            tx.execute(
+                "UPDATE budget_reservations SET state=?1,actual_cost_micro_usd=?2,settled_at=?3 WHERE reservation_id=?4 AND actual_cost_micro_usd IS NULL",
+                params![new_state, final_int, settled_time, id.to_string()],
+            )?;
+            let event_name = match status {
+                SettlementStatus::Completed(_) | SettlementStatus::CancelledWithUsage(_) => {
+                    "BudgetSettled"
+                }
+                SettlementStatus::CancelledUncertain | SettlementStatus::UncertainPartial => {
+                    "BudgetUsageUnknown"
+                }
+            };
+            let status_str = match status {
+                SettlementStatus::Completed(_) => "COMPLETED",
+                SettlementStatus::CancelledWithUsage(_) => "CANCELLED_WITH_USAGE",
+                SettlementStatus::CancelledUncertain => "CANCELLED_UNCERTAIN",
+                SettlementStatus::UncertainPartial => "UNCERTAIN_PARTIAL",
+            };
+            let details = serde_json::json!({
+                "reservation_id": id.to_string(),
+                "status": status_str,
+                "final_usage_known": final_actual.is_some(),
+            });
+            audit(
+                tx,
+                session,
+                event,
+                (event_name, record.classification_floor),
+                &now,
+                None,
+                &details,
+            )?;
+            Ok(BudgetRecord {
+                reservation_id: id,
+                reserved: CostUsd::from_micro_usd(reserved),
+                actual: final_actual,
+                state: new_state.into(),
+            })
         })
     }
 }

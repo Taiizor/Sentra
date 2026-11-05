@@ -284,6 +284,43 @@ pub struct ConsumptionRecord {
     pub audit_sequence: u64,
 }
 
+/// Explicit settlement outcome for a budget reservation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SettlementStatus {
+    /// Confirmed successful completion with verified final actual usage.
+    /// Unused reservation difference is released from `budget_used`.
+    Completed(CostUsd),
+    /// Confirmed cancellation with verified final actual usage.
+    /// Unused reservation difference is released from `budget_used`.
+    CancelledWithUsage(CostUsd),
+    /// Confirmed cancellation where final usage could not be verified.
+    /// The full upper-bound reservation is retained in `budget_used`.
+    CancelledUncertain,
+    /// Uncertain completion or unconfirmed partial usage.
+    /// Reservation remains active in `RESERVED` state and full upper bound is retained in `budget_used`.
+    UncertainPartial,
+}
+
+impl SettlementStatus {
+    /// Returns the verified actual cost, if final usage is known.
+    pub fn actual_cost(&self) -> Option<CostUsd> {
+        match self {
+            Self::Completed(cost) | Self::CancelledWithUsage(cost) => Some(*cost),
+            Self::CancelledUncertain | Self::UncertainPartial => None,
+        }
+    }
+
+    /// Whether this status represents a confirmed cancellation.
+    pub fn is_cancelled(&self) -> bool {
+        matches!(self, Self::CancelledWithUsage(_) | Self::CancelledUncertain)
+    }
+
+    /// Whether this status confirms completion or cancellation.
+    pub fn is_terminal(&self) -> bool {
+        !matches!(self, Self::UncertainPartial)
+    }
+}
+
 /// Persisted reservation, including explicit unknown final usage.
 #[derive(Clone)]
 pub struct BudgetRecord {

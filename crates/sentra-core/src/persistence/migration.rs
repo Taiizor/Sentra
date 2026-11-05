@@ -81,7 +81,7 @@ pub(super) fn initialize(
         }
         let violations = tx.collect("PRAGMA foreign_key_check", [], |_| Ok(()))?;
         if !violations.is_empty() {
-            return Err(PersistenceError::new(Kind::Integrity));
+            return Err(PersistenceError::new(Kind::ForeignKeyViolation));
         }
         Ok(())
     })
