@@ -2,11 +2,21 @@
 
 Phases are dependency-ordered delivery gates, not dates or promises. **Explicit owner approval is required before Phase 1 begins.** Subsequent sensitive actions remain subject to policy. Every release must publish an actually tested support matrix and unresolved limitations.
 
+## Permanent Git policy
+
+- Agents MUST NOT create commits, amend commits, reset, rebase, cherry-pick, create or delete tags, or push without explicit user authorization.
+- User-performed Git operations are not restricted.
+- Explicit authorization applies only to the specific operation or operations approved by the user.
+- By default, agents MUST leave changes in the working tree.
+- Agents MUST NOT modify existing Git history without explicit authorization.
+
+This policy applies across all phases and is also recorded in [AGENTS.md](AGENTS.md#permanent-git-policy). Phase authorization does not authorize Git operations. Historical Phase 0 references to no commits, tags, or pushes describe the default agent workflow and do not restrict user-performed operations.
+
 ## Phase 0 — Research and architecture
 
 Deliver the product definition, requirements, both operating-mode specifications, agent contracts, threat model, extension contracts, technology comparisons, ADRs, and a reviewed source register.
 
-Acceptance: all eight requested root documents exist; research and ADR directories are populated; requirements map to phases; the two modes share consistent evidence and permission semantics; open decisions have resolution gates; local documentation checks pass. No application implementation, dependency installation, commit, tag, or push occurs. Completion is tracked in [PROGRESS.md](PROGRESS.md).
+Acceptance: all eight requested root documents exist; research and ADR directories are populated; requirements map to phases; the two modes share consistent evidence and permission semantics; open decisions have resolution gates; local documentation checks pass. No application implementation or dependency installation occurs. Agent Git operations follow the permanent policy above; user-performed commits do not invalidate Phase 0 completion. Completion is tracked in [PROGRESS.md](PROGRESS.md).
 
 ## Phase 1 — Technical validation and local foundation
 

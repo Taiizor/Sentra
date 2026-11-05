@@ -4,7 +4,7 @@ Last updated: 2026-11-05.
 
 ## Current status
 
-**Phase 0: complete after documentation review. Phase 1: not started and awaiting explicit owner approval.** No application code, prototype, package manifest, or dependency installation was produced. The initialization agent issued no commit, tag, or push operation.
+**Phase 0: complete and closed after documentation synchronization and final review. Phase 1: NOT started.** No application code, prototype, package manifest, or dependency installation was produced. The initialization and finalization agent issued no commit or other history/reference-changing Git operation. Phase 0 closure does not authorize Phase 1.
 
 ## Completed Phase 0 work
 
@@ -21,7 +21,7 @@ Last updated: 2026-11-05.
 | Assumptions and unresolved decisions | [OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md) | Owner roles, deadlines, evidence, and safe defaults |
 | Documentation review | [Review record](docs/REVIEW.md) | Link, scope, lifecycle, support, and traceability review |
 
-Local checks passed for 32 Markdown documents, 176 local file/fragment links, 41 requirements mapped to validation, seven ADR status records, and 44 table structures. The research register contains 54 primary sources. See the review record for methods and limits.
+Finalization checks passed for 32 Markdown documents, 180 local file/fragment links, 41 requirements mapped to validation, seven ADR status records, and 44 table structures. The research register contains 54 primary sources. See the review record for methods and limits.
 
 ## Environment findings
 
@@ -29,7 +29,19 @@ The starting repository on branch `develop` contained only `.gitattributes`; the
 
 No Rust program was compiled. No image was pulled, container or VM launched, repository analyzed, model invoked, benchmark executed, or containment guarantee validated. Documentation validation is not an application test result.
 
-During final checks, commit `52eed96` (`Add Phase 0 research and architecture baseline`) appeared in the repository history, and the branch acquired `origin/develop` tracking. These changes occurred outside the agent's issued operations; their source is not established by this inspection. Existing history was preserved. The final review corrections remain uncommitted in the working tree.
+## Inspected Git history and finalization
+
+The inspected history, oldest first, is:
+
+- `50c7ca7a286e0b4dd6e2953ece0b1f1499b06f2e` — `Initial commit`, 2026-11-05T15:53:23+03:00; root commit containing `.gitattributes`.
+- `52eed96dd49b41240ac58ab07f17374daf0888e1` — `Add Phase 0 research and architecture baseline`, 2026-11-05T16:23:08+03:00; parent `50c7ca7a286e0b4dd6e2953ece0b1f1499b06f2e`; adds the 32 Phase 0 Markdown documents.
+- `22676aa40871cbc86f6c101cfb71aa4b79f09a37` — `Finalize Phase 0 documentation review`, 2026-11-05T16:26:55+03:00; parent `52eed96dd49b41240ac58ab07f17374daf0888e1`; records the intentional corrections to `PROGRESS.md`, `docs/AGENT_MODEL.md`, `docs/REVIEW.md`, and `docs/VALIDATION.md`, including Q-06 benchmark traceability and the completed review results.
+
+The subsequent read-only audit confirmed a clean working tree, branch `develop`, and HEAD at `22676aa40871cbc86f6c101cfb71aa4b79f09a37`. The local `origin/develop` tracking reference points to the same commit, with zero commits ahead or behind. No fetch, pull, or remote refresh was performed. The earlier documentation corrections are committed in `22676aa`; they are not pending working-tree changes. These historical Git operations were outside the initialization agent's issued operations; author metadata alone does not identify the executing person or tool.
+
+The owner-defined permanent Git policy is now synchronized in `AGENTS.md` and `ROADMAP.md`: it restricts agent operations without explicit operation-specific authorization and leaves user-performed Git operations unrestricted. The seven ADRs, requirements, architecture, and technology choices remain unchanged.
+
+This finalization updates only `AGENTS.md`, `ROADMAP.md`, `PROGRESS.md`, and `docs/REVIEW.md`. These new synchronization edits remain unstaged in the working tree. Branch, HEAD, index, commit history, and Git references are preserved; no commit, amend, reset, rebase, cherry-pick, tag creation/deletion, push, fetch, or pull was performed.
 
 ## Pending implementation and release gates
 
