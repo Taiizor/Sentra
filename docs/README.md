@@ -1,6 +1,6 @@
 # Documentation Index
 
-Sentra is in Phase 1 technical validation, with isolated experiments and no production Core Engine or CLI. Start with the root [README](../README.md), [vision](../VISION.md), [requirements](../REQUIREMENTS.md), [architecture](../ARCHITECTURE.md), and [roadmap](../ROADMAP.md).
+Sentra is in Phase 1, with partial Core library foundations and technical experiments. The product CLI, production persistence and execution integrations are not implemented; see the [current workspace validation and security limits](phase1/INCREMENT_5_3_WORKSPACE_VALIDATION.md). Start with the root [README](../README.md), [vision](../VISION.md), [requirements](../REQUIREMENTS.md), [architecture](../ARCHITECTURE.md), and [roadmap](../ROADMAP.md).
 
 | Specification | Scope |
 | --- | --- |

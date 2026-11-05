@@ -1,6 +1,12 @@
 # Phase 1 Execution and Validation Record
 
-Date: 2026-11-05. Phase 1 is explicitly authorized by the project owner. Phase 2 is not authorized. This record links completed technical-validation increments and preserves the initial inspection results. **Phase 1 is not complete.** Production Core Engine, CLI and integrations remain unimplemented.
+Date: 2026-11-05. Phase 1 is explicitly authorized by the project owner. Phase 2 is not authorized. This record links technical-validation increments and preserves historical observations. **Phase 1 is not complete.** Core library foundations are partially implemented; persistence, CLI, execution and real provider integrations remain unimplemented.
+
+## Increment 5.3 update
+
+The [workspace validation report](INCREMENT_5_3_WORKSPACE_VALIDATION.md) is ready for review. Canonical root/instance binding, Windows reparse quarantine, metadata-only discovery and explicit limits/incompleteness are implemented in sentra-core, with 76 unique passing tests. Real internal/external junction and deny-ACL fixtures execute through the reviewed runner. Three 10,000-file Unicode/nested measurements meet the declared Q-05 fixture target; no race-free filesystem isolation or content-access authority is claimed. A separate synthetic probe Failed for the preexisting PolicyEngine current-operation grant-binding gap, so composed authorization is Blocked. Policy/session code, zero dependencies and ADR statuses are preserved. No Increment 5.4 or Phase 2 work started.
+
+Milestone sections below are historical reports, not claims that later Core foundations remain absent.
 
 ## Milestone 4 update
 

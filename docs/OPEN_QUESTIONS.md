@@ -27,6 +27,8 @@ Owner entries are accountable roles to be assigned, not claims that those people
 | OQ-19 | Which Windows-native, binary-only, and kernel profiles are justified? | Research/execution maintainer | P6 or later: separate threat model, tooling, licensing and containment validation | Ghidra/Frida optional; no initial native/kernel support |
 | OQ-20 | When is distributed workflow/storage infrastructure justified? | Core/platform maintainer | After measured multi-worker recovery/scale limits | Single-operator local core; revisit Temporal/server database before expanding custom infrastructure |
 | OQ-21 | Are name/trademark and public project governance ready? | Project owner | Before public launch: naming and contribution/governance review | Keep current working identity without asserting name clearance |
+| OQ-22 | Which safe filesystem API can provide strong handle-relative containment and stable object identity? | Core/security maintainer | Before source content reads/exports/modifications: safe API or narrowly reviewed dependency decision, adversarial races, hard links, case-sensitive NTFS, mapped providers and opaque reparse fixtures | Current observations confer no content authority; all reparse flags stay quarantined; no unsafe code or new dependency selected |
+| OQ-23 | Does composed approval enforce the currently evaluated operation context? | Core/security maintainer | Increment 5.3 inspection probe Failed: grant for Restricted metadata A accepted for B; focused current action/session/revision binding and non-consumption regressions required before unified dispatch | Block composed authorization; preserve the existing finding and do not infer safety from the prior hardening pass count |
 
 ## Critical assumptions
 
