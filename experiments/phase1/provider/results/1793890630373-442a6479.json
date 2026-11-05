@@ -1,0 +1,718 @@
+{
+  "schema_version": "1",
+  "milestone": "Phase 1 / Milestone 3 / mock provider contract validation",
+  "observed_at_utc": "2026-11-05T14:57:12.3798053+00:00",
+  "environment": {
+    "powershell": "7.6.9",
+    "host_os": "Microsoft Windows 10.0.26300",
+    "architecture": "X64"
+  },
+  "command_timeout_seconds": 60,
+  "input_sha256": {
+    "Cargo.toml": "33cc58d376b211b8980421cf034f725886235f17f8943d0fd9f5040b97aab6bd",
+    "Cargo.lock": "d74a73575c05b7ea49ce47ccdeb749788ff317ea42416da187f4df0509d5b0cb",
+    "src/lib.rs": "4ede4a8176a3f8be1e32657c75f3febd933e6448ff1cc6b990688d500af92a84",
+    "src/contract.rs": "3ed3803011db47a2fbf10097f5e9c6711563c6824b305604106d50ed5544e9f6",
+    "src/gateway.rs": "b1023e74ca5b84c33bbd48b17a58efedbb9a990540a9273b79b3f21a1f2e95c5",
+    "src/mock.rs": "444ba824b321ab7954377aece97e3c6f33bc69cae74e9f3329e6b64030c7b7d7",
+    "tests/contract.rs": "a8c084e7936e7b648cd041a750fd83cf183a28e3b1dc653f0b835ecb11c0bfc0",
+    "Validate.ps1": "d08b07a7b3532f3adc215333bdfdf8a15b7336869cbc83d46455de852b0c2f4b"
+  },
+  "third_party_dependency_count": 0,
+  "checks": [
+    {
+      "name": "rustc-version",
+      "executable": "C:/Users/Taiizor/.cargo/bin/rustc.exe",
+      "arguments": [
+        "-vV"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 96,
+      "stdout": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.0\nLLVM version: 23.1.1\n",
+      "stderr": ""
+    },
+    {
+      "name": "cargo-version",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "--version"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 71,
+      "stdout": "cargo 1.99.0 (5f94df478 2026-08-27)\n",
+      "stderr": ""
+    },
+    {
+      "name": "format",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "fmt",
+        "--manifest-path",
+        "E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/provider/Cargo.toml",
+        "--",
+        "--check"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 195,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "name": "metadata",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "metadata",
+        "--offline",
+        "--manifest-path",
+        "E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/provider/Cargo.toml",
+        "--no-deps",
+        "--format-version",
+        "1"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 76,
+      "stdout": "{\"packages\":[{\"name\":\"sentra-provider-contract-probe\",\"version\":\"0.0.0\",\"id\":\"path+file:///E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/provider#sentra-provider-contract-probe@0.0.0\",\"license\":null,\"license_file\":null,\"description\":null,\"source\":null,\"dependencies\":[],\"targets\":[{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"sentra_provider_contract_probe\",\"src_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\provider\\\\src\\\\lib.rs\",\"edition\":\"2024\",\"doc\":true,\"doctest\":true,\"test\":true},{\"kind\":[\"test\"],\"crate_types\":[\"bin\"],\"name\":\"contract\",\"src_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\provider\\\\tests\\\\contract.rs\",\"edition\":\"2024\",\"doc\":false,\"doctest\":false,\"test\":true}],\"features\":{},\"manifest_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\provider\\\\Cargo.toml\",\"metadata\":null,\"publish\":[],\"authors\":[],\"categories\":[],\"keywords\":[],\"readme\":null,\"repository\":null,\"homepage\":null,\"documentation\":null,\"edition\":\"2024\",\"links\":null,\"default_run\":null,\"rust_version\":null}],\"workspace_members\":[\"path+file:///E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/provider#sentra-provider-contract-probe@0.0.0\"],\"workspace_default_members\":[\"path+file:///E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/provider#sentra-provider-contract-probe@0.0.0\"],\"resolve\":null,\"target_directory\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\provider\\\\target\",\"build_directory\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\provider\\\\target\",\"version\":1,\"workspace_root\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\experiments\\\\phase1\\\\provider\",\"metadata\":null}\n",
+      "stderr": ""
+    },
+    {
+      "name": "check",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "check",
+        "--offline",
+        "--manifest-path",
+        "E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/provider/Cargo.toml",
+        "--all-targets",
+        "--target",
+        "x86_64-pc-windows-msvc"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 507,
+      "stdout": "",
+      "stderr": "    Checking sentra-provider-contract-probe v0.0.0 (E:\\MyProject\\Mix\\GitHub\\Sentra\\experiments\\phase1\\provider)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.44s\n"
+    },
+    {
+      "name": "clippy",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "clippy",
+        "--offline",
+        "--manifest-path",
+        "E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/provider/Cargo.toml",
+        "--all-targets",
+        "--target",
+        "x86_64-pc-windows-msvc",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 288,
+      "stdout": "",
+      "stderr": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s\n"
+    },
+    {
+      "name": "contract-tests-first",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "test",
+        "--offline",
+        "--manifest-path",
+        "E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/provider/Cargo.toml",
+        "--target",
+        "x86_64-pc-windows-msvc",
+        "--",
+        "--test-threads=1"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 356,
+      "stdout": "\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 61 tests\ntest t01_provider_free_boundary_remains_available ... ok\ntest t02_construction_does_not_initiate_provider_operations ... ok\ntest t03_initialization_discovery_and_close_have_explicit_lifecycles ... ok\ntest t04_metadata_requires_an_explicit_policy_grant ... ok\ntest t05_requests_cannot_implicitly_initialize_a_provider ... ok\ntest t06_initialization_failure_leaves_the_provider_unready ... ok\ntest t07_discovery_preserves_provider_specific_capability_differences ... ok\ntest t08_malformed_and_duplicate_model_descriptors_are_rejected ... ok\ntest t09_success_is_normalized_and_actual_usage_settles_reservation ... ok\ntest t10_identical_mock_runs_produce_identical_responses_and_diagnostics ... ok\ntest t11_a_valid_decision_v1_structure_is_accepted ... ok\ntest t12_missing_extra_and_wrongly_typed_structured_fields_fail_validation ... ok\ntest t13_malformed_adapter_output_is_normalized_without_retry ... ok\ntest t14_unsupported_structured_output_is_not_silently_downgraded ... ok\ntest t15_unsupported_streaming_is_rejected_before_dispatch ... ok\ntest t16_individual_features_do_not_imply_support_for_their_combination ... ok\ntest t17_stream_chunks_are_ordered_bounded_and_finalized ... ok\ntest t18_out_of_order_stream_is_cancelled_and_never_promoted ... ok\ntest t19_stream_final_content_must_match_assembled_chunks ... ok\ntest t20_a_failure_after_partial_stream_output_is_not_retried ... ok\ntest t21_timeout_cancels_the_operation_and_retains_unknown_cost ... ok\ntest t22_mid_request_cancellation_uses_the_virtual_clock ... ok\ntest t23_pre_dispatch_cancellation_never_calls_the_provider ... ok\ntest t24_unsupported_remote_cancellation_stays_unconfirmed ... ok\ntest t25_required_cancellation_support_is_negotiated_before_dispatch ... ok\ntest t26_rate_limit_retry_preserves_request_identity_and_retry_after ... ok\ntest t27_retry_attempt_count_is_finite ... ok\ntest t28_excessive_retry_after_is_not_silently_shortened ... ok\ntest t29_unavailable_provider_uses_bounded_exponential_backoff ... ok\ntest t30_authentication_errors_are_normalized_redacted_and_not_retried ... ok\ntest t31_internal_failure_does_not_receive_a_transient_retry ... ok\ntest t32_missing_usage_is_unknown_and_its_reservation_cannot_be_reused ... ok\ntest t33_required_but_missing_usage_rejects_success_and_retains_reservation ... ok\ntest t34_models_without_usage_reporting_expose_that_difference ... ok\ntest t35_usage_exceeding_input_or_output_bounds_is_rejected ... ok\ntest t36_price_overflow_cannot_bypass_the_budget ... ok\ntest t37_unknown_prices_block_paid_dispatch_instead_of_implying_zero ... ok\ntest t38_cost_is_reserved_before_the_first_attempt ... ok\ntest t39_input_byte_limits_include_unicode_and_policy_intersection ... ok\ntest t40_context_window_and_output_token_limits_are_jointly_enforced ... ok\ntest t41_unsupported_token_counting_is_not_assumed_compatible ... ok\ntest t42_output_byte_limits_apply_even_to_billed_responses ... ok\ntest t43_stream_event_count_is_bounded ... ok\ntest t44_inference_requires_both_explicit_initiation_and_policy_permission ... ok\ntest t45_private_inputs_and_findings_require_grants_and_keep_classification ... ok\ntest t46_remote_egress_needs_separate_permission_even_for_public_input ... ok\ntest t47_ordinary_debug_and_diagnostics_exclude_sensitive_payloads ... ok\ntest t48_deadline_overflow_is_rejected_before_dispatch ... ok\ntest t49_completion_at_the_exclusive_deadline_times_out ... ok\ntest t50_retry_delay_cannot_exceed_the_overall_deadline ... ok\ntest t51_response_model_mismatch_is_a_protocol_error ... ok\ntest t52_unconfirmed_cancellation_is_not_reported_as_remote_termination ... ok\ntest t53_unknown_usage_on_an_earlier_attempt_stays_visible_after_retry_success ... ok\ntest t54_known_partial_usage_is_charged_after_timeout ... ok\ntest t55_secret_classification_cannot_be_overridden_by_egress_permission ... ok\ntest t56_unsolicited_stream_events_are_rejected ... ok\ntest t57_unknown_model_never_dispatches_to_a_default_provider_model ... ok\ntest t58_advertised_features_cannot_enable_unimplemented_structured_streaming ... ok\ntest t59_missing_usage_is_visible_even_with_a_zero_price_quote ... ok\ntest t60_invalid_retry_configuration_is_rejected_before_dispatch ... ok\ntest t61_unsupported_capability_identifies_the_missing_feature ... ok\n\ntest result: ok. 61 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.15s\n     Running unittests src\\lib.rs (target\\x86_64-pc-windows-msvc\\debug\\deps\\sentra_provider_contract_probe-b2320ed08ddde43a.exe)\n     Running tests\\contract.rs (target\\x86_64-pc-windows-msvc\\debug\\deps\\contract-6c53e69ee2121c17.exe)\n   Doc-tests sentra_provider_contract_probe\n"
+    },
+    {
+      "name": "contract-tests-repeat",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "test",
+        "--offline",
+        "--manifest-path",
+        "E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/provider/Cargo.toml",
+        "--target",
+        "x86_64-pc-windows-msvc",
+        "--",
+        "--test-threads=1"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 252,
+      "stdout": "\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 61 tests\ntest t01_provider_free_boundary_remains_available ... ok\ntest t02_construction_does_not_initiate_provider_operations ... ok\ntest t03_initialization_discovery_and_close_have_explicit_lifecycles ... ok\ntest t04_metadata_requires_an_explicit_policy_grant ... ok\ntest t05_requests_cannot_implicitly_initialize_a_provider ... ok\ntest t06_initialization_failure_leaves_the_provider_unready ... ok\ntest t07_discovery_preserves_provider_specific_capability_differences ... ok\ntest t08_malformed_and_duplicate_model_descriptors_are_rejected ... ok\ntest t09_success_is_normalized_and_actual_usage_settles_reservation ... ok\ntest t10_identical_mock_runs_produce_identical_responses_and_diagnostics ... ok\ntest t11_a_valid_decision_v1_structure_is_accepted ... ok\ntest t12_missing_extra_and_wrongly_typed_structured_fields_fail_validation ... ok\ntest t13_malformed_adapter_output_is_normalized_without_retry ... ok\ntest t14_unsupported_structured_output_is_not_silently_downgraded ... ok\ntest t15_unsupported_streaming_is_rejected_before_dispatch ... ok\ntest t16_individual_features_do_not_imply_support_for_their_combination ... ok\ntest t17_stream_chunks_are_ordered_bounded_and_finalized ... ok\ntest t18_out_of_order_stream_is_cancelled_and_never_promoted ... ok\ntest t19_stream_final_content_must_match_assembled_chunks ... ok\ntest t20_a_failure_after_partial_stream_output_is_not_retried ... ok\ntest t21_timeout_cancels_the_operation_and_retains_unknown_cost ... ok\ntest t22_mid_request_cancellation_uses_the_virtual_clock ... ok\ntest t23_pre_dispatch_cancellation_never_calls_the_provider ... ok\ntest t24_unsupported_remote_cancellation_stays_unconfirmed ... ok\ntest t25_required_cancellation_support_is_negotiated_before_dispatch ... ok\ntest t26_rate_limit_retry_preserves_request_identity_and_retry_after ... ok\ntest t27_retry_attempt_count_is_finite ... ok\ntest t28_excessive_retry_after_is_not_silently_shortened ... ok\ntest t29_unavailable_provider_uses_bounded_exponential_backoff ... ok\ntest t30_authentication_errors_are_normalized_redacted_and_not_retried ... ok\ntest t31_internal_failure_does_not_receive_a_transient_retry ... ok\ntest t32_missing_usage_is_unknown_and_its_reservation_cannot_be_reused ... ok\ntest t33_required_but_missing_usage_rejects_success_and_retains_reservation ... ok\ntest t34_models_without_usage_reporting_expose_that_difference ... ok\ntest t35_usage_exceeding_input_or_output_bounds_is_rejected ... ok\ntest t36_price_overflow_cannot_bypass_the_budget ... ok\ntest t37_unknown_prices_block_paid_dispatch_instead_of_implying_zero ... ok\ntest t38_cost_is_reserved_before_the_first_attempt ... ok\ntest t39_input_byte_limits_include_unicode_and_policy_intersection ... ok\ntest t40_context_window_and_output_token_limits_are_jointly_enforced ... ok\ntest t41_unsupported_token_counting_is_not_assumed_compatible ... ok\ntest t42_output_byte_limits_apply_even_to_billed_responses ... ok\ntest t43_stream_event_count_is_bounded ... ok\ntest t44_inference_requires_both_explicit_initiation_and_policy_permission ... ok\ntest t45_private_inputs_and_findings_require_grants_and_keep_classification ... ok\ntest t46_remote_egress_needs_separate_permission_even_for_public_input ... ok\ntest t47_ordinary_debug_and_diagnostics_exclude_sensitive_payloads ... ok\ntest t48_deadline_overflow_is_rejected_before_dispatch ... ok\ntest t49_completion_at_the_exclusive_deadline_times_out ... ok\ntest t50_retry_delay_cannot_exceed_the_overall_deadline ... ok\ntest t51_response_model_mismatch_is_a_protocol_error ... ok\ntest t52_unconfirmed_cancellation_is_not_reported_as_remote_termination ... ok\ntest t53_unknown_usage_on_an_earlier_attempt_stays_visible_after_retry_success ... ok\ntest t54_known_partial_usage_is_charged_after_timeout ... ok\ntest t55_secret_classification_cannot_be_overridden_by_egress_permission ... ok\ntest t56_unsolicited_stream_events_are_rejected ... ok\ntest t57_unknown_model_never_dispatches_to_a_default_provider_model ... ok\ntest t58_advertised_features_cannot_enable_unimplemented_structured_streaming ... ok\ntest t59_missing_usage_is_visible_even_with_a_zero_price_quote ... ok\ntest t60_invalid_retry_configuration_is_rejected_before_dispatch ... ok\ntest t61_unsupported_capability_identifies_the_missing_feature ... ok\n\ntest result: ok. 61 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s\n     Running unittests src\\lib.rs (target\\x86_64-pc-windows-msvc\\debug\\deps\\sentra_provider_contract_probe-b2320ed08ddde43a.exe)\n     Running tests\\contract.rs (target\\x86_64-pc-windows-msvc\\debug\\deps\\contract-6c53e69ee2121c17.exe)\n   Doc-tests sentra_provider_contract_probe\n"
+    }
+  ],
+  "expected_contract_tests": 61,
+  "runs": [
+    {
+      "name": "contract-tests-first",
+      "command_status": "Passed",
+      "tests": [
+        {
+          "name": "t01_provider_free_boundary_remains_available",
+          "status": "Passed"
+        },
+        {
+          "name": "t02_construction_does_not_initiate_provider_operations",
+          "status": "Passed"
+        },
+        {
+          "name": "t03_initialization_discovery_and_close_have_explicit_lifecycles",
+          "status": "Passed"
+        },
+        {
+          "name": "t04_metadata_requires_an_explicit_policy_grant",
+          "status": "Passed"
+        },
+        {
+          "name": "t05_requests_cannot_implicitly_initialize_a_provider",
+          "status": "Passed"
+        },
+        {
+          "name": "t06_initialization_failure_leaves_the_provider_unready",
+          "status": "Passed"
+        },
+        {
+          "name": "t07_discovery_preserves_provider_specific_capability_differences",
+          "status": "Passed"
+        },
+        {
+          "name": "t08_malformed_and_duplicate_model_descriptors_are_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "t09_success_is_normalized_and_actual_usage_settles_reservation",
+          "status": "Passed"
+        },
+        {
+          "name": "t10_identical_mock_runs_produce_identical_responses_and_diagnostics",
+          "status": "Passed"
+        },
+        {
+          "name": "t11_a_valid_decision_v1_structure_is_accepted",
+          "status": "Passed"
+        },
+        {
+          "name": "t12_missing_extra_and_wrongly_typed_structured_fields_fail_validation",
+          "status": "Passed"
+        },
+        {
+          "name": "t13_malformed_adapter_output_is_normalized_without_retry",
+          "status": "Passed"
+        },
+        {
+          "name": "t14_unsupported_structured_output_is_not_silently_downgraded",
+          "status": "Passed"
+        },
+        {
+          "name": "t15_unsupported_streaming_is_rejected_before_dispatch",
+          "status": "Passed"
+        },
+        {
+          "name": "t16_individual_features_do_not_imply_support_for_their_combination",
+          "status": "Passed"
+        },
+        {
+          "name": "t17_stream_chunks_are_ordered_bounded_and_finalized",
+          "status": "Passed"
+        },
+        {
+          "name": "t18_out_of_order_stream_is_cancelled_and_never_promoted",
+          "status": "Passed"
+        },
+        {
+          "name": "t19_stream_final_content_must_match_assembled_chunks",
+          "status": "Passed"
+        },
+        {
+          "name": "t20_a_failure_after_partial_stream_output_is_not_retried",
+          "status": "Passed"
+        },
+        {
+          "name": "t21_timeout_cancels_the_operation_and_retains_unknown_cost",
+          "status": "Passed"
+        },
+        {
+          "name": "t22_mid_request_cancellation_uses_the_virtual_clock",
+          "status": "Passed"
+        },
+        {
+          "name": "t23_pre_dispatch_cancellation_never_calls_the_provider",
+          "status": "Passed"
+        },
+        {
+          "name": "t24_unsupported_remote_cancellation_stays_unconfirmed",
+          "status": "Passed"
+        },
+        {
+          "name": "t25_required_cancellation_support_is_negotiated_before_dispatch",
+          "status": "Passed"
+        },
+        {
+          "name": "t26_rate_limit_retry_preserves_request_identity_and_retry_after",
+          "status": "Passed"
+        },
+        {
+          "name": "t27_retry_attempt_count_is_finite",
+          "status": "Passed"
+        },
+        {
+          "name": "t28_excessive_retry_after_is_not_silently_shortened",
+          "status": "Passed"
+        },
+        {
+          "name": "t29_unavailable_provider_uses_bounded_exponential_backoff",
+          "status": "Passed"
+        },
+        {
+          "name": "t30_authentication_errors_are_normalized_redacted_and_not_retried",
+          "status": "Passed"
+        },
+        {
+          "name": "t31_internal_failure_does_not_receive_a_transient_retry",
+          "status": "Passed"
+        },
+        {
+          "name": "t32_missing_usage_is_unknown_and_its_reservation_cannot_be_reused",
+          "status": "Passed"
+        },
+        {
+          "name": "t33_required_but_missing_usage_rejects_success_and_retains_reservation",
+          "status": "Passed"
+        },
+        {
+          "name": "t34_models_without_usage_reporting_expose_that_difference",
+          "status": "Passed"
+        },
+        {
+          "name": "t35_usage_exceeding_input_or_output_bounds_is_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "t36_price_overflow_cannot_bypass_the_budget",
+          "status": "Passed"
+        },
+        {
+          "name": "t37_unknown_prices_block_paid_dispatch_instead_of_implying_zero",
+          "status": "Passed"
+        },
+        {
+          "name": "t38_cost_is_reserved_before_the_first_attempt",
+          "status": "Passed"
+        },
+        {
+          "name": "t39_input_byte_limits_include_unicode_and_policy_intersection",
+          "status": "Passed"
+        },
+        {
+          "name": "t40_context_window_and_output_token_limits_are_jointly_enforced",
+          "status": "Passed"
+        },
+        {
+          "name": "t41_unsupported_token_counting_is_not_assumed_compatible",
+          "status": "Passed"
+        },
+        {
+          "name": "t42_output_byte_limits_apply_even_to_billed_responses",
+          "status": "Passed"
+        },
+        {
+          "name": "t43_stream_event_count_is_bounded",
+          "status": "Passed"
+        },
+        {
+          "name": "t44_inference_requires_both_explicit_initiation_and_policy_permission",
+          "status": "Passed"
+        },
+        {
+          "name": "t45_private_inputs_and_findings_require_grants_and_keep_classification",
+          "status": "Passed"
+        },
+        {
+          "name": "t46_remote_egress_needs_separate_permission_even_for_public_input",
+          "status": "Passed"
+        },
+        {
+          "name": "t47_ordinary_debug_and_diagnostics_exclude_sensitive_payloads",
+          "status": "Passed"
+        },
+        {
+          "name": "t48_deadline_overflow_is_rejected_before_dispatch",
+          "status": "Passed"
+        },
+        {
+          "name": "t49_completion_at_the_exclusive_deadline_times_out",
+          "status": "Passed"
+        },
+        {
+          "name": "t50_retry_delay_cannot_exceed_the_overall_deadline",
+          "status": "Passed"
+        },
+        {
+          "name": "t51_response_model_mismatch_is_a_protocol_error",
+          "status": "Passed"
+        },
+        {
+          "name": "t52_unconfirmed_cancellation_is_not_reported_as_remote_termination",
+          "status": "Passed"
+        },
+        {
+          "name": "t53_unknown_usage_on_an_earlier_attempt_stays_visible_after_retry_success",
+          "status": "Passed"
+        },
+        {
+          "name": "t54_known_partial_usage_is_charged_after_timeout",
+          "status": "Passed"
+        },
+        {
+          "name": "t55_secret_classification_cannot_be_overridden_by_egress_permission",
+          "status": "Passed"
+        },
+        {
+          "name": "t56_unsolicited_stream_events_are_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "t57_unknown_model_never_dispatches_to_a_default_provider_model",
+          "status": "Passed"
+        },
+        {
+          "name": "t58_advertised_features_cannot_enable_unimplemented_structured_streaming",
+          "status": "Passed"
+        },
+        {
+          "name": "t59_missing_usage_is_visible_even_with_a_zero_price_quote",
+          "status": "Passed"
+        },
+        {
+          "name": "t60_invalid_retry_configuration_is_rejected_before_dispatch",
+          "status": "Passed"
+        },
+        {
+          "name": "t61_unsupported_capability_identifies_the_missing_feature",
+          "status": "Passed"
+        }
+      ],
+      "count": 61
+    },
+    {
+      "name": "contract-tests-repeat",
+      "command_status": "Passed",
+      "tests": [
+        {
+          "name": "t01_provider_free_boundary_remains_available",
+          "status": "Passed"
+        },
+        {
+          "name": "t02_construction_does_not_initiate_provider_operations",
+          "status": "Passed"
+        },
+        {
+          "name": "t03_initialization_discovery_and_close_have_explicit_lifecycles",
+          "status": "Passed"
+        },
+        {
+          "name": "t04_metadata_requires_an_explicit_policy_grant",
+          "status": "Passed"
+        },
+        {
+          "name": "t05_requests_cannot_implicitly_initialize_a_provider",
+          "status": "Passed"
+        },
+        {
+          "name": "t06_initialization_failure_leaves_the_provider_unready",
+          "status": "Passed"
+        },
+        {
+          "name": "t07_discovery_preserves_provider_specific_capability_differences",
+          "status": "Passed"
+        },
+        {
+          "name": "t08_malformed_and_duplicate_model_descriptors_are_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "t09_success_is_normalized_and_actual_usage_settles_reservation",
+          "status": "Passed"
+        },
+        {
+          "name": "t10_identical_mock_runs_produce_identical_responses_and_diagnostics",
+          "status": "Passed"
+        },
+        {
+          "name": "t11_a_valid_decision_v1_structure_is_accepted",
+          "status": "Passed"
+        },
+        {
+          "name": "t12_missing_extra_and_wrongly_typed_structured_fields_fail_validation",
+          "status": "Passed"
+        },
+        {
+          "name": "t13_malformed_adapter_output_is_normalized_without_retry",
+          "status": "Passed"
+        },
+        {
+          "name": "t14_unsupported_structured_output_is_not_silently_downgraded",
+          "status": "Passed"
+        },
+        {
+          "name": "t15_unsupported_streaming_is_rejected_before_dispatch",
+          "status": "Passed"
+        },
+        {
+          "name": "t16_individual_features_do_not_imply_support_for_their_combination",
+          "status": "Passed"
+        },
+        {
+          "name": "t17_stream_chunks_are_ordered_bounded_and_finalized",
+          "status": "Passed"
+        },
+        {
+          "name": "t18_out_of_order_stream_is_cancelled_and_never_promoted",
+          "status": "Passed"
+        },
+        {
+          "name": "t19_stream_final_content_must_match_assembled_chunks",
+          "status": "Passed"
+        },
+        {
+          "name": "t20_a_failure_after_partial_stream_output_is_not_retried",
+          "status": "Passed"
+        },
+        {
+          "name": "t21_timeout_cancels_the_operation_and_retains_unknown_cost",
+          "status": "Passed"
+        },
+        {
+          "name": "t22_mid_request_cancellation_uses_the_virtual_clock",
+          "status": "Passed"
+        },
+        {
+          "name": "t23_pre_dispatch_cancellation_never_calls_the_provider",
+          "status": "Passed"
+        },
+        {
+          "name": "t24_unsupported_remote_cancellation_stays_unconfirmed",
+          "status": "Passed"
+        },
+        {
+          "name": "t25_required_cancellation_support_is_negotiated_before_dispatch",
+          "status": "Passed"
+        },
+        {
+          "name": "t26_rate_limit_retry_preserves_request_identity_and_retry_after",
+          "status": "Passed"
+        },
+        {
+          "name": "t27_retry_attempt_count_is_finite",
+          "status": "Passed"
+        },
+        {
+          "name": "t28_excessive_retry_after_is_not_silently_shortened",
+          "status": "Passed"
+        },
+        {
+          "name": "t29_unavailable_provider_uses_bounded_exponential_backoff",
+          "status": "Passed"
+        },
+        {
+          "name": "t30_authentication_errors_are_normalized_redacted_and_not_retried",
+          "status": "Passed"
+        },
+        {
+          "name": "t31_internal_failure_does_not_receive_a_transient_retry",
+          "status": "Passed"
+        },
+        {
+          "name": "t32_missing_usage_is_unknown_and_its_reservation_cannot_be_reused",
+          "status": "Passed"
+        },
+        {
+          "name": "t33_required_but_missing_usage_rejects_success_and_retains_reservation",
+          "status": "Passed"
+        },
+        {
+          "name": "t34_models_without_usage_reporting_expose_that_difference",
+          "status": "Passed"
+        },
+        {
+          "name": "t35_usage_exceeding_input_or_output_bounds_is_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "t36_price_overflow_cannot_bypass_the_budget",
+          "status": "Passed"
+        },
+        {
+          "name": "t37_unknown_prices_block_paid_dispatch_instead_of_implying_zero",
+          "status": "Passed"
+        },
+        {
+          "name": "t38_cost_is_reserved_before_the_first_attempt",
+          "status": "Passed"
+        },
+        {
+          "name": "t39_input_byte_limits_include_unicode_and_policy_intersection",
+          "status": "Passed"
+        },
+        {
+          "name": "t40_context_window_and_output_token_limits_are_jointly_enforced",
+          "status": "Passed"
+        },
+        {
+          "name": "t41_unsupported_token_counting_is_not_assumed_compatible",
+          "status": "Passed"
+        },
+        {
+          "name": "t42_output_byte_limits_apply_even_to_billed_responses",
+          "status": "Passed"
+        },
+        {
+          "name": "t43_stream_event_count_is_bounded",
+          "status": "Passed"
+        },
+        {
+          "name": "t44_inference_requires_both_explicit_initiation_and_policy_permission",
+          "status": "Passed"
+        },
+        {
+          "name": "t45_private_inputs_and_findings_require_grants_and_keep_classification",
+          "status": "Passed"
+        },
+        {
+          "name": "t46_remote_egress_needs_separate_permission_even_for_public_input",
+          "status": "Passed"
+        },
+        {
+          "name": "t47_ordinary_debug_and_diagnostics_exclude_sensitive_payloads",
+          "status": "Passed"
+        },
+        {
+          "name": "t48_deadline_overflow_is_rejected_before_dispatch",
+          "status": "Passed"
+        },
+        {
+          "name": "t49_completion_at_the_exclusive_deadline_times_out",
+          "status": "Passed"
+        },
+        {
+          "name": "t50_retry_delay_cannot_exceed_the_overall_deadline",
+          "status": "Passed"
+        },
+        {
+          "name": "t51_response_model_mismatch_is_a_protocol_error",
+          "status": "Passed"
+        },
+        {
+          "name": "t52_unconfirmed_cancellation_is_not_reported_as_remote_termination",
+          "status": "Passed"
+        },
+        {
+          "name": "t53_unknown_usage_on_an_earlier_attempt_stays_visible_after_retry_success",
+          "status": "Passed"
+        },
+        {
+          "name": "t54_known_partial_usage_is_charged_after_timeout",
+          "status": "Passed"
+        },
+        {
+          "name": "t55_secret_classification_cannot_be_overridden_by_egress_permission",
+          "status": "Passed"
+        },
+        {
+          "name": "t56_unsolicited_stream_events_are_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "t57_unknown_model_never_dispatches_to_a_default_provider_model",
+          "status": "Passed"
+        },
+        {
+          "name": "t58_advertised_features_cannot_enable_unimplemented_structured_streaming",
+          "status": "Passed"
+        },
+        {
+          "name": "t59_missing_usage_is_visible_even_with_a_zero_price_quote",
+          "status": "Passed"
+        },
+        {
+          "name": "t60_invalid_retry_configuration_is_rejected_before_dispatch",
+          "status": "Passed"
+        },
+        {
+          "name": "t61_unsupported_capability_identifies_the_missing_feature",
+          "status": "Passed"
+        }
+      ],
+      "count": 61
+    }
+  ],
+  "repeated_outcomes_match": true,
+  "synthetic_canaries_absent_from_test_logs": true,
+  "not_tested": [
+    {
+      "id": "N01",
+      "status": "Not Tested",
+      "name": "Real provider SDK, authentication and backend interoperability",
+      "reason": "No real provider, API key or network access is used."
+    },
+    {
+      "id": "N02",
+      "status": "Not Tested",
+      "name": "Production Core Engine integration without a provider",
+      "reason": "The provider-free experiment boundary passes; the production Core Engine is not implemented."
+    },
+    {
+      "id": "N03",
+      "status": "Not Tested",
+      "name": "Real tokenizer, prices and invoice reconciliation",
+      "reason": "Token counts and micro-USD rates are synthetic mock fixtures."
+    },
+    {
+      "id": "N04",
+      "status": "Not Tested",
+      "name": "Real transport cancellation, latency, backpressure and OS egress enforcement",
+      "reason": "Logical time and in-process mock operations do not validate remote termination or network containment."
+    },
+    {
+      "id": "N05",
+      "status": "Not Tested",
+      "name": "JSON/SSE wire parsing, arbitrary JSON Schema and structured streaming",
+      "reason": "Only a narrow typed DecisionV1 object and bounded text streams are implemented in the experiment."
+    },
+    {
+      "id": "N06",
+      "status": "Not Tested",
+      "name": "Concurrent/durable billing ledger, IPC and restart recovery",
+      "reason": "The mock gateway and ledger are sequential and in-memory; accepted process adapter/storage designs remain unimplemented."
+    }
+  ],
+  "summary": {
+    "Passed": 61,
+    "Failed": 0,
+    "Blocked": 0,
+    "Not Tested": 6
+  }
+}

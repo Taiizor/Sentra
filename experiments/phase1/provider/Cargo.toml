@@ -1,0 +1,8 @@
+[package]
+name = "sentra-provider-contract-probe"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# This experiment does not establish the production workspace or dependencies.
+[workspace]

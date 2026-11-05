@@ -146,3 +146,9 @@ Before production persistence: select/review the exact Rust binding and embedded
 Milestone entry was clean `develop` at `9dbf5f7753e0a47e6723ad831be1f00b520fc875`. During execution, `8d0fcd5936a20876507350614c79dd1e9e677243` and `1fdedefab738e16cd96e140f1e2bb014305426c5` appeared outside the agent's issued Git operations, recording experiment files and results. They were preserved. No commit, amend, reset, rebase, cherry-pick, tag, push, fetch, pull, staging, stashing or history/reference-changing command was issued by the agent. New completion edits remain in the working tree; author metadata does not establish the source of concurrent Git operations.
 
 **SQLite is suitable to retain for the proposed foundation, with the above conditions. The SQLite assessment report is ready for review; complete V-02 and Phase 1 acceptance are not claimed. No production Core Engine, next milestone, VM operation or Phase 2 work was started.**
+
+## Subsequent owner decision — Milestone 3
+
+After this assessment, the owner approved SQLite as the candidate for Sentra's persistence foundation and separately authorized mock provider contract validation. The preceding results and milestone-boundary statements are historical; no SQLite tests or raw evidence were changed by that follow-up. See the [provider milestone report](PROVIDER_VALIDATION.md).
+
+Candidate approval does not establish production readiness. Required persistence policies remain explicit rollback after statement failure; full transaction restart and fresh reads after SQLITE_BUSY_SNAPSHOT; bounded retries; WAL/checkpoint lifecycle management; and evidence integrity across process termination. Physical disk exhaustion, real write/fsync IOERR, power-loss durability, production Rust binding integration and database/blob reconciliation remain unresolved. No ADR status or storage architecture changed.
