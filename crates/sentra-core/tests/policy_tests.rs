@@ -14,7 +14,7 @@ fn create_test_session() -> SessionMetadata {
     SessionMetadata::new(
         SessionId::new(),
         TimestampUtc::from_epoch_secs(1_700_000_000),
-        "E:/MyProject/Mix/GitHub/Sentra",
+        "/workspace/test-project",
         OperatingMode::DeepSecurityResearch,
         "operator_tester",
         "sha256:target_revision_rev1",
