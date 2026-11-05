@@ -20,6 +20,10 @@ pub mod audit;
 pub mod common;
 /// Core domain models, identifiers, and classifications.
 pub mod domain;
+/// Host-side evidence verification boundary and artifact admission filters.
+pub mod evidence;
+/// Fail-closed execution engine and backend contracts.
+pub mod execution;
 /// Local SQLite connection, migration and durable repository primitives.
 pub mod persistence;
 /// Security policy engine, decisions, and approval brokers.
@@ -32,8 +36,18 @@ pub mod workspace;
 pub use audit::{AuditEvent, AuditEventKind};
 pub use common::{Clock, MockClock, SystemClock};
 pub use domain::{
-    ApprovalId, DomainError, EventId, Identifier, SecurityClassification, SessionId,
-    SessionTransitionError, TaskId, TimestampUtc,
+    ApprovalId, DomainError, EventId, EvidenceId, ExecutionId, Identifier, SecurityClassification,
+    SessionId, SessionTransitionError, TaskId, TimestampUtc,
+};
+pub use evidence::{
+    EvidenceArtifact, EvidenceEnvelope, EvidenceMetadata, EvidenceVerificationError,
+    EvidenceVerificationErrorKind, EvidenceVerifier, IntegrityVerificationStatus,
+    MAX_EVIDENCE_SIZE_BYTES,
+};
+pub use execution::{
+    BackendCapabilities, ExecutionBackend, ExecutionEngine, ExecutionError, ExecutionErrorKind,
+    ExecutionRequest, ExecutionResult, ExecutionScope, ExecutionStatus, FailClosedBackend,
+    ResourceLimits, ResourceUsage, SyntheticFixtureBackend,
 };
 pub use policy::{
     ApprovalAuthority, ApprovalBroker, ApprovalGrant, ApprovalRequest, BudgetPolicyConfig, CostUsd,
