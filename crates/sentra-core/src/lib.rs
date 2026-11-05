@@ -20,6 +20,8 @@ pub mod audit;
 pub mod common;
 /// Core domain models, identifiers, and classifications.
 pub mod domain;
+/// Local SQLite connection, migration and durable repository primitives.
+pub mod persistence;
 /// Security policy engine, decisions, and approval brokers.
 pub mod policy;
 /// Session lifecycle, state machine, and metadata.

@@ -1,0 +1,77 @@
+{
+  "increment": "5.4.2",
+  "observed_at_utc": "2026-11-05T20:41:35.346Z",
+  "markdown": {
+    "documents": 45,
+    "local_links": 320,
+    "table_blocks": 96,
+    "requirements": 41,
+    "adr_statuses": [
+      {
+        "path": "docs\\adr\\0007-open-source-and-integration-licensing.md",
+        "status": "Proposed"
+      },
+      {
+        "path": "docs\\adr\\0006-evidence-and-independent-verification.md",
+        "status": "Accepted"
+      },
+      {
+        "path": "docs\\adr\\0005-capability-scoped-process-adapters.md",
+        "status": "Accepted"
+      },
+      {
+        "path": "docs\\adr\\0004-vm-boundary-for-untrusted-execution.md",
+        "status": "Accepted"
+      },
+      {
+        "path": "docs\\adr\\0003-local-modular-control-plane.md",
+        "status": "Accepted"
+      },
+      {
+        "path": "docs\\adr\\0002-conditional-rust-core.md",
+        "status": "Proposed"
+      },
+      {
+        "path": "docs\\adr\\0001-platform-scope-and-phase-boundary.md",
+        "status": "Accepted"
+      }
+    ],
+    "failures": []
+  },
+  "preservation": {
+    "head": true,
+    "branch": true,
+    "refs": true,
+    "history": true,
+    "index": true
+  },
+  "original_files": 123,
+  "allowed_changed_original_files": [
+    "ARCHITECTURE.md",
+    "Cargo.lock",
+    "PROGRESS.md",
+    "README.md",
+    "ROADMAP.md",
+    "crates/sentra-core/Cargo.toml",
+    "crates/sentra-core/src/lib.rs",
+    "crates/sentra-core/src/policy/engine.rs",
+    "docs/OPEN_QUESTIONS.md",
+    "docs/VALIDATION.md",
+    "docs/phase1/INCREMENT_5_4_1_DEPENDENCY_AUDIT.md",
+    "docs/phase1/INCREMENT_5_4_1_PERSISTENCE_DESIGN.md",
+    "docs/phase1/README.md",
+    "experiments/phase1/authorization/Validate.ps1"
+  ],
+  "unexpected_changed_original_files": [],
+  "git": {
+    "head": "7f66ec2f47861566ca76993e74fc49818ee42be5",
+    "branch": "refs/heads/develop",
+    "status": " M ARCHITECTURE.md\n M Cargo.lock\n M PROGRESS.md\n M README.md\n M ROADMAP.md\n M crates/sentra-core/Cargo.toml\n M crates/sentra-core/src/lib.rs\n M crates/sentra-core/src/policy/engine.rs\n M docs/OPEN_QUESTIONS.md\n M docs/VALIDATION.md\n M docs/phase1/INCREMENT_5_4_1_DEPENDENCY_AUDIT.md\n M docs/phase1/INCREMENT_5_4_1_PERSISTENCE_DESIGN.md\n M docs/phase1/README.md\n M experiments/phase1/authorization/Validate.ps1\n?? crates/sentra-core/src/persistence/connection.rs\n?? crates/sentra-core/src/persistence/error.rs\n?? crates/sentra-core/src/persistence/migration.rs\n?? crates/sentra-core/src/persistence/mod.rs\n?? crates/sentra-core/src/persistence/model.rs\n?? crates/sentra-core/src/persistence/repository.rs\n?? crates/sentra-core/src/persistence/schema_v1.sql\n?? crates/sentra-core/src/persistence/transaction.rs\n?? crates/sentra-core/tests/persistence_tests.rs\n?? crates/sentra-core/tests/support/persistence.rs\n?? docs/phase1/INCREMENT_5_4_2_SQLITE_IMPLEMENTATION.md\n?? experiments/phase1/authorization/results/1793909993262.json\n?? experiments/phase1/authorization/results/1793910842702.json\n?? experiments/phase1/persistence/Validate.ps1\n?? experiments/phase1/persistence/results/1793909666845.json\n?? experiments/phase1/persistence/results/1793909947975.json\n?? experiments/phase1/persistence/results/1793910614344.json\n?? experiments/phase1/persistence/results/1793910739083.json\n?? experiments/phase1/persistence/results/1793911046516.json\n?? experiments/phase1/persistence/results/final-review.json\n?? experiments/phase1/workspace/results/1793909993262.json\n?? experiments/phase1/workspace/results/1793910842720.json",
+    "tracking": "refs/heads/develop 7f66ec2f47861566ca76993e74fc49818ee42be5 refs/remotes/origin/develop \nrefs/remotes/origin/HEAD 7f66ec2f47861566ca76993e74fc49818ee42be5  \nrefs/remotes/origin/develop 7f66ec2f47861566ca76993e74fc49818ee42be5",
+    "ahead_behind": "0\t0",
+    "index_entries_sha256": "f30b9ab55fb55147b66f40e707dc4c45f70d83df276f440b7c0b32acd4897fd9",
+    "history_sha256": "6d2ffa9e9a623674b168989ff3211ef7f357e9d8fb3ec835ca7bb4cdaa89237b",
+    "refs_sha256": "eb6b2a9e7a1bcd960e40197ae8b465feaa27e4e0cbab83182bd42d499e80f60b"
+  },
+  "note": "Read-only Git/Markdown/source review; Bun built-ins only. No network, index or reference mutation."
+}

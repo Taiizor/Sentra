@@ -92,9 +92,18 @@ foreach ($check in $checks) {
 }
 $metadataCheck = $checks | Where-Object { $_.name -eq 'dependency-metadata' } | Select-Object -First 1
 $dependencyCount = $null
+$approvedDependencies = $false
 if ($metadataCheck.status -eq 'Passed') {
     $metadata = $metadataCheck.stdout | ConvertFrom-Json
     $dependencyCount = @($metadata.packages | ForEach-Object { $_.dependencies } | Where-Object { $null -ne $_ }).Count
+    $dependencies = @($metadata.packages | Where-Object { $_.name -eq 'sentra-core' } | ForEach-Object { $_.dependencies })
+    # Increment 5.4.2 explicitly authorizes only these pinned direct dependencies.
+    $approvedDependencies = $dependencyCount -eq 3 -and $dependencies.Count -eq 3
+    foreach ($spec in @(@('rusqlite', '=0.32.1', 'bundled'), @('serde', '=1.0.229', 'derive'), @('serde_json', '=1.0.154', ''))) {
+        $dependency = @($dependencies | Where-Object { $_.name -eq $spec[0] })
+        if ($dependency.Count -ne 1 -or $dependency[0].req -ne $spec[1]) { $approvedDependencies = $false; continue }
+        if ($spec[2] -and $spec[2] -notin $dependency[0].features) { $approvedDependencies = $false }
+    }
 }
 $workspace = $checks | Where-Object { $_.name -eq 'workspace-tests' } | Select-Object -First 1
 $repeat = $checks | Where-Object { $_.name -eq 'repeat-concurrency' } | Select-Object -First 1
@@ -102,7 +111,7 @@ $concurrencyVerified = $repeat.status -eq 'Passed' -and $repeat.stdout -match 'C
 $report = [ordered]@{
     increment = 'Phase 1 / Increment 5.3.1'; observed_at_utc = [DateTimeOffset]::UtcNow.ToString('o')
     environment = [ordered]@{ powershell = $PSVersionTable.PSVersion.ToString(); os = [Runtime.InteropServices.RuntimeInformation]::OSDescription; architecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() }
-    input_sha256 = $inputs; inputs_unchanged = $unchanged; third_party_dependencies = $dependencyCount; checks = $checks.ToArray()
+    input_sha256 = $inputs; inputs_unchanged = $unchanged; third_party_dependencies = $dependencyCount; approved_dependencies = $approvedDependencies; checks = $checks.ToArray()
     workspace_summary = [ordered]@{ Passed = ($workspace.summaries.passed | Measure-Object -Sum).Sum; Failed = ($workspace.summaries.failed | Measure-Object -Sum).Sum; 'Not Tested' = ($workspace.summaries.ignored | Measure-Object -Sum).Sum }
     repeated_concurrency_verified = $concurrencyVerified
     not_tested = @('Three unchanged 5.3 Windows fixture/scale cases are explicitly ignored by ordinary workspace tests; prior results remain historical.', 'Remote human authentication, persistent/cross-process receipts, external dispatch, Linux/macOS/ARM64 and filesystem containment remain outside this correction.')
@@ -110,4 +119,4 @@ $report = [ordered]@{
 [IO.File]::WriteAllText($resultPath, ($report | ConvertTo-Json -Depth 20) + "`n", [Text.UTF8Encoding]::new($false))
 $checks | ForEach-Object { [PSCustomObject]@{ Name = $_.name; Status = $_.status; Exit = $_.exit_code } } | Format-Table -AutoSize
 Write-Output "Evidence: $resultPath"
-if (-not $unchanged -or $dependencyCount -ne 0 -or -not $concurrencyVerified -or @($checks | Where-Object { $_.status -ne 'Passed' }).Count -gt 0) { exit 1 }
+if (-not $unchanged -or -not $approvedDependencies -or -not $concurrencyVerified -or @($checks | Where-Object { $_.status -ne 'Passed' }).Count -gt 0) { exit 1 }

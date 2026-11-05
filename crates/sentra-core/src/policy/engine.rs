@@ -101,22 +101,8 @@ impl PolicyEngine {
             return PolicyDecision::Denied { reason };
         }
 
-        // 2. Bell-LaPadula Information Flow Check:
-        // No write-down to lower classification levels
-        if let OperationAction::ExportReport {
-            destination_classification: Some(dst_class),
-            ..
-        } = action
-            && !classification.can_flow_to(dst_class)
-        {
-            return PolicyDecision::Denied {
-                reason: DenialReason::ClassificationExceeded {
-                    classification,
-                    detail: format!(
-                        "data at classification [{classification}] cannot flow down to [{dst_class}] under Bell-LaPadula rules"
-                    ),
-                },
-            };
+        if let Err(reason) = validate_operation_constraints(classification, action) {
+            return PolicyDecision::Denied { reason };
         }
 
         // 3. Egress and Sensitivity checks
@@ -174,4 +160,30 @@ impl PolicyEngine {
             }
         }
     }
+}
+
+pub(crate) fn validate_operation_constraints(
+    classification: SecurityClassification,
+    action: &OperationAction,
+) -> Result<(), DenialReason> {
+    if let OperationAction::UnknownOperation { operation_name } = action {
+        return Err(DenialReason::UnknownOperation(operation_name.clone()));
+    }
+    action
+        .validate()
+        .map_err(|_| DenialReason::MissingAuthorization("malformed operation".into()))?;
+    if let OperationAction::ExportReport {
+        destination_classification: Some(destination),
+        ..
+    } = action
+        && !classification.can_flow_to(destination)
+    {
+        return Err(DenialReason::ClassificationExceeded {
+            classification,
+            detail: format!(
+                "data at classification [{classification}] cannot flow down to [{destination}] under Bell-LaPadula rules"
+            ),
+        });
+    }
+    Ok(())
 }

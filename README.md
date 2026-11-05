@@ -4,7 +4,7 @@
 
 Sentra is a planned independent, extensible platform for authorized security research on open-source and proprietary software. It will combine specialized AI agents, established analysis tools, isolated execution, evidence management, and independently verified remediation.
 
-**Status: Phase 0 complete; Phase 1 foundation in progress.** The Core library contains domain/session/policy foundations and metadata-only workspace discovery. [Increment 5.3.1](docs/phase1/INCREMENT_5_3_1_SECURITY_REVIEW.md) fixes the in-process approval-binding defect: 103 tests pass on Windows x64; three prior environment/scale cases were not rerun. SQLite remains the approved persistence candidate with [unresolved integration gaps](docs/phase1/SQLITE_VALIDATION.md). Product CLI, production persistence, scanner, sandbox, API and real provider integrations remain unimplemented. Phase 1 is incomplete; Increment 5.4 and Phase 2 have not started. See the [Phase 1 execution record](docs/phase1/README.md).
+**Status: Phase 0 complete; Phase 1 foundation in progress.** The Core library contains domain/session/policy foundations, metadata-only workspace discovery and an [initial SQLite persistence adapter](docs/phase1/INCREMENT_5_4_2_SQLITE_IMPLEMENTATION.md). Increment 5.4.2 validates bundled SQLite 3.46.0 on Windows x64/MSVC, durable approval binding, atomic audit/budgets and recovery fixtures; the workspace passes 153 tests. Physical storage faults, power loss, blob reconciliation and full dispatch remain unvalidated. Product CLI, scanner, sandbox, API and real provider integrations remain unimplemented. Phase 1 is incomplete; Increment 5.4.3 and Phase 2 have not started. See the [Phase 1 execution record](docs/phase1/README.md).
 
 ## Two operating modes
 
