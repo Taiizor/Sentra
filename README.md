@@ -4,7 +4,7 @@
 
 Sentra is a planned independent, extensible platform for authorized security research on open-source and proprietary software. It will combine specialized AI agents, established analysis tools, isolated execution, evidence management, and independently verified remediation.
 
-**Status: Phase 0 complete; Phase 1 technical validation in progress.** The isolated Rust/MSVC x64 probe has passed, and the [Milestone 2 SQLite reliability report](docs/phase1/SQLITE_VALIDATION.md) is ready for review with explicit remaining gaps. The Core Engine, product CLI, production persistence, scanner, sandbox, API and provider integrations are not implemented. Phase 1 is not complete; no next milestone or Phase 2 work has started. See the [Phase 1 execution record](docs/phase1/README.md).
+**Status: Phase 0 complete; Phase 1 technical validation in progress.** The isolated Rust/MSVC x64 probe has passed. SQLite is the owner-approved persistence candidate, with [remaining reliability/integration gaps](docs/phase1/SQLITE_VALIDATION.md). The [Milestone 3 mock provider contract report](docs/phase1/PROVIDER_VALIDATION.md) is ready for review: 62 tests pass twice without external services. The Core Engine, product CLI, production persistence, scanner, sandbox, API and real provider integrations are not implemented. Phase 1 is not complete; Phase 2 has not started. See the [Phase 1 execution record](docs/phase1/README.md).
 
 ## Two operating modes
 

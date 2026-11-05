@@ -2,7 +2,7 @@
 
 ## Current project status
 
-Sentra is in Phase 1 technical validation. Trusted local Rust/MSVC and SQLite experiments have been exercised; they are not the product CLI, production persistence layer or a security-analysis worker. The [SQLite assessment](docs/phase1/SQLITE_VALIDATION.md) distinguishes actual process-crash recovery from untested power/device faults and records a separate failed JavaScript type check. There are no application releases, supported product binaries, hosted services, or implemented security guarantees. Isolation, approval, and privacy controls remain requirements for future implementations. See the [Phase 1 execution record](docs/phase1/README.md).
+Sentra is in Phase 1 technical validation. Trusted local Rust/MSVC, SQLite and deterministic mock-provider experiments have been exercised; they are not the product CLI, production persistence layer or a security-analysis worker. The [SQLite assessment](docs/phase1/SQLITE_VALIDATION.md) distinguishes actual process-crash recovery from untested power/device faults and records a separate failed JavaScript type check. The [provider contract assessment](docs/phase1/PROVIDER_VALIDATION.md) uses synthetic inputs only, with policy/capability denials and redacted diagnostics; no real provider, key or network transport is connected. There are no application releases, supported product binaries, hosted services, or implemented product security guarantees. Isolation, approval, and privacy controls remain requirements for future implementations. See the [Phase 1 execution record](docs/phase1/README.md).
 
 Only analyze software and environments for which you have explicit authorization. A repository's visibility, or possession of its source, is not permission to test a deployed service.
 

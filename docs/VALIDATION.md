@@ -2,7 +2,9 @@
 
 This document defines the validation plan. Phase 0 performed documentation checks and read-only environment inspection only; no application tests, model evaluations, sandbox exercises or benchmarks ran in that phase. Phase 1 is now explicitly authorized. Its [initial execution report](phase1/README.md) records the x64 probe checks that actually ran, the incomplete full Rust gate, and the remaining unvalidated experiments. No production core/CLI or sandbox suite has run yet.
 
-Milestone 2's [SQLite assessment](phase1/SQLITE_VALIDATION.md) is ready for review. Two final source-identical runs each report 18 Passed, 0 Failed, 1 Blocked and 3 Not Tested engine items. JavaScript semantic checking separately Failed; it is not part of that SQLite pass count. The assessment supports retaining SQLite conditionally, without completing the actual Rust-binding/database-blob portion of V-02 or changing an ADR status. No next milestone was started.
+Milestone 2's [SQLite assessment](phase1/SQLITE_VALIDATION.md) records two final source-identical runs with 18 Passed, 0 Failed, 1 Blocked and 3 Not Tested engine items each. JavaScript semantic checking separately Failed; it is not part of that SQLite pass count. The owner approved SQLite as the persistence candidate, preserving the actual Rust-binding/database-blob portion of V-02 and the outstanding physical storage/power-fault gates. No ADR status changed.
+
+Milestone 3's [provider contract assessment](phase1/PROVIDER_VALIDATION.md) is ready for review: 62 Passed, 0 Failed, 0 Blocked and 6 Not Tested assessment items, with all 62 mock tests passed twice. It adds partial F-15, F-16, S-06 and S-14 evidence for provider-neutral contracts, explicit capabilities, structured output, virtual timeout/cancellation, retries, normalized errors and usage. Provider-free experimental boundary construction passes; the real Core Engine is unimplemented and its provider-free integration is Not Tested. This is not completion of V-05's human-grant/concurrent-reservation gate, F-15's two-backend gate, the S-03 injection corpus, or real transport/OS egress validation.
 
 ## Phase 1 technical spikes
 

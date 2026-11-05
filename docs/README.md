@@ -1,6 +1,6 @@
 # Documentation Index
 
-Sentra is currently a documentation-only project. Start with the root [README](../README.md), [vision](../VISION.md), [requirements](../REQUIREMENTS.md), [architecture](../ARCHITECTURE.md), and [roadmap](../ROADMAP.md).
+Sentra is in Phase 1 technical validation, with isolated experiments and no production Core Engine or CLI. Start with the root [README](../README.md), [vision](../VISION.md), [requirements](../REQUIREMENTS.md), [architecture](../ARCHITECTURE.md), and [roadmap](../ROADMAP.md).
 
 | Specification | Scope |
 | --- | --- |
@@ -12,6 +12,7 @@ Sentra is currently a documentation-only project. Start with the root [README](.
 | [Validation](VALIDATION.md) | Technical spikes, evaluation design, and release evidence |
 | [Open questions](OPEN_QUESTIONS.md) | Assumptions, owner roles, decision gates, and safe defaults |
 | [Review record](REVIEW.md) | Phase 0 consistency and documentation checks |
+| [Phase 1 execution record](phase1/README.md) | Rust/MSVC, SQLite and mock provider evidence, reproducibility and outstanding gates |
 | [Research](research/README.md) | Existing systems, tooling, isolation, technology, and source register |
 | [ADRs](adr/README.md) | Architectural decisions and proposals |
 

@@ -2,6 +2,8 @@
 
 Status: conceptual contract. No SDK, plugin loader, registry, MCP server, or API exists yet. Built-in adapters follow the same domain boundaries as future external extensions.
 
+The [Phase 1 mock provider experiment](phase1/PROVIDER_VALIDATION.md) validates a subset of provider behavior with neutral domain types and 62 deterministic tests. Its in-process traits do not implement the process protocol below or establish a production SDK. Capability advertisements, gateway support and policy grants must intersect; unsupported features are explicit. Unknown usage retains budget reservations, and cancellation acknowledgment is separate from confirmed termination. Live interoperability, IPC/restart behavior and OS egress controls remain untested.
+
 ## Adapter families
 
 | Family | Required responsibility | Declared capability examples |

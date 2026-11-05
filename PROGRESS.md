@@ -4,7 +4,7 @@ Last updated: 2026-11-05.
 
 ## Current status
 
-**Phase 0: complete and closed. Phase 1: explicitly authorized and in progress; Milestone 2 SQLite assessment ready for review. Phase 2: NOT authorized.** The x64 Rust/MSVC probe and SQLite engine experiments have executed. The product Core Engine, CLI and production persistence layer are not implemented. Phase 1 is not complete; no full Rust-binding, storage or isolation gate is claimed satisfied. The agent has issued no history/reference-changing Git operation.
+**Phase 0: complete and closed. Phase 1: explicitly authorized and in progress; Milestone 3 mock provider contract assessment ready for review. Phase 2: NOT authorized.** The x64 Rust/MSVC, SQLite engine and mock provider experiments have executed. SQLite is the owner-approved persistence candidate, with unresolved production gates. The product Core Engine, CLI, production persistence and real AI adapters are not implemented. Phase 1 is not complete; no full Rust-binding, storage, isolation or live-provider gate is claimed satisfied. The agent has issued no history/reference-changing Git operation.
 
 ## Phase 1 initial milestone
 
@@ -13,14 +13,14 @@ The [initial validation report](docs/phase1/README.md) records the execution pla
 - **Validated subset:** Rust/Cargo 1.99.0 with the actual MSVC 14.52.37025 linker; x64 build/run, three probe tests, format, warning-free Clippy, Unicode/spaced input path, CRLF and expected error exits.
 - **Partially validated:** the complete V-01 Rust gate and read-only host virtualization availability. The prerelease Visual Studio installation requires `vswhere -prerelease` for discovery.
 - **Blocked / not validated:** ARM64 check fails with E0463 because its standard library is not installed. Hyper-V management/feature queries require permissions unavailable to this session; no dedicated worker was provisioned or tested.
-- **Not started:** production Rust SQLite/native dependency integration, mock provider contract, production process/path/policy/session/evidence foundations, product CLI and their integration/security suites. SQLite engine reliability is now assessed separately in Milestone 2 below.
+- **Not started:** production Rust SQLite/native dependency integration, production process/path/policy/session/evidence foundations, product CLI and their integration/security suites. SQLite engine reliability and the mock provider contract are now assessed separately in Milestones 2 and 3 below.
 - **Decisions preserved:** all seven ADRs are unchanged; ADR-0002 and ADR-0007 remain Proposed. No production dependency set, minimum Rust version, additional storage technology or weaker isolation profile was selected.
 
 The experiment and generated lockfile contain no third-party Cargo dependencies. No dependencies, toolchain components or virtualization software were installed. No API keys, external AI calls, telemetry, untrusted target execution, VM launch or host configuration changes were used. Cargo compilation ran offline; OS network isolation was not measured. Current edits remain in the working tree.
 
 ## Phase 1 Milestone 2 — SQLite reliability
 
-The [SQLite validation report](docs/phase1/SQLITE_VALIDATION.md) is complete and ready for review. It recommends retaining SQLite as a suitable candidate for local single-operator metadata, conditional on validating the actual Rust binding, database/blob reconciliation and remaining failure modes. No production database abstraction or additional storage technology was introduced, and no subsequent milestone was started.
+The [SQLite validation report](docs/phase1/SQLITE_VALIDATION.md) is complete. The owner subsequently approved SQLite as the candidate for local single-operator metadata when authorizing Milestone 3. Production readiness remains conditional on validating the actual Rust binding, database/blob reconciliation and remaining failure modes. No production database abstraction or additional storage technology was introduced in Milestone 2.
 
 - Two final runs of identical source digests each report **18 Passed, 0 Failed, 1 Blocked, 3 Not Tested** for the SQLite matrix. Each run actually terminates ten owned writer/migration processes and verifies recovery with integrity_check; three additional writer processes commit 240 rows alongside a reader.
 - Engine/environment: existing Bun 1.4.4, SQLite 3.53.4, Windows x64/NTFS; WAL, synchronous=FULL, explicit checkpoints and finite busy timeouts. No packages or runtime components were downloaded or installed, and no external services were accessed.
@@ -30,6 +30,19 @@ The [SQLite validation report](docs/phase1/SQLITE_VALIDATION.md) is complete and
 - Milestone entry was clean `develop` at `9dbf5f7753e0a47e6723ad831be1f00b520fc875`. Concurrent commits `8d0fcd5` and `1fdedef` recorded experiment files/results outside the agent's issued Git operations; they were preserved. New completion edits remain in the working tree.
 
 All seven ADRs and architecture choices are unchanged. ADR-0002 and ADR-0007 remain Proposed. The report's suitability recommendation does not complete V-02, authorize the production Core Engine, or begin Phase 2.
+
+## Phase 1 Milestone 3 — AI provider contract
+
+The [provider validation report](docs/phase1/PROVIDER_VALIDATION.md) is complete and ready for review. A standalone, standard-library-only Rust mock validates provider-neutral behavior before any production integration. The Core Engine must remain provider-optional; the provider-free boundary probe passes, but the actual Core Engine is not implemented and its integration is Not Tested.
+
+- **Passed:** 62 named deterministic contract tests in each of two final runs, with matching names/outcomes; 0 Failed, 0 Blocked and 6 Not Tested assessment areas. Offline formatting, Cargo metadata/check and warning-free Clippy also pass. Raw evidence records exact commands, source hashes, individual statuses and zero third-party dependencies.
+- **Validated mock subset:** explicit initialization/discovery; configurable capabilities and precise Unsupported reasons; normalized requests/results/errors; narrow typed structured validation; bounded text streams; virtual timeout/cancellation; finite rate-limit/retry behavior; context/byte limits; conservative token/cost reservations; separate classification and egress grants; redacted diagnostics.
+- **Not Tested:** real SDK/auth/backend interoperability; production Core integration; real tokenizers/prices/invoices; actual transport cancellation/backpressure/OS egress; JSON/SSE/general schemas/structured streaming; concurrent/durable reservations, IPC and restart recovery. Virtual clock results do not demonstrate real provider termination. Unconfirmed cancellation retains the full reservation even if a partial usage receipt is available.
+- **Scope preserved:** no API keys, external services, networking code, telemetry, real providers, autonomous agents, vulnerability workflows, VM operation, host changes or Phase 2 work. The in-process behavior probe does not replace ADR-0005's process-adapter boundary. All seven ADRs are unchanged; ADR-0002 and ADR-0007 remain Proposed.
+- **SQLite decision carried forward:** explicit rollback after statement failures; full transaction restart and fresh reads after SQLITE_BUSY_SNAPSHOT; bounded retries; managed WAL/checkpoints; evidence integrity across process termination. Physical disk exhaustion, real write/fsync IOERR, power-loss durability, production Rust binding and database/blob reconciliation remain unresolved. The earlier JavaScript semantic-check failure remains separate and unresolved.
+- **Repository entry:** clean `develop` at `2689268f2676304de69bc2ef1767c79b951f76fd` (`Document SQLite reliability assessment`), also the local `origin/develop`. Earlier SQLite completion changes were committed outside the agent's issued operations and were preserved. New Milestone 3 changes remain in the working tree.
+
+Milestone 3 does not complete Phase 1 or satisfy the two-real-backend compatibility gate. No following milestone is started by this report.
 
 ## Completed Phase 0 work
 
@@ -76,7 +89,7 @@ The Phase 0 finalization modified only `AGENTS.md`, `ROADMAP.md`, `PROGRESS.md`,
 | Phase 1 authorization | Project owner | Satisfied by explicit instruction on 2026-11-05; no Phase 2 or Git authorization implied |
 | Rust/MSVC and persistence feasibility | Core maintainer | Initial x64 and SQLite engine subsets pass; full V-01, actual Rust binding, database/blob reconciliation and remaining storage-fault gates remain pending |
 | Disposable Linux VM backend | Execution/security maintainer | Authenticated worker and containment suite before untrusted execution |
-| Provider independence and privacy | AI/security maintainer | Two backend conformance runs and measured egress controls |
+| Provider independence and privacy | AI/security maintainer | Mock contract passes 62 tests twice; production provider-free Core, two real-backend conformance runs and measured egress controls remain pending |
 | OSI license and third-party licensing | Project owner / licensing reviewer | License selection and version-specific notices before public distribution |
 | Private disclosure channel | Project owner / security maintainer | Published, tested reporting channel before release |
 
