@@ -626,3 +626,297 @@ fn test_audit_consistency_and_diagnostic_redaction() {
     assert!(err_display.contains(secret)); // message container
     assert!(err_debug.contains("ServiceError"));
 }
+
+// -----------------------------------------------------------------------------
+// 14. F-561-01: Policy Enforcement at Actual Execution Boundary
+// -----------------------------------------------------------------------------
+
+#[test]
+fn test_execute_task_enforces_classification_floor_rejection() {
+    let harness = CoreServiceHarness::new_synthetic();
+    // Create standard session with classification floor: Internal
+    let session_id = harness.create_standard_session().unwrap();
+
+    // Directly invoke execute_task bypassing evaluate_action with Public (< Internal)
+    let req = TaskExecutionRequest {
+        session_id,
+        task_id: TaskId::for_test_sequence(101),
+        scope: ExecutionScope::SyntheticFixture,
+        action: OperationAction::DiscoverMetadata {
+            relative_path: "src".to_string(),
+        },
+        classification: SecurityClassification::Public, // Below floor
+        resource_limits: None,
+        estimated_cost: CostUsd::from_micro_usd(10_000),
+        grant: None,
+        evidence_envelopes: vec![],
+    };
+
+    let err = harness.service.execute_task(req).unwrap_err();
+    assert_eq!(err.kind, ServiceErrorKind::PolicyDenied);
+    assert!(err.message.contains("below session classification floor"));
+
+    // Verify zero budget was reserved
+    assert_eq!(
+        harness.service.budget_used(session_id).unwrap(),
+        CostUsd::ZERO
+    );
+}
+
+#[test]
+fn test_execute_task_enforces_policy_engine_denial_for_unknown_operation() {
+    let harness = CoreServiceHarness::new_synthetic();
+    let session_id = harness.create_standard_session().unwrap();
+
+    let req = TaskExecutionRequest {
+        session_id,
+        task_id: TaskId::for_test_sequence(102),
+        scope: ExecutionScope::SyntheticFixture,
+        action: OperationAction::UnknownOperation {
+            operation_name: "malicious_unregistered_action".to_string(),
+        },
+        classification: SecurityClassification::Internal,
+        resource_limits: None,
+        estimated_cost: CostUsd::from_micro_usd(10_000),
+        grant: None,
+        evidence_envelopes: vec![],
+    };
+
+    let err = harness.service.execute_task(req).unwrap_err();
+    assert_eq!(err.kind, ServiceErrorKind::PolicyDenied);
+    assert!(err.message.contains("unknown or unsupported operation"));
+
+    // Verify zero budget was reserved
+    assert_eq!(
+        harness.service.budget_used(session_id).unwrap(),
+        CostUsd::ZERO
+    );
+}
+
+#[test]
+fn test_execute_task_enforces_policy_denial_on_information_flow_violation() {
+    let harness = CoreServiceHarness::new_synthetic();
+    let session_id = harness.create_standard_session().unwrap();
+
+    // ExportReport from Internal to Public is an unauthorized write-down
+    let req = TaskExecutionRequest {
+        session_id,
+        task_id: TaskId::for_test_sequence(103),
+        scope: ExecutionScope::SyntheticFixture,
+        action: OperationAction::ExportReport {
+            destination: "public_export.json".to_string(),
+            destination_classification: Some(SecurityClassification::Public),
+            is_external: false,
+        },
+        classification: SecurityClassification::Internal,
+        resource_limits: None,
+        estimated_cost: CostUsd::from_micro_usd(10_000),
+        grant: None,
+        evidence_envelopes: vec![],
+    };
+
+    let err = harness.service.execute_task(req).unwrap_err();
+    assert_eq!(err.kind, ServiceErrorKind::PolicyDenied);
+
+    // Verify zero budget was reserved
+    assert_eq!(
+        harness.service.budget_used(session_id).unwrap(),
+        CostUsd::ZERO
+    );
+}
+
+// -----------------------------------------------------------------------------
+// 15. F-561-02: Safe Approval & Budget Reservation Ordering
+// -----------------------------------------------------------------------------
+
+#[test]
+fn test_budget_exhaustion_does_not_consume_valid_approval_grant() {
+    let harness = CoreServiceHarness::new_synthetic();
+    let root_str = harness.dir.workspace_root.to_str().unwrap();
+
+    // Create session with small budget: $0.10 (100,000 micro-USD)
+    let session_id = harness
+        .service
+        .create_session(
+            root_str,
+            OperatingMode::ContinuousReview,
+            "operator-test",
+            SecurityClassification::Internal,
+            "commit-abc12345",
+            CostUsd::from_micro_usd(100_000), // $0.10
+        )
+        .unwrap();
+
+    let action = OperationAction::ExecuteTool {
+        tool_id: "synthetic:noop".to_string(),
+        untrusted: false,
+        arguments: vec![],
+    };
+
+    // Request and issue a valid approval grant
+    let approval_id = harness
+        .service
+        .request_approval(session_id, &action, SecurityClassification::Internal)
+        .unwrap();
+    let grant = harness
+        .service
+        .issue_approval(
+            session_id,
+            approval_id,
+            &action,
+            SecurityClassification::Internal,
+        )
+        .unwrap();
+
+    // Attempt to execute with estimated cost: $0.50 (exceeds $0.10 limit)
+    let req_oversized = TaskExecutionRequest {
+        session_id,
+        task_id: TaskId::for_test_sequence(104),
+        scope: ExecutionScope::SyntheticFixture,
+        action: action.clone(),
+        classification: SecurityClassification::Internal,
+        resource_limits: None,
+        estimated_cost: CostUsd::from_micro_usd(500_000), // $0.50 > $0.10
+        grant: Some(grant.clone()),
+        evidence_envelopes: vec![],
+    };
+
+    let err = harness.service.execute_task(req_oversized).unwrap_err();
+    assert_eq!(err.kind, ServiceErrorKind::BudgetExceeded);
+
+    // F-561-02 CRITICAL CHECK:
+    // The grant MUST NOT have been consumed by the failed budget reservation!
+    // We retry with the EXACT SAME grant and an estimated cost of $0.05 (within $0.10 limit).
+    let req_valid = TaskExecutionRequest {
+        session_id,
+        task_id: TaskId::for_test_sequence(105),
+        scope: ExecutionScope::SyntheticFixture,
+        action: action.clone(),
+        classification: SecurityClassification::Internal,
+        resource_limits: None,
+        estimated_cost: CostUsd::from_micro_usd(50_000), // $0.05 <= $0.10
+        grant: Some(grant.clone()),
+        evidence_envelopes: vec![],
+    };
+
+    let report = harness.service.execute_task(req_valid).unwrap();
+    assert_eq!(report.status, ExecutionStatus::Completed);
+    assert_eq!(report.exit_code, Some(0));
+
+    // Now that the task actually completed, the single-use grant was consumed.
+    // Replay attempt with the same grant must be rejected!
+    let req_replay = TaskExecutionRequest {
+        session_id,
+        task_id: TaskId::for_test_sequence(106),
+        scope: ExecutionScope::SyntheticFixture,
+        action,
+        classification: SecurityClassification::Internal,
+        resource_limits: None,
+        estimated_cost: CostUsd::from_micro_usd(10_000),
+        grant: Some(grant),
+        evidence_envelopes: vec![],
+    };
+
+    let err_replay = harness.service.execute_task(req_replay).unwrap_err();
+    assert_eq!(err_replay.kind, ServiceErrorKind::ApprovalInvalid);
+}
+
+#[test]
+fn test_invalid_approval_grant_leaves_no_budget_reservation() {
+    let harness = CoreServiceHarness::new_synthetic();
+    let session_id = harness.create_standard_session().unwrap();
+
+    let action = OperationAction::ExecuteTool {
+        tool_id: "synthetic:noop".to_string(),
+        untrusted: false,
+        arguments: vec![],
+    };
+
+    // Request approval for session A
+    let approval_id = harness
+        .service
+        .request_approval(session_id, &action, SecurityClassification::Internal)
+        .unwrap();
+    let grant = harness
+        .service
+        .issue_approval(
+            session_id,
+            approval_id,
+            &action,
+            SecurityClassification::Internal,
+        )
+        .unwrap();
+
+    // Create session B
+    let session_b = harness.create_standard_session().unwrap();
+
+    // Attempt to use grant from session A on session B
+    let req_mismatched = TaskExecutionRequest {
+        session_id: session_b,
+        task_id: TaskId::for_test_sequence(107),
+        scope: ExecutionScope::SyntheticFixture,
+        action,
+        classification: SecurityClassification::Internal,
+        resource_limits: None,
+        estimated_cost: CostUsd::from_micro_usd(200_000),
+        grant: Some(grant),
+        evidence_envelopes: vec![],
+    };
+
+    let err = harness.service.execute_task(req_mismatched).unwrap_err();
+    assert_eq!(err.kind, ServiceErrorKind::ApprovalInvalid);
+
+    // Verify session B has ZERO budget reserved or spent
+    assert_eq!(
+        harness.service.budget_used(session_b).unwrap(),
+        CostUsd::ZERO
+    );
+}
+
+// -----------------------------------------------------------------------------
+// 16. F-561-03: Never Silently Ignore Budget Settlement Failures
+// -----------------------------------------------------------------------------
+
+#[test]
+fn test_service_error_compound_settlement_failure_contracts() {
+    let exec_err = ExecutionError::new(
+        sentra_core::ExecutionErrorKind::BackendFault,
+        "primary simulated execution fault",
+    );
+    let settle_err = sentra_core::persistence::PersistenceError::from_kind(
+        sentra_core::persistence::PersistenceErrorKind::Database,
+    );
+
+    let compound = ServiceError::execution_with_settlement_failure(exec_err, settle_err);
+
+    // Verify compound classification
+    assert_eq!(
+        compound.kind,
+        ServiceErrorKind::ExecutionWithSettlementFailure
+    );
+    assert!(compound.is_execution());
+    assert!(compound.has_settlement_failure());
+    assert!(compound.secondary_error().is_some());
+
+    // Verify string representation retains BOTH failure details
+    let err_str = compound.to_string();
+    assert!(err_str.contains("primary simulated execution fault"));
+    assert!(err_str.contains("secondary settlement failure"));
+
+    // Check evidence variant
+    let ev_err = sentra_core::EvidenceVerificationError::new(
+        sentra_core::EvidenceVerificationErrorKind::OversizedPayload,
+        "evidence oversized",
+    );
+    let settle_err2 = sentra_core::persistence::PersistenceError::from_kind(
+        sentra_core::persistence::PersistenceErrorKind::Database,
+    );
+    let compound_ev = ServiceError::evidence_with_settlement_failure(ev_err, settle_err2);
+    assert_eq!(
+        compound_ev.kind,
+        ServiceErrorKind::EvidenceWithSettlementFailure
+    );
+    assert!(compound_ev.is_evidence());
+    assert!(compound_ev.has_settlement_failure());
+    assert!(compound_ev.to_string().contains("evidence oversized"));
+}

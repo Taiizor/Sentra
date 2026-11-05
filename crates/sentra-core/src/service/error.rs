@@ -32,6 +32,10 @@ pub enum ServiceErrorKind {
     InvalidState,
     /// Task cancellation or lifecycle error.
     Cancellation,
+    /// Task execution failed, and subsequent conservative budget settlement also failed (remediates F-561-03).
+    ExecutionWithSettlementFailure,
+    /// Evidence envelope verification failed, and subsequent conservative budget settlement also failed (remediates F-561-03).
+    EvidenceWithSettlementFailure,
 }
 
 /// Redacted typed Core Service error.
@@ -44,6 +48,8 @@ pub struct ServiceError {
     pub kind: ServiceErrorKind,
     /// Safe diagnostic message without sensitive leakage.
     pub message: String,
+    /// Secondary persistence or settlement error, if an error occurred during post-failure cleanup (remediates F-561-03).
+    pub secondary_error: Option<String>,
 }
 
 impl ServiceError {
@@ -52,6 +58,7 @@ impl ServiceError {
         Self {
             kind,
             message: message.into(),
+            secondary_error: None,
         }
     }
 
@@ -112,11 +119,74 @@ impl ServiceError {
     pub fn cancellation(msg: impl Into<String>) -> Self {
         Self::new(ServiceErrorKind::Cancellation, msg)
     }
+
+    /// Helper for execution failure compounded by settlement failure (remediates F-561-03).
+    pub fn execution_with_settlement_failure(
+        exec_err: ExecutionError,
+        settle_err: PersistenceError,
+    ) -> Self {
+        Self {
+            kind: ServiceErrorKind::ExecutionWithSettlementFailure,
+            message: format!("{exec_err}; secondary settlement failure: {settle_err}"),
+            secondary_error: Some(settle_err.to_string()),
+        }
+    }
+
+    /// Helper for evidence verification failure compounded by settlement failure (remediates F-561-03).
+    pub fn evidence_with_settlement_failure(
+        ev_err: EvidenceVerificationError,
+        settle_err: PersistenceError,
+    ) -> Self {
+        Self {
+            kind: ServiceErrorKind::EvidenceWithSettlementFailure,
+            message: format!("{ev_err}; secondary settlement failure: {settle_err}"),
+            secondary_error: Some(settle_err.to_string()),
+        }
+    }
+
+    /// Whether this error represents an execution failure (standalone or with settlement failure).
+    pub fn is_execution(&self) -> bool {
+        matches!(
+            self.kind,
+            ServiceErrorKind::Execution | ServiceErrorKind::ExecutionWithSettlementFailure
+        )
+    }
+
+    /// Whether this error represents an evidence verification failure (standalone or with settlement failure).
+    pub fn is_evidence(&self) -> bool {
+        matches!(
+            self.kind,
+            ServiceErrorKind::EvidenceVerification
+                | ServiceErrorKind::EvidenceWithSettlementFailure
+        )
+    }
+
+    /// Whether this error was accompanied by a secondary budget settlement failure.
+    pub fn has_settlement_failure(&self) -> bool {
+        matches!(
+            self.kind,
+            ServiceErrorKind::ExecutionWithSettlementFailure
+                | ServiceErrorKind::EvidenceWithSettlementFailure
+        )
+    }
+
+    /// Returns the secondary persistence/settlement error message, if present.
+    pub fn secondary_error(&self) -> Option<&str> {
+        self.secondary_error.as_deref()
+    }
 }
 
 impl fmt::Display for ServiceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "service error [{:?}]: {}", self.kind, self.message)
+        if let Some(ref sec) = self.secondary_error {
+            write!(
+                f,
+                "service error [{:?}]: {} (secondary: {})",
+                self.kind, self.message, sec
+            )
+        } else {
+            write!(f, "service error [{:?}]: {}", self.kind, self.message)
+        }
     }
 }
 
@@ -125,6 +195,7 @@ impl fmt::Debug for ServiceError {
         f.debug_struct("ServiceError")
             .field("kind", &self.kind)
             .field("message", &self.message)
+            .field("secondary_error", &self.secondary_error)
             .finish()
     }
 }

@@ -204,6 +204,25 @@ fn budget_used(
     model::unsigned(used).map_err(corrupt)
 }
 
+/// Parameters for atomically reserving budget and optionally consuming an approval grant.
+#[derive(Clone, Debug)]
+pub struct PrepareExecutionRequest<'a> {
+    /// Unique budget reservation identifier.
+    pub reservation_id: Identifier,
+    /// Associated session identifier.
+    pub session_id: SessionId,
+    /// Model identifier or task category string.
+    pub model_id: &'a str,
+    /// Estimated cost for budget reservation.
+    pub amount: CostUsd,
+    /// Optional approval grant and intent for atomic consumption.
+    pub grant_and_intent: Option<(&'a PersistentApprovalGrant, &'a ApprovalIntent<'a>)>,
+    /// Audit event identifier for budget reservation.
+    pub reservation_event: EventId,
+    /// Audit event identifier for approval consumption.
+    pub consumption_event: EventId,
+}
+
 impl PersistenceRepository {
     /// Bootstrap the storage adapter and separate privileged controller capability.
     /// Existing in-memory grants cannot be converted into persistent receipts.
@@ -348,6 +367,139 @@ impl PersistenceRepository {
             tx.execute("INSERT INTO budget_reservations(reservation_id,session_id,model_id,reserved_cost_micro_usd,state,reserved_at) VALUES(?1,?2,?3,?4,'RESERVED',?5)", params![id.to_string(),session.to_string(),model,amount_int,now])?;
             audit(tx, session, event, ("BudgetReserved", record.classification_floor), &now, None, &serde_json::json!({"reservation_id":id.to_string(),"micro_usd":amount.as_micro_usd()}))?;
             Ok(BudgetRecord { reservation_id:id,reserved:amount,actual:None,state:"RESERVED".into() })
+        })
+    }
+
+    /// Atomically validates and reserves budget, and (if an approval grant is supplied)
+    /// validates and consumes the approval grant in the EXACT SAME database transaction.
+    ///
+    /// If budget reservation fails (e.g. BudgetExceeded), the entire transaction rolls back
+    /// and the approval grant remains unconsumed (remediates F-561-02).
+    /// If approval validation fails, the entire transaction rolls back and no budget is reserved.
+    pub fn reserve_budget_and_consume_approval(
+        &self,
+        req: PrepareExecutionRequest<'_>,
+        clock: &impl Clock,
+    ) -> Result<(BudgetRecord, Option<ConsumptionRecord>), PersistenceError> {
+        model::parse_id(&req.reservation_id.to_string())?;
+        let amount_int = model::integer(req.amount.as_micro_usd())?;
+        if !model::valid_text(req.model_id) {
+            return Err(model::invalid());
+        }
+
+        if let Some((grant, _)) = req.grant_and_intent
+            && !Arc::ptr_eq(&self.seal, &grant.seal)
+        {
+            return Err(error(Kind::InvalidApproval));
+        }
+
+        self.manager.write(|tx| {
+            let now = model::time_text(clock.now())?;
+
+            // 1. If an approval grant is provided, validate it against current context and row
+            let approval_data = if let Some((grant, intent)) = req.grant_and_intent {
+                let snapshot = current(tx, intent)?;
+                if snapshot != grant.snapshot {
+                    return Err(error(Kind::ContextMismatch));
+                }
+                let row = read_approval(tx, grant.request_id())?;
+                binding_matches(&row, &snapshot, intent)?;
+                let mut comparison = row.clone();
+                comparison.state = grant.approval.state.clone();
+                if comparison != grant.approval {
+                    return Err(error(Kind::InvalidApproval));
+                }
+                if row.state == "CONSUMED" {
+                    return Err(error(Kind::ApprovalReused));
+                }
+                if row.state != "ISSUED" {
+                    return Err(error(Kind::InvalidApproval));
+                }
+                validate_time(&row, &now)?;
+                Some((grant, intent, row))
+            } else {
+                None
+            };
+
+            // 2. Validate session and budget availability
+            let (sess_snapshot, sess_record) =
+                read_snapshot(tx, req.session_id)?.ok_or_else(|| error(Kind::Conflict))?;
+            if sess_record.state.is_terminal() {
+                return Err(error(Kind::PolicyDenied));
+            }
+            if budget_used(tx, req.session_id)?
+                .checked_add(req.amount.as_micro_usd())
+                .is_none_or(|total| total > sess_snapshot.budget_limit_micro_usd)
+            {
+                return Err(error(Kind::BudgetExceeded));
+            }
+
+            // 3. Perform budget reservation
+            tx.execute(
+                "INSERT INTO budget_reservations(reservation_id,session_id,model_id,reserved_cost_micro_usd,state,reserved_at) VALUES(?1,?2,?3,?4,'RESERVED',?5)",
+                params![req.reservation_id.to_string(), req.session_id.to_string(), req.model_id, amount_int, now],
+            )?;
+            audit(
+                tx,
+                req.session_id,
+                req.reservation_event,
+                ("BudgetReserved", sess_record.classification_floor),
+                &now,
+                None,
+                &serde_json::json!({
+                    "reservation_id": req.reservation_id.to_string(),
+                    "micro_usd": req.amount.as_micro_usd()
+                }),
+            )?;
+
+            // 4. Perform approval consumption (if grant was provided)
+            let consumption_record = if let Some((grant, intent, row)) = approval_data {
+                let changed = tx.execute(
+                    "UPDATE approval_requests SET state='CONSUMED',consumed_at=?1,consumed_action_digest=?2 WHERE request_id=?3 AND session_id=?4 AND context_generation=?5 AND target_revision=?6 AND action_name=?7 AND action_digest=?2 AND classification=?8 AND state='ISSUED' AND created_at<=?1 AND issued_at<=?1 AND expires_at>?1 AND receipt_token=?9",
+                    params![
+                        now,
+                        row.action_digest,
+                        row.id,
+                        row.session,
+                        model::integer(row.generation)?,
+                        row.revision,
+                        row.action_name,
+                        row.classification,
+                        row.token
+                    ],
+                )?;
+                if changed != 1 {
+                    return Err(error(Kind::Conflict));
+                }
+                let sequence = audit(
+                    tx,
+                    intent.session.session_id,
+                    req.consumption_event,
+                    ("ApprovalConsumed", intent.classification),
+                    &now,
+                    Some(&row.action_digest),
+                    &serde_json::json!({
+                        "request_id": row.id,
+                        "generation": row.generation
+                    }),
+                )?;
+                Some(ConsumptionRecord {
+                    request_id: grant.request_id(),
+                    audit_sequence: sequence,
+                })
+            } else {
+                None
+            };
+
+            Ok((
+                BudgetRecord {
+                    reservation_id: req.reservation_id,
+                    reserved: req.amount,
+                    actual: None,
+                    state: "RESERVED".into(),
+                },
+                consumption_record,
+            ))
         })
     }
 

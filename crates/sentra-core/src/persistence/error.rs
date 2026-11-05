@@ -65,6 +65,11 @@ pub struct PersistenceError {
 }
 
 impl PersistenceError {
+    /// Constructs a persistence error from a categorical kind.
+    pub fn from_kind(kind: PersistenceErrorKind) -> Self {
+        Self::new(kind)
+    }
+
     pub(super) fn new(kind: PersistenceErrorKind) -> Self {
         Self {
             kind,
