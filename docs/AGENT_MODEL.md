@@ -71,4 +71,4 @@ Reserve maximum permitted model cost before dispatch and reconcile against actua
 
 Bound retries by failure type: retry transient transport failures with idempotency; do not retry invalid permissions, stale revisions, schema failures, or ambiguous sensitive side effects automatically. On cancellation revoke pending work, request worker termination, and record unresolved remote execution explicitly.
 
-Parallelism, model choice, and final research defaults are validation questions. This Phase 0 documentation was prepared without delegating work to sub-agents.
+Parallelism, model choice, and final research defaults are validation questions.

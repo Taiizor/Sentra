@@ -81,5 +81,6 @@ For nondeterministic defects, record repeated outcomes and a justified confidenc
 | F-16, F-17, S-01, S-02 | Extension/MCP/API capability parity, approval and schema tests |
 | F-18, F-19, S-10 | Integration/dashboard authorization, stale-head and publication tests |
 | S-14 | Cross-cutting missing-control/fail-closed cases at every feature gate |
+| Q-06 | Frozen benchmark protocol, complete denominators/attempts/budgets, uncertainty and contamination disclosures |
 
 The roadmap defines numerical corpus sizes and phase dependencies. Every support claim must cite the concrete validation artifact produced at that gate.
