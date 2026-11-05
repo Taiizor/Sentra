@@ -9,6 +9,7 @@ Phases are dependency-ordered delivery gates, not dates or promises. **Explicit 
 - Explicit authorization applies only to the specific operation or operations approved by the user.
 - By default, agents MUST leave changes in the working tree.
 - Agents MUST NOT modify existing Git history without explicit authorization.
+- Agents MUST NOT fetch or pull without explicit user authorization.
 
 This policy applies across all phases and is also recorded in [AGENTS.md](AGENTS.md#permanent-git-policy). Phase authorization does not authorize Git operations. Historical Phase 0 references to no commits, tags, or pushes describe the default agent workflow and do not restrict user-performed operations.
 
@@ -21,6 +22,8 @@ Acceptance: all eight requested root documents exist; research and ADR directori
 ## Phase 1 — Technical validation and local foundation
 
 Prerequisite: recorded explicit owner approval. This phase may contain disposable technical spikes and application implementation; none is authorized by Phase 0 completion.
+
+Status: the owner explicitly authorized Phase 1 on 2026-11-05. The [initial validation report](docs/phase1/README.md) records the execution breakdown, successful x64 standard-library probe, unvalidated dependent gates, ARM64 limitation, and local VM permission blocker. Phase 1 remains in progress; the acceptance criteria below have not all been met. Phase 2 remains unauthorized.
 
 Deliver a reusable Rust-core candidate and Windows CLI foundation for discovery, session manifests, policy decisions, local storage, inspection, cancellation, and recovery. Validate core-language and process/storage choices before expanding the workspace. Design extension schemas before loading third-party plugins.
 

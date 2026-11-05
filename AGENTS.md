@@ -8,10 +8,11 @@
 
 ## Current phase boundary
 
-- Phase 0 permits research, repository/environment inspection, architecture, documentation, and documentation validation only.
+- Phase 0 is complete. The project owner explicitly authorized Phase 1 technical validation and foundation work on 2026-11-05. Phase 2 is not authorized.
+- During Phase 1, validate assumptions with small isolated experiments before dependent implementation. Keep prototypes separate from the production core/CLI and report incomplete or blocked gates explicitly.
 - Do not create application code, executable prototypes, package manifests, lockfiles, or CI automation during Phase 0.
 - Do not install dependencies during Phase 0. Agent Git operations follow the permanent policy below.
-- Phase 0 completion does not authorize Phase 1. Obtain explicit project-owner approval before implementation or technical spikes begin.
+- The Phase 1 approval is recorded in `docs/phase1/README.md`; it does not authorize Phase 2, host configuration changes, external source transfer, or Git mutations.
 - Do not turn a proposed ADR into a validated technology claim without recording its required experiments.
 
 ## Permanent Git policy
@@ -21,6 +22,7 @@
 - Explicit authorization applies only to the specific operation or operations approved by the user.
 - By default, agents MUST leave changes in the working tree.
 - Agents MUST NOT modify existing Git history without explicit authorization.
+- Agents MUST NOT fetch or pull without explicit user authorization.
 
 This policy applies across all phases. Phase authorization does not authorize Git operations. Historical Phase 0 references to no commits, tags, or pushes describe the default agent workflow and do not restrict user-performed operations. The same policy is recorded in [ROADMAP.md](ROADMAP.md#permanent-git-policy).
 

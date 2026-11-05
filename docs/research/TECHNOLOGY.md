@@ -51,3 +51,7 @@ Protocol versions above are researched candidates, not runtime compatibility pro
 ## Build versus reuse rule
 
 Reuse scanner engines, advisory formats, fuzzing engines, cryptographic libraries, VM runtimes, and protocol implementations. Build the minimal product-specific policy and evidence invariants. Before custom harness generation, campaign ensemble, or research scheduling infrastructure, document an OSS-CRS/Buttercup comparison. Revisit this split when experiments show a reusable system can satisfy more of the product contract.
+
+## Phase 1 evidence update
+
+The [initial Phase 1 report](../phase1/README.md) records successful dependency-free x64 Rust/MSVC compilation, execution, three probe tests, formatting and Clippy on the inspected host. It does not validate SQLite/native crates, full process lifecycle, provider contracts, core/CLI behavior, or an authenticated disposable worker. ARM64 compilation is blocked by the absent target standard library. ADR-0002 therefore remains Proposed, and this Phase 0 qualitative comparison is not promoted into a general support or performance claim.

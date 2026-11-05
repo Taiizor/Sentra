@@ -49,3 +49,9 @@ Tool availability is not a successful compile or execution test. No Rust source 
 3. Existing Docker Desktop can help with curated development fixtures after implementation approval; it does not fulfill the disposable-VM security requirement.
 4. A local dedicated Linux VM candidate needs explicit prerequisite and worker validation. No general-purpose Linux user distribution is assumed from the Docker WSL listing.
 5. Installed versions are observations, not project minimum versions. Pin supported versions only after the relevant validation gates.
+
+## Phase 1 follow-up
+
+The owner subsequently authorized Phase 1. The [initial execution report](../phase1/README.md) and its raw evidence supersede the earlier tooling uncertainty where experiments exist: x64 Rust/MSVC build/run and three probe tests pass. The actual linker is MSVC 14.52.37025 from Visual Studio 2026 Insiders; `vswhere -prerelease` finds the installation that the original query omitted. Windows SDK libraries are under `D:/Windows Kits/10`, rather than the originally probed standard path. Installed versions and actual linking are separate observations; no specific SDK release or native dependency set has been pinned.
+
+ARM64 compilation remains unvalidated because its Rust standard library is not installed. Read-only Hyper-V inspection finds a hypervisor and running services, but feature/VM queries are permission-blocked. No VM or containment test has run and no host configuration has changed. The original Phase 0 observations above are historical, not claims that no later experiment occurred.

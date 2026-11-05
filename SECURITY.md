@@ -2,7 +2,7 @@
 
 ## Current project status
 
-Sentra is in the documentation stage. There are no application releases, supported binaries, hosted services, or implemented security guarantees. All isolation, approval, and privacy controls described in this repository are requirements for future implementations.
+Sentra is in Phase 1 technical validation. Only a trusted, dependency-free local Rust/MSVC experiment has been built and exercised; it is not the product CLI or a security-analysis worker. There are no application releases, supported product binaries, hosted services, or implemented security guarantees. Isolation, approval, and privacy controls remain requirements for future implementations. See the [initial validation report](docs/phase1/README.md).
 
 Only analyze software and environments for which you have explicit authorization. A repository's visibility, or possession of its source, is not permission to test a deployed service.
 
@@ -29,7 +29,7 @@ These requirements apply equally to open-source and proprietary targets. The per
 
 Local-first means that project state and artifacts are kept locally by default. It does not mean a hosted provider never receives source. Hosted inference requires a separate egress decision describing endpoint, data categories, retention assumptions, and permitted repository scope. Do not promise training exclusion or zero retention without validating the chosen provider's applicable terms and configuration.
 
-Generated PoCs, crash dumps, source snippets, patches, and dependency names may expose confidential information. Access and export rules follow the input classification. Default telemetry must contain no source or raw prompts and remain opt-in. Exact retention defaults are a Phase 2 decision; sessions must declare retention before collecting sensitive evidence.
+Generated PoCs, crash dumps, source snippets, patches, and dependency names may expose confidential information. Access and export rules follow the input classification. No telemetry is implemented or used in Phase 1. Any future telemetry proposal must exclude source and raw prompts and require explicit opt-in. Exact retention defaults are a Phase 2 decision; sessions must declare retention before collecting sensitive evidence.
 
 ## Limits of assurance
 
