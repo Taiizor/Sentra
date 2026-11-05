@@ -4,7 +4,7 @@ Last updated: 2026-11-05.
 
 ## Current status
 
-**Phase 0: complete and closed. Phase 1: explicitly authorized and in progress; Increment 5.1 Core Engine architecture and contracts design complete. Phase 2: NOT authorized.** The x64 Rust/MSVC, SQLite engine, mock AI provider contract, and VM/sandbox isolation validation experiments have executed. Milestone 4 closure review issued a Conditional Go recommendation. Increment 5.1 establishes the implementation-ready architecture, Rust trait contracts, domain models, session state machine, workspace canonicalization rules, SQLite recovery invariants, and mandatory fail-closed execution boundary. No production application code was implemented and no third-party dependencies were installed. Phase 1 is not complete; no full Rust-binding, storage, isolation or live-provider gate is claimed satisfied. The agent has issued no history/reference-changing Git operation.
+**Phase 0: complete and closed. Phase 1: explicitly authorized and in progress; Increment 5.2 Core Engine Domain Models, Session State Machine, and Policy Engine complete. Phase 2: NOT authorized.** The x64 Rust/MSVC, SQLite engine, mock AI provider contract, and VM/sandbox isolation validation experiments have executed. Milestone 4 closure review issued a Conditional Go recommendation. Increment 5.1 established the architecture and contracts. Increment 5.2 delivers the first production-code foundation in `crates/sentra-core`: domain primitives, immutable audit events, the 9-state session lifecycle state machine, security classifications, and the default-deny policy engine with human approval broker. Zero third-party dependencies are introduced. All 23 tests pass with warning-free rustfmt, check, and clippy (`-D warnings`). Workspace file discovery, SQLite persistence, and execution backends are not started. The agent has issued no history/reference-changing Git operation.
 
 ## Phase 1 initial milestone
 
@@ -71,6 +71,26 @@ The [Core Engine design document](docs/phase1/CORE_ENGINE_DESIGN.md) is complete
 - **Repository entry:** Clean `develop` at `c6d62a3` (`Review Milestone 4 closure and core readiness`). No commits, tags, pushes, fetches, or pulls were issued by the agent. All Increment 5.1 design files remain in the working tree.
 
 Increment 5.1 does not implement production code or authorize Phase 2.
+
+## Phase 1 Increment 5.2 — Domain models, session state machine, and policy engine
+
+The first production-code foundation for Sentra Core Engine is implemented in `crates/sentra-core` and verified. Following the architecture defined in [CORE_ENGINE_DESIGN.md](docs/phase1/CORE_ENGINE_DESIGN.md) and the Conditional Go requirements from [MILESTONE_4_REVIEW.md](docs/phase1/MILESTONE_4_REVIEW.md), Increment 5.2 implements core domain models, session lifecycle state management, immutable audit trail events, security classifications, and the default-deny policy engine.
+
+- **Zero third-party dependencies:** Implemented strictly with the Rust Standard Library (`edition = "2024"`, `#![forbid(unsafe_code)]`, `#![warn(missing_docs)]`, `#![deny(clippy::all)]`). No third-party crates (`uuid`, `chrono`, `rand`, etc.) were introduced, preserving ADR-0007 offline compilation and licensing compliance.
+- **Strong domain types:** 128-bit type-safe UUID-compatible `Identifier` (`SessionId`, `TaskId`, `ApprovalId`, `EventId`) supporting deterministic generation from sequence counters, sequential generation with monotonic atomic counters, and standard 36-character hyphenated parsing. Immutable `TimestampUtc` with millisecond resolution and RFC 3339 serialization/parsing.
+- **Security classification and data flow rules:** `SecurityClassification` (`Public`, `Internal`, `Confidential`, `Restricted`) with explicit numeric ranks (`10`, `20`, `30`, `40`). Enforces the Bell-LaPadula simple integrity invariant (`can_flow_to`: no write-down to lower classification). High-risk classifications require explicit approval for external egress.
+- **Canonical session lifecycle state machine:** `SessionState` implements all 9 canonical states (`Created`, `Scoped`, `Planned`, `Running`, `WaitingForApproval`, `Paused`, `Completed`, `Failed`, `Cancelled`). Terminal states (`Completed`, `Failed`, `Cancelled`) cannot transition to any state. Self-transitions are rejected. All 81 cells of the complete 9x9 transition matrix are verified.
+- **State machine audit invariants:** `SessionStateMachine` maintains a strictly monotonic sequence counter and emits an immutable `AuditEvent` on every valid state transition. Invalid transition attempts return a typed `SessionTransitionError`, leaving internal state and sequence counters untouched without emitting audit events.
+- **Default-deny policy engine and human approval broker:** `PolicyEngine` enforces default-deny: unknown operations are rejected immediately. Restricted classification data always requires human approval. Sensitive actions (`ExecuteTool`, `ModifyCheckout`, `ExportReport` external, `InvokeProvider` exceeding auto-budget) trigger `PolicyDecision::NeedsApproval`. In-memory `ApprovalBroker` verifies grants, enforces expiry via mockable `Clock`, and provides single-use replay protection (consumed tokens cannot be reused).
+- **Capability vs authorization separation:** Policy authorization is strictly decoupled from backend execution capability. A backend possessing a capability does not imply policy grant; policy granting permission does not imply capability availability.
+- **Verification outcomes:** All 23 tests pass across three integration test suites:
+  - `domain_tests.rs`: 9 tests passed (identifier roundtrip, invalid UUID parsing, deterministic/sequential generation, typed IDs, timestamp RFC 3339 parsing/formatting, arithmetic, expiry, classification ranking, pairwise flow, egress rules).
+  - `session_tests.rs`: 5 tests passed (metadata validation, complete 81-cell 9x9 transition matrix, terminal state permanence, full lifecycle audit event emission, invalid transition invariants).
+  - `policy_tests.rs`: 9 tests passed (default-deny unknown operations, safe operations auto-grant, restricted classification mandatory approval, sensitive actions approval triggers, grant lifecycle and single-use replay prevention, time-travel expiry, mismatch rejections, revocation handling, capability vs policy decoupling).
+- **Toolchain compliance:** `cargo fmt --check`, `cargo check --workspace`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, and `cargo test --workspace` all pass with 0 errors and 0 warnings.
+- **Repository state:** Clean `develop` at `c6d62a3` baseline. No commits, tags, pushes, fetches, or pulls were issued by the agent. All Increment 5.2 files remain in the working tree.
+
+Increment 5.2 does not implement file discovery, SQLite persistence, execution backends, or Phase 2 work.
 
 ## Completed Phase 0 work
 
