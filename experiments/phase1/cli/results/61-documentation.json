@@ -1,0 +1,104 @@
+{
+  "increment": "6.1",
+  "status": "Passed",
+  "documents": {
+    "README.md": "cd5883edb89e2ba01707e1a617b85aa563df4f41efe193c9e0250c3eddb2c932",
+    "ROADMAP.md": "0dddf8c126a870df381ccab2123513b847f5a7e93082d61751a67be14e07b2d7",
+    "PROGRESS.md": "a9e7d64cfd738538b4ce4cf7c5991c4fb8087120f20a82a132e2ff1add81928e",
+    "ARCHITECTURE.md": "5c04ff3e7bee174a19383690e121f171807c972c2fecbba514648827705692b5",
+    "SECURITY.md": "8c0706d2b24725c35824e79201b26aa86708bbcc538148e31f782ee1d8f5d592",
+    "docs/README.md": "1172bbe6a13d8e7a7cc972e934186e774e442996ed51e45b034371798044d85c",
+    "docs/OPEN_QUESTIONS.md": "09909bf56300248ae7e0d3da3dc2f22043143a4c1e10783eae57b35bc5780f01",
+    "docs/VALIDATION.md": "98c4691f1f637cff7c52778dea9453d8fb99b8ea69b36759e722b71cc73b1cb6",
+    "docs/phase1/README.md": "5e8a65a7e537080cfcafbabd400cf3d369497ac3df3fef9697881188b7e40e56",
+    "docs/phase1/INCREMENT_6_1_LOCAL_CLI_FOUNDATION.md": "d47fed1db279324c8c8e3f220711dc425fae41770fe806bd8b6eda69f184dec0"
+  },
+  "local_links_checked": 179,
+  "adr": [
+    {
+      "path": "docs/adr/0001-platform-scope-and-phase-boundary.md",
+      "status": "Accepted (design baseline)",
+      "sha256": "6a54f31a9719326c5d135ae5085b50c58f41e683adc3a0086aaf35696622d9eb"
+    },
+    {
+      "path": "docs/adr/0002-conditional-rust-core.md",
+      "status": "Proposed",
+      "sha256": "8ff1c6d2345f7a1929e309db30b27b7256059b099d7ee60bb54d8b8a9fd5cf4d"
+    },
+    {
+      "path": "docs/adr/0003-local-modular-control-plane.md",
+      "status": "Accepted (design baseline; concrete storage/runtime configuration unvalidated)",
+      "sha256": "24ba013e4df530dbe4d125ed19a8a69a40b5b399474260e1ca38cae69624fce7"
+    },
+    {
+      "path": "docs/adr/0004-vm-boundary-for-untrusted-execution.md",
+      "status": "Accepted (security invariant; specific backend remains proposed)",
+      "sha256": "33794bb30725b2b401aa348f835653770be361f5b6e0895aca1581f5f6a0af5f"
+    },
+    {
+      "path": "docs/adr/0005-capability-scoped-process-adapters.md",
+      "status": "Accepted (design baseline; protocols/SDKs not implemented)",
+      "sha256": "60dc1e5dd3c71fc2ee8ad7a4dd978b6cb90152c5b8760a37d472f5e77b05cd5c"
+    },
+    {
+      "path": "docs/adr/0006-evidence-and-independent-verification.md",
+      "status": "Accepted (design baseline)",
+      "sha256": "340e04c5946d1364ec65df03e815bfcea1c8e1846e242189004ad5a065a3f66d"
+    },
+    {
+      "path": "docs/adr/0007-open-source-and-integration-licensing.md",
+      "status": "Proposed",
+      "sha256": "88dbd70b6bafa1cff3e7466f5de39141ffe0c2c8693d1e8eaa46b868b202471d"
+    }
+  ],
+  "requirement_ids_checked": [
+    "F-01",
+    "F-02",
+    "F-03",
+    "F-04",
+    "F-05",
+    "F-06",
+    "F-07",
+    "F-08",
+    "F-09",
+    "F-10",
+    "F-11",
+    "F-12",
+    "F-13",
+    "F-14",
+    "F-15",
+    "F-16",
+    "F-17",
+    "F-18",
+    "F-19",
+    "F-20",
+    "S-01",
+    "S-02",
+    "S-03",
+    "S-04",
+    "S-05",
+    "S-06",
+    "S-07",
+    "S-08",
+    "S-09",
+    "S-10",
+    "S-11",
+    "S-12",
+    "S-13",
+    "S-14",
+    "S-15",
+    "Q-01",
+    "Q-02",
+    "Q-03",
+    "Q-04",
+    "Q-05",
+    "Q-06"
+  ],
+  "existing_lock_packages_unchanged": true,
+  "new_external_packages": 0,
+  "failures": [],
+  "limitations": [
+    "Narrow local-link/fence/heading/ID check, not a full Markdown renderer or runtime egress capture."
+  ],
+  "checker_source": "import { readFileSync, writeFileSync, existsSync } from 'node:fs';\nimport { dirname, resolve } from 'node:path';\n\nconst documents = ['README.md','ROADMAP.md','PROGRESS.md','ARCHITECTURE.md','SECURITY.md','docs/README.md','docs/OPEN_QUESTIONS.md','docs/VALIDATION.md','docs/phase1/README.md','docs/phase1/INCREMENT_6_1_LOCAL_CLI_FOUNDATION.md'];\nconst failures: string[] = [];\nconst sha = (p: string) => new Bun.CryptoHasher('sha256').update(readFileSync(p)).digest('hex');\nconst clean = (s: string) => s.replace(/```[^\\n]*\\n[\\s\\S]*?```/g, '');\nconst slug = (s: string) => s.toLowerCase().replace(/[`*_~]/g,'').replace(/[^\\p{L}\\p{N}_\\-\\s]/gu,'').replace(/\\s/g,'-');\nlet linkCount = 0;\nfor (const p of documents) {\n  const source = readFileSync(p,'utf8');\n  if ((source.match(/^```/gm)?.length ?? 0) % 2) failures.push(`Unclosed fence: ${p}`);\n  const text = clean(source);\n  for (const match of text.matchAll(/\\[[^\\]\\n]+\\]\\(([^)\\n]+)\\)/g)) {\n    const href = match[1];\n    if (/^[a-z][a-z0-9+.-]*:/i.test(href)) continue;\n    const [file,anchor] = href.split('#');\n    const target = resolve(dirname(p),decodeURIComponent(file || p.split('/').at(-1)!));\n    linkCount++;\n    if (!existsSync(target)) { failures.push(`Missing local link: ${p} -> ${href}`); continue; }\n    if (anchor && target.endsWith('.md')) {\n      const ids = [...clean(readFileSync(target,'utf8')).matchAll(/^#{1,6}\\s+(.+)$/gm)].map(m=>slug(m[1].trim()));\n      if (!ids.includes(decodeURIComponent(anchor))) failures.push(`Missing heading: ${p} -> ${href}`);\n    }\n  }\n}\nconst requirements = new Set([...readFileSync('REQUIREMENTS.md','utf8').matchAll(/^\\| ([FSQ]-\\d{2}) \\|/gm)].map(m=>m[1]));\nfor (const id of [...readFileSync(documents.at(-1)!,'utf8').matchAll(/\\b[FSQ]-\\d{2}\\b/g)].map(m=>m[0])) {\n  if (!requirements.has(id)) failures.push(`Unknown requirement: ${id}`);\n}\nconst adr = [...new Bun.Glob('docs/adr/000*.md').scanSync('.')].map(p=>p.replaceAll('\\\\','/')).sort().map(p=>({path:p,status:readFileSync(p,'utf8').match(/^- Status: (.+)$/m)?.[1],sha256:sha(p)}));\nconst entry = JSON.parse(readFileSync('target/increment61-entry.json','utf8'));\nif (adr.length !== 7 || adr.some(a=>a.sha256!==entry.files[a.path])) failures.push('ADR decisions changed or inventory differs');\nfunction git(...args:string[]) { const r = Bun.spawnSync(['git','--no-optional-locks',...args],{stdout:'pipe',stderr:'pipe',env:{...process.env,GIT_OPTIONAL_LOCKS:'0'}}); if(r.exitCode)throw Error(r.stderr.toString());return r.stdout.toString(); }\nconst blocks = (s:string) => new Map(s.replace(/\\r\\n/g,'\\n').split('[[package]]').slice(1).map(b=>[b.match(/^\\s*name = \"([^\"]+)\"/m)![1],b.trim()]));\nconst before = blocks(git('show','HEAD:Cargo.lock'));\nconst after = blocks(readFileSync('Cargo.lock','utf8'));\nfor (const [name,block] of before) if (after.get(name)!==block) failures.push(`Existing lock package changed: ${name}`);\nif(after.size!==before.size+1 || !after.has('sentra-cli')) failures.push('Unexpected package inventory');\nconst cli = readFileSync('crates/sentra-cli/Cargo.toml','utf8');\nif (!cli.includes('sentra-core = { path = \"../sentra-core\", version = \"=0.1.0\" }')) failures.push('CLI local edge changed');\nconst production = ['crates/sentra-cli/src/lib.rs','crates/sentra-cli/src/main.rs','crates/sentra-core/src/service/local_workspace.rs'];\nfor (const p of production) {\n  const source = readFileSync(p,'utf8');\n  if (/\\bunsafe\\s*\\{|\\bunsafe\\s+fn|Command::new|std::net|TcpStream|UdpSocket|reqwest|\\.execute_task\\(/.test(source)) failures.push(`Unexpected unsafe/transport/dispatch code: ${p}`);\n}\nconst currentHead = git('rev-parse','HEAD').trim();\nif (!readFileSync(documents.at(-1)!,'utf8').includes(currentHead)) failures.push('Documented HEAD differs');\nconst report = {increment:'6.1',status:failures.length?'Failed':'Passed',documents:Object.fromEntries(documents.map(p=>[p,sha(p)])),local_links_checked:linkCount,adr,requirement_ids_checked:[...requirements],existing_lock_packages_unchanged:failures.every(f=>!f.includes('lock package')),new_external_packages:0,failures,limitations:['Narrow local-link/fence/heading/ID check, not a full Markdown renderer or runtime egress capture.'],checker_source:readFileSync('target/increment61-documentation.ts','utf8')};\nwriteFileSync('experiments/phase1/cli/results/61-documentation.json',JSON.stringify(report,null,2)+'\\n');\nconsole.log(JSON.stringify({status:report.status,documents:documents.length,local_links:linkCount,adrs:adr.length,failures}));\nif(failures.length)process.exit(1);\n"
+}

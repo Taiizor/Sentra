@@ -1,6 +1,10 @@
 # Phase 1 Execution and Validation Record
 
-Date: 2026-11-05; latest status update: 2026-11-06. Phase 1 is explicitly authorized by the project owner. Phase 2 is not authorized. This record links technical-validation increments and preserves historical observations. **Phase 1 is not complete.** Core library, persistence and synthetic service foundations are implemented; CLI and real provider/VM workload integrations remain unimplemented.
+Date: 2026-11-05; latest status update: 2026-11-06. Phase 1 is explicitly authorized by the project owner. Phase 2 is not authorized. This record links technical-validation increments and preserves historical observations. **Phase 1 is not complete.** Core library, persistence, synthetic service foundations and the initial local CLI are implemented; real provider/VM workload integrations remain unimplemented.
+
+## Increment 6.1 update
+
+The [local CLI foundation](INCREMENT_6_1_LOCAL_CLI_FOUNDATION.md) provides `init`, `status`, `session show`, help and version, with stable exit codes and optional JSON. Core owns the explicit workspace/external-storage lifecycle, preserves a dedicated store's sole session identity, rejects incomplete/orphaned/unrelated storage, and requires a successful shutdown checkpoint before reporting success. Inspection changes no domain rows. No target execution, discovery scan, approval issuance, AI, network, Git integration or new third-party dependency is exposed. Phase 1 remains incomplete; Increment 6.2 and Phase 2 have not started. All earlier reports remain historical evidence.
 
 ## Increment 5.6.2.2.2 update
 

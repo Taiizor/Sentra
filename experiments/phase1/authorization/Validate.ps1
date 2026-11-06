@@ -122,10 +122,17 @@ $dependencyCount = $null
 $approvedDependencies = $false
 if ($null -ne $metadataCheck -and $metadataCheck.status -eq 'Passed') {
     $metadata = $metadataCheck.stdout | ConvertFrom-Json
-    $dependencyCount = @($metadata.packages | ForEach-Object { $_.dependencies } | Where-Object { $null -ne $_ }).Count
+    $dependencyCount = @($metadata.packages | ForEach-Object { $_.dependencies } | Where-Object { $null -ne $_ -and $null -ne $_.source }).Count
     $dependencies = @($metadata.packages | Where-Object { $_.name -eq 'sentra-core' } | ForEach-Object { $_.dependencies })
-    # Increment 5.4.2 explicitly authorizes only these pinned direct dependencies.
-    $approvedDependencies = $dependencyCount -eq 3 -and $dependencies.Count -eq 3
+    # Increment 6.1 adds exactly one local CLI -> Core edge, no third-party package.
+    # Keep the audited external dependency restriction and validate the path edge.
+    $localDependencies = @($metadata.packages | ForEach-Object { $_.dependencies } | Where-Object { $null -ne $_ -and $null -eq $_.source })
+    $cliDependencies = @($metadata.packages | Where-Object { $_.name -eq 'sentra-cli' } | ForEach-Object { $_.dependencies })
+    $approvedDependencies = $dependencyCount -eq 3 -and $dependencies.Count -eq 3 -and $localDependencies.Count -eq 1 -and $cliDependencies.Count -eq 1
+    if ($approvedDependencies) {
+        $edge = $cliDependencies[0]
+        $approvedDependencies = $edge.name -eq 'sentra-core' -and $edge.req -eq '=0.1.0' -and $null -eq $edge.source -and $edge.path.Replace([char]92, [char]47) -eq "$repoRoot/crates/sentra-core"
+    }
     foreach ($spec in @(@('rusqlite', '=0.32.1', 'bundled'), @('serde', '=1.0.229', 'derive'), @('serde_json', '=1.0.154', ''))) {
         $dependency = @($dependencies | Where-Object { $_.name -eq $spec[0] })
         if ($dependency.Count -ne 1 -or $dependency[0].req -ne $spec[1]) { $approvedDependencies = $false; continue }

@@ -4,7 +4,20 @@
 
 Sentra is a planned independent, extensible platform for authorized security research on open-source and proprietary software. It will combine specialized AI agents, established analysis tools, isolated execution, evidence management, and independently verified remediation.
 
-**Status: Phase 0 complete; Phase 1 foundation in progress.** The Core library contains domain/session/policy foundations, metadata-only workspace discovery and an [initial SQLite persistence adapter](docs/phase1/INCREMENT_5_4_2_SQLITE_IMPLEMENTATION.md). Increment 5.4.2 validates bundled SQLite 3.46.0 on Windows x64/MSVC, durable approval binding, atomic audit/budgets and recovery fixtures; the workspace passes 153 tests. Physical storage faults, power loss, blob reconciliation and full dispatch remain unvalidated. Product CLI, scanner, sandbox, API and real provider integrations remain unimplemented. Phase 1 is incomplete; Increment 5.4.3 and Phase 2 have not started. See the [Phase 1 execution record](docs/phase1/README.md).
+**Status: Phase 0 complete; Phase 1 foundation in progress.** The Core library provides session/policy, metadata-only workspace, SQLite and synthetic service foundations. [Increment 6.1](docs/phase1/INCREMENT_6_1_LOCAL_CLI_FOUNDATION.md) adds an offline CLI for local initialization, status and session inspection on Windows x64/MSVC. Scanning, real providers and VM workloads are unavailable; untrusted execution remains fail-closed. Physical storage faults, power loss, blob reconciliation and external-effect recovery remain unvalidated. Phase 1 is incomplete; Increment 6.2 and Phase 2 have not started. See the [Phase 1 execution record](docs/phase1/README.md).
+
+## Local CLI foundation
+
+Use an explicitly selected workspace and an existing, protected local storage directory **outside** that workspace. These example paths must already exist; no source repository is built or scanned by these commands.
+
+```powershell
+cargo run --offline --package sentra-cli -- --help
+$context = cargo run --offline --package sentra-cli -- init --workspace E:/AuthorizedProject --database E:/SentraData/project.db --json | ConvertFrom-Json
+cargo run --offline --package sentra-cli -- status --workspace E:/AuthorizedProject --database E:/SentraData/project.db --json
+cargo run --offline --package sentra-cli -- session show $context.session_id --workspace E:/AuthorizedProject --database E:/SentraData/project.db --json
+```
+
+The first command builds trusted Sentra code through the cached development toolchain. The binary is named `sentra`; installation/distribution is not implemented. A dedicated database contains one foundation session whose ID is also the local project identity. Repeating `init` preserves that identity. `status`/`session` do not create databases or change domain records; SQLite recovery, lock files and checkpointing can change physical storage files. An uninitialized status exits with code 3; errors have distinct nonzero codes. No execution, scanning, approval or provider commands exist. Full behavior, JSON and error contracts are in the [increment report](docs/phase1/INCREMENT_6_1_LOCAL_CLI_FOUNDATION.md).
 
 ## Two operating modes
 
@@ -17,7 +30,7 @@ Both modes use the same policy, evidence, execution, and verification services. 
 
 The first implementation milestone is a Windows 11 CLI and reusable core with project discovery, immutable inputs, policy decisions, local persistence, and resumable sessions. The first useful review release follows in Phase 2: a narrow Rust source-review pilot, Cargo.lock advisory analysis, a provider adapter, and reference validation on a dedicated Linux VM worker. A bounded Linux C/C++ fuzzing pilot for deep research follows in Phase 3.
 
-These are targets, not available features. Rust is the recommended core language pending the Phase 1 validation gate. Bun is the sole runtime and package manager for any Sentra-owned JavaScript/TypeScript tooling. Optional analysis workers may require their own non-JavaScript runtimes.
+The broader workflows remain targets beyond the implemented local foundation. Rust is the recommended core language pending the full Phase 1 validation gate. Bun is the sole runtime and package manager for any Sentra-owned JavaScript/TypeScript tooling. Optional analysis workers may require their own non-JavaScript runtimes.
 
 Ghidra, Frida, Windows-native target execution, additional language packs, MCP, API, dashboard, GitHub/GitLab automation, and a public plugin registry belong to later milestones. No universal language or operating-system coverage is claimed.
 

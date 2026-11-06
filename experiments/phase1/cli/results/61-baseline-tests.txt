@@ -1,0 +1,356 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running unittests src\lib.rs (target\debug\deps\sentra_core-00c9e4f85497a2ae.exe)
+
+running 14 tests
+test persistence::model::tests::malformed_unicode_identifiers_timestamps_and_numeric_limits_fail_without_panics ... ok
+test persistence::transaction::tests::backoff_stays_in_approved_range_and_varies_by_ticket ... ok
+test persistence::transaction::tests::caught_statement_failure_still_cannot_commit_partial_work ... ok
+test persistence::transaction::tests::non_contention_and_failed_rollback_are_never_retried ... ok
+test persistence::transaction::tests::rollback_failure_is_distinct_from_the_statement_failure ... ok
+test persistence::transaction::tests::sqlite_page_limit_full_aborts_without_partial_rows ... ok
+test workspace::discovery::tests::unstable_directory_retracts_its_subtree_without_string_prefix_collisions ... ok
+test workspace::platform::tests::reparse_and_unknown_attributes_override_ordinary_types ... ok
+test policy::approval::tests::poisoned_broker_denies_context_issuance_and_consumption ... ok
+test persistence::migration::tests::migration_line_endings_are_stable_and_failed_ddl_leaves_no_partial_schema ... ok
+test workspace::platform::tests::replacement_by_symlink_between_check_and_open_is_rejected ... ok
+test persistence::transaction::tests::actual_begin_contention_stops_after_five_whole_operation_attempts ... ok
+test persistence::connection::tests::managed_connection_really_enforces_foreign_keys_and_closes_all_clones ... ok
+test persistence::transaction::tests::real_busy_snapshot_retries_the_whole_transaction_with_fresh_reads ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests\authorization_isolation_review_tests.rs (target\debug\deps\authorization_isolation_review_tests-57a1ef59703656af.exe)
+
+running 22 tests
+test independent_error_accessors_sanitize_constructor_bypass_and_keep_secondary_numbers ... ok
+test immutable_policy_clone_and_different_engine_cannot_override_registered_rules ... ok
+test failed_policy_registration_audit_rolls_back_epoch_and_preserves_legitimate_grant ... ok
+test independent_backend_unwind_releases_fence_without_refunding_or_reusing_approval ... ok
+test independent_context_generation_rotates_on_repeated_owner_registration ... ok
+test policy_binding_is_persistent_across_separate_manager_reconstruction ... ok
+test independent_simultaneous_old_and_current_contexts_have_only_current_winner ... ok
+test legacy_unbound_snapshot_requires_explicit_owner_policy_binding_without_data_recreation ... ok
+test independent_cross_session_prepare_preserves_both_owners_and_matching_grant ... ok
+test independent_budget_wait_then_context_change_rejects_old_approval ... ok
+test policy_change_invalidates_automatic_context_pending_request_and_issued_approval ... ok
+test policy_aba_never_restores_old_context_or_approval ... ok
+test preview_second_stage_storage_corruption_is_not_an_ordinary_grant_denial ... ok
+test preview_all_decisions_are_non_consuming_and_leave_every_persistent_table_unchanged ... ok
+test preview_sql_read_error_retains_extended_code_without_disclosing_sql_diagnostics ... ok
+test policy_update_cannot_race_live_service_dispatch_and_old_service_cannot_dispatch_afterward ... ok
+test regression_closed_database_policy_preview_preserves_typed_error ... ok
+test regression_different_immutable_policy_requires_registration_and_invalidates_old_context ... ok
+test unchanged_effective_policy_is_a_non_mutating_registration_and_keeps_valid_grant ... ok
+test preview_missing_and_corrupt_authoritative_state_propagates_typed_failure ... ok
+test independent_real_lifecycle_pause_wait_terminal_and_resume_boundaries ... ok
+test independent_sql_settlement_fault_keeps_both_typed_causes_and_rolls_back_cleanup ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s
+
+     Running tests\authorization_tests.rs (target\debug\deps\authorization_tests-574798ad1a4c5c48.exe)
+
+running 27 tests
+test broker_engine_and_authority_preserve_send_sync_contract ... ok
+test caller_metadata_cannot_replace_registered_workspace_actor_policy_or_mode ... ok
+test canonical_framing_handles_delimiters_unicode_empty_args_and_optional_fields ... ok
+test changing_request_display_metadata_cannot_change_issued_binding_or_expiry ... ok
+test checkout_target_order_is_canonical_but_target_set_is_bound ... ok
+test classification_is_bound_and_presented_grant_cannot_take_automatic_fallback ... ok
+test clock_before_issue_or_creation_cannot_authorize_future_receipts ... ok
+test copying_all_visible_grant_fields_cannot_forge_broker_provenance ... ok
+test diagnostics_do_not_disclose_receipt_payloads_or_tokens ... ok
+test different_registered_session_cannot_use_a_grant_even_with_same_target ... ok
+test duplicate_issuance_revocation_and_unknown_request_are_denied ... ok
+test every_public_grant_field_is_integrity_checked_without_consuming_original ... ok
+test every_operation_parameter_change_is_denied_without_consuming_matching_grant ... ok
+test exact_issued_operation_authorizes_once_through_policy_and_broker ... ok
+test expiry_is_exclusive_for_issuance_and_consumption_with_existing_clock ... ok
+test grant_from_another_broker_is_not_accepted ... ok
+test known_request_id_without_registered_issuance_is_not_authorization ... ok
+test malformed_operations_cannot_request_or_consume_approval ... ok
+test malformed_required_context_is_rejected_without_replacing_valid_context ... ok
+test missing_context_and_missing_required_grant_fail_closed ... ok
+test original_a_to_b_probe_denies_then_allows_a_exactly_once ... ok
+test stale_pending_request_cannot_be_issued_after_trusted_context_change ... ok
+test trusted_classification_floor_blocks_caller_downgrade_without_a_grant ... ok
+test trusted_target_revision_change_invalidates_grant_even_after_aba_restore ... ok
+test trusted_workspace_rebinding_invalidates_original_target_grant ... ok
+test concurrency_only_mismatches_then_legitimate_matching_attempt_repeat_32_rounds ... ok
+test concurrency_two_matching_and_six_mismatching_attempts_repeat_64_rounds ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests\domain_tests.rs (target\debug\deps\domain_tests-19e090a29a1217a7.exe)
+
+running 9 tests
+test test_deterministic_and_sequential_identifiers ... ok
+test test_identifier_bytes_roundtrip ... ok
+test test_identifier_invalid_strings ... ok
+test test_security_classification_egress_and_parsing ... ok
+test test_security_classification_ranking_and_pairwise_flow ... ok
+test test_timestamp_expiry_and_arithmetic ... ok
+test test_timestamp_invalid_rfc3339 ... ok
+test test_timestamp_utc_roundtrip_and_rfc3339 ... ok
+test test_typed_identifiers ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\evidence_tests.rs (target\debug\deps\evidence_tests-050f646b2eddc6a5.exe)
+
+running 9 tests
+test cryptographic_verification_explicitly_unavailable_offline ... ok
+test invalid_media_type_syntax_and_whitelist_enforcement ... ok
+test invalid_metadata_producer_role_rejected ... ok
+test length_mismatch_detected_and_rejected ... ok
+test malformed_declared_sha256_format_rejected ... ok
+test missing_payload_when_positive_length_declared ... ok
+test oversized_evidence_rejected_immediately ... ok
+test sensitive_content_redacted_in_debug_formatting ... ok
+test valid_evidence_structural_verification_success ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\execution_evidence_adversarial_tests.rs (target\debug\deps\execution_evidence_adversarial_tests-38d2167105ad325c.exe)
+
+running 11 tests
+test adversarial_arbitrary_arguments_ignored_by_synthetic_backend ... ok
+test adversarial_evidence_payload_exceeding_ceiling_by_one_byte ... ok
+test adversarial_forged_synthetic_fixture_identifiers_rejected ... ok
+test adversarial_mime_type_syntax_and_parameter_handling ... ok
+test adversarial_oversized_resource_limits_and_revision_tampering ... ok
+test adversarial_scope_and_action_inconsistencies ... ok
+test adversarial_sensitive_data_not_leaked_in_any_formatting ... ok
+test adversarial_syntactically_valid_sha256_never_bypasses_offline_gate ... ok
+test cross_increment_uncertain_execution_retains_conservative_budget_hold ... ok
+test execution_engine_detects_and_rejects_correlation_mismatch ... ok
+test execution_engine_handles_contradictory_mock_backend ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\execution_tests.rs (target\debug\deps\execution_tests-68741f1bf7215e86.exe)
+
+running 8 tests
+test conservative_budget_accounting_on_uncertain_execution_outcome ... ok
+test execution_engine_dispatch_untrusted_workload_intercepted ... ok
+test execution_scope_predicates_and_formatting ... ok
+test invalid_and_forged_execution_requests_fail_validation ... ok
+test no_host_docker_or_wsl2_fallback_declared_in_capabilities ... ok
+test synthetic_backend_strictly_rejects_untrusted_workload ... ok
+test synthetic_fixture_scope_validation_and_execution ... ok
+test untrusted_workload_rejected_by_default_fail_closed_backend ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\independent_core_review_tests.rs (target\debug\deps\independent_core_review_tests-edc7f5173a63c85d.exe)
+
+running 31 tests
+test owned_5621_process ... ignored, Owned subprocess helper; explicitly launched only by the process-boundary parent test
+test remediation_foreign_context_seal_and_foreign_budget_settlement_fail_closed ... ok
+test remediation_success_outcome_settlement_failure_has_only_typed_persistence_cause ... ok
+test remediation_context_updates_are_fenced_through_dispatch_without_holding_sqlite ... ok
+test review_atomic_prepare_cannot_consume_a_while_reserving_for_b ... ok
+test review_compound_evidence_error_redacts_untrusted_metadata ... ok
+test review_budget_denial_preserves_issued_grant_for_exact_retry ... ok
+test review_approval_update_failure_rolls_back_prior_reservation_and_audit ... ok
+test review_atomic_prepare_separate_connections_have_one_winner ... ok
+test review_compound_error_keeps_typed_primary_source ... ok
+test review_actual_execution_and_evidence_settlement_failures_are_observable ... ok
+test remediation_context_change_before_prepare_invalidates_approved_and_automatic_paths ... ok
+test review_compound_execution_error_redacts_backend_sensitive_message ... ok
+test review_either_audit_failure_rolls_back_approval_budget_and_sequence ... ok
+test review_atomic_consumption_and_budget_contention_are_serialized ... ok
+test review_atomic_prepare_cross_process_has_one_consumption_and_reservation ... ok
+test review_no_grant_prepare_revalidates_context_after_policy_decision ... ok
+test review_provider_action_cost_cannot_be_under_reserved ... ok
+test review_prepare_debug_does_not_disclose_authorization_parameters ... ok
+test review_public_context_registration_cannot_lower_trusted_floor ... ok
+test review_paused_session_cannot_dispatch_new_work ... ok
+test review_invalid_expired_and_stale_approvals_do_not_reserve_or_consume ... ok
+test review_policy_preview_does_not_grant_with_another_sessions_receipt ... ok
+test remediation_estimates_never_become_measured_actual_usage ... ok
+test review_same_context_synchronization_does_not_invalidate_issued_memory_grant ... ok
+test remediation_prepare_binds_all_action_parameters_and_preserves_matching_receipt ... ok
+test review_service_denials_never_call_backend_or_mutate_budget_approval ... ok
+test review_real_process_exit_after_prepare_preserves_pair_but_cannot_replay ... ok
+test review_successful_settlement_preserves_unknown_usage_without_compound_error ... ok
+test review_non_success_results_keep_primary_outcome_when_settlement_fails ... ok
+test remediation_terminal_paused_waiting_and_unscoped_sessions_deny_admission ... ok
+
+test result: ok. 30 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.75s
+
+     Running tests\persistence_tests.rs (target\debug\deps\persistence_tests-48c8beef783b5470.exe)
+
+running 43 tests
+test approval_concurrent_matching_and_mismatching_consumers_preserve_single_use ... ok
+test approval_changes_to_action_arguments_target_revision_generation_or_class_are_denied ... ok
+test approval_expiration_boundary_clock_reversal_and_revocation_fail_closed ... ok
+test approval_unknown_pending_missing_context_and_foreign_provenance_are_denied ... ok
+test budget_concurrent_reservations_cannot_overspend ... ok
+test audit_failure_rolls_back_state_and_no_success_is_reported ... ok
+test budget_audit_failure_rolls_back_reservation_and_settlement ... ok
+test approval_modified_session_metadata_is_not_trusted ... ok
+test approval_failed_audit_does_not_consume_valid_receipt ... ok
+test audit_retains_security_context_and_redacts_ordinary_diagnostics ... ok
+test approval_separate_connections_have_one_database_consumer ... ok
+test approval_row_provenance_mutation_and_missing_snapshot_are_not_accepted ... ok
+test approval_context_reregistration_rejects_old_generation_even_after_revision_aba ... ok
+test budget_overflow_invalid_values_overruns_and_unsafe_limit_reduction_are_denied ... ok
+test approval_cross_process_exactly_one_consumes_and_audit_is_atomic ... ok
+test connection_invalid_paths_fail_without_creating_files ... ok
+test budget_settlement_status_cancelled_with_usage_and_helpers ... ok
+test approval_reopen_requires_privileged_recovery_and_replay_stays_rejected ... ok
+test owned_persistence_process_worker ... ignored, Owned subprocess helper; the three parent tests execute it with explicit fixture pipes
+test budget_settlement_status_completed_releases_difference_and_finalizes ... ok
+test budget_separate_connections_cannot_exceed_shared_limit ... ok
+test connection_fresh_pragmas_schema_integrity_and_clean_shutdown ... ok
+test budget_unknown_cancelled_or_partial_usage_retains_full_reservation ... ok
+test migration_rejects_unrelated_database_without_overwriting ... ok
+test migrations_enforce_foreign_keys_audit_uniqueness_and_budget_checks ... ok
+test detailed_integrity_check_reports_structured_fk_violations ... ok
+test migration_real_process_interruption_leaves_fresh_database_recoverable ... ok
+test persistent_original_a_to_b_probe_denied_then_a_succeeds_once ... ok
+test open_database_with_existing_foreign_key_violation_fails_closed ... ok
+test migration_newer_schema_is_rejected_without_overwriting ... ok
+test persistent_policy_denies_unknown_malformed_write_down_and_terminal_session ... ok
+test quarantine_halts_closes_and_preserves_db_wal_and_shm_in_place ... ok
+test migration_repeated_initialization_preserves_supported_data ... ok
+test recovery_corrupt_database_fails_closed_and_preserves_original_bytes ... ok
+test windows_static_symlink_database_parent_and_wal_are_rejected ... ok
+test windows_unc_device_drive_relative_and_reserved_paths_are_rejected ... ok
+test runtime_integrity_check_detects_foreign_key_violations_and_halts_manager ... ok
+test recovery_real_process_termination_preserves_committed_and_discards_uncommitted ... ok
+test approval_all_action_parameter_changes_are_bound_without_consuming_original ... ok
+test migration_drift_missing_history_and_unknown_trigger_fail_closed ... ok
+test windows_locked_database_initialization_fails_without_overwriting ... ok
+test busy_timeout_is_real_and_distinct_from_stale_snapshot ... ok
+test wal_long_lived_reader_blocks_shutdown_then_release_allows_truncation ... ok
+
+test result: ok. 42 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 5.99s
+
+     Running tests\policy_tests.rs (target\debug\deps\policy_tests-341512b267e4bb9f.exe)
+
+running 9 tests
+test test_approval_grant_expiry ... ok
+test test_approval_grant_lifecycle_and_single_use_replay_prevention ... ok
+test test_approval_grant_mismatch_rejections ... ok
+test test_capability_vs_policy_authorization_separation ... ok
+test test_default_deny_unknown_operation ... ok
+test test_restricted_classification_always_requires_approval ... ok
+test test_revoked_approval_request ... ok
+test test_safe_operation_auto_granted_for_non_restricted ... ok
+test test_sensitive_actions_require_approval ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\security_tests.rs (target\debug\deps\security_tests-d0008c3dff484d47.exe)
+
+running 10 tests
+test test_action_digest_argument_delimiter_injection_resistance ... ok
+test test_action_digest_modify_checkout_target_binding_and_canonical_sorting ... ok
+test test_bell_lapadula_flow_enforcement_prevents_write_down ... ok
+test test_budget_threshold_boundary_precision ... ok
+test test_classification_check_never_accidentally_grants_unknown_operation ... ok
+test test_cost_usd_fixed_point_exact_arithmetic ... ok
+test test_cost_usd_rejects_nan_infinity_and_negative_amounts ... ok
+test test_failed_validation_does_not_consume_grant ... ok
+test test_uuid_version_variant_and_production_fail_closed ... ok
+test test_concurrent_single_use_approval_consumption_exact_winner ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\service_tests.rs (target\debug\deps\service_tests-01cd4c1a145305b0.exe)
+
+running 19 tests
+test test_service_error_compound_settlement_failure_contracts ... ok
+test test_missing_session_context_fails_closed ... ok
+test test_approval_rejection_and_replay_prevention ... ok
+test test_backend_unavailable_for_untrusted_workloads ... ok
+test test_persistence_failure_and_terminal_session_state ... ok
+test test_execution_identifier_mismatch_remediation_f_551_05 ... ok
+test test_policy_denial_unknown_operation_and_classification_downgrade ... ok
+test test_audit_consistency_and_diagnostic_redaction ... ok
+test test_execute_task_enforces_policy_engine_denial_for_unknown_operation ... ok
+test test_execute_task_enforces_classification_floor_rejection ... ok
+test test_successful_synthetic_workflow ... ok
+test test_execute_task_enforces_policy_denial_on_information_flow_violation ... ok
+test test_conservative_budget_reservation_and_limit_enforcement ... ok
+test test_budget_exhaustion_does_not_consume_valid_approval_grant ... ok
+test test_evidence_validation_failure ... ok
+test test_backend_fault_and_invalid_result_remediation_f_551_01 ... ok
+test test_invalid_approval_grant_leaves_no_budget_reservation ... ok
+test test_workspace_boundary_rejection ... ok
+test test_timeout_and_cancellation_lifecycle ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+     Running tests\session_tests.rs (target\debug\deps\session_tests-83dd2836579b1dad.exe)
+
+running 5 tests
+test test_complete_9x9_transition_matrix ... ok
+test test_metadata_validation ... ok
+test test_state_machine_invalid_transition_invariants ... ok
+test test_state_machine_valid_lifecycle_and_audit_emission ... ok
+test test_terminal_states_are_permanent ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\workspace_tests.rs (target\debug\deps\workspace_tests-0fc0a9f4ef05c150.exe)
+
+running 41 tests
+test workspace_classification_is_preserved_and_does_not_issue_grants ... ok
+test workspace_directory_change_invalidates_retained_observation ... ok
+test workspace_absolute_case_alias_uses_filesystem_semantics ... ok
+test workspace_directory_child_change_is_detected_with_identical_timestamp ... ok
+test workspace_discovery_normal_nested_and_empty_directories ... ok
+test workspace_external_directory_symlink_hides_outside_metadata ... ok
+test workspace_entry_limit_distinguishes_exact_capacity_from_overflow ... ok
+test workspace_file_size_limit_quarantines_without_content_read ... ok
+test workspace_file_symlink_external_target_is_quarantined ... ok
+test workspace_depth_limits_report_partial_instead_of_clean ... ok
+test workspace_file_symlink_internal_target_is_quarantined ... ok
+test workspace_git_directory_is_opaque_including_case_alias ... ok
+test workspace_git_pointer_and_invalid_manifests_are_not_read ... ok
+test workspace_limits_and_content_read_requests_are_validated ... ok
+test workspace_inventory_byte_limit_stops_with_explicit_status ... ok
+test workspace_internal_directory_symlink_is_not_traversed ... ok
+test workspace_missing_leaf_is_not_a_valid_future_path ... ok
+test workspace_metadata_changed_after_resolution_is_rejected ... ok
+test workspace_missing_root_and_file_root_fail_typed ... ok
+test workspace_nul_ads_reserved_names_and_win32_aliases_fail_closed ... ok
+test workspace_nested_and_cyclic_symlinks_terminate_without_following ... ok
+test workspace_nested_entries_cannot_exceed_global_budget ... ok
+test workspace_no_discovered_build_hook_script_or_executable_is_run ... ok
+test workspace_observation_is_bound_to_root_instance_not_equal_path_string ... ok
+test workspace_ordinary_diagnostics_redact_absolute_and_relative_payloads ... ok
+test workspace_oversized_path_is_rejected_before_io ... ok
+test workspace_outside_sibling_and_string_prefix_collision_are_rejected ... ok
+test workspace_parent_components_are_never_lexically_excused ... ok
+test workspace_relative_root_is_resolved_against_actual_cwd ... ok
+test workspace_preexisting_writer_changes_invalidate_retained_observation ... ok
+test workspace_scale_10000_file_measurement ... ignored, explicit 10,000-file benchmark; run experiments/phase1/workspace/Validate.ps1
+test workspace_root_dot_is_canonicalized_without_changing_process_cwd ... ok
+test workspace_replacement_with_symlink_before_resolution_is_rejected ... ok
+test workspace_relative_absolute_dot_and_repeated_separators ... ok
+test workspace_root_and_root_ancestor_symlinks_are_rejected ... ok
+test workspace_unc_devices_and_ambiguous_prefixes_fail_before_access ... ok
+test workspace_windows_junction_is_quarantined_without_target_traversal ... ignored, requires owned junction fixture; run experiments/phase1/workspace/Validate.ps1
+test workspace_windows_permission_denied_is_not_accepted ... ignored, requires owned deny-ACL fixture; run experiments/phase1/workspace/Validate.ps1
+test workspace_total_file_length_limit_reports_incomplete ... ok
+test workspace_retained_handles_deny_observed_rename_attempts ... ok
+test workspace_valid_root_is_canonical_and_session_classified ... ok
+
+test result: ok. 38 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+   Doc-tests sentra_core
+
+running 7 tests
+test crates\sentra-core\src\lib.rs - persistence (line 55) - compile fail ... ok
+test crates\sentra-core\src\lib.rs - persistence (line 48) - compile fail ... ok
+test crates\sentra-core\src\lib.rs - persistence (line 43) - compile fail ... ok
+test crates\sentra-core\src\lib.rs - persistence (line 36) - compile fail ... ok
+test crates\sentra-core\src\policy\approval.rs - policy::approval::ApprovalBroker (line 181) - compile fail ... ok
+test crates\sentra-core\src\policy\engine.rs - policy::engine::PolicyEngine (line 17) - compile fail ... ok
+test crates\sentra-core\src\policy\approval.rs - policy::approval::ApprovalBroker (line 188) - compile fail ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
