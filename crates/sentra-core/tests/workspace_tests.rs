@@ -395,6 +395,39 @@ fn workspace_directory_change_invalidates_retained_observation() {
 }
 
 #[test]
+#[cfg(windows)]
+fn workspace_directory_child_change_is_detected_with_identical_timestamp() {
+    use std::{
+        fs::{FileTimes, OpenOptions},
+        os::windows::fs::OpenOptionsExt,
+    };
+    let f = Fixture::new();
+    f.file("dir/original", b"old");
+    // Attribute-only access is compatible with retained no-delete metadata pins.
+    let directory = OpenOptions::new()
+        .access_mode(0x100)
+        .share_mode(7)
+        .custom_flags(0x0200_0000)
+        .open(f.repo.join("dir"))
+        .unwrap();
+    let original_time = directory.metadata().unwrap().modified().unwrap();
+    let boundary = f.boundary();
+    let observed = boundary.resolve(Path::new("dir")).unwrap();
+    f.file("dir/new", b"new");
+    directory
+        .set_times(FileTimes::new().set_modified(original_time))
+        .unwrap();
+    assert_eq!(
+        directory.metadata().unwrap().modified().unwrap(),
+        original_time
+    );
+    assert_eq!(
+        boundary.inspect(&observed).unwrap_err().kind,
+        WorkspaceErrorKind::PathChanged
+    );
+}
+
+#[test]
 fn workspace_file_symlink_internal_target_is_quarantined() {
     let f = Fixture::new();
     f.file("real", b"x");

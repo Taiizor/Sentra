@@ -267,7 +267,8 @@ impl ApprovalBroker {
         (broker, authority)
     }
 
-    /// Install or synchronize a trusted workspace/session/revision snapshot and classification floor.
+    /// Check an existing owner-installed context without changing it.
+    /// Only ApprovalAuthority can install or replace authoritative context.
     pub fn set_session_context(
         &self,
         session: &SessionMetadata,
@@ -282,16 +283,17 @@ impl ApprovalBroker {
         {
             return Err(unavailable());
         }
-        let mut inner = self.inner.lock().map_err(|_| unavailable())?;
-        inner.sessions.insert(
-            session.session_id,
-            SessionContext {
-                metadata: session.clone(),
-                revision: target_revision.into(),
-                minimum_classification,
-                generation: Arc::new(()),
-            },
-        );
+        let inner = self.inner.lock().map_err(|_| unavailable())?;
+        let context = inner
+            .sessions
+            .get(&session.session_id)
+            .ok_or_else(unavailable)?;
+        if context.metadata != *session
+            || context.revision != target_revision
+            || context.minimum_classification != minimum_classification
+        {
+            return Err(unavailable());
+        }
         Ok(())
     }
 

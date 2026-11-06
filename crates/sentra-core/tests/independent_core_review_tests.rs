@@ -1,6 +1,6 @@
-//! Independent 5.6.2.1 verification. No production changes or fault-injection hooks.
-//! Run `cargo test --test independent_core_review_tests --offline review_ -- --ignored --test-threads=1`.
-//! Assertions specify required secure behavior; failures must remain visible as findings.
+//! 5.6.2.1 adversarial assertions promoted to 5.6.2.2 regression coverage.
+//! Original source is preserved under experiments/phase1/core-review/archive/.
+//! Run `cargo test --test independent_core_review_tests --offline`.
 #![forbid(unsafe_code)]
 
 use rusqlite::Connection;
@@ -97,6 +97,7 @@ struct ObserverBackend {
     fault: AtomicBool,
     result_status: AtomicUsize,
     park_before_effect: bool,
+    gate: std::sync::Mutex<Option<(std::sync::mpsc::Sender<()>, std::sync::mpsc::Receiver<()>)>>,
 }
 impl ExecutionBackend for ObserverBackend {
     fn name(&self) -> &'static str {
@@ -123,6 +124,10 @@ impl ExecutionBackend for ObserverBackend {
             panic!("parent must terminate this owned fixture before its effect");
         }
         self.calls.fetch_add(1, Ordering::SeqCst);
+        if let Some((ready, release)) = self.gate.lock().unwrap().take() {
+            ready.send(()).unwrap();
+            release.recv().unwrap();
+        }
         if self.close_on_dispatch.load(Ordering::SeqCst) {
             self.manager.shutdown().unwrap();
         }
@@ -154,6 +159,7 @@ impl ExecutionBackend for ObserverBackend {
 }
 
 struct Fixture {
+    authority: sentra_core::persistence::PersistentApprovalAuthority,
     service: CoreService,
     repo: PersistenceRepository,
     manager: SqliteConnectionManager,
@@ -174,16 +180,18 @@ impl Fixture {
             fault: AtomicBool::new(false),
             result_status: AtomicUsize::new(0),
             park_before_effect: false,
+            gate: Default::default(),
         });
         let service = CoreService::new(
             CoreServiceConfig::default(),
             repo.clone(),
-            authority,
+            authority.clone(),
             PolicyEngine::new(),
             backend.clone(),
             clock.clone(),
         );
         Self {
+            authority,
             service,
             repo,
             manager,
@@ -268,16 +276,23 @@ fn intent<'a>(
     }
 }
 fn prepare<'a>(
+    authority: &sentra_core::persistence::PersistentApprovalAuthority,
     session: SessionId,
     grant: Option<(&'a PersistentApprovalGrant, &'a ApprovalIntent<'a>)>,
     amount: u64,
 ) -> PrepareExecutionRequest<'a> {
     PrepareExecutionRequest {
         reservation_id: id(),
-        session_id: session,
-        model_id: "owned-fixture",
-        amount: CostUsd::from_micro_usd(amount),
-        grant_and_intent: grant,
+        context: authority
+            .execution_context(
+                session,
+                Class::Internal,
+                grant.map_or(&metadata_action(), |(_, intent)| intent.action),
+                CostUsd::from_micro_usd(amount),
+                &PolicyEngine::new(),
+            )
+            .unwrap(),
+        grant: grant.map(|(grant, _)| grant),
         reservation_event: event(),
         consumption_event: event(),
     }
@@ -300,7 +315,6 @@ fn malformed_envelope(session: SessionId) -> EvidenceEnvelope {
 }
 
 #[test]
-#[ignore = "Explicit independent review; asserts secure behavior and may expose a finding"]
 fn review_public_context_registration_cannot_lower_trusted_floor() {
     let f = Fixture::new();
     let session = f.session(100);
@@ -349,7 +363,6 @@ fn review_public_context_registration_cannot_lower_trusted_floor() {
 }
 
 #[test]
-#[ignore = "Explicit independent review; asserts secure behavior and may expose a finding"]
 fn review_same_context_synchronization_does_not_invalidate_issued_memory_grant() {
     let f = Fixture::new();
     let session = f.session(100);
@@ -385,7 +398,6 @@ fn review_same_context_synchronization_does_not_invalidate_issued_memory_grant()
 }
 
 #[test]
-#[ignore = "Explicit independent review; asserts secure behavior and may expose a finding"]
 fn review_atomic_prepare_cannot_consume_a_while_reserving_for_b() {
     let f = Fixture::new();
     let a = f.session(100);
@@ -395,9 +407,10 @@ fn review_atomic_prepare_cannot_consume_a_while_reserving_for_b() {
     let record = f.service.get_session(a).unwrap();
     let bound = intent(&record, &action);
     let before = f.counts();
-    let result = f
-        .repo
-        .reserve_budget_and_consume_approval(prepare(b, Some((&grant, &bound)), 7), &f.clock);
+    let result = f.repo.reserve_budget_and_consume_approval(
+        prepare(&f.authority, b, Some((&grant, &bound)), 7),
+        &f.clock,
+    );
     let intact = f.approval_state(&grant) == "ISSUED" && f.counts() == before;
     assert!(
         result.is_err() && intact,
@@ -408,22 +421,13 @@ fn review_atomic_prepare_cannot_consume_a_while_reserving_for_b() {
 }
 
 #[test]
-#[ignore = "Explicit independent review; asserts secure behavior and may expose a finding"]
 fn review_no_grant_prepare_revalidates_context_after_policy_decision() {
     let f = Fixture::new();
     let session = f.session(100);
     let old = f.service.get_session(session).unwrap();
-    let action = metadata_action();
-    let engine = PolicyEngine::new();
-    engine
-        .register_session_context(&old.metadata, &old.target_revision, Class::Internal)
-        .unwrap();
-    assert!(matches!(
-        engine.evaluate(&old.metadata, Class::Internal, &action, None, &f.clock),
-        PolicyDecision::Granted
-    ));
-    let (_, authority) = PersistenceRepository::with_authority(f.manager.clone());
-    authority
+    let request = prepare(&f.authority, session, None, 7);
+    assert!(!request.context.requires_approval());
+    f.authority
         .register_session(
             &old.metadata,
             "revision-B",
@@ -433,17 +437,18 @@ fn review_no_grant_prepare_revalidates_context_after_policy_decision() {
             &f.clock,
         )
         .unwrap();
-    let result = f
-        .repo
-        .reserve_budget_and_consume_approval(prepare(session, None, 7), &f.clock);
-    assert!(
-        result.is_err(),
-        "the no-grant prepare request cannot express or recheck the authorized generation/revision/classification"
+    let before = f.counts();
+    assert_eq!(
+        f.repo
+            .reserve_budget_and_consume_approval(request, &f.clock)
+            .unwrap_err()
+            .kind,
+        Kind::ContextMismatch
     );
+    assert_eq!(before, f.counts());
 }
 
 #[test]
-#[ignore = "Explicit independent review; asserts secure behavior and may expose a finding"]
 fn review_paused_session_cannot_dispatch_new_work() {
     let f = Fixture::new();
     let session = f.session(100);
@@ -470,7 +475,6 @@ fn review_paused_session_cannot_dispatch_new_work() {
 }
 
 #[test]
-#[ignore = "Explicit independent review; asserts secure behavior and may expose a finding"]
 fn review_provider_action_cost_cannot_be_under_reserved() {
     let f = Fixture::new();
     let session = f.session(100);
@@ -486,7 +490,6 @@ fn review_provider_action_cost_cannot_be_under_reserved() {
 }
 
 #[test]
-#[ignore = "Explicit independent review; asserts secure behavior and may expose a finding"]
 fn review_prepare_debug_does_not_disclose_authorization_parameters() {
     let f = Fixture::new();
     let session = f.session(100);
@@ -497,7 +500,7 @@ fn review_prepare_debug_does_not_disclose_authorization_parameters() {
     let grant = f.grant(session, &action);
     let record = f.service.get_session(session).unwrap();
     let bound = intent(&record, &action);
-    let request = prepare(session, Some((&grant, &bound)), 7);
+    let request = prepare(&f.authority, session, Some((&grant, &bound)), 7);
     assert!(
         !format!("{request:?}").contains("REVIEW_SECRET_APPROVED_ARGUMENT"),
         "PrepareExecutionRequest derived Debug exposes its ApprovalIntent/action arguments"
@@ -505,7 +508,6 @@ fn review_prepare_debug_does_not_disclose_authorization_parameters() {
 }
 
 #[test]
-#[ignore = "Explicit independent review; a preview must not claim an unrelated grant is valid"]
 fn review_policy_preview_does_not_grant_with_another_sessions_receipt() {
     let f = Fixture::new();
     let a = f.session(100);
@@ -523,7 +525,6 @@ fn review_policy_preview_does_not_grant_with_another_sessions_receipt() {
 }
 
 #[test]
-#[ignore = "Explicit independent review; test-only statement fault injection"]
 fn review_either_audit_failure_rolls_back_approval_budget_and_sequence() {
     let f = Fixture::new();
     let session = f.session(100);
@@ -542,7 +543,7 @@ fn review_either_audit_failure_rolls_back_approval_budget_and_sequence() {
     let duplicate: EventId = duplicate.parse().unwrap();
     let before = f.counts();
     for fail_consumption_audit in [false, true] {
-        let mut request = prepare(session, Some((&grant, &bound)), 7);
+        let mut request = prepare(&f.authority, session, Some((&grant, &bound)), 7);
         if fail_consumption_audit {
             request.consumption_event = duplicate;
         } else {
@@ -559,13 +560,16 @@ fn review_either_audit_failure_rolls_back_approval_budget_and_sequence() {
     }
     let result = f
         .repo
-        .reserve_budget_and_consume_approval(prepare(session, Some((&grant, &bound)), 7), &f.clock)
+        .reserve_budget_and_consume_approval(
+            prepare(&f.authority, session, Some((&grant, &bound)), 7),
+            &f.clock,
+        )
         .unwrap();
     let audit = f.repo.audit_events(session, 0, 1000).unwrap();
     assert_eq!(audit[audit.len() - 2].event_kind, "BudgetReserved");
     assert_eq!(audit[audit.len() - 1].event_kind, "ApprovalConsumed");
     assert_eq!(
-        result.1.unwrap().audit_sequence,
+        result.consumption.as_ref().unwrap().audit_sequence,
         audit.last().unwrap().sequence_number
     );
     assert!(
@@ -576,7 +580,7 @@ fn review_either_audit_failure_rolls_back_approval_budget_and_sequence() {
     assert_eq!(
         f.repo
             .reserve_budget_and_consume_approval(
-                prepare(session, Some((&grant, &bound)), 7),
+                prepare(&f.authority, session, Some((&grant, &bound)), 7),
                 &f.clock
             )
             .unwrap_err()
@@ -587,7 +591,6 @@ fn review_either_audit_failure_rolls_back_approval_budget_and_sequence() {
 }
 
 #[test]
-#[ignore = "Explicit independent review; test-only SQLite trigger, never a production fault hook"]
 fn review_approval_update_failure_rolls_back_prior_reservation_and_audit() {
     let f = Fixture::new();
     let session = f.session(100);
@@ -599,7 +602,10 @@ fn review_approval_update_failure_rolls_back_prior_reservation_and_audit() {
     f.raw().execute_batch("CREATE TRIGGER owned_review_reject_consumption BEFORE UPDATE OF state ON approval_requests WHEN NEW.state='CONSUMED' BEGIN SELECT RAISE(ABORT,'owned review statement fault'); END").unwrap();
     let error = f
         .repo
-        .reserve_budget_and_consume_approval(prepare(session, Some((&grant, &bound)), 7), &f.clock)
+        .reserve_budget_and_consume_approval(
+            prepare(&f.authority, session, Some((&grant, &bound)), 7),
+            &f.clock,
+        )
         .unwrap_err();
     assert_eq!(error.sqlite_code, Some(1811));
     assert_eq!(f.counts(), before);
@@ -608,12 +614,14 @@ fn review_approval_update_failure_rolls_back_prior_reservation_and_audit() {
         .execute_batch("DROP TRIGGER owned_review_reject_consumption")
         .unwrap();
     f.repo
-        .reserve_budget_and_consume_approval(prepare(session, Some((&grant, &bound)), 7), &f.clock)
+        .reserve_budget_and_consume_approval(
+            prepare(&f.authority, session, Some((&grant, &bound)), 7),
+            &f.clock,
+        )
         .unwrap();
 }
 
 #[test]
-#[ignore = "Explicit independent review; deterministic boundary checks"]
 fn review_invalid_expired_and_stale_approvals_do_not_reserve_or_consume() {
     let f = Fixture::new();
     let session = f.session(100);
@@ -630,49 +638,75 @@ fn review_invalid_expired_and_stale_approvals_do_not_reserve_or_consume() {
     assert!(
         f.repo
             .reserve_budget_and_consume_approval(
-                prepare(session, Some((&grant, &mismatched)), 7),
+                prepare(&f.authority, session, Some((&grant, &mismatched)), 7),
                 &f.clock
             )
             .is_err()
     );
-    let mut bad_generation = intent(&record, &action);
-    bad_generation.context_generation += 1;
-    assert!(
-        f.repo
-            .reserve_budget_and_consume_approval(
-                prepare(session, Some((&grant, &bad_generation)), 7),
-                &f.clock
-            )
-            .is_err()
-    );
-    let mut bad_revision = intent(&record, &action);
-    bad_revision.target_revision = "revision-B";
-    assert!(
-        f.repo
-            .reserve_budget_and_consume_approval(
-                prepare(session, Some((&grant, &bad_revision)), 7),
-                &f.clock
-            )
-            .is_err()
-    );
+    assert_eq!(f.counts(), before);
+    assert_eq!(f.approval_state(&grant), "ISSUED");
     let bound = intent(&record, &action);
+    let stale = prepare(&f.authority, session, Some((&grant, &bound)), 7);
+    // Rotate generation while retaining revision: caller fields cannot fabricate a fresh context.
+    f.authority
+        .register_session(
+            &record.metadata,
+            &record.target_revision,
+            Class::Internal,
+            record.budget_limit,
+            event(),
+            &f.clock,
+        )
+        .unwrap();
+    let after_update = f.counts();
+    assert_eq!(
+        f.repo
+            .reserve_budget_and_consume_approval(stale, &f.clock)
+            .unwrap_err()
+            .kind,
+        Kind::ContextMismatch
+    );
+    assert_eq!(f.counts(), after_update);
+    assert_eq!(f.approval_state(&grant), "ISSUED");
+    let fresh = f.grant(session, &action);
+    let current = f.service.get_session(session).unwrap();
+    let current_intent = intent(&current, &action);
+    let stale_revision = prepare(&f.authority, session, Some((&fresh, &current_intent)), 7);
+    f.authority
+        .register_session(
+            &current.metadata,
+            "revision-B",
+            Class::Internal,
+            current.budget_limit,
+            event(),
+            &f.clock,
+        )
+        .unwrap();
+    assert_eq!(
+        f.repo
+            .reserve_budget_and_consume_approval(stale_revision, &f.clock)
+            .unwrap_err()
+            .kind,
+        Kind::ContextMismatch
+    );
+    let expiring = f.grant(session, &action);
+    let current = f.service.get_session(session).unwrap();
+    let bound = intent(&current, &action);
+    let request = prepare(&f.authority, session, Some((&expiring, &bound)), 7);
+    let before = f.counts();
     f.clock.advance_seconds(3600);
     assert_eq!(
         f.repo
-            .reserve_budget_and_consume_approval(
-                prepare(session, Some((&grant, &bound)), 7),
-                &f.clock
-            )
+            .reserve_budget_and_consume_approval(request, &f.clock)
             .unwrap_err()
             .kind,
         Kind::ApprovalExpired
     );
-    assert_eq!(f.counts(), before);
-    assert_eq!(f.approval_state(&grant), "ISSUED");
+    assert_eq!(before, f.counts());
+    assert_eq!(f.approval_state(&expiring), "ISSUED");
 }
 
 #[test]
-#[ignore = "Explicit independent review; budget exhaustion must not burn approval"]
 fn review_budget_denial_preserves_issued_grant_for_exact_retry() {
     let f = Fixture::new();
     let session = f.session(10);
@@ -684,7 +718,7 @@ fn review_budget_denial_preserves_issued_grant_for_exact_retry() {
     assert_eq!(
         f.repo
             .reserve_budget_and_consume_approval(
-                prepare(session, Some((&grant, &bound)), 11),
+                prepare(&f.authority, session, Some((&grant, &bound)), 11),
                 &f.clock
             )
             .unwrap_err()
@@ -694,13 +728,15 @@ fn review_budget_denial_preserves_issued_grant_for_exact_retry() {
     assert_eq!(f.counts(), before);
     assert_eq!(f.approval_state(&grant), "ISSUED");
     f.repo
-        .reserve_budget_and_consume_approval(prepare(session, Some((&grant, &bound)), 7), &f.clock)
+        .reserve_budget_and_consume_approval(
+            prepare(&f.authority, session, Some((&grant, &bound)), 7),
+            &f.clock,
+        )
         .unwrap();
     assert_eq!(f.approval_state(&grant), "CONSUMED");
 }
 
 #[test]
-#[ignore = "Explicit independent review; deterministic thread barriers"]
 fn review_atomic_consumption_and_budget_contention_are_serialized() {
     let f = Fixture::new();
     let session = f.session(100);
@@ -719,7 +755,7 @@ fn review_atomic_consumption_and_budget_contention_are_serialized() {
                 scope.spawn(move || {
                     barrier.wait();
                     f.repo.reserve_budget_and_consume_approval(
-                        prepare(session, Some((grant, bound)), 7),
+                        prepare(&f.authority, session, Some((grant, bound)), 7),
                         &f.clock,
                     )
                 })
@@ -747,8 +783,10 @@ fn review_atomic_consumption_and_budget_contention_are_serialized() {
                 let f = &f;
                 scope.spawn(move || {
                     barrier.wait();
-                    f.repo
-                        .reserve_budget_and_consume_approval(prepare(session, None, 40), &f.clock)
+                    f.repo.reserve_budget_and_consume_approval(
+                        prepare(&f.authority, session, None, 40),
+                        &f.clock,
+                    )
                 })
             })
             .collect();
@@ -762,7 +800,6 @@ fn review_atomic_consumption_and_budget_contention_are_serialized() {
 }
 
 #[test]
-#[ignore = "Explicit independent review; independent connection barrier"]
 fn review_atomic_prepare_separate_connections_have_one_winner() {
     let f = Fixture::new();
     let session = f.session(100);
@@ -792,7 +829,7 @@ fn review_atomic_prepare_separate_connections_have_one_winner() {
                         .unwrap();
                     barrier.wait();
                     repo.reserve_budget_and_consume_approval(
-                        prepare(session, Some((&restored, &bound)), 7),
+                        prepare(&authority, session, Some((&restored, &bound)), 7),
                         &f.clock,
                     )
                 })
@@ -808,7 +845,6 @@ fn review_atomic_prepare_separate_connections_have_one_winner() {
 }
 
 #[test]
-#[ignore = "Explicit independent review; actual service denial before all side effects"]
 fn review_service_denials_never_call_backend_or_mutate_budget_approval() {
     let f = Fixture::new();
     let session = f.session(100);
@@ -846,7 +882,6 @@ fn review_service_denials_never_call_backend_or_mutate_budget_approval() {
 }
 
 #[test]
-#[ignore = "Explicit independent review; real managed shutdown is the test-only failure source"]
 fn review_actual_execution_and_evidence_settlement_failures_are_observable() {
     for evidence_failure in [false, true] {
         let f = Fixture::new();
@@ -869,7 +904,7 @@ fn review_actual_execution_and_evidence_settlement_failures_are_observable() {
             }
         );
         assert!(error.has_settlement_failure());
-        assert!(error.secondary_error().unwrap().contains("Closed"));
+        assert_eq!(error.secondary_error().unwrap().kind, Kind::Closed);
         let (state, actual): (String, Option<i64>) = f
             .raw()
             .query_row(
@@ -884,7 +919,6 @@ fn review_actual_execution_and_evidence_settlement_failures_are_observable() {
 }
 
 #[test]
-#[ignore = "Explicit independent review; verifies that successful cleanup does not invent a secondary error"]
 fn review_successful_settlement_preserves_unknown_usage_without_compound_error() {
     for evidence_failure in [false, true] {
         let f = Fixture::new();
@@ -913,7 +947,6 @@ fn review_successful_settlement_preserves_unknown_usage_without_compound_error()
 }
 
 #[test]
-#[ignore = "Explicit independent review; asserts secure error formatting"]
 fn review_compound_execution_error_redacts_backend_sensitive_message() {
     let f = Fixture::new();
     let session = f.session(100);
@@ -932,7 +965,6 @@ fn review_compound_execution_error_redacts_backend_sensitive_message() {
 }
 
 #[test]
-#[ignore = "Explicit independent review; asserts secure error formatting"]
 fn review_compound_evidence_error_redacts_untrusted_metadata() {
     let f = Fixture::new();
     let session = f.session(100);
@@ -949,7 +981,6 @@ fn review_compound_evidence_error_redacts_untrusted_metadata() {
 }
 
 #[test]
-#[ignore = "Explicit independent review; checks existing typed error introspection"]
 fn review_compound_error_keeps_typed_primary_source() {
     let mut typed = Vec::new();
     for evidence_failure in [false, true] {
@@ -964,7 +995,27 @@ fn review_compound_error_keeps_typed_primary_source() {
             request.evidence_envelopes.push(malformed_envelope(session));
         }
         let error = f.service.execute_task(request).unwrap_err();
-        typed.push(error.source().is_some());
+        let source = error.source().unwrap();
+        typed.push(if evidence_failure {
+            source
+                .downcast_ref::<sentra_core::EvidenceVerificationError>()
+                .is_some_and(|e| {
+                    e.kind == sentra_core::EvidenceVerificationErrorKind::InvalidMediaType
+                })
+        } else {
+            source
+                .downcast_ref::<ExecutionError>()
+                .is_some_and(|e| e.kind == ExecutionErrorKind::BackendFault)
+        });
+        assert_eq!(error.secondary_error().unwrap().kind, Kind::Closed);
+        assert!(
+            !format!(
+                "{source} {source:?} {:?} {}",
+                error.primary_error(),
+                error.message
+            )
+            .contains("REVIEW_SECRET")
+        );
     }
     assert!(
         typed.iter().all(|preserved| *preserved),
@@ -973,7 +1024,6 @@ fn review_compound_error_keeps_typed_primary_source() {
 }
 
 #[test]
-#[ignore = "Explicit independent review; tests each non-success result branch with actual settlement failure"]
 fn review_non_success_results_keep_primary_outcome_when_settlement_fails() {
     let mut outcomes = Vec::new();
     for status in 1..=3 {
@@ -987,6 +1037,15 @@ fn review_non_success_results_keep_primary_outcome_when_settlement_fails() {
             .service
             .execute_task(f.request(session, action, Some(grant), 7))
             .unwrap_err();
+        let expected = match status {
+            1 => ExecutionStatus::Failed,
+            2 => ExecutionStatus::TimedOut,
+            _ => ExecutionStatus::Cancelled,
+        };
+        assert!(
+            matches!(error.primary_error(), Some(sentra_core::service::ServicePrimaryError::Outcome(outcome)) if outcome.status == expected && outcome.exit_code == if status == 1 {Some(7)} else {None})
+        );
+        assert_eq!(error.secondary_error().unwrap().kind, Kind::Closed);
         outcomes.push((
             error.kind.clone(),
             error.is_execution() && error.has_settlement_failure(),
@@ -1093,7 +1152,6 @@ impl Drop for OwnedChild {
 }
 
 #[test]
-#[ignore = "Explicit independent review; kills only the owned repository test executable"]
 fn review_real_process_exit_after_prepare_preserves_pair_but_cannot_replay() {
     let f = Fixture::new();
     let session = f.session(100);
@@ -1104,6 +1162,21 @@ fn review_real_process_exit_after_prepare_preserves_pair_but_cannot_replay() {
     // Ready is emitted only by the backend after the atomic prepare method returned.
     assert_eq!(f.approval_state(&grant), "CONSUMED");
     assert_eq!(f.repo.budget_used(session).unwrap().as_micro_usd(), 7);
+    let live = f.service.get_session(session).unwrap();
+    assert_eq!(
+        f.authority
+            .register_session(
+                &live.metadata,
+                "revision-after-exit",
+                Class::Internal,
+                live.budget_limit,
+                event(),
+                &f.clock
+            )
+            .unwrap_err()
+            .kind,
+        Kind::ContextBusy
+    );
     child.terminate();
     f.manager.integrity_check().unwrap();
     let raw = f.raw();
@@ -1129,7 +1202,7 @@ fn review_real_process_exit_after_prepare_preserves_pair_but_cannot_replay() {
     assert_eq!(
         f.repo
             .reserve_budget_and_consume_approval(
-                prepare(session, Some((&grant, &bound)), 7),
+                prepare(&f.authority, session, Some((&grant, &bound)), 7),
                 &f.clock
             )
             .unwrap_err()
@@ -1142,10 +1215,21 @@ fn review_real_process_exit_after_prepare_preserves_pair_but_cannot_replay() {
             .unwrap(),
         1
     );
+    // Process termination released the admission lock without deleting/replacing
+    // its lock file. An explicit lifecycle update can now proceed.
+    f.authority
+        .register_session(
+            &live.metadata,
+            "revision-after-exit",
+            Class::Internal,
+            live.budget_limit,
+            event(),
+            &f.clock,
+        )
+        .unwrap();
 }
 
 #[test]
-#[ignore = "Explicit independent review; two owned processes race the new atomic method"]
 fn review_atomic_prepare_cross_process_has_one_consumption_and_reservation() {
     let f = Fixture::new();
     let session = f.session(100);
@@ -1236,7 +1320,7 @@ fn owned_5621_process() {
         let mut input = String::new();
         std::io::stdin().lock().read_line(&mut input).unwrap();
         assert_eq!(input.trim(), "GO");
-        let mut request = prepare(session, Some((&grant, &bound)), 7);
+        let mut request = prepare(&authority, session, Some((&grant, &bound)), 7);
         request.reservation_id = Identifier::new_deterministic(5621, u64::from(std::process::id()));
         request.reservation_event =
             EventId::for_test_sequence(60_000_001 + u64::from(std::process::id()) * 10);
@@ -1261,6 +1345,7 @@ fn owned_5621_process() {
         fault: AtomicBool::new(false),
         result_status: AtomicUsize::new(0),
         park_before_effect: true,
+        gate: Default::default(),
     });
     let service = CoreService::new(
         CoreServiceConfig::default(),
@@ -1283,4 +1368,364 @@ fn owned_5621_process() {
     };
     let _ = service.execute_task(request);
     panic!("parent must terminate owned child before execute_task returns");
+}
+
+#[test]
+fn remediation_context_updates_are_fenced_through_dispatch_without_holding_sqlite() {
+    let f = Fixture::new();
+    let session = f.session(100);
+    let other = f.session(100);
+    let record = f.service.get_session(session).unwrap();
+    let (ready, entered) = std::sync::mpsc::channel();
+    let (release, proceed) = std::sync::mpsc::channel();
+    *f.backend.gate.lock().unwrap() = Some((ready, proceed));
+    thread::scope(|scope| {
+        let job = scope.spawn(|| {
+            f.service
+                .execute_task(f.request(session, metadata_action(), None, 7))
+        });
+        entered.recv_timeout(Duration::from_secs(10)).unwrap();
+        // Separate connections and authorities must see the SAME OS session fence.
+        let manager = SqliteConnectionManager::open(&f.directory.db, &f.clock).unwrap();
+        let (repo, authority) = PersistenceRepository::with_authority(manager);
+        assert_eq!(
+            authority
+                .register_session(
+                    &record.metadata,
+                    "revision-B",
+                    Class::Restricted,
+                    record.budget_limit,
+                    event(),
+                    &f.clock
+                )
+                .unwrap_err()
+                .kind,
+            Kind::ContextBusy
+        );
+        assert_eq!(
+            repo.transition_session(
+                session,
+                SessionState::Scoped,
+                SessionState::Planned,
+                event(),
+                &f.clock
+            )
+            .unwrap_err()
+            .kind,
+            Kind::ContextBusy
+        );
+        // DB is available while dispatch is parked. No database writer lock or
+        // global context lock is held across the external backend call.
+        assert_eq!(
+            repo.session(session).unwrap().unwrap().target_revision,
+            "revision-A"
+        );
+        repo.transition_session(
+            other,
+            SessionState::Scoped,
+            SessionState::Planned,
+            event(),
+            &f.clock,
+        )
+        .unwrap();
+        release.send(()).unwrap();
+        job.join().unwrap().unwrap();
+        authority
+            .register_session(
+                &record.metadata,
+                "revision-B",
+                Class::Restricted,
+                record.budget_limit,
+                event(),
+                &f.clock,
+            )
+            .unwrap();
+    });
+    assert_eq!(
+        f.service.get_session(session).unwrap().target_revision,
+        "revision-B"
+    );
+    assert_eq!(f.backend.calls.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn remediation_context_change_before_prepare_invalidates_approved_and_automatic_paths() {
+    for approval in [false, true] {
+        let f = Fixture::new();
+        let session = f.session(100);
+        let action = if approval { tool() } else { metadata_action() };
+        let grant = approval.then(|| f.grant(session, &action));
+        let record = f.service.get_session(session).unwrap();
+        let bound = intent(&record, &action);
+        let request = prepare(
+            &f.authority,
+            session,
+            grant.as_ref().map(|g| (g, &bound)),
+            7,
+        );
+        let barrier = Barrier::new(2);
+        thread::scope(|scope| {
+            let changed = scope.spawn(|| {
+                f.authority
+                    .register_session(
+                        &record.metadata,
+                        "revision-B",
+                        Class::Internal,
+                        record.budget_limit,
+                        event(),
+                        &f.clock,
+                    )
+                    .unwrap();
+                barrier.wait();
+            });
+            barrier.wait();
+            let before = f.counts();
+            assert_eq!(
+                f.repo
+                    .reserve_budget_and_consume_approval(request, &f.clock)
+                    .unwrap_err()
+                    .kind,
+                Kind::ContextMismatch
+            );
+            assert_eq!(f.counts(), before);
+            changed.join().unwrap();
+        });
+        if let Some(grant) = grant {
+            assert_eq!(f.approval_state(&grant), "ISSUED");
+        }
+        assert_eq!(f.backend.calls.load(Ordering::SeqCst), 0);
+    }
+}
+
+#[test]
+fn remediation_terminal_paused_waiting_and_unscoped_sessions_deny_admission() {
+    for state in [
+        SessionState::Created,
+        SessionState::WaitingForApproval,
+        SessionState::Paused,
+        SessionState::Completed,
+        SessionState::Failed,
+        SessionState::Cancelled,
+    ] {
+        let f = Fixture::new();
+        let session = f.session(100);
+        let record = f.service.get_session(session).unwrap();
+        let grant = f.grant(session, &tool());
+        let stale = prepare(&f.authority, session, None, 7);
+        // Test-only direct state fixture, never a production bypass API.
+        f.raw()
+            .execute(
+                "UPDATE sessions SET state=?1 WHERE session_id=?2",
+                rusqlite::params![state.as_str(), session.to_string()],
+            )
+            .unwrap();
+        let before = f.counts();
+        assert!(
+            f.service
+                .execute_task(f.request(session, tool(), Some(grant.clone()), 7))
+                .is_err()
+        );
+        assert_eq!(
+            f.repo
+                .reserve_budget_and_consume_approval(stale, &f.clock)
+                .unwrap_err()
+                .kind,
+            Kind::PolicyDenied
+        );
+        assert_eq!(f.counts(), before);
+        assert_eq!(f.approval_state(&grant), "ISSUED");
+        assert_eq!(f.backend.calls.load(Ordering::SeqCst), 0);
+        if state.is_terminal() {
+            assert_eq!(
+                f.authority
+                    .register_session(
+                        &record.metadata,
+                        "revision-B",
+                        Class::Public,
+                        record.budget_limit,
+                        event(),
+                        &f.clock
+                    )
+                    .unwrap_err()
+                    .kind,
+                Kind::ContextMismatch
+            );
+            assert!(
+                f.repo
+                    .transition_session(session, state, SessionState::Running, event(), &f.clock)
+                    .is_err()
+            );
+        }
+    }
+    for state in [
+        SessionState::Scoped,
+        SessionState::Planned,
+        SessionState::Running,
+    ] {
+        assert!(state.allows_execution());
+    }
+}
+
+#[test]
+fn remediation_foreign_context_seal_and_foreign_budget_settlement_fail_closed() {
+    let f = Fixture::new();
+    let a = f.session(100);
+    let b = f.session(100);
+    let (_, outsider) = PersistenceRepository::with_authority(f.manager.clone());
+    let request = prepare(&outsider, a, None, 7);
+    let before = f.counts();
+    assert_eq!(
+        f.repo
+            .reserve_budget_and_consume_approval(request, &f.clock)
+            .unwrap_err()
+            .kind,
+        Kind::ContextMismatch
+    );
+    assert_eq!(before, f.counts());
+    let prepared = f
+        .repo
+        .reserve_budget_and_consume_approval(prepare(&f.authority, a, None, 7), &f.clock)
+        .unwrap();
+    let id = prepared.budget.reservation_id;
+    drop(prepared);
+    let before = f.counts();
+    assert_eq!(
+        f.authority
+            .settle_budget_for_session(
+                b,
+                id,
+                sentra_core::persistence::SettlementStatus::CancelledUncertain,
+                event(),
+                &f.clock
+            )
+            .unwrap_err()
+            .kind,
+        Kind::ContextMismatch
+    );
+    assert_eq!(before, f.counts());
+    assert_eq!(f.repo.budget_used(a).unwrap().as_micro_usd(), 7);
+    assert_eq!(f.repo.budget_used(b).unwrap(), CostUsd::ZERO);
+}
+
+#[test]
+fn remediation_estimates_never_become_measured_actual_usage() {
+    for status in 0..=3 {
+        let f = Fixture::new();
+        let session = f.session(100);
+        f.backend.result_status.store(status, Ordering::SeqCst);
+        let report = f
+            .service
+            .execute_task(f.request(session, metadata_action(), None, 7))
+            .unwrap();
+        assert_eq!(report.settlement.actual_cost(), None);
+        assert_eq!(f.repo.budget_used(session).unwrap().as_micro_usd(), 7);
+        let actual: Option<i64> = f
+            .raw()
+            .query_row(
+                "SELECT actual_cost_micro_usd FROM budget_reservations",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(actual, None);
+    }
+}
+
+#[test]
+fn remediation_prepare_binds_all_action_parameters_and_preserves_matching_receipt() {
+    let actions = [
+        (
+            tool(),
+            OperationAction::ExecuteTool {
+                tool_id: "synthetic:noop".into(),
+                untrusted: false,
+                arguments: vec!["changed-secret-argument".into()],
+            },
+        ),
+        (
+            OperationAction::ModifyCheckout {
+                file_count: 1,
+                target_paths: vec!["a/private.rs".into()],
+            },
+            OperationAction::ModifyCheckout {
+                file_count: 1,
+                target_paths: vec!["b/private.rs".into()],
+            },
+        ),
+        (
+            OperationAction::ExportReport {
+                destination: "a.txt".into(),
+                is_external: true,
+                destination_classification: Some(Class::Internal),
+            },
+            OperationAction::ExportReport {
+                destination: "b.txt".into(),
+                is_external: true,
+                destination_classification: Some(Class::Internal),
+            },
+        ),
+        (tool(), metadata_action()),
+    ];
+    for (approved, changed) in actions {
+        let f = Fixture::new();
+        let session = f.session(100);
+        let grant = f.grant(session, &approved);
+        let record = f.service.get_session(session).unwrap();
+        let mismatch = intent(&record, &changed);
+        let before = f.counts();
+        assert!(
+            f.repo
+                .reserve_budget_and_consume_approval(
+                    prepare(&f.authority, session, Some((&grant, &mismatch)), 7),
+                    &f.clock
+                )
+                .is_err()
+        );
+        assert_eq!(before, f.counts());
+        assert_eq!(f.approval_state(&grant), "ISSUED");
+        let bound = intent(&record, &approved);
+        f.repo
+            .reserve_budget_and_consume_approval(
+                prepare(&f.authority, session, Some((&grant, &bound)), 7),
+                &f.clock,
+            )
+            .unwrap();
+        assert_eq!(f.approval_state(&grant), "CONSUMED");
+        assert_eq!(
+            f.repo
+                .reserve_budget_and_consume_approval(
+                    prepare(&f.authority, session, Some((&grant, &bound)), 7),
+                    &f.clock
+                )
+                .unwrap_err()
+                .kind,
+            Kind::ApprovalReused
+        );
+    }
+}
+
+#[test]
+fn remediation_success_outcome_settlement_failure_has_only_typed_persistence_cause() {
+    let f = Fixture::new();
+    let session = f.session(100);
+    f.backend.close_on_dispatch.store(true, Ordering::SeqCst);
+    let error = f
+        .service
+        .execute_task(f.request(session, metadata_action(), None, 7))
+        .unwrap_err();
+    assert_eq!(error.kind, ServiceErrorKind::Persistence);
+    assert!(!error.has_settlement_failure());
+    assert!(
+        matches!(error.primary_error(),Some(sentra_core::service::ServicePrimaryError::Persistence(e)) if e.kind==Kind::Closed)
+    );
+    assert_eq!(
+        f.raw()
+            .query_row(
+                "SELECT actual_cost_micro_usd FROM budget_reservations",
+                [],
+                |r| r.get::<_, Option<i64>>(0)
+            )
+            .unwrap(),
+        None
+    );
 }

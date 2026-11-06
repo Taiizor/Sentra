@@ -24,6 +24,12 @@ pub enum SessionState {
 }
 
 impl SessionState {
+    /// States eligible for a new synchronous task admission. Approval waiting,
+    /// pause, unscoped creation and all terminal states deny execution.
+    pub const fn allows_execution(&self) -> bool {
+        matches!(self, Self::Scoped | Self::Planned | Self::Running)
+    }
+
     /// Returns whether this state is terminal (no further transitions permitted).
     pub const fn is_terminal(&self) -> bool {
         matches!(self, Self::Completed | Self::Failed | Self::Cancelled)

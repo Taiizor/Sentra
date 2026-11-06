@@ -37,6 +37,8 @@ pub enum PersistenceErrorKind {
     InvalidApproval,
     /// Trusted current context does not match the intended operation.
     ContextMismatch,
+    /// A live execution admission prevents a concurrent lifecycle/context update.
+    ContextBusy,
     /// A grant has already been consumed.
     ApprovalReused,
     /// The request has expired or is not yet valid.

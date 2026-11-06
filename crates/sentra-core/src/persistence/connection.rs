@@ -110,6 +110,66 @@ impl fmt::Debug for SqliteConnectionManager {
     }
 }
 
+/// OS-owned admission lease. Close releases the lock, including process death.
+/// Persistent lock files must never be unlinked while managers may be active.
+pub(super) struct SessionAdmission {
+    _file: File,
+    _parents: Vec<File>,
+}
+
+impl SqliteConnectionManager {
+    pub(super) fn session_admission(
+        &self,
+        session: crate::SessionId,
+        exclusive: bool,
+    ) -> Result<SessionAdmission, PersistenceError> {
+        use std::fs::{OpenOptions, TryLockError};
+        super::model::parse_id(&session.to_string())?;
+        let mut name = self.0.path.as_os_str().to_os_string();
+        name.push(format!(".session-{session}.lock"));
+        let (path, parents) = validated_path(Path::new(&name))?;
+        let mut options = OpenOptions::new();
+        options.read(true).write(true).create(true).truncate(false);
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            options.share_mode(3).custom_flags(0x0020_0000);
+        }
+        let file = options
+            .open(&path)
+            .map_err(|_| PersistenceError::new(Kind::InvalidPath))?;
+        ordinary(&path)?;
+        let metadata = file
+            .metadata()
+            .map_err(|_| PersistenceError::new(Kind::InvalidPath))?;
+        if !metadata.is_file() {
+            return Err(PersistenceError::new(Kind::InvalidPath));
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            if metadata.file_attributes() & (0x400 | 0x40 | 0x1000 | 0x40000 | 0x400000) != 0 {
+                return Err(PersistenceError::new(Kind::InvalidPath));
+            }
+        }
+        let result = if exclusive {
+            file.try_lock()
+        } else {
+            file.try_lock_shared()
+        };
+        result.map_err(|e| {
+            PersistenceError::new(match e {
+                TryLockError::WouldBlock => Kind::ContextBusy,
+                TryLockError::Error(_) => Kind::InvalidPath,
+            })
+        })?;
+        Ok(SessionAdmission {
+            _file: file,
+            _parents: parents,
+        })
+    }
+}
+
 fn recovery_paths(path: &Path) -> [PathBuf; 4] {
     let base = path.as_os_str().to_os_string();
     let sidecar = |suffix| {
