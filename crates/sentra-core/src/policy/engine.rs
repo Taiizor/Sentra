@@ -12,6 +12,13 @@ use crate::{
 
 /// Deterministic policy engine enforcing default-deny authorization,
 /// security classification constraints, and human approval broker lifecycles.
+/// Effective configuration is immutable after construction. A different policy
+/// value cannot replace a registered persistent policy without owner re-registration.
+/// ```compile_fail
+/// use sentra_core::{PolicyEngine, CostUsd};
+/// let mut engine = PolicyEngine::new();
+/// engine.set_max_auto_budget(CostUsd::ZERO);
+/// ```
 #[derive(Debug, Default)]
 pub struct PolicyEngine {
     approval_broker: ApprovalBroker,
@@ -53,9 +60,36 @@ impl PolicyEngine {
         self.config.max_auto_budget
     }
 
-    /// Sets the maximum cost that can be automatically approved.
-    pub fn set_max_auto_budget(&mut self, budget: CostUsd) {
-        self.config.max_auto_budget = budget;
+    /// Bootstrap-only ownership transfer into the service's immutable configuration.
+    /// The service never exposes this engine or a configuration mutator.
+    pub(crate) fn for_service(self, budget: CostUsd) -> Self {
+        Self {
+            config: BudgetPolicyConfig {
+                max_auto_budget: budget,
+                ..self.config
+            },
+            ..self
+        }
+    }
+
+    /// Canonical effective rule identity, not a cryptographic digest. Reserved
+    /// configuration fields do not relax mandatory sensitivity/egress rules.
+    /// Only the auto-budget threshold currently changes evaluation semantics.
+    pub(crate) fn policy_identity(&self) -> String {
+        format!(
+            "sentra-policy:v1:auto-microusd={}",
+            self.config.max_auto_budget.as_micro_usd()
+        )
+    }
+
+    pub(crate) fn valid_policy_identity(value: &str) -> bool {
+        value
+            .strip_prefix("sentra-policy:v1:auto-microusd=")
+            .is_some_and(|number| {
+                number
+                    .parse::<u64>()
+                    .is_ok_and(|parsed| parsed.to_string() == number)
+            })
     }
 
     /// Returns a reference to the active budget policy configuration.

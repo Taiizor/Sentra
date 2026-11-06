@@ -160,10 +160,18 @@ pub(super) struct Snapshot {
     pub revision: String,
     pub classification_floor: String,
     pub budget_limit_micro_usd: u64,
+    /// Version 1 archives remain readable but are not executable authorization.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_identity: Option<String>,
 }
 impl Snapshot {
     pub fn validate(&self) -> Result<SessionMetadata, PersistenceError> {
-        if self.version != 1 || self.generation == 0 || !valid_text(&self.revision) {
+        let policy_valid = match (self.version, self.policy_identity.as_deref()) {
+            (1, None) => true,
+            (2, Some(identity)) => crate::PolicyEngine::valid_policy_identity(identity),
+            _ => false,
+        };
+        if !policy_valid || self.generation == 0 || !valid_text(&self.revision) {
             return Err(invalid());
         }
         integer(self.generation)?;

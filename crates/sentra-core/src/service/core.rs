@@ -136,11 +136,11 @@ impl CoreService {
         config: CoreServiceConfig,
         repository: PersistenceRepository,
         authority: PersistentApprovalAuthority,
-        mut policy_engine: PolicyEngine,
+        policy_engine: PolicyEngine,
         execution_backend: Arc<dyn ExecutionBackend>,
         clock: Arc<dyn Clock>,
     ) -> Self {
-        policy_engine.set_max_auto_budget(config.max_auto_budget);
+        let policy_engine = policy_engine.for_service(config.max_auto_budget);
         let evidence_verifier = if let Some(ref types) = config.allowed_media_types {
             EvidenceVerifier::new()
                 .with_max_size(config.max_evidence_size_bytes)
@@ -223,11 +223,11 @@ impl CoreService {
         let event_id = EventId::new();
         let record = self
             .authority
-            .register_session(
+            .register_session_with_policy(
                 &metadata,
                 target_revision,
                 classification_floor,
-                budget_limit,
+                (budget_limit, &self.policy_engine),
                 event_id,
                 &self.clock,
             )
@@ -353,26 +353,28 @@ impl CoreService {
             &self.policy_engine,
         ) {
             Ok(context) => context,
-            Err(_) => {
+            Err(error) if error.kind == crate::persistence::PersistenceErrorKind::PolicyDenied => {
                 return Ok(ServicePolicyDecision::Denied {
                     reason: "Authoritative context or policy denied".into(),
                 });
             }
+            Err(error) => return Err(ServiceError::persistence(error)),
         };
-        if context.requires_approval() && grant.is_none() {
-            return Ok(ServicePolicyDecision::NeedsApproval {
-                action_name: action.action_name(),
-                description: "Explicit approval required".into(),
-            });
-        }
         match self
             .repository
-            .validate_execution(&context, grant, &self.clock)
+            .preview_execution(&context, grant, &self.clock)
         {
-            Ok(()) => Ok(ServicePolicyDecision::Granted),
-            Err(_) => Ok(ServicePolicyDecision::Denied {
+            Ok(crate::persistence::ExecutionPreview::Granted) => Ok(ServicePolicyDecision::Granted),
+            Ok(crate::persistence::ExecutionPreview::NeedsApproval) => {
+                Ok(ServicePolicyDecision::NeedsApproval {
+                    action_name: action.action_name(),
+                    description: "Explicit approval required".into(),
+                })
+            }
+            Ok(crate::persistence::ExecutionPreview::Denied) => Ok(ServicePolicyDecision::Denied {
                 reason: "Approval or authoritative context invalid".into(),
             }),
+            Err(error) => Err(ServiceError::persistence(error)),
         }
     }
 
