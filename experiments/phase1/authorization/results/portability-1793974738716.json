@@ -1,0 +1,139 @@
+{
+  "increment": "5.6.2.2.2 validator portability",
+  "observed_at_utc": "2026-11-06T14:23:24.1932762+00:00",
+  "driver_sha256": "78d42e28427c39a24b8a9c645e77fde690dceb353e890e9a1f60d3438fc6214d",
+  "driver_unchanged": true,
+  "fixture_root": "E:/MyProject/Mix/GitHub/Sentra/target/authorization-portability-4db04d0ca00d4908b30425c6551856db",
+  "cases": [
+    {
+      "name": "default",
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 16004,
+      "command": [
+        "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+        "-NoProfile",
+        "-File",
+        "E:\\MyProject\\Mix\\GitHub\\Sentra\\experiments\\phase1\\authorization/Validate.ps1"
+      ],
+      "working_directory": "E:/MyProject/Mix/GitHub/Sentra",
+      "cargo_target_dir": null,
+      "target_existed_before": null,
+      "target_empty_before": null,
+      "evidence": "experiments/phase1/authorization/results/1793974739056.json",
+      "target_matches": true,
+      "archive_within_target": true,
+      "artifacts": {
+        "requested_target_dir": null,
+        "resolved_target_dir": "E:/MyProject/Mix/GitHub/Sentra/target",
+        "archive": "E:/MyProject/Mix/GitHub/Sentra/target/debug/libsentra_core.rlib",
+        "dependency_dir": "E:/MyProject/Mix/GitHub/Sentra/target/debug/deps",
+        "probe": "E:/MyProject/Mix/GitHub/Sentra/target/authorization-validation/84ac872e08e946ed9d74bdd8e708c86a/policy-context-probe.exe",
+        "archive_sha256": "c4951b36e6be5f4b0ebd30b18fad92ded91e0edda4ebcf435051f4e3fabf4a2a",
+        "probe_sha256": "edd57ace828165c50426021907e283fa9e9ce11f86ed7294f1722272851a803d"
+      },
+      "checks": 13,
+      "stdout": "rustc-version exit=0 timed_out=False\r\ncargo-version exit=0 timed_out=False\r\ndependency-metadata exit=0 timed_out=False\r\nformat exit=0 timed_out=False\r\ncheck exit=0 timed_out=False\r\nclippy exit=0 timed_out=False\r\nworkspace-tests exit=0 timed_out=False\r\ngrant-binding-regressions exit=0 timed_out=False\r\nrepeat-concurrency exit=0 timed_out=False\r\nprobe-format exit=0 timed_out=False\r\nprobe-library-artifact exit=0 timed_out=False\r\noriginal-probe-compile exit=0 timed_out=False\r\noriginal-a-to-b-probe exit=0 timed_out=False\r\n\r\n\u001b[32;1mName                     \u001b[0m\u001b[32;1m Status\u001b[0m\u001b[32;1m Exit\u001b[0m\r\n\u001b[32;1m----                     \u001b[0m \u001b[32;1m------\u001b[0m \u001b[32;1m----\u001b[0m\r\nrustc-version             Passed    0\r\ncargo-version             Passed    0\r\ndependency-metadata       Passed    0\r\nformat                    Passed    0\r\ncheck                     Passed    0\r\nclippy                    Passed    0\r\nworkspace-tests           Passed    0\r\ngrant-binding-regressions Passed    0\r\nrepeat-concurrency        Passed    0\r\nprobe-format              Passed    0\r\nprobe-library-artifact    Passed    0\r\noriginal-probe-compile    Passed    0\r\noriginal-a-to-b-probe     Passed    0\r\n\r\nEvidence: E:\\MyProject\\Mix\\GitHub\\Sentra\\experiments\\phase1\\authorization/results/1793974739056.json\r\n",
+      "stderr": ""
+    },
+    {
+      "name": "absolute-spaces",
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 111247,
+      "command": [
+        "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+        "-NoProfile",
+        "-File",
+        "E:\\MyProject\\Mix\\GitHub\\Sentra\\experiments\\phase1\\authorization/Validate.ps1"
+      ],
+      "working_directory": "E:/MyProject/Mix/GitHub/Sentra/target/authorization-portability-4db04d0ca00d4908b30425c6551856db",
+      "cargo_target_dir": "E:/MyProject/Mix/GitHub/Sentra/target/authorization-portability-4db04d0ca00d4908b30425c6551856db/absolute target with spaces",
+      "target_existed_before": true,
+      "target_empty_before": true,
+      "evidence": "experiments/phase1/authorization/results/1793974755118.json",
+      "target_matches": true,
+      "archive_within_target": true,
+      "artifacts": {
+        "requested_target_dir": "E:/MyProject/Mix/GitHub/Sentra/target/authorization-portability-4db04d0ca00d4908b30425c6551856db/absolute target with spaces",
+        "resolved_target_dir": "E:/MyProject/Mix/GitHub/Sentra/target/authorization-portability-4db04d0ca00d4908b30425c6551856db/absolute target with spaces",
+        "archive": "E:/MyProject/Mix/GitHub/Sentra/target/authorization-portability-4db04d0ca00d4908b30425c6551856db/absolute target with spaces/debug/libsentra_core.rlib",
+        "dependency_dir": "E:/MyProject/Mix/GitHub/Sentra/target/authorization-portability-4db04d0ca00d4908b30425c6551856db/absolute target with spaces/debug/deps",
+        "probe": "E:/MyProject/Mix/GitHub/Sentra/target/authorization-portability-4db04d0ca00d4908b30425c6551856db/absolute target with spaces/authorization-validation/0464538e4764433aa0d520042f2acefa/policy-context-probe.exe",
+        "archive_sha256": "dd0378ae4e6fcfb760c04675bdfa6f5d8b8f2c1b1605c9fed9236132c7270e78",
+        "probe_sha256": "da043c761032a170222bc6ed47ca3f485bb3d5b2e8388265ff97196a4bc23061"
+      },
+      "checks": 13,
+      "stdout": "rustc-version exit=0 timed_out=False\r\ncargo-version exit=0 timed_out=False\r\ndependency-metadata exit=0 timed_out=False\r\nformat exit=0 timed_out=False\r\ncheck exit=0 timed_out=False\r\nclippy exit=0 timed_out=False\r\nworkspace-tests exit=0 timed_out=False\r\ngrant-binding-regressions exit=0 timed_out=False\r\nrepeat-concurrency exit=0 timed_out=False\r\nprobe-format exit=0 timed_out=False\r\nprobe-library-artifact exit=0 timed_out=False\r\noriginal-probe-compile exit=0 timed_out=False\r\noriginal-a-to-b-probe exit=0 timed_out=False\r\n\r\n\u001b[32;1mName                     \u001b[0m\u001b[32;1m Status\u001b[0m\u001b[32;1m Exit\u001b[0m\r\n\u001b[32;1m----                     \u001b[0m \u001b[32;1m------\u001b[0m \u001b[32;1m----\u001b[0m\r\nrustc-version             Passed    0\r\ncargo-version             Passed    0\r\ndependency-metadata       Passed    0\r\nformat                    Passed    0\r\ncheck                     Passed    0\r\nclippy                    Passed    0\r\nworkspace-tests           Passed    0\r\ngrant-binding-regressions Passed    0\r\nrepeat-concurrency        Passed    0\r\nprobe-format              Passed    0\r\nprobe-library-artifact    Passed    0\r\noriginal-probe-compile    Passed    0\r\noriginal-a-to-b-probe     Passed    0\r\n\r\nEvidence: E:\\MyProject\\Mix\\GitHub\\Sentra\\experiments\\phase1\\authorization/results/1793974755118.json\r\n",
+      "stderr": ""
+    },
+    {
+      "name": "initially-empty",
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 123829,
+      "command": [
+        "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+        "-NoProfile",
+        "-File",
+        "E:\\MyProject\\Mix\\GitHub\\Sentra\\experiments\\phase1\\authorization/Validate.ps1"
+      ],
+      "working_directory": "E:/MyProject/Mix/GitHub/Sentra",
+      "cargo_target_dir": "E:/MyProject/Mix/GitHub/Sentra/target/authorization-portability-4db04d0ca00d4908b30425c6551856db/initially empty target",
+      "target_existed_before": true,
+      "target_empty_before": true,
+      "evidence": "experiments/phase1/authorization/results/1793974866323.json",
+      "target_matches": true,
+      "archive_within_target": true,
+      "artifacts": {
+        "requested_target_dir": "E:/MyProject/Mix/GitHub/Sentra/target/authorization-portability-4db04d0ca00d4908b30425c6551856db/initially empty target",
+        "resolved_target_dir": "E:/MyProject/Mix/GitHub/Sentra/target/authorization-portability-4db04d0ca00d4908b30425c6551856db/initially empty target",
+        "archive": "E:/MyProject/Mix/GitHub/Sentra/target/authorization-portability-4db04d0ca00d4908b30425c6551856db/initially empty target/debug/libsentra_core.rlib",
+        "dependency_dir": "E:/MyProject/Mix/GitHub/Sentra/target/authorization-portability-4db04d0ca00d4908b30425c6551856db/initially empty target/debug/deps",
+        "probe": "E:/MyProject/Mix/GitHub/Sentra/target/authorization-portability-4db04d0ca00d4908b30425c6551856db/initially empty target/authorization-validation/2ad7f90c2d9844b091424943149bca86/policy-context-probe.exe",
+        "archive_sha256": "7ad3a32b880a6343dae877b908b0fc3c0abd42fab9007b4eb751658a3407c879",
+        "probe_sha256": "b6fb2957628f228a1889f61339f787d5198956a53ee625e1b9a7667413eb0c2f"
+      },
+      "checks": 13,
+      "stdout": "rustc-version exit=0 timed_out=False\r\ncargo-version exit=0 timed_out=False\r\ndependency-metadata exit=0 timed_out=False\r\nformat exit=0 timed_out=False\r\ncheck exit=0 timed_out=False\r\nclippy exit=0 timed_out=False\r\nworkspace-tests exit=0 timed_out=False\r\ngrant-binding-regressions exit=0 timed_out=False\r\nrepeat-concurrency exit=0 timed_out=False\r\nprobe-format exit=0 timed_out=False\r\nprobe-library-artifact exit=0 timed_out=False\r\noriginal-probe-compile exit=0 timed_out=False\r\noriginal-a-to-b-probe exit=0 timed_out=False\r\n\r\n\u001b[32;1mName                     \u001b[0m\u001b[32;1m Status\u001b[0m\u001b[32;1m Exit\u001b[0m\r\n\u001b[32;1m----                     \u001b[0m \u001b[32;1m------\u001b[0m \u001b[32;1m----\u001b[0m\r\nrustc-version             Passed    0\r\ncargo-version             Passed    0\r\ndependency-metadata       Passed    0\r\nformat                    Passed    0\r\ncheck                     Passed    0\r\nclippy                    Passed    0\r\nworkspace-tests           Passed    0\r\ngrant-binding-regressions Passed    0\r\nrepeat-concurrency        Passed    0\r\nprobe-format              Passed    0\r\nprobe-library-artifact    Passed    0\r\noriginal-probe-compile    Passed    0\r\noriginal-a-to-b-probe     Passed    0\r\n\r\nEvidence: E:\\MyProject\\Mix\\GitHub\\Sentra\\experiments\\phase1\\authorization/results/1793974866323.json\r\n",
+      "stderr": ""
+    },
+    {
+      "name": "reuse",
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 14340,
+      "command": [
+        "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+        "-NoProfile",
+        "-File",
+        "E:\\MyProject\\Mix\\GitHub\\Sentra\\experiments\\phase1\\authorization/Validate.ps1"
+      ],
+      "working_directory": "E:/MyProject/Mix/GitHub/Sentra",
+      "cargo_target_dir": "E:/MyProject/Mix/GitHub/Sentra/target/authorization-portability-4db04d0ca00d4908b30425c6551856db/initially empty target",
+      "target_existed_before": true,
+      "target_empty_before": false,
+      "evidence": "experiments/phase1/authorization/results/1793974990153.json",
+      "target_matches": true,
+      "archive_within_target": true,
+      "artifacts": {
+        "requested_target_dir": "E:/MyProject/Mix/GitHub/Sentra/target/authorization-portability-4db04d0ca00d4908b30425c6551856db/initially empty target",
+        "resolved_target_dir": "E:/MyProject/Mix/GitHub/Sentra/target/authorization-portability-4db04d0ca00d4908b30425c6551856db/initially empty target",
+        "archive": "E:/MyProject/Mix/GitHub/Sentra/target/authorization-portability-4db04d0ca00d4908b30425c6551856db/initially empty target/debug/libsentra_core.rlib",
+        "dependency_dir": "E:/MyProject/Mix/GitHub/Sentra/target/authorization-portability-4db04d0ca00d4908b30425c6551856db/initially empty target/debug/deps",
+        "probe": "E:/MyProject/Mix/GitHub/Sentra/target/authorization-portability-4db04d0ca00d4908b30425c6551856db/initially empty target/authorization-validation/c4085f24128c49b5ad8a4cc4e1e0c8fc/policy-context-probe.exe",
+        "archive_sha256": "7ad3a32b880a6343dae877b908b0fc3c0abd42fab9007b4eb751658a3407c879",
+        "probe_sha256": "fc0d1306c345cbfe81db1dbdde997f16552f78a80b261bfba3e43d0fa6928f82"
+      },
+      "checks": 13,
+      "stdout": "rustc-version exit=0 timed_out=False\r\ncargo-version exit=0 timed_out=False\r\ndependency-metadata exit=0 timed_out=False\r\nformat exit=0 timed_out=False\r\ncheck exit=0 timed_out=False\r\nclippy exit=0 timed_out=False\r\nworkspace-tests exit=0 timed_out=False\r\ngrant-binding-regressions exit=0 timed_out=False\r\nrepeat-concurrency exit=0 timed_out=False\r\nprobe-format exit=0 timed_out=False\r\nprobe-library-artifact exit=0 timed_out=False\r\noriginal-probe-compile exit=0 timed_out=False\r\noriginal-a-to-b-probe exit=0 timed_out=False\r\n\r\n\u001b[32;1mName                     \u001b[0m\u001b[32;1m Status\u001b[0m\u001b[32;1m Exit\u001b[0m\r\n\u001b[32;1m----                     \u001b[0m \u001b[32;1m------\u001b[0m \u001b[32;1m----\u001b[0m\r\nrustc-version             Passed    0\r\ncargo-version             Passed    0\r\ndependency-metadata       Passed    0\r\nformat                    Passed    0\r\ncheck                     Passed    0\r\nclippy                    Passed    0\r\nworkspace-tests           Passed    0\r\ngrant-binding-regressions Passed    0\r\nrepeat-concurrency        Passed    0\r\nprobe-format              Passed    0\r\nprobe-library-artifact    Passed    0\r\noriginal-probe-compile    Passed    0\r\noriginal-a-to-b-probe     Passed    0\r\n\r\nEvidence: E:\\MyProject\\Mix\\GitHub\\Sentra\\experiments\\phase1\\authorization/results/1793974990153.json\r\n",
+      "stderr": ""
+    }
+  ],
+  "reuse_verified": true,
+  "note": "Cached approved dependencies only; no source/host configuration changes. Build artifacts are retained for the required warm invocation. Each validator compiles a unique probe using this Cargo invocation archive/dependency path."
+}
