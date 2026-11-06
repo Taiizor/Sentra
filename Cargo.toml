@@ -2,4 +2,5 @@
 resolver = "2"
 members = [
     "crates/sentra-core",
+    "crates/sentra-cli",
 ]

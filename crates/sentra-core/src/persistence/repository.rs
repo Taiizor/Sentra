@@ -332,6 +332,31 @@ impl PersistenceRepository {
             .write(|tx| Ok(read_snapshot(tx, id)?.map(|(_, record)| record)))
     }
 
+    /// Inspect a dedicated single-project store without enumerating arbitrary
+    /// sessions. An empty store is incomplete; multiple sessions are incompatible
+    /// with this local CLI projection. This does not register or change context.
+    pub(crate) fn local_session(&self) -> Result<SessionRecord, PersistenceError> {
+        self.manager.write(|tx| {
+            let ids = tx.collect(
+                "SELECT session_id FROM sessions ORDER BY session_id LIMIT 2",
+                [],
+                |r| r.get::<_, String>(0),
+            )?;
+            if ids.len() != 1 {
+                return Err(error(Kind::ContextMismatch));
+            }
+            let id = ids[0]
+                .parse::<SessionId>()
+                .map_err(|_| error(Kind::Integrity))?;
+            let (snapshot, record) =
+                read_snapshot(tx, id)?.ok_or_else(|| error(Kind::Integrity))?;
+            if snapshot.policy_identity.is_none() {
+                return Err(error(Kind::PolicyMismatch));
+            }
+            Ok(record)
+        })
+    }
+
     /// Store a canonical pending request; this cannot issue or authorize a grant.
     pub fn request_approval(
         &self,

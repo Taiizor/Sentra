@@ -140,6 +140,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "sentra-cli"
+version = "0.1.0"
+dependencies = [
+ "sentra-core",
+]
+
+[[package]]
 name = "sentra-core"
 version = "0.1.0"
 dependencies = [

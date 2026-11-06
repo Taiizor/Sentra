@@ -256,6 +256,12 @@ impl CoreService {
             .ok_or_else(|| ServiceError::session(format!("Session '{session_id}' not found")))
     }
 
+    pub(super) fn local_session(&self) -> Result<SessionRecord, ServiceError> {
+        self.repository
+            .local_session()
+            .map_err(ServiceError::persistence)
+    }
+
     /// Transitions a session to a new lifecycle state.
     pub fn transition_session(
         &self,

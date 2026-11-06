@@ -112,22 +112,37 @@ impl fmt::Debug for SqliteConnectionManager {
 
 /// OS-owned admission lease. Close releases the lock, including process death.
 /// Persistent lock files must never be unlinked while managers may be active.
-pub(super) struct SessionAdmission {
+pub(crate) struct SessionAdmission {
     _file: File,
     _parents: Vec<File>,
 }
 
 impl SqliteConnectionManager {
+    // The CLI-local lifecycle uses a separate database-wide admission name. It
+    // never grants session authority and must not be unlinked by callers.
+    pub(crate) fn local_context_admission(
+        path: &Path,
+    ) -> Result<SessionAdmission, PersistenceError> {
+        let (path, _pins) = validated_path(path)?;
+        let mut name = path.into_os_string();
+        name.push(".local-context.lock");
+        Self::admission(Path::new(&name), true)
+    }
+
     pub(super) fn session_admission(
         &self,
         session: crate::SessionId,
         exclusive: bool,
     ) -> Result<SessionAdmission, PersistenceError> {
-        use std::fs::{OpenOptions, TryLockError};
         super::model::parse_id(&session.to_string())?;
         let mut name = self.0.path.as_os_str().to_os_string();
         name.push(format!(".session-{session}.lock"));
-        let (path, parents) = validated_path(Path::new(&name))?;
+        Self::admission(Path::new(&name), exclusive)
+    }
+
+    fn admission(input: &Path, exclusive: bool) -> Result<SessionAdmission, PersistenceError> {
+        use std::fs::{OpenOptions, TryLockError};
+        let (path, parents) = validated_path(input)?;
         let mut options = OpenOptions::new();
         options.read(true).write(true).create(true).truncate(false);
         #[cfg(windows)]
@@ -389,14 +404,28 @@ impl SqliteConnectionManager {
     /// Open only an explicitly selected local data file with an existing trusted parent.
     /// Parent/sidecar checks mitigate static indirection; they are not race-free VFS containment.
     pub fn open(path: &Path, clock: &impl Clock) -> Result<Self, PersistenceError> {
+        Self::open_mode(path, clock, true)
+    }
+
+    /// Open an existing, initialized Sentra database without permission to create
+    /// a missing database or adopt an empty SQLite file. Physical WAL recovery,
+    /// mandatory PRAGMAs and schema validation still apply; no domain rows change.
+    pub fn open_existing(path: &Path, clock: &impl Clock) -> Result<Self, PersistenceError> {
+        Self::open_mode(path, clock, false)
+    }
+
+    fn open_mode(path: &Path, clock: &impl Clock, create: bool) -> Result<Self, PersistenceError> {
         let (path, pins) = validated_path(path)?;
         let exists = path
             .try_exists()
             .map_err(|_| PersistenceError::new(Kind::InvalidPath))?;
+        if !exists && !create {
+            return Err(PersistenceError::new(Kind::InvalidPath));
+        }
         let mut flags = OpenFlags::SQLITE_OPEN_READ_WRITE
             | OpenFlags::SQLITE_OPEN_NO_MUTEX
             | OpenFlags::SQLITE_OPEN_NOFOLLOW;
-        if !exists {
+        if !exists && create {
             flags |= OpenFlags::SQLITE_OPEN_CREATE;
         }
         let connection =
@@ -431,7 +460,8 @@ impl SqliteConnectionManager {
         if version > migration::VERSION {
             return Err(PersistenceError::new(Kind::NewerSchema));
         }
-        if version < 0
+        if (!create && version == 0)
+            || version < 0
             || (version == 0 && (objects != 0 || application != 0))
             || (version > 0 && application != migration::APPLICATION_ID)
         {
