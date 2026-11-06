@@ -1,8 +1,10 @@
 # Phase 1 Execution and Validation Record
 
-Date: 2026-11-05; latest status update: 2026-11-06. Phase 1 is explicitly authorized by the project owner. Phase 2 is not authorized. This record links technical-validation increments and preserves historical observations. **Phase 1 is not complete.** Core library, persistence, synthetic service foundations and the initial local CLI are implemented; real provider/VM workload integrations remain unimplemented.
+Date: 2026-11-05; latest status update: 2026-11-07. Phase 1 is explicitly authorized by the project owner. Phase 2 is not authorized. This record links technical-validation increments and preserves historical observations. **Phase 1 is not complete.** Core library, persistence, synthetic service foundations and the initial local CLI are implemented; real provider/VM workload integrations remain unimplemented.
 
 ## Increment 6.1 update
+
+Documentation follow-up: [Increment 6.1.2](INCREMENT_6_1_2_STORAGE_SEMANTICS_DOCUMENTATION.md) makes inspection's domain-state read-only versus SQLite/storage side effects explicit, including write permissions and potential exit 5. It records initialization crash windows and atomic staging versus explicit operator recovery as design-only alternatives. F-611-02 / OQ-25 remains a mandatory open pre-Phase-2 production-readiness gate; the one-session identity model is unchanged. No production code or behavior changed; the [6.1.1 review](INCREMENT_6_1_1_INDEPENDENT_REVIEW.md) is preserved. Phase 1 final verification and Phase 2 are not started by this increment.
 
 The [local CLI foundation](INCREMENT_6_1_LOCAL_CLI_FOUNDATION.md) provides `init`, `status`, `session show`, help and version, with stable exit codes and optional JSON. Core owns the explicit workspace/external-storage lifecycle, preserves a dedicated store's sole session identity, rejects incomplete/orphaned/unrelated storage, and requires a successful shutdown checkpoint before reporting success. Inspection changes no domain rows. No target execution, discovery scan, approval issuance, AI, network, Git integration or new third-party dependency is exposed. Phase 1 remains incomplete; Increment 6.2 and Phase 2 have not started. All earlier reports remain historical evidence.
 

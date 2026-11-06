@@ -35,10 +35,11 @@ Acceptance:
 - Reject expired, replayed, out-of-scope, and revision-mismatched approval records. Bound tasks, output, and storage; show cancellation reaches a process tree in the platform spike.
 - Meet or explain/revise Q-05 with measured hardware, repeated runs, and raw results. A failed performance target is recorded rather than concealed.
 - Demonstrate an authenticated control-channel prototype to a disposable Linux VM candidate, or record a blocking prerequisite before any untrusted execution feature is enabled.
+- Resolve **F-611-02 / OQ-25 incomplete initialization recovery before Phase 2 production readiness**: Core/platform owner with security review must select and approve atomic staging or explicit operator recovery (or a justified combination), implement it in a separately authorized increment, and demonstrate real process termination at schema/session/Scoped boundaries, WAL/SHM preservation, concurrent initialization, and no replacement of an existing project. Recording alternatives in [Increment 6.1.2](docs/phase1/INCREMENT_6_1_2_STORAGE_SEMANTICS_DOCUMENTATION.md) does not pass this gate. Current CLI inspection is domain-state read-only with [SQLite/storage side effects and write-permission requirements](README.md#inspection-storage-permissions).
 
 ## Phase 2 — Continuous Security Review pilot
 
-Depends on Phase 1 language, persistence, and policy gates. Deliver local immutable base/head review, surrounding context, narrow Rust source investigation, Cargo.lock/RustSec analysis, local reports, a provider abstraction, and patch verification on reference Rust targets inside a disposable Linux VM worker. Private local snapshots must use the same workflow without public upload.
+Depends on Phase 1 language, persistence, and policy gates, including the open F-611-02 incomplete-initialization recovery requirement before Phase 2 production readiness. This is an unresolved prerequisite, not authorization to start Phase 2. Deliver local immutable base/head review, surrounding context, narrow Rust source investigation, Cargo.lock/RustSec analysis, local reports, a provider abstraction, and patch verification on reference Rust targets inside a disposable Linux VM worker. Private local snapshots must use the same workflow without public upload.
 
 Acceptance:
 

@@ -19,6 +19,21 @@ cargo run --offline --package sentra-cli -- session show $context.session_id --w
 
 The first command builds trusted Sentra code through the cached development toolchain. The binary is named `sentra`; installation/distribution is not implemented. A dedicated database contains one foundation session whose ID is also the local project identity. Repeating `init` preserves that identity. `status`/`session` do not create databases or change domain records; SQLite recovery, lock files and checkpointing can change physical storage files. An uninitialized status exits with code 3; errors have distinct nonzero codes. No execution, scanning, approval or provider commands exist. Full behavior, JSON and error contracts are in the [increment report](docs/phase1/INCREMENT_6_1_LOCAL_CLI_FOUNDATION.md).
 
+### Inspection storage permissions
+
+`sentra status` and `sentra session show` are **domain-state read-only**, not physically read-only inspection tools. Use writable, protected local storage even for these commands; do not expect forensic/read-only-media access or unchanged database file bytes.
+
+| Layer | Current inspection behavior |
+| --- | --- |
+| Domain-state immutability | Does not change session/snapshot, approval, audit, budget or migration records. No permission to execute, export or modify target content follows from inspection. |
+| Logical SQL write behavior | Reads existing domain records and validates the existing schema; does not issue domain INSERT/UPDATE/DELETE or persistent DDL against a supported existing store. It still uses managed `BEGIN IMMEDIATE` transactions and initialization/verification PRAGMAs, not a read-only SQL connection. |
+| SQLite recovery/checkpoint side effects | Opens existing SQLite with `SQLITE_OPEN_READ_WRITE`. WAL recovery/checkpoint processing may apply pending **committed** frames to the main database. Normal CLI shutdown attempts `PRAGMA wal_checkpoint(TRUNCATE)` before closing; errors are surfaced. This can change `.db` bytes and truncate `-wal`; uncommitted data is not promoted to committed state. |
+| Filesystem and lock metadata effects | May create/open `<database>.local-context.lock` with read-write access. SQLite may create/update `-shm` and other coordination files. Filesystem timestamps, directory and lock metadata may change. The admission file can be created even when the database is absent and status reports uninitialized. |
+
+Write access to the database and sufficient storage-directory permissions may therefore be required. Read-only media or inadequate permissions may cause `storage_or_service_failure` (exit **5**); path/parent validation can fail earlier with exit **4**. There is no automatic read-only fallback, repair or permission change.
+
+Interrupted `init` can leave incomplete initialization (`incomplete_storage`, exit **6**, or a storage failure, exit **5**). Preserve the original database and WAL/SHM/journal recovery set; do not treat these errors as instructions to delete or overwrite files. No recovery command exists. The [crash-window analysis and future alternatives](docs/phase1/INCREMENT_6_1_2_STORAGE_SEMANTICS_DOCUMENTATION.md#incomplete-initialization-and-current-recovery-behavior) track atomic staging versus explicit operator recovery as an unresolved pre-Phase-2 readiness gate. Stores with multiple sessions are currently rejected fail-closed; project identity remains the single foundation SessionId.
+
 ## Two operating modes
 
 - **Continuous Security Review:** review an immutable base/head change with surrounding context, validate candidate findings, and prepare remediation proposals. Local Git input comes before hosted pull-request automation.
