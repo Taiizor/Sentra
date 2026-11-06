@@ -1,8 +1,21 @@
 # Progress
 
-Last updated: 2026-11-06.
+Last updated: 2026-11-07.
 
 ## Current status
+
+**Phase 1 Increment 6.1.1: independent CLI security, persistence & lifecycle review complete — Approved with Conditions.** The [independent review](docs/phase1/INCREMENT_6_1_1_INDEPENDENT_REVIEW.md) independently audits and verifies the `sentra-cli` foundation and `LocalWorkspace` Core facade. No production code, existing tests, public APIs, database schema, or dependencies were modified. Phase 1 remains incomplete; Increment 6.2 and Phase 2 have not started.
+
+- **F-611-01 (SQLite Inspection Side Effects & Read-Only Media) — Low Severity:** `sentra status` and `session show` are strictly domain-state immutable (all domain rows in all 6 persistent tables remain 100% identical). However, inspection is not VFS read-only: it acquires an OS write lock (`.local-context.lock`), opens SQLite with `SQLITE_OPEN_READ_WRITE`, replays uncheckpointed WAL frames, and executes `PRAGMA wal_checkpoint(TRUNCATE)` on shutdown. Inspection fails with exit code 5 on write-protected media or read-only filesystems.
+- **F-611-02 (Interrupted Bootstrap Leaves Incomplete Store) — Low Severity:** `sentra init` creates the database directly at its destination path without atomic staging (`.tmp` rename). A forced kill midway leaves an incomplete database. Subsequent invocations correctly fail closed (`incomplete_storage` exit 6 or `storage_or_service_failure` exit 5) without auto-repair or overwriting, but manual file deletion is required to re-attempt initialization.
+- **F-611-03 (Single Foundation Session Limitation) — Informational:** Project identity aliases the foundation `SessionId`. Stores with zero or multiple sessions fail closed with `incomplete_storage`. Preserved under [OQ-25](docs/OPEN_QUESTIONS.md).
+- **F-611-04 (Transient Windows File Contention) — Informational:** Transient OS Error 5 (Access Denied) and OS Error 32 (Sharing Violation) on newly linked test binaries observed under Windows Defender real-time scanning; cleared upon handle release.
+- **Command & Output Security:** Hand-crafted parser enforces UTF-8, max 64 arguments, duplicate rejection, and no arbitrary flag injection. Exit codes (0, 2, 3, 4, 5, 6, 7, 8) accurately categorize outcomes. Broken output pipe handling fails closed with exit code 8. Error messages and single-line JSON (`schema_version=1`) strictly redact filesystem paths, tokens, SQL text, and database diagnostics.
+- **Authorization & Execution Boundary:** Untrusted target execution remains 100% fail-closed via `FailClosedBackend` and `ExecutionError::untrusted_workload_disabled()`. No CLI route to `CoreService::execute_task` exists. Foundation session has zero budget (`CostUsd::ZERO`), internal classification floor, and metadata-only revision labels; no execution authority can be minted via the CLI.
+- **Actual Verification:** Full offline check, formatting, warning-free Clippy, and workspace tests Passed. Ordinary test suite: **290 runtime + 7 compile-fail doctests Passed, 0 Failed, 5 ignored** (2 subprocess helpers + 3 platform fixtures). Specialized validation suites: persistence **13/13**, authorization **13/13**, workspace **11/11**, and CLI **18/18**. Total verified unique assertion invariants: **300 Passed, 0 Failed**.
+- **Preservation & Boundaries:** Entry was clean `develop` at commit `89b1ad243ef084679b046367bdec2419d557e226`. Physical index SHA-256 (`2F89DABDB388AAA234B20E2CC7DAA665979A7C92E3FE46A2AFDC3866F3F659EE`) and entry count (272) remain identical. Permanent Git policy maintained with zero agent commits, pushes, or branch mutations; all review artifacts remain unstaged. Phase 2 remains strictly unauthorized.
+
+### Status at Increment 6.1.1 entry (historical implementation report)
 
 **Phase 1 Increment 6.1: local CLI foundation implemented and tested.** The [implementation report](docs/phase1/INCREMENT_6_1_LOCAL_CLI_FOUNDATION.md) records the `sentra-cli` crate, Core-owned initialization/status/session inspection, stable JSON/exit codes, external local storage and fail-closed behavior. A dedicated store retains one foundation session as its local project identity. Repeated initialization and read-only domain inspection preserve all persisted domain rows; incomplete/corrupt/orphaned storage is not silently repaired. No execution/approval/provider command exists. Phase 1 remains incomplete; Increment 6.2 and Phase 2 have not started.
 
