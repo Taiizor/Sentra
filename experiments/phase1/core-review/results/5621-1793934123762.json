@@ -1,0 +1,1313 @@
+{
+  "increment": "5.6.2.1 independent verification only",
+  "observed_at_utc": "2026-11-06T03:02:25.7413775+00:00",
+  "include_adversarial": true,
+  "inputs_unchanged": true,
+  "input_sha256": {
+    "Cargo.toml": "ed8c7a2be82195af0ec64bb0b33f355f66f47f9d8f04224f0a6a22dd39a2dd32",
+    "Cargo.lock": "fb6713bff071fa0a334ed5925e6c225be5f9167efdb1311d491bcc53af7c221b",
+    "crates/sentra-core/Cargo.toml": "2fa3c69c2d52e1f54292db83897f70286e61ca27d3caeb4af539dc2efa759fa7",
+    "experiments/phase1/core-review/Validate-5.6.2.1.ps1": "6471d947b988559d61c6e2105f90db563ca54bb6d3d504e6578f4e5e5af8abae",
+    "crates/sentra-core/src/audit/event.rs": "39b67aed6d79a3cd870f96ff7eb1cfab7b23b77dcb089da070e1f13fbc29b443",
+    "crates/sentra-core/src/audit/mod.rs": "0e96769b8ba9d29bba489f0985fcd0697f5c57ce189e78af0c450a2bfe244734",
+    "crates/sentra-core/src/common/clock.rs": "bdd454eb800886d50ab267822e27a2a8f677599aaab02ac65bf32caff3681a4c",
+    "crates/sentra-core/src/common/mod.rs": "c3b31f5c989c4eae942f930f2982b942b33891f27ca8fdc7b1768c61ec8c5274",
+    "crates/sentra-core/src/domain/classification.rs": "860f9bdad583489a80e57928f7beafafb31e4aae3e4b7fb908a60023f4b0930b",
+    "crates/sentra-core/src/domain/error.rs": "751ea216e4a840a84e954a15abee0d120f3e2737509cf02d6a4c7dcd640ee51c",
+    "crates/sentra-core/src/domain/id.rs": "e647c6b812924816a5a163079f2dd5bafa52090c1f8859ad098e5039aa7f4638",
+    "crates/sentra-core/src/domain/mod.rs": "97df5ea95d42ebbdd4c4342eebcd57e39a3085046588c14731cd70dc5b6125a3",
+    "crates/sentra-core/src/domain/time.rs": "a6dc1ee086339dc9906ed40fbb841cb70122ac36420512bb138d8cce64d25c00",
+    "crates/sentra-core/src/evidence/error.rs": "a5d0d61db4ebf25b690c63830d950b9d9fa06c883dffbc3c1865ad752ee041e7",
+    "crates/sentra-core/src/evidence/mod.rs": "0aa52dd3af8c14c6d1ab530e71aca9a09909efbfd2ff21b54b1a2dd9571661e9",
+    "crates/sentra-core/src/evidence/model.rs": "28b01239a9e97a47f38a74cee2c02a35a7ccc9b558ee5a7c8c3f838af6d14abd",
+    "crates/sentra-core/src/evidence/verifier.rs": "7d7f51c065eacb8f05f4db7bfd3452427c9562dfa6f1c3a495837768699bb383",
+    "crates/sentra-core/src/execution/backend.rs": "80725d19447fd1db679b9a66979dc78c68cf459073e2840b9125a71cdf9f9c15",
+    "crates/sentra-core/src/execution/engine.rs": "28f1a6c5aa304fbc3765efcc8aad96c46012d1f6c23e955c01cb4b2c4823a952",
+    "crates/sentra-core/src/execution/error.rs": "2c49ad412e6362ae8432f8d9b6588221c4303dc74e2147e68b868b7c283d2bec",
+    "crates/sentra-core/src/execution/mod.rs": "9114e1cce503daccf8b67066f0bf64b01c46c67e0bbe5e86b0f4cce7486046ab",
+    "crates/sentra-core/src/execution/model.rs": "4e2430d5339da7aec97b79e1f559960839bafad4a93da23a7eaed1e4264755cb",
+    "crates/sentra-core/src/execution/scope.rs": "786030c5757bebd3293433e826d482a0a9099cd3a84f69d8a20803403a87bd27",
+    "crates/sentra-core/src/lib.rs": "74776e51fbf3ebde2288b844151a3a4854f0fee46a67d564ef1a1f35da1f314b",
+    "crates/sentra-core/src/persistence/connection.rs": "7511ef3a72af5617396d65b04ddaf28528dced363f292b4649b89bd02dfe77d7",
+    "crates/sentra-core/src/persistence/error.rs": "b36878e6464e3b373b9ae26c97a59c96e18ffa89b650cc69d2a3f3a0304f9f86",
+    "crates/sentra-core/src/persistence/migration.rs": "fa8b9d4a421a1bd5fc3e4811a263d59b318b7be4a502fac5c7001af20b3bc3d2",
+    "crates/sentra-core/src/persistence/mod.rs": "a75bbf88586417638adeef9e1109585a9c6f18d1579f3af269524d5840f55d2f",
+    "crates/sentra-core/src/persistence/model.rs": "10cd0e3c7ee69817d20f839b29cf7f60de752dc58c85a5f1b5c51469d99848ce",
+    "crates/sentra-core/src/persistence/repository.rs": "3ff5b0fe1aec9e98d9b72c566ef25cccbd520e492a9a8bfa1854de790091d4f9",
+    "crates/sentra-core/src/persistence/schema_v1.sql": "54c53fb3b5b58173c3c6ef697c2e11a8362a48fe61eeb18e7b49dad0e124a1d3",
+    "crates/sentra-core/src/persistence/transaction.rs": "2f5b841f178d68b4cf389dfa017221110aa6ced2da4b2e8299fa55568ac4965a",
+    "crates/sentra-core/src/policy/action.rs": "9a5a96813c95187c0f8f56b8034fd9be297153d87c28a84e2c58575d27aa9262",
+    "crates/sentra-core/src/policy/approval.rs": "8ebd5c10c1326b653be90fe0d6763a0d84aee283e10cdeaac2891d3eb935ac40",
+    "crates/sentra-core/src/policy/budget.rs": "9c9f5245fcbf9f531ef6c076a9a5496829c4447132f368baa3497f9f03ed6ee1",
+    "crates/sentra-core/src/policy/decision.rs": "2ea03bcdd4a58d4dc827f3cf4da984749c138d7553682b67f150b86d9efb97af",
+    "crates/sentra-core/src/policy/engine.rs": "47e97ac49c1337c501026b9e2a1ee80911e5524ebe1ea8bc423a5824a508b837",
+    "crates/sentra-core/src/policy/mod.rs": "b6ac2e7e94a202bbdec594beb3ea96e7b8a07eb7ee82786746ce1694f35ebc12",
+    "crates/sentra-core/src/service/config.rs": "1e8d217add46452ca8d6ed86b1024b1d71c03bde99a0aed4eda0814d14a61061",
+    "crates/sentra-core/src/service/core.rs": "0a03404285631fa5129ac106ff5fb8aaf462fa0cf04ecf375b84a97e076d3a9d",
+    "crates/sentra-core/src/service/error.rs": "879bd4e9b0d36d5629b75ba2acd9d070480c6910abf9ae7c47276b6e0710130c",
+    "crates/sentra-core/src/service/harness.rs": "371f8d70a8d9341a39fa77bfa60b6d7a123a3256d238a71275eaa19c119a7ca2",
+    "crates/sentra-core/src/service/lifecycle.rs": "0b38522d00c648494f2573bf8165306ccae1647f3907fe545d6763312ef914a1",
+    "crates/sentra-core/src/service/mod.rs": "81f6086787aeb533dc62064b577e77bc2268067934e960361375a4feabc91b3d",
+    "crates/sentra-core/src/session/machine.rs": "d540af726063cd5c108dd05c5bb729dc93d6ba2a9fb5d8733977f3736820cf11",
+    "crates/sentra-core/src/session/metadata.rs": "befa1d8d088ea3539d043fe407f3c75b865fb011d3ae05c12a96f66c85a43931",
+    "crates/sentra-core/src/session/mod.rs": "eb74a1d363dcb7a41ef5307fe1c1f2ea62fa63c05aa26f6845475378aa9c7fd6",
+    "crates/sentra-core/src/session/state.rs": "545eb479c42bff3ffde949ed2dda5abebf09ac172f52867bb6fdce1085d73e8c",
+    "crates/sentra-core/src/workspace/boundary.rs": "b513ec3f040fa2948d5720c2e04f560483565cf1831dfd993779b6cb392156f5",
+    "crates/sentra-core/src/workspace/discovery.rs": "0e54cf60dc7aab30caa934ccd0509949c2b5cb64be53a97d8f181a27c6cfef0d",
+    "crates/sentra-core/src/workspace/error.rs": "60ce8a1585d3250ba8639135b11ca99f4cc6895cb8251fafd1ed7caa8e133e2a",
+    "crates/sentra-core/src/workspace/mod.rs": "152d90a1c1bafb2e2e366af2175ee7bc4c8ae7bd5f882310c6266ab895e2a9e0",
+    "crates/sentra-core/src/workspace/model.rs": "461db7a3791607724d0d39183bf12ab64a67ac8b3ac2c15fe619b7b4aaa30653",
+    "crates/sentra-core/src/workspace/platform.rs": "9b5f51919bfd496600bdd0b5ae2eca1a097cf4bbd7c1f2fb39826270490186a0",
+    "crates/sentra-core/tests/authorization_tests.rs": "7435b52fa8dc07a911d1169e2abcca34b366db65908bf2d4759069e646bc1345",
+    "crates/sentra-core/tests/domain_tests.rs": "e8e19591e1f841320facef1f714cec89ac5eff77f8cd7b5cce319f84c2fb0c26",
+    "crates/sentra-core/tests/evidence_tests.rs": "723cee517cc0ed2ab5a9712a1863ac58b5ac7d08baf0f389725c0b04d90db45b",
+    "crates/sentra-core/tests/execution_evidence_adversarial_tests.rs": "79b949862e7967005c4d67bd2917699abfedf2f74247284641b70eb213ef3fee",
+    "crates/sentra-core/tests/execution_tests.rs": "5619682beec1facb8c959c2ed92a8b68d94170edc2f465254477eeab99064bfd",
+    "crates/sentra-core/tests/independent_core_review_tests.rs": "9ac6bde83c6a13cac986fb377c70e33454675ef8a26a36d381e08570c81d00d4",
+    "crates/sentra-core/tests/persistence_tests.rs": "4555431322d64cfb31b749cb0dbfe2742e56d4748c6fb437d22586d76d378e99",
+    "crates/sentra-core/tests/policy_tests.rs": "3f9780084f272250d04cf5ead05d35a3f50110b0ced37141f2e4065f257188ae",
+    "crates/sentra-core/tests/security_tests.rs": "590a9f424f9feb86cf5fbfa400ec1b291d611cf2a6fee076fb5ef66af3c22042",
+    "crates/sentra-core/tests/service_tests.rs": "8de11ffdff018fbaf5453e7ff4d1b2ec47670ec46d4868ef979c11349114052d",
+    "crates/sentra-core/tests/session_tests.rs": "9915e30233c9dd04ac8b0cddc2e3ffe8b040c4cbd2250c4e09c81f2a7b713d17",
+    "crates/sentra-core/tests/support/persistence.rs": "9d15af2aaf201418b3d573a1e72613dd6838ef3e9673cf76e4a555c255fb8453",
+    "crates/sentra-core/tests/workspace_tests.rs": "ef5916280c643c921f72200d76bed5f5ca322f9c54a1773ef0b822e8fc4edfb9"
+  },
+  "environment": {
+    "powershell": "7.6.9",
+    "os": "Microsoft Windows 10.0.26300",
+    "architecture": "X64"
+  },
+  "checks": [
+    {
+      "name": "format",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 365,
+      "stdout": "",
+      "stderr": "",
+      "summaries": [],
+      "tests": []
+    },
+    {
+      "name": "check",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "check",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--offline"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 378,
+      "stdout": "",
+      "stderr": "    Checking sentra-core v0.1.0 (E:\\MyProject\\Mix\\GitHub\\Sentra\\crates\\sentra-core)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.30s\n",
+      "summaries": [],
+      "tests": []
+    },
+    {
+      "name": "clippy",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--offline",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 552,
+      "stdout": "",
+      "stderr": "    Checking sentra-core v0.1.0 (E:\\MyProject\\Mix\\GitHub\\Sentra\\crates\\sentra-core)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.40s\n",
+      "summaries": [],
+      "tests": []
+    },
+    {
+      "name": "workspace-tests",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "test",
+        "--workspace",
+        "--offline"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 18184,
+      "stdout": "\nrunning 14 tests\ntest persistence::model::tests::malformed_unicode_identifiers_timestamps_and_numeric_limits_fail_without_panics ... ok\ntest persistence::transaction::tests::backoff_stays_in_approved_range_and_varies_by_ticket ... ok\ntest persistence::transaction::tests::non_contention_and_failed_rollback_are_never_retried ... ok\ntest persistence::transaction::tests::caught_statement_failure_still_cannot_commit_partial_work ... ok\ntest persistence::transaction::tests::rollback_failure_is_distinct_from_the_statement_failure ... ok\ntest persistence::transaction::tests::sqlite_page_limit_full_aborts_without_partial_rows ... ok\ntest workspace::discovery::tests::unstable_directory_retracts_its_subtree_without_string_prefix_collisions ... ok\ntest workspace::platform::tests::reparse_and_unknown_attributes_override_ordinary_types ... ok\ntest policy::approval::tests::poisoned_broker_denies_context_issuance_and_consumption ... ok\ntest persistence::migration::tests::migration_line_endings_are_stable_and_failed_ddl_leaves_no_partial_schema ... ok\ntest workspace::platform::tests::replacement_by_symlink_between_check_and_open_is_rejected ... ok\ntest persistence::transaction::tests::actual_begin_contention_stops_after_five_whole_operation_attempts ... ok\ntest persistence::connection::tests::managed_connection_really_enforces_foreign_keys_and_closes_all_clones ... ok\ntest persistence::transaction::tests::real_busy_snapshot_retries_the_whole_transaction_with_fresh_reads ... ok\n\ntest result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s\n\n\nrunning 27 tests\ntest broker_engine_and_authority_preserve_send_sync_contract ... ok\ntest caller_metadata_cannot_replace_registered_workspace_actor_policy_or_mode ... ok\ntest canonical_framing_handles_delimiters_unicode_empty_args_and_optional_fields ... ok\ntest changing_request_display_metadata_cannot_change_issued_binding_or_expiry ... ok\ntest checkout_target_order_is_canonical_but_target_set_is_bound ... ok\ntest classification_is_bound_and_presented_grant_cannot_take_automatic_fallback ... ok\ntest clock_before_issue_or_creation_cannot_authorize_future_receipts ... ok\ntest copying_all_visible_grant_fields_cannot_forge_broker_provenance ... ok\ntest diagnostics_do_not_disclose_receipt_payloads_or_tokens ... ok\ntest different_registered_session_cannot_use_a_grant_even_with_same_target ... ok\ntest duplicate_issuance_revocation_and_unknown_request_are_denied ... ok\ntest every_public_grant_field_is_integrity_checked_without_consuming_original ... ok\ntest exact_issued_operation_authorizes_once_through_policy_and_broker ... ok\ntest every_operation_parameter_change_is_denied_without_consuming_matching_grant ... ok\ntest expiry_is_exclusive_for_issuance_and_consumption_with_existing_clock ... ok\ntest grant_from_another_broker_is_not_accepted ... ok\ntest known_request_id_without_registered_issuance_is_not_authorization ... ok\ntest malformed_operations_cannot_request_or_consume_approval ... ok\ntest malformed_required_context_is_rejected_without_replacing_valid_context ... ok\ntest missing_context_and_missing_required_grant_fail_closed ... ok\ntest original_a_to_b_probe_denies_then_allows_a_exactly_once ... ok\ntest stale_pending_request_cannot_be_issued_after_trusted_context_change ... ok\ntest trusted_classification_floor_blocks_caller_downgrade_without_a_grant ... ok\ntest trusted_target_revision_change_invalidates_grant_even_after_aba_restore ... ok\ntest trusted_workspace_rebinding_invalidates_original_target_grant ... ok\ntest concurrency_only_mismatches_then_legitimate_matching_attempt_repeat_32_rounds ... ok\ntest concurrency_two_matching_and_six_mismatching_attempts_repeat_64_rounds ... ok\n\ntest result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s\n\n\nrunning 9 tests\ntest test_deterministic_and_sequential_identifiers ... ok\ntest test_identifier_bytes_roundtrip ... ok\ntest test_identifier_invalid_strings ... ok\ntest test_security_classification_egress_and_parsing ... ok\ntest test_security_classification_ranking_and_pairwise_flow ... ok\ntest test_timestamp_expiry_and_arithmetic ... ok\ntest test_timestamp_invalid_rfc3339 ... ok\ntest test_timestamp_utc_roundtrip_and_rfc3339 ... ok\ntest test_typed_identifiers ... ok\n\ntest result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 9 tests\ntest cryptographic_verification_explicitly_unavailable_offline ... ok\ntest invalid_media_type_syntax_and_whitelist_enforcement ... ok\ntest invalid_metadata_producer_role_rejected ... ok\ntest length_mismatch_detected_and_rejected ... ok\ntest malformed_declared_sha256_format_rejected ... ok\ntest missing_payload_when_positive_length_declared ... ok\ntest oversized_evidence_rejected_immediately ... ok\ntest sensitive_content_redacted_in_debug_formatting ... ok\ntest valid_evidence_structural_verification_success ... ok\n\ntest result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 11 tests\ntest adversarial_arbitrary_arguments_ignored_by_synthetic_backend ... ok\ntest adversarial_evidence_payload_exceeding_ceiling_by_one_byte ... ok\ntest adversarial_forged_synthetic_fixture_identifiers_rejected ... ok\ntest adversarial_mime_type_syntax_and_parameter_handling ... ok\ntest adversarial_oversized_resource_limits_and_revision_tampering ... ok\ntest adversarial_scope_and_action_inconsistencies ... ok\ntest adversarial_sensitive_data_not_leaked_in_any_formatting ... ok\ntest adversarial_syntactically_valid_sha256_never_bypasses_offline_gate ... ok\ntest cross_increment_uncertain_execution_retains_conservative_budget_hold ... ok\ntest execution_engine_detects_and_rejects_correlation_mismatch ... ok\ntest execution_engine_handles_contradictory_mock_backend ... ok\n\ntest result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 8 tests\ntest conservative_budget_accounting_on_uncertain_execution_outcome ... ok\ntest execution_engine_dispatch_untrusted_workload_intercepted ... ok\ntest execution_scope_predicates_and_formatting ... ok\ntest invalid_and_forged_execution_requests_fail_validation ... ok\ntest no_host_docker_or_wsl2_fallback_declared_in_capabilities ... ok\ntest synthetic_backend_strictly_rejects_untrusted_workload ... ok\ntest synthetic_fixture_scope_validation_and_execution ... ok\ntest untrusted_workload_rejected_by_default_fail_closed_backend ... ok\n\ntest result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 23 tests\ntest owned_5621_process ... ignored, Owned subprocess helper; explicitly launched only by the process-boundary parent test\ntest review_actual_execution_and_evidence_settlement_failures_are_observable ... ignored, Explicit independent review; real managed shutdown is the test-only failure source\ntest review_approval_update_failure_rolls_back_prior_reservation_and_audit ... ignored, Explicit independent review; test-only SQLite trigger, never a production fault hook\ntest review_atomic_consumption_and_budget_contention_are_serialized ... ignored, Explicit independent review; deterministic thread barriers\ntest review_atomic_prepare_cannot_consume_a_while_reserving_for_b ... ignored, Explicit independent review; asserts secure behavior and may expose a finding\ntest review_atomic_prepare_cross_process_has_one_consumption_and_reservation ... ignored, Explicit independent review; two owned processes race the new atomic method\ntest review_atomic_prepare_separate_connections_have_one_winner ... ignored, Explicit independent review; independent connection barrier\ntest review_budget_denial_preserves_issued_grant_for_exact_retry ... ignored, Explicit independent review; budget exhaustion must not burn approval\ntest review_compound_error_keeps_typed_primary_source ... ignored, Explicit independent review; checks existing typed error introspection\ntest review_compound_evidence_error_redacts_untrusted_metadata ... ignored, Explicit independent review; asserts secure error formatting\ntest review_compound_execution_error_redacts_backend_sensitive_message ... ignored, Explicit independent review; asserts secure error formatting\ntest review_either_audit_failure_rolls_back_approval_budget_and_sequence ... ignored, Explicit independent review; test-only statement fault injection\ntest review_invalid_expired_and_stale_approvals_do_not_reserve_or_consume ... ignored, Explicit independent review; deterministic boundary checks\ntest review_no_grant_prepare_revalidates_context_after_policy_decision ... ignored, Explicit independent review; asserts secure behavior and may expose a finding\ntest review_paused_session_cannot_dispatch_new_work ... ignored, Explicit independent review; asserts secure behavior and may expose a finding\ntest review_policy_preview_does_not_grant_with_another_sessions_receipt ... ignored, Explicit independent review; a preview must not claim an unrelated grant is valid\ntest review_prepare_debug_does_not_disclose_authorization_parameters ... ignored, Explicit independent review; asserts secure behavior and may expose a finding\ntest review_provider_action_cost_cannot_be_under_reserved ... ignored, Explicit independent review; asserts secure behavior and may expose a finding\ntest review_public_context_registration_cannot_lower_trusted_floor ... ignored, Explicit independent review; asserts secure behavior and may expose a finding\ntest review_real_process_exit_after_prepare_preserves_pair_but_cannot_replay ... ignored, Explicit independent review; kills only the owned repository test executable\ntest review_same_context_synchronization_does_not_invalidate_issued_memory_grant ... ignored, Explicit independent review; asserts secure behavior and may expose a finding\ntest review_service_denials_never_call_backend_or_mutate_budget_approval ... ignored, Explicit independent review; actual service denial before all side effects\ntest review_successful_settlement_preserves_unknown_usage_without_compound_error ... ignored, Explicit independent review; verifies that successful cleanup does not invent a secondary error\n\ntest result: ok. 0 passed; 0 failed; 23 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 43 tests\ntest approval_context_reregistration_rejects_old_generation_even_after_revision_aba ... ok\ntest approval_modified_session_metadata_is_not_trusted ... ok\ntest approval_changes_to_action_arguments_target_revision_generation_or_class_are_denied ... ok\ntest approval_expiration_boundary_clock_reversal_and_revocation_fail_closed ... ok\ntest approval_concurrent_matching_and_mismatching_consumers_preserve_single_use ... ok\ntest approval_failed_audit_does_not_consume_valid_receipt ... ok\ntest audit_failure_rolls_back_state_and_no_success_is_reported ... ok\ntest audit_retains_security_context_and_redacts_ordinary_diagnostics ... ok\ntest budget_audit_failure_rolls_back_reservation_and_settlement ... ok\ntest approval_unknown_pending_missing_context_and_foreign_provenance_are_denied ... ok\ntest approval_row_provenance_mutation_and_missing_snapshot_are_not_accepted ... ok\ntest connection_invalid_paths_fail_without_creating_files ... ok\ntest approval_cross_process_exactly_one_consumes_and_audit_is_atomic ... ok\ntest approval_separate_connections_have_one_database_consumer ... ok\ntest budget_concurrent_reservations_cannot_overspend ... ok\ntest budget_overflow_invalid_values_overruns_and_unsafe_limit_reduction_are_denied ... ok\ntest budget_settlement_status_cancelled_with_usage_and_helpers ... ok\ntest owned_persistence_process_worker ... ignored, Owned subprocess helper; the three parent tests execute it with explicit fixture pipes\ntest approval_reopen_requires_privileged_recovery_and_replay_stays_rejected ... ok\ntest migration_rejects_unrelated_database_without_overwriting ... ok\ntest budget_settlement_status_completed_releases_difference_and_finalizes ... ok\ntest budget_separate_connections_cannot_exceed_shared_limit ... ok\ntest detailed_integrity_check_reports_structured_fk_violations ... ok\ntest connection_fresh_pragmas_schema_integrity_and_clean_shutdown ... ok\ntest migration_newer_schema_is_rejected_without_overwriting ... ok\ntest migration_real_process_interruption_leaves_fresh_database_recoverable ... ok\ntest migrations_enforce_foreign_keys_audit_uniqueness_and_budget_checks ... ok\ntest budget_unknown_cancelled_or_partial_usage_retains_full_reservation ... ok\ntest windows_unc_device_drive_relative_and_reserved_paths_are_rejected ... ok\ntest persistent_original_a_to_b_probe_denied_then_a_succeeds_once ... ok\ntest open_database_with_existing_foreign_key_violation_fails_closed ... ok\ntest windows_static_symlink_database_parent_and_wal_are_rejected ... ok\ntest migration_repeated_initialization_preserves_supported_data ... ok\ntest runtime_integrity_check_detects_foreign_key_violations_and_halts_manager ... ok\ntest recovery_corrupt_database_fails_closed_and_preserves_original_bytes ... ok\ntest persistent_policy_denies_unknown_malformed_write_down_and_terminal_session ... ok\ntest quarantine_halts_closes_and_preserves_db_wal_and_shm_in_place ... ok\ntest recovery_real_process_termination_preserves_committed_and_discards_uncommitted ... ok\ntest approval_all_action_parameter_changes_are_bound_without_consuming_original ... ok\ntest migration_drift_missing_history_and_unknown_trigger_fail_closed ... ok\ntest windows_locked_database_initialization_fails_without_overwriting ... ok\ntest busy_timeout_is_real_and_distinct_from_stale_snapshot ... ok\ntest wal_long_lived_reader_blocks_shutdown_then_release_allows_truncation ... ok\n\ntest result: ok. 42 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 6.09s\n\n\nrunning 9 tests\ntest test_approval_grant_expiry ... ok\ntest test_approval_grant_lifecycle_and_single_use_replay_prevention ... ok\ntest test_approval_grant_mismatch_rejections ... ok\ntest test_capability_vs_policy_authorization_separation ... ok\ntest test_default_deny_unknown_operation ... ok\ntest test_restricted_classification_always_requires_approval ... ok\ntest test_revoked_approval_request ... ok\ntest test_safe_operation_auto_granted_for_non_restricted ... ok\ntest test_sensitive_actions_require_approval ... ok\n\ntest result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 10 tests\ntest test_action_digest_argument_delimiter_injection_resistance ... ok\ntest test_action_digest_modify_checkout_target_binding_and_canonical_sorting ... ok\ntest test_bell_lapadula_flow_enforcement_prevents_write_down ... ok\ntest test_budget_threshold_boundary_precision ... ok\ntest test_classification_check_never_accidentally_grants_unknown_operation ... ok\ntest test_cost_usd_fixed_point_exact_arithmetic ... ok\ntest test_cost_usd_rejects_nan_infinity_and_negative_amounts ... ok\ntest test_failed_validation_does_not_consume_grant ... ok\ntest test_uuid_version_variant_and_production_fail_closed ... ok\ntest test_concurrent_single_use_approval_consumption_exact_winner ... ok\n\ntest result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n\n\nrunning 19 tests\ntest test_service_error_compound_settlement_failure_contracts ... ok\ntest test_conservative_budget_reservation_and_limit_enforcement ... ok\ntest test_budget_exhaustion_does_not_consume_valid_approval_grant ... ok\ntest test_execute_task_enforces_classification_floor_rejection ... ok\ntest test_execute_task_enforces_policy_engine_denial_for_unknown_operation ... ok\ntest test_audit_consistency_and_diagnostic_redaction ... ok\ntest test_execute_task_enforces_policy_denial_on_information_flow_violation ... ok\ntest test_backend_fault_and_invalid_result_remediation_f_551_01 ... ok\ntest test_approval_rejection_and_replay_prevention ... ok\ntest test_missing_session_context_fails_closed ... ok\ntest test_backend_unavailable_for_untrusted_workloads ... ok\ntest test_execution_identifier_mismatch_remediation_f_551_05 ... ok\ntest test_evidence_validation_failure ... ok\ntest test_persistence_failure_and_terminal_session_state ... ok\ntest test_policy_denial_unknown_operation_and_classification_downgrade ... ok\ntest test_successful_synthetic_workflow ... ok\ntest test_invalid_approval_grant_leaves_no_budget_reservation ... ok\ntest test_workspace_boundary_rejection ... ok\ntest test_timeout_and_cancellation_lifecycle ... ok\n\ntest result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s\n\n\nrunning 5 tests\ntest test_complete_9x9_transition_matrix ... ok\ntest test_metadata_validation ... ok\ntest test_state_machine_invalid_transition_invariants ... ok\ntest test_state_machine_valid_lifecycle_and_audit_emission ... ok\ntest test_terminal_states_are_permanent ... ok\n\ntest result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 40 tests\ntest workspace_classification_is_preserved_and_does_not_issue_grants ... ok\ntest workspace_absolute_case_alias_uses_filesystem_semantics ... ok\ntest workspace_directory_change_invalidates_retained_observation ... ok\ntest workspace_discovery_normal_nested_and_empty_directories ... ok\ntest workspace_external_directory_symlink_hides_outside_metadata ... ok\ntest workspace_entry_limit_distinguishes_exact_capacity_from_overflow ... ok\ntest workspace_file_size_limit_quarantines_without_content_read ... ok\ntest workspace_depth_limits_report_partial_instead_of_clean ... ok\ntest workspace_file_symlink_external_target_is_quarantined ... ok\ntest workspace_file_symlink_internal_target_is_quarantined ... ok\ntest workspace_git_directory_is_opaque_including_case_alias ... ok\ntest workspace_git_pointer_and_invalid_manifests_are_not_read ... ok\ntest workspace_limits_and_content_read_requests_are_validated ... ok\ntest workspace_inventory_byte_limit_stops_with_explicit_status ... ok\ntest workspace_internal_directory_symlink_is_not_traversed ... ok\ntest workspace_missing_leaf_is_not_a_valid_future_path ... ok\ntest workspace_metadata_changed_after_resolution_is_rejected ... ok\ntest workspace_missing_root_and_file_root_fail_typed ... ok\ntest workspace_nested_and_cyclic_symlinks_terminate_without_following ... ok\ntest workspace_nested_entries_cannot_exceed_global_budget ... ok\ntest workspace_nul_ads_reserved_names_and_win32_aliases_fail_closed ... ok\ntest workspace_observation_is_bound_to_root_instance_not_equal_path_string ... ok\ntest workspace_no_discovered_build_hook_script_or_executable_is_run ... ok\ntest workspace_ordinary_diagnostics_redact_absolute_and_relative_payloads ... ok\ntest workspace_oversized_path_is_rejected_before_io ... ok\ntest workspace_parent_components_are_never_lexically_excused ... ok\ntest workspace_outside_sibling_and_string_prefix_collision_are_rejected ... ok\ntest workspace_relative_root_is_resolved_against_actual_cwd ... ok\ntest workspace_preexisting_writer_changes_invalidate_retained_observation ... ok\ntest workspace_replacement_with_symlink_before_resolution_is_rejected ... ok\ntest workspace_scale_10000_file_measurement ... ignored, explicit 10,000-file benchmark; run experiments/phase1/workspace/Validate.ps1\ntest workspace_relative_absolute_dot_and_repeated_separators ... ok\ntest workspace_root_and_root_ancestor_symlinks_are_rejected ... ok\ntest workspace_root_dot_is_canonicalized_without_changing_process_cwd ... ok\ntest workspace_retained_handles_deny_observed_rename_attempts ... ok\ntest workspace_windows_junction_is_quarantined_without_target_traversal ... ignored, requires owned junction fixture; run experiments/phase1/workspace/Validate.ps1\ntest workspace_windows_permission_denied_is_not_accepted ... ignored, requires owned deny-ACL fixture; run experiments/phase1/workspace/Validate.ps1\ntest workspace_unc_devices_and_ambiguous_prefixes_fail_before_access ... ok\ntest workspace_total_file_length_limit_reports_incomplete ... ok\ntest workspace_valid_root_is_canonical_and_session_classified ... ok\n\ntest result: ok. 37 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.08s\n\n\nrunning 5 tests\ntest crates\\sentra-core\\src\\lib.rs - persistence (line 36) - compile fail ... ok\ntest crates\\sentra-core\\src\\policy\\approval.rs - policy::approval::ApprovalBroker (line 188) - compile fail ... ok\ntest crates\\sentra-core\\src\\policy\\approval.rs - policy::approval::ApprovalBroker (line 181) - compile fail ... ok\ntest crates\\sentra-core\\src\\lib.rs - persistence (line 43) - compile fail ... ok\ntest crates\\sentra-core\\src\\lib.rs - persistence (line 48) - compile fail ... ok\n\ntest result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s\n\n",
+      "stderr": "   Compiling sentra-core v0.1.0 (E:\\MyProject\\Mix\\GitHub\\Sentra\\crates\\sentra-core)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.20s\n     Running unittests src\\lib.rs (target\\debug\\deps\\sentra_core-00c9e4f85497a2ae.exe)\n     Running tests\\authorization_tests.rs (target\\debug\\deps\\authorization_tests-574798ad1a4c5c48.exe)\n     Running tests\\domain_tests.rs (target\\debug\\deps\\domain_tests-19e090a29a1217a7.exe)\n     Running tests\\evidence_tests.rs (target\\debug\\deps\\evidence_tests-050f646b2eddc6a5.exe)\n     Running tests\\execution_evidence_adversarial_tests.rs (target\\debug\\deps\\execution_evidence_adversarial_tests-38d2167105ad325c.exe)\n     Running tests\\execution_tests.rs (target\\debug\\deps\\execution_tests-68741f1bf7215e86.exe)\n     Running tests\\independent_core_review_tests.rs (target\\debug\\deps\\independent_core_review_tests-edc7f5173a63c85d.exe)\n     Running tests\\persistence_tests.rs (target\\debug\\deps\\persistence_tests-48c8beef783b5470.exe)\n     Running tests\\policy_tests.rs (target\\debug\\deps\\policy_tests-341512b267e4bb9f.exe)\n     Running tests\\security_tests.rs (target\\debug\\deps\\security_tests-d0008c3dff484d47.exe)\n     Running tests\\service_tests.rs (target\\debug\\deps\\service_tests-01cd4c1a145305b0.exe)\n     Running tests\\session_tests.rs (target\\debug\\deps\\session_tests-83dd2836579b1dad.exe)\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\n   Doc-tests sentra_core\n",
+      "summaries": [
+        {
+          "passed": 14,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        },
+        {
+          "passed": 27,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        },
+        {
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 23,
+          "filtered": 0
+        },
+        {
+          "passed": 42,
+          "failed": 0,
+          "ignored": 1,
+          "filtered": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        },
+        {
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        },
+        {
+          "passed": 19,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        },
+        {
+          "passed": 37,
+          "failed": 0,
+          "ignored": 3,
+          "filtered": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ],
+      "tests": [
+        {
+          "name": "persistence::model::tests::malformed_unicode_identifiers_timestamps_and_numeric_limits_fail_without_panics",
+          "status": "Passed"
+        },
+        {
+          "name": "persistence::transaction::tests::backoff_stays_in_approved_range_and_varies_by_ticket",
+          "status": "Passed"
+        },
+        {
+          "name": "persistence::transaction::tests::non_contention_and_failed_rollback_are_never_retried",
+          "status": "Passed"
+        },
+        {
+          "name": "persistence::transaction::tests::caught_statement_failure_still_cannot_commit_partial_work",
+          "status": "Passed"
+        },
+        {
+          "name": "persistence::transaction::tests::rollback_failure_is_distinct_from_the_statement_failure",
+          "status": "Passed"
+        },
+        {
+          "name": "persistence::transaction::tests::sqlite_page_limit_full_aborts_without_partial_rows",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace::discovery::tests::unstable_directory_retracts_its_subtree_without_string_prefix_collisions",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace::platform::tests::reparse_and_unknown_attributes_override_ordinary_types",
+          "status": "Passed"
+        },
+        {
+          "name": "policy::approval::tests::poisoned_broker_denies_context_issuance_and_consumption",
+          "status": "Passed"
+        },
+        {
+          "name": "persistence::migration::tests::migration_line_endings_are_stable_and_failed_ddl_leaves_no_partial_schema",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace::platform::tests::replacement_by_symlink_between_check_and_open_is_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "persistence::transaction::tests::actual_begin_contention_stops_after_five_whole_operation_attempts",
+          "status": "Passed"
+        },
+        {
+          "name": "persistence::connection::tests::managed_connection_really_enforces_foreign_keys_and_closes_all_clones",
+          "status": "Passed"
+        },
+        {
+          "name": "persistence::transaction::tests::real_busy_snapshot_retries_the_whole_transaction_with_fresh_reads",
+          "status": "Passed"
+        },
+        {
+          "name": "broker_engine_and_authority_preserve_send_sync_contract",
+          "status": "Passed"
+        },
+        {
+          "name": "caller_metadata_cannot_replace_registered_workspace_actor_policy_or_mode",
+          "status": "Passed"
+        },
+        {
+          "name": "canonical_framing_handles_delimiters_unicode_empty_args_and_optional_fields",
+          "status": "Passed"
+        },
+        {
+          "name": "changing_request_display_metadata_cannot_change_issued_binding_or_expiry",
+          "status": "Passed"
+        },
+        {
+          "name": "checkout_target_order_is_canonical_but_target_set_is_bound",
+          "status": "Passed"
+        },
+        {
+          "name": "classification_is_bound_and_presented_grant_cannot_take_automatic_fallback",
+          "status": "Passed"
+        },
+        {
+          "name": "clock_before_issue_or_creation_cannot_authorize_future_receipts",
+          "status": "Passed"
+        },
+        {
+          "name": "copying_all_visible_grant_fields_cannot_forge_broker_provenance",
+          "status": "Passed"
+        },
+        {
+          "name": "diagnostics_do_not_disclose_receipt_payloads_or_tokens",
+          "status": "Passed"
+        },
+        {
+          "name": "different_registered_session_cannot_use_a_grant_even_with_same_target",
+          "status": "Passed"
+        },
+        {
+          "name": "duplicate_issuance_revocation_and_unknown_request_are_denied",
+          "status": "Passed"
+        },
+        {
+          "name": "every_public_grant_field_is_integrity_checked_without_consuming_original",
+          "status": "Passed"
+        },
+        {
+          "name": "exact_issued_operation_authorizes_once_through_policy_and_broker",
+          "status": "Passed"
+        },
+        {
+          "name": "every_operation_parameter_change_is_denied_without_consuming_matching_grant",
+          "status": "Passed"
+        },
+        {
+          "name": "expiry_is_exclusive_for_issuance_and_consumption_with_existing_clock",
+          "status": "Passed"
+        },
+        {
+          "name": "grant_from_another_broker_is_not_accepted",
+          "status": "Passed"
+        },
+        {
+          "name": "known_request_id_without_registered_issuance_is_not_authorization",
+          "status": "Passed"
+        },
+        {
+          "name": "malformed_operations_cannot_request_or_consume_approval",
+          "status": "Passed"
+        },
+        {
+          "name": "malformed_required_context_is_rejected_without_replacing_valid_context",
+          "status": "Passed"
+        },
+        {
+          "name": "missing_context_and_missing_required_grant_fail_closed",
+          "status": "Passed"
+        },
+        {
+          "name": "original_a_to_b_probe_denies_then_allows_a_exactly_once",
+          "status": "Passed"
+        },
+        {
+          "name": "stale_pending_request_cannot_be_issued_after_trusted_context_change",
+          "status": "Passed"
+        },
+        {
+          "name": "trusted_classification_floor_blocks_caller_downgrade_without_a_grant",
+          "status": "Passed"
+        },
+        {
+          "name": "trusted_target_revision_change_invalidates_grant_even_after_aba_restore",
+          "status": "Passed"
+        },
+        {
+          "name": "trusted_workspace_rebinding_invalidates_original_target_grant",
+          "status": "Passed"
+        },
+        {
+          "name": "concurrency_only_mismatches_then_legitimate_matching_attempt_repeat_32_rounds",
+          "status": "Passed"
+        },
+        {
+          "name": "concurrency_two_matching_and_six_mismatching_attempts_repeat_64_rounds",
+          "status": "Passed"
+        },
+        {
+          "name": "test_deterministic_and_sequential_identifiers",
+          "status": "Passed"
+        },
+        {
+          "name": "test_identifier_bytes_roundtrip",
+          "status": "Passed"
+        },
+        {
+          "name": "test_identifier_invalid_strings",
+          "status": "Passed"
+        },
+        {
+          "name": "test_security_classification_egress_and_parsing",
+          "status": "Passed"
+        },
+        {
+          "name": "test_security_classification_ranking_and_pairwise_flow",
+          "status": "Passed"
+        },
+        {
+          "name": "test_timestamp_expiry_and_arithmetic",
+          "status": "Passed"
+        },
+        {
+          "name": "test_timestamp_invalid_rfc3339",
+          "status": "Passed"
+        },
+        {
+          "name": "test_timestamp_utc_roundtrip_and_rfc3339",
+          "status": "Passed"
+        },
+        {
+          "name": "test_typed_identifiers",
+          "status": "Passed"
+        },
+        {
+          "name": "cryptographic_verification_explicitly_unavailable_offline",
+          "status": "Passed"
+        },
+        {
+          "name": "invalid_media_type_syntax_and_whitelist_enforcement",
+          "status": "Passed"
+        },
+        {
+          "name": "invalid_metadata_producer_role_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "length_mismatch_detected_and_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "malformed_declared_sha256_format_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "missing_payload_when_positive_length_declared",
+          "status": "Passed"
+        },
+        {
+          "name": "oversized_evidence_rejected_immediately",
+          "status": "Passed"
+        },
+        {
+          "name": "sensitive_content_redacted_in_debug_formatting",
+          "status": "Passed"
+        },
+        {
+          "name": "valid_evidence_structural_verification_success",
+          "status": "Passed"
+        },
+        {
+          "name": "adversarial_arbitrary_arguments_ignored_by_synthetic_backend",
+          "status": "Passed"
+        },
+        {
+          "name": "adversarial_evidence_payload_exceeding_ceiling_by_one_byte",
+          "status": "Passed"
+        },
+        {
+          "name": "adversarial_forged_synthetic_fixture_identifiers_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "adversarial_mime_type_syntax_and_parameter_handling",
+          "status": "Passed"
+        },
+        {
+          "name": "adversarial_oversized_resource_limits_and_revision_tampering",
+          "status": "Passed"
+        },
+        {
+          "name": "adversarial_scope_and_action_inconsistencies",
+          "status": "Passed"
+        },
+        {
+          "name": "adversarial_sensitive_data_not_leaked_in_any_formatting",
+          "status": "Passed"
+        },
+        {
+          "name": "adversarial_syntactically_valid_sha256_never_bypasses_offline_gate",
+          "status": "Passed"
+        },
+        {
+          "name": "cross_increment_uncertain_execution_retains_conservative_budget_hold",
+          "status": "Passed"
+        },
+        {
+          "name": "execution_engine_detects_and_rejects_correlation_mismatch",
+          "status": "Passed"
+        },
+        {
+          "name": "execution_engine_handles_contradictory_mock_backend",
+          "status": "Passed"
+        },
+        {
+          "name": "conservative_budget_accounting_on_uncertain_execution_outcome",
+          "status": "Passed"
+        },
+        {
+          "name": "execution_engine_dispatch_untrusted_workload_intercepted",
+          "status": "Passed"
+        },
+        {
+          "name": "execution_scope_predicates_and_formatting",
+          "status": "Passed"
+        },
+        {
+          "name": "invalid_and_forged_execution_requests_fail_validation",
+          "status": "Passed"
+        },
+        {
+          "name": "no_host_docker_or_wsl2_fallback_declared_in_capabilities",
+          "status": "Passed"
+        },
+        {
+          "name": "synthetic_backend_strictly_rejects_untrusted_workload",
+          "status": "Passed"
+        },
+        {
+          "name": "synthetic_fixture_scope_validation_and_execution",
+          "status": "Passed"
+        },
+        {
+          "name": "untrusted_workload_rejected_by_default_fail_closed_backend",
+          "status": "Passed"
+        },
+        {
+          "name": "owned_5621_process",
+          "status": "Ignored"
+        },
+        {
+          "name": "review_actual_execution_and_evidence_settlement_failures_are_observable",
+          "status": "Ignored"
+        },
+        {
+          "name": "review_approval_update_failure_rolls_back_prior_reservation_and_audit",
+          "status": "Ignored"
+        },
+        {
+          "name": "review_atomic_consumption_and_budget_contention_are_serialized",
+          "status": "Ignored"
+        },
+        {
+          "name": "review_atomic_prepare_cannot_consume_a_while_reserving_for_b",
+          "status": "Ignored"
+        },
+        {
+          "name": "review_atomic_prepare_cross_process_has_one_consumption_and_reservation",
+          "status": "Ignored"
+        },
+        {
+          "name": "review_atomic_prepare_separate_connections_have_one_winner",
+          "status": "Ignored"
+        },
+        {
+          "name": "review_budget_denial_preserves_issued_grant_for_exact_retry",
+          "status": "Ignored"
+        },
+        {
+          "name": "review_compound_error_keeps_typed_primary_source",
+          "status": "Ignored"
+        },
+        {
+          "name": "review_compound_evidence_error_redacts_untrusted_metadata",
+          "status": "Ignored"
+        },
+        {
+          "name": "review_compound_execution_error_redacts_backend_sensitive_message",
+          "status": "Ignored"
+        },
+        {
+          "name": "review_either_audit_failure_rolls_back_approval_budget_and_sequence",
+          "status": "Ignored"
+        },
+        {
+          "name": "review_invalid_expired_and_stale_approvals_do_not_reserve_or_consume",
+          "status": "Ignored"
+        },
+        {
+          "name": "review_no_grant_prepare_revalidates_context_after_policy_decision",
+          "status": "Ignored"
+        },
+        {
+          "name": "review_paused_session_cannot_dispatch_new_work",
+          "status": "Ignored"
+        },
+        {
+          "name": "review_policy_preview_does_not_grant_with_another_sessions_receipt",
+          "status": "Ignored"
+        },
+        {
+          "name": "review_prepare_debug_does_not_disclose_authorization_parameters",
+          "status": "Ignored"
+        },
+        {
+          "name": "review_provider_action_cost_cannot_be_under_reserved",
+          "status": "Ignored"
+        },
+        {
+          "name": "review_public_context_registration_cannot_lower_trusted_floor",
+          "status": "Ignored"
+        },
+        {
+          "name": "review_real_process_exit_after_prepare_preserves_pair_but_cannot_replay",
+          "status": "Ignored"
+        },
+        {
+          "name": "review_same_context_synchronization_does_not_invalidate_issued_memory_grant",
+          "status": "Ignored"
+        },
+        {
+          "name": "review_service_denials_never_call_backend_or_mutate_budget_approval",
+          "status": "Ignored"
+        },
+        {
+          "name": "review_successful_settlement_preserves_unknown_usage_without_compound_error",
+          "status": "Ignored"
+        },
+        {
+          "name": "approval_context_reregistration_rejects_old_generation_even_after_revision_aba",
+          "status": "Passed"
+        },
+        {
+          "name": "approval_modified_session_metadata_is_not_trusted",
+          "status": "Passed"
+        },
+        {
+          "name": "approval_changes_to_action_arguments_target_revision_generation_or_class_are_denied",
+          "status": "Passed"
+        },
+        {
+          "name": "approval_expiration_boundary_clock_reversal_and_revocation_fail_closed",
+          "status": "Passed"
+        },
+        {
+          "name": "approval_concurrent_matching_and_mismatching_consumers_preserve_single_use",
+          "status": "Passed"
+        },
+        {
+          "name": "approval_failed_audit_does_not_consume_valid_receipt",
+          "status": "Passed"
+        },
+        {
+          "name": "audit_failure_rolls_back_state_and_no_success_is_reported",
+          "status": "Passed"
+        },
+        {
+          "name": "audit_retains_security_context_and_redacts_ordinary_diagnostics",
+          "status": "Passed"
+        },
+        {
+          "name": "budget_audit_failure_rolls_back_reservation_and_settlement",
+          "status": "Passed"
+        },
+        {
+          "name": "approval_unknown_pending_missing_context_and_foreign_provenance_are_denied",
+          "status": "Passed"
+        },
+        {
+          "name": "approval_row_provenance_mutation_and_missing_snapshot_are_not_accepted",
+          "status": "Passed"
+        },
+        {
+          "name": "connection_invalid_paths_fail_without_creating_files",
+          "status": "Passed"
+        },
+        {
+          "name": "approval_cross_process_exactly_one_consumes_and_audit_is_atomic",
+          "status": "Passed"
+        },
+        {
+          "name": "approval_separate_connections_have_one_database_consumer",
+          "status": "Passed"
+        },
+        {
+          "name": "budget_concurrent_reservations_cannot_overspend",
+          "status": "Passed"
+        },
+        {
+          "name": "budget_overflow_invalid_values_overruns_and_unsafe_limit_reduction_are_denied",
+          "status": "Passed"
+        },
+        {
+          "name": "budget_settlement_status_cancelled_with_usage_and_helpers",
+          "status": "Passed"
+        },
+        {
+          "name": "owned_persistence_process_worker",
+          "status": "Ignored"
+        },
+        {
+          "name": "approval_reopen_requires_privileged_recovery_and_replay_stays_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "migration_rejects_unrelated_database_without_overwriting",
+          "status": "Passed"
+        },
+        {
+          "name": "budget_settlement_status_completed_releases_difference_and_finalizes",
+          "status": "Passed"
+        },
+        {
+          "name": "budget_separate_connections_cannot_exceed_shared_limit",
+          "status": "Passed"
+        },
+        {
+          "name": "detailed_integrity_check_reports_structured_fk_violations",
+          "status": "Passed"
+        },
+        {
+          "name": "connection_fresh_pragmas_schema_integrity_and_clean_shutdown",
+          "status": "Passed"
+        },
+        {
+          "name": "migration_newer_schema_is_rejected_without_overwriting",
+          "status": "Passed"
+        },
+        {
+          "name": "migration_real_process_interruption_leaves_fresh_database_recoverable",
+          "status": "Passed"
+        },
+        {
+          "name": "migrations_enforce_foreign_keys_audit_uniqueness_and_budget_checks",
+          "status": "Passed"
+        },
+        {
+          "name": "budget_unknown_cancelled_or_partial_usage_retains_full_reservation",
+          "status": "Passed"
+        },
+        {
+          "name": "windows_unc_device_drive_relative_and_reserved_paths_are_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "persistent_original_a_to_b_probe_denied_then_a_succeeds_once",
+          "status": "Passed"
+        },
+        {
+          "name": "open_database_with_existing_foreign_key_violation_fails_closed",
+          "status": "Passed"
+        },
+        {
+          "name": "windows_static_symlink_database_parent_and_wal_are_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "migration_repeated_initialization_preserves_supported_data",
+          "status": "Passed"
+        },
+        {
+          "name": "runtime_integrity_check_detects_foreign_key_violations_and_halts_manager",
+          "status": "Passed"
+        },
+        {
+          "name": "recovery_corrupt_database_fails_closed_and_preserves_original_bytes",
+          "status": "Passed"
+        },
+        {
+          "name": "persistent_policy_denies_unknown_malformed_write_down_and_terminal_session",
+          "status": "Passed"
+        },
+        {
+          "name": "quarantine_halts_closes_and_preserves_db_wal_and_shm_in_place",
+          "status": "Passed"
+        },
+        {
+          "name": "recovery_real_process_termination_preserves_committed_and_discards_uncommitted",
+          "status": "Passed"
+        },
+        {
+          "name": "approval_all_action_parameter_changes_are_bound_without_consuming_original",
+          "status": "Passed"
+        },
+        {
+          "name": "migration_drift_missing_history_and_unknown_trigger_fail_closed",
+          "status": "Passed"
+        },
+        {
+          "name": "windows_locked_database_initialization_fails_without_overwriting",
+          "status": "Passed"
+        },
+        {
+          "name": "busy_timeout_is_real_and_distinct_from_stale_snapshot",
+          "status": "Passed"
+        },
+        {
+          "name": "wal_long_lived_reader_blocks_shutdown_then_release_allows_truncation",
+          "status": "Passed"
+        },
+        {
+          "name": "test_approval_grant_expiry",
+          "status": "Passed"
+        },
+        {
+          "name": "test_approval_grant_lifecycle_and_single_use_replay_prevention",
+          "status": "Passed"
+        },
+        {
+          "name": "test_approval_grant_mismatch_rejections",
+          "status": "Passed"
+        },
+        {
+          "name": "test_capability_vs_policy_authorization_separation",
+          "status": "Passed"
+        },
+        {
+          "name": "test_default_deny_unknown_operation",
+          "status": "Passed"
+        },
+        {
+          "name": "test_restricted_classification_always_requires_approval",
+          "status": "Passed"
+        },
+        {
+          "name": "test_revoked_approval_request",
+          "status": "Passed"
+        },
+        {
+          "name": "test_safe_operation_auto_granted_for_non_restricted",
+          "status": "Passed"
+        },
+        {
+          "name": "test_sensitive_actions_require_approval",
+          "status": "Passed"
+        },
+        {
+          "name": "test_action_digest_argument_delimiter_injection_resistance",
+          "status": "Passed"
+        },
+        {
+          "name": "test_action_digest_modify_checkout_target_binding_and_canonical_sorting",
+          "status": "Passed"
+        },
+        {
+          "name": "test_bell_lapadula_flow_enforcement_prevents_write_down",
+          "status": "Passed"
+        },
+        {
+          "name": "test_budget_threshold_boundary_precision",
+          "status": "Passed"
+        },
+        {
+          "name": "test_classification_check_never_accidentally_grants_unknown_operation",
+          "status": "Passed"
+        },
+        {
+          "name": "test_cost_usd_fixed_point_exact_arithmetic",
+          "status": "Passed"
+        },
+        {
+          "name": "test_cost_usd_rejects_nan_infinity_and_negative_amounts",
+          "status": "Passed"
+        },
+        {
+          "name": "test_failed_validation_does_not_consume_grant",
+          "status": "Passed"
+        },
+        {
+          "name": "test_uuid_version_variant_and_production_fail_closed",
+          "status": "Passed"
+        },
+        {
+          "name": "test_concurrent_single_use_approval_consumption_exact_winner",
+          "status": "Passed"
+        },
+        {
+          "name": "test_service_error_compound_settlement_failure_contracts",
+          "status": "Passed"
+        },
+        {
+          "name": "test_conservative_budget_reservation_and_limit_enforcement",
+          "status": "Passed"
+        },
+        {
+          "name": "test_budget_exhaustion_does_not_consume_valid_approval_grant",
+          "status": "Passed"
+        },
+        {
+          "name": "test_execute_task_enforces_classification_floor_rejection",
+          "status": "Passed"
+        },
+        {
+          "name": "test_execute_task_enforces_policy_engine_denial_for_unknown_operation",
+          "status": "Passed"
+        },
+        {
+          "name": "test_audit_consistency_and_diagnostic_redaction",
+          "status": "Passed"
+        },
+        {
+          "name": "test_execute_task_enforces_policy_denial_on_information_flow_violation",
+          "status": "Passed"
+        },
+        {
+          "name": "test_backend_fault_and_invalid_result_remediation_f_551_01",
+          "status": "Passed"
+        },
+        {
+          "name": "test_approval_rejection_and_replay_prevention",
+          "status": "Passed"
+        },
+        {
+          "name": "test_missing_session_context_fails_closed",
+          "status": "Passed"
+        },
+        {
+          "name": "test_backend_unavailable_for_untrusted_workloads",
+          "status": "Passed"
+        },
+        {
+          "name": "test_execution_identifier_mismatch_remediation_f_551_05",
+          "status": "Passed"
+        },
+        {
+          "name": "test_evidence_validation_failure",
+          "status": "Passed"
+        },
+        {
+          "name": "test_persistence_failure_and_terminal_session_state",
+          "status": "Passed"
+        },
+        {
+          "name": "test_policy_denial_unknown_operation_and_classification_downgrade",
+          "status": "Passed"
+        },
+        {
+          "name": "test_successful_synthetic_workflow",
+          "status": "Passed"
+        },
+        {
+          "name": "test_invalid_approval_grant_leaves_no_budget_reservation",
+          "status": "Passed"
+        },
+        {
+          "name": "test_workspace_boundary_rejection",
+          "status": "Passed"
+        },
+        {
+          "name": "test_timeout_and_cancellation_lifecycle",
+          "status": "Passed"
+        },
+        {
+          "name": "test_complete_9x9_transition_matrix",
+          "status": "Passed"
+        },
+        {
+          "name": "test_metadata_validation",
+          "status": "Passed"
+        },
+        {
+          "name": "test_state_machine_invalid_transition_invariants",
+          "status": "Passed"
+        },
+        {
+          "name": "test_state_machine_valid_lifecycle_and_audit_emission",
+          "status": "Passed"
+        },
+        {
+          "name": "test_terminal_states_are_permanent",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_classification_is_preserved_and_does_not_issue_grants",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_absolute_case_alias_uses_filesystem_semantics",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_directory_change_invalidates_retained_observation",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_discovery_normal_nested_and_empty_directories",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_external_directory_symlink_hides_outside_metadata",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_entry_limit_distinguishes_exact_capacity_from_overflow",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_file_size_limit_quarantines_without_content_read",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_depth_limits_report_partial_instead_of_clean",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_file_symlink_external_target_is_quarantined",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_file_symlink_internal_target_is_quarantined",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_git_directory_is_opaque_including_case_alias",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_git_pointer_and_invalid_manifests_are_not_read",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_limits_and_content_read_requests_are_validated",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_inventory_byte_limit_stops_with_explicit_status",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_internal_directory_symlink_is_not_traversed",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_missing_leaf_is_not_a_valid_future_path",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_metadata_changed_after_resolution_is_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_missing_root_and_file_root_fail_typed",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_nested_and_cyclic_symlinks_terminate_without_following",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_nested_entries_cannot_exceed_global_budget",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_nul_ads_reserved_names_and_win32_aliases_fail_closed",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_observation_is_bound_to_root_instance_not_equal_path_string",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_no_discovered_build_hook_script_or_executable_is_run",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_ordinary_diagnostics_redact_absolute_and_relative_payloads",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_oversized_path_is_rejected_before_io",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_parent_components_are_never_lexically_excused",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_outside_sibling_and_string_prefix_collision_are_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_relative_root_is_resolved_against_actual_cwd",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_preexisting_writer_changes_invalidate_retained_observation",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_replacement_with_symlink_before_resolution_is_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_scale_10000_file_measurement",
+          "status": "Ignored"
+        },
+        {
+          "name": "workspace_relative_absolute_dot_and_repeated_separators",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_root_and_root_ancestor_symlinks_are_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_root_dot_is_canonicalized_without_changing_process_cwd",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_retained_handles_deny_observed_rename_attempts",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_windows_junction_is_quarantined_without_target_traversal",
+          "status": "Ignored"
+        },
+        {
+          "name": "workspace_windows_permission_denied_is_not_accepted",
+          "status": "Ignored"
+        },
+        {
+          "name": "workspace_unc_devices_and_ambiguous_prefixes_fail_before_access",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_total_file_length_limit_reports_incomplete",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_valid_root_is_canonical_and_session_classified",
+          "status": "Passed"
+        },
+        {
+          "name": "crates\\sentra-core\\src\\lib.rs - persistence (line 36) - compile fail",
+          "status": "Passed"
+        },
+        {
+          "name": "crates\\sentra-core\\src\\policy\\approval.rs - policy::approval::ApprovalBroker (line 188) - compile fail",
+          "status": "Passed"
+        },
+        {
+          "name": "crates\\sentra-core\\src\\policy\\approval.rs - policy::approval::ApprovalBroker (line 181) - compile fail",
+          "status": "Passed"
+        },
+        {
+          "name": "crates\\sentra-core\\src\\lib.rs - persistence (line 43) - compile fail",
+          "status": "Passed"
+        },
+        {
+          "name": "crates\\sentra-core\\src\\lib.rs - persistence (line 48) - compile fail",
+          "status": "Passed"
+        }
+      ]
+    },
+    {
+      "name": "discovered-test-list",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "test",
+        "--workspace",
+        "--offline",
+        "--",
+        "--list"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 712,
+      "stdout": "persistence::connection::tests::managed_connection_really_enforces_foreign_keys_and_closes_all_clones: test\npersistence::migration::tests::migration_line_endings_are_stable_and_failed_ddl_leaves_no_partial_schema: test\npersistence::model::tests::malformed_unicode_identifiers_timestamps_and_numeric_limits_fail_without_panics: test\npersistence::transaction::tests::actual_begin_contention_stops_after_five_whole_operation_attempts: test\npersistence::transaction::tests::backoff_stays_in_approved_range_and_varies_by_ticket: test\npersistence::transaction::tests::caught_statement_failure_still_cannot_commit_partial_work: test\npersistence::transaction::tests::non_contention_and_failed_rollback_are_never_retried: test\npersistence::transaction::tests::real_busy_snapshot_retries_the_whole_transaction_with_fresh_reads: test\npersistence::transaction::tests::rollback_failure_is_distinct_from_the_statement_failure: test\npersistence::transaction::tests::sqlite_page_limit_full_aborts_without_partial_rows: test\npolicy::approval::tests::poisoned_broker_denies_context_issuance_and_consumption: test\nworkspace::discovery::tests::unstable_directory_retracts_its_subtree_without_string_prefix_collisions: test\nworkspace::platform::tests::reparse_and_unknown_attributes_override_ordinary_types: test\nworkspace::platform::tests::replacement_by_symlink_between_check_and_open_is_rejected: test\n\n14 tests, 0 benchmarks\nbroker_engine_and_authority_preserve_send_sync_contract: test\ncaller_metadata_cannot_replace_registered_workspace_actor_policy_or_mode: test\ncanonical_framing_handles_delimiters_unicode_empty_args_and_optional_fields: test\nchanging_request_display_metadata_cannot_change_issued_binding_or_expiry: test\ncheckout_target_order_is_canonical_but_target_set_is_bound: test\nclassification_is_bound_and_presented_grant_cannot_take_automatic_fallback: test\nclock_before_issue_or_creation_cannot_authorize_future_receipts: test\nconcurrency_only_mismatches_then_legitimate_matching_attempt_repeat_32_rounds: test\nconcurrency_two_matching_and_six_mismatching_attempts_repeat_64_rounds: test\ncopying_all_visible_grant_fields_cannot_forge_broker_provenance: test\ndiagnostics_do_not_disclose_receipt_payloads_or_tokens: test\ndifferent_registered_session_cannot_use_a_grant_even_with_same_target: test\nduplicate_issuance_revocation_and_unknown_request_are_denied: test\nevery_operation_parameter_change_is_denied_without_consuming_matching_grant: test\nevery_public_grant_field_is_integrity_checked_without_consuming_original: test\nexact_issued_operation_authorizes_once_through_policy_and_broker: test\nexpiry_is_exclusive_for_issuance_and_consumption_with_existing_clock: test\ngrant_from_another_broker_is_not_accepted: test\nknown_request_id_without_registered_issuance_is_not_authorization: test\nmalformed_operations_cannot_request_or_consume_approval: test\nmalformed_required_context_is_rejected_without_replacing_valid_context: test\nmissing_context_and_missing_required_grant_fail_closed: test\noriginal_a_to_b_probe_denies_then_allows_a_exactly_once: test\nstale_pending_request_cannot_be_issued_after_trusted_context_change: test\ntrusted_classification_floor_blocks_caller_downgrade_without_a_grant: test\ntrusted_target_revision_change_invalidates_grant_even_after_aba_restore: test\ntrusted_workspace_rebinding_invalidates_original_target_grant: test\n\n27 tests, 0 benchmarks\ntest_deterministic_and_sequential_identifiers: test\ntest_identifier_bytes_roundtrip: test\ntest_identifier_invalid_strings: test\ntest_security_classification_egress_and_parsing: test\ntest_security_classification_ranking_and_pairwise_flow: test\ntest_timestamp_expiry_and_arithmetic: test\ntest_timestamp_invalid_rfc3339: test\ntest_timestamp_utc_roundtrip_and_rfc3339: test\ntest_typed_identifiers: test\n\n9 tests, 0 benchmarks\ncryptographic_verification_explicitly_unavailable_offline: test\ninvalid_media_type_syntax_and_whitelist_enforcement: test\ninvalid_metadata_producer_role_rejected: test\nlength_mismatch_detected_and_rejected: test\nmalformed_declared_sha256_format_rejected: test\nmissing_payload_when_positive_length_declared: test\noversized_evidence_rejected_immediately: test\nsensitive_content_redacted_in_debug_formatting: test\nvalid_evidence_structural_verification_success: test\n\n9 tests, 0 benchmarks\nadversarial_arbitrary_arguments_ignored_by_synthetic_backend: test\nadversarial_evidence_payload_exceeding_ceiling_by_one_byte: test\nadversarial_forged_synthetic_fixture_identifiers_rejected: test\nadversarial_mime_type_syntax_and_parameter_handling: test\nadversarial_oversized_resource_limits_and_revision_tampering: test\nadversarial_scope_and_action_inconsistencies: test\nadversarial_sensitive_data_not_leaked_in_any_formatting: test\nadversarial_syntactically_valid_sha256_never_bypasses_offline_gate: test\ncross_increment_uncertain_execution_retains_conservative_budget_hold: test\nexecution_engine_detects_and_rejects_correlation_mismatch: test\nexecution_engine_handles_contradictory_mock_backend: test\n\n11 tests, 0 benchmarks\nconservative_budget_accounting_on_uncertain_execution_outcome: test\nexecution_engine_dispatch_untrusted_workload_intercepted: test\nexecution_scope_predicates_and_formatting: test\ninvalid_and_forged_execution_requests_fail_validation: test\nno_host_docker_or_wsl2_fallback_declared_in_capabilities: test\nsynthetic_backend_strictly_rejects_untrusted_workload: test\nsynthetic_fixture_scope_validation_and_execution: test\nuntrusted_workload_rejected_by_default_fail_closed_backend: test\n\n8 tests, 0 benchmarks\nowned_5621_process: test\nreview_actual_execution_and_evidence_settlement_failures_are_observable: test\nreview_approval_update_failure_rolls_back_prior_reservation_and_audit: test\nreview_atomic_consumption_and_budget_contention_are_serialized: test\nreview_atomic_prepare_cannot_consume_a_while_reserving_for_b: test\nreview_atomic_prepare_cross_process_has_one_consumption_and_reservation: test\nreview_atomic_prepare_separate_connections_have_one_winner: test\nreview_budget_denial_preserves_issued_grant_for_exact_retry: test\nreview_compound_error_keeps_typed_primary_source: test\nreview_compound_evidence_error_redacts_untrusted_metadata: test\nreview_compound_execution_error_redacts_backend_sensitive_message: test\nreview_either_audit_failure_rolls_back_approval_budget_and_sequence: test\nreview_invalid_expired_and_stale_approvals_do_not_reserve_or_consume: test\nreview_no_grant_prepare_revalidates_context_after_policy_decision: test\nreview_paused_session_cannot_dispatch_new_work: test\nreview_policy_preview_does_not_grant_with_another_sessions_receipt: test\nreview_prepare_debug_does_not_disclose_authorization_parameters: test\nreview_provider_action_cost_cannot_be_under_reserved: test\nreview_public_context_registration_cannot_lower_trusted_floor: test\nreview_real_process_exit_after_prepare_preserves_pair_but_cannot_replay: test\nreview_same_context_synchronization_does_not_invalidate_issued_memory_grant: test\nreview_service_denials_never_call_backend_or_mutate_budget_approval: test\nreview_successful_settlement_preserves_unknown_usage_without_compound_error: test\n\n23 tests, 0 benchmarks\napproval_all_action_parameter_changes_are_bound_without_consuming_original: test\napproval_changes_to_action_arguments_target_revision_generation_or_class_are_denied: test\napproval_concurrent_matching_and_mismatching_consumers_preserve_single_use: test\napproval_context_reregistration_rejects_old_generation_even_after_revision_aba: test\napproval_cross_process_exactly_one_consumes_and_audit_is_atomic: test\napproval_expiration_boundary_clock_reversal_and_revocation_fail_closed: test\napproval_failed_audit_does_not_consume_valid_receipt: test\napproval_modified_session_metadata_is_not_trusted: test\napproval_reopen_requires_privileged_recovery_and_replay_stays_rejected: test\napproval_row_provenance_mutation_and_missing_snapshot_are_not_accepted: test\napproval_separate_connections_have_one_database_consumer: test\napproval_unknown_pending_missing_context_and_foreign_provenance_are_denied: test\naudit_failure_rolls_back_state_and_no_success_is_reported: test\naudit_retains_security_context_and_redacts_ordinary_diagnostics: test\nbudget_audit_failure_rolls_back_reservation_and_settlement: test\nbudget_concurrent_reservations_cannot_overspend: test\nbudget_overflow_invalid_values_overruns_and_unsafe_limit_reduction_are_denied: test\nbudget_separate_connections_cannot_exceed_shared_limit: test\nbudget_settlement_status_cancelled_with_usage_and_helpers: test\nbudget_settlement_status_completed_releases_difference_and_finalizes: test\nbudget_unknown_cancelled_or_partial_usage_retains_full_reservation: test\nbusy_timeout_is_real_and_distinct_from_stale_snapshot: test\nconnection_fresh_pragmas_schema_integrity_and_clean_shutdown: test\nconnection_invalid_paths_fail_without_creating_files: test\ndetailed_integrity_check_reports_structured_fk_violations: test\nmigration_drift_missing_history_and_unknown_trigger_fail_closed: test\nmigration_newer_schema_is_rejected_without_overwriting: test\nmigration_real_process_interruption_leaves_fresh_database_recoverable: test\nmigration_rejects_unrelated_database_without_overwriting: test\nmigration_repeated_initialization_preserves_supported_data: test\nmigrations_enforce_foreign_keys_audit_uniqueness_and_budget_checks: test\nopen_database_with_existing_foreign_key_violation_fails_closed: test\nowned_persistence_process_worker: test\npersistent_original_a_to_b_probe_denied_then_a_succeeds_once: test\npersistent_policy_denies_unknown_malformed_write_down_and_terminal_session: test\nquarantine_halts_closes_and_preserves_db_wal_and_shm_in_place: test\nrecovery_corrupt_database_fails_closed_and_preserves_original_bytes: test\nrecovery_real_process_termination_preserves_committed_and_discards_uncommitted: test\nruntime_integrity_check_detects_foreign_key_violations_and_halts_manager: test\nwal_long_lived_reader_blocks_shutdown_then_release_allows_truncation: test\nwindows_locked_database_initialization_fails_without_overwriting: test\nwindows_static_symlink_database_parent_and_wal_are_rejected: test\nwindows_unc_device_drive_relative_and_reserved_paths_are_rejected: test\n\n43 tests, 0 benchmarks\ntest_approval_grant_expiry: test\ntest_approval_grant_lifecycle_and_single_use_replay_prevention: test\ntest_approval_grant_mismatch_rejections: test\ntest_capability_vs_policy_authorization_separation: test\ntest_default_deny_unknown_operation: test\ntest_restricted_classification_always_requires_approval: test\ntest_revoked_approval_request: test\ntest_safe_operation_auto_granted_for_non_restricted: test\ntest_sensitive_actions_require_approval: test\n\n9 tests, 0 benchmarks\ntest_action_digest_argument_delimiter_injection_resistance: test\ntest_action_digest_modify_checkout_target_binding_and_canonical_sorting: test\ntest_bell_lapadula_flow_enforcement_prevents_write_down: test\ntest_budget_threshold_boundary_precision: test\ntest_classification_check_never_accidentally_grants_unknown_operation: test\ntest_concurrent_single_use_approval_consumption_exact_winner: test\ntest_cost_usd_fixed_point_exact_arithmetic: test\ntest_cost_usd_rejects_nan_infinity_and_negative_amounts: test\ntest_failed_validation_does_not_consume_grant: test\ntest_uuid_version_variant_and_production_fail_closed: test\n\n10 tests, 0 benchmarks\ntest_approval_rejection_and_replay_prevention: test\ntest_audit_consistency_and_diagnostic_redaction: test\ntest_backend_fault_and_invalid_result_remediation_f_551_01: test\ntest_backend_unavailable_for_untrusted_workloads: test\ntest_budget_exhaustion_does_not_consume_valid_approval_grant: test\ntest_conservative_budget_reservation_and_limit_enforcement: test\ntest_evidence_validation_failure: test\ntest_execute_task_enforces_classification_floor_rejection: test\ntest_execute_task_enforces_policy_denial_on_information_flow_violation: test\ntest_execute_task_enforces_policy_engine_denial_for_unknown_operation: test\ntest_execution_identifier_mismatch_remediation_f_551_05: test\ntest_invalid_approval_grant_leaves_no_budget_reservation: test\ntest_missing_session_context_fails_closed: test\ntest_persistence_failure_and_terminal_session_state: test\ntest_policy_denial_unknown_operation_and_classification_downgrade: test\ntest_service_error_compound_settlement_failure_contracts: test\ntest_successful_synthetic_workflow: test\ntest_timeout_and_cancellation_lifecycle: test\ntest_workspace_boundary_rejection: test\n\n19 tests, 0 benchmarks\ntest_complete_9x9_transition_matrix: test\ntest_metadata_validation: test\ntest_state_machine_invalid_transition_invariants: test\ntest_state_machine_valid_lifecycle_and_audit_emission: test\ntest_terminal_states_are_permanent: test\n\n5 tests, 0 benchmarks\nworkspace_absolute_case_alias_uses_filesystem_semantics: test\nworkspace_classification_is_preserved_and_does_not_issue_grants: test\nworkspace_depth_limits_report_partial_instead_of_clean: test\nworkspace_directory_change_invalidates_retained_observation: test\nworkspace_discovery_normal_nested_and_empty_directories: test\nworkspace_entry_limit_distinguishes_exact_capacity_from_overflow: test\nworkspace_external_directory_symlink_hides_outside_metadata: test\nworkspace_file_size_limit_quarantines_without_content_read: test\nworkspace_file_symlink_external_target_is_quarantined: test\nworkspace_file_symlink_internal_target_is_quarantined: test\nworkspace_git_directory_is_opaque_including_case_alias: test\nworkspace_git_pointer_and_invalid_manifests_are_not_read: test\nworkspace_internal_directory_symlink_is_not_traversed: test\nworkspace_inventory_byte_limit_stops_with_explicit_status: test\nworkspace_limits_and_content_read_requests_are_validated: test\nworkspace_metadata_changed_after_resolution_is_rejected: test\nworkspace_missing_leaf_is_not_a_valid_future_path: test\nworkspace_missing_root_and_file_root_fail_typed: test\nworkspace_nested_and_cyclic_symlinks_terminate_without_following: test\nworkspace_nested_entries_cannot_exceed_global_budget: test\nworkspace_no_discovered_build_hook_script_or_executable_is_run: test\nworkspace_nul_ads_reserved_names_and_win32_aliases_fail_closed: test\nworkspace_observation_is_bound_to_root_instance_not_equal_path_string: test\nworkspace_ordinary_diagnostics_redact_absolute_and_relative_payloads: test\nworkspace_outside_sibling_and_string_prefix_collision_are_rejected: test\nworkspace_oversized_path_is_rejected_before_io: test\nworkspace_parent_components_are_never_lexically_excused: test\nworkspace_preexisting_writer_changes_invalidate_retained_observation: test\nworkspace_relative_absolute_dot_and_repeated_separators: test\nworkspace_relative_root_is_resolved_against_actual_cwd: test\nworkspace_replacement_with_symlink_before_resolution_is_rejected: test\nworkspace_retained_handles_deny_observed_rename_attempts: test\nworkspace_root_and_root_ancestor_symlinks_are_rejected: test\nworkspace_root_dot_is_canonicalized_without_changing_process_cwd: test\nworkspace_scale_10000_file_measurement: test\nworkspace_total_file_length_limit_reports_incomplete: test\nworkspace_unc_devices_and_ambiguous_prefixes_fail_before_access: test\nworkspace_valid_root_is_canonical_and_session_classified: test\nworkspace_windows_junction_is_quarantined_without_target_traversal: test\nworkspace_windows_permission_denied_is_not_accepted: test\n\n40 tests, 0 benchmarks\ncrates\\sentra-core\\src\\lib.rs - persistence (line 36): test\ncrates\\sentra-core\\src\\lib.rs - persistence (line 43): test\ncrates\\sentra-core\\src\\lib.rs - persistence (line 48): test\ncrates\\sentra-core\\src\\policy\\approval.rs - policy::approval::ApprovalBroker (line 181): test\ncrates\\sentra-core\\src\\policy\\approval.rs - policy::approval::ApprovalBroker (line 188): test\n\n5 tests, 0 benchmarks\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\n     Running unittests src\\lib.rs (target\\debug\\deps\\sentra_core-00c9e4f85497a2ae.exe)\n     Running tests\\authorization_tests.rs (target\\debug\\deps\\authorization_tests-574798ad1a4c5c48.exe)\n     Running tests\\domain_tests.rs (target\\debug\\deps\\domain_tests-19e090a29a1217a7.exe)\n     Running tests\\evidence_tests.rs (target\\debug\\deps\\evidence_tests-050f646b2eddc6a5.exe)\n     Running tests\\execution_evidence_adversarial_tests.rs (target\\debug\\deps\\execution_evidence_adversarial_tests-38d2167105ad325c.exe)\n     Running tests\\execution_tests.rs (target\\debug\\deps\\execution_tests-68741f1bf7215e86.exe)\n     Running tests\\independent_core_review_tests.rs (target\\debug\\deps\\independent_core_review_tests-edc7f5173a63c85d.exe)\n     Running tests\\persistence_tests.rs (target\\debug\\deps\\persistence_tests-48c8beef783b5470.exe)\n     Running tests\\policy_tests.rs (target\\debug\\deps\\policy_tests-341512b267e4bb9f.exe)\n     Running tests\\security_tests.rs (target\\debug\\deps\\security_tests-d0008c3dff484d47.exe)\n     Running tests\\service_tests.rs (target\\debug\\deps\\service_tests-01cd4c1a145305b0.exe)\n     Running tests\\session_tests.rs (target\\debug\\deps\\session_tests-83dd2836579b1dad.exe)\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\n   Doc-tests sentra_core\n",
+      "summaries": [],
+      "tests": []
+    },
+    {
+      "name": "independent-security-regressions",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "test",
+        "--package",
+        "sentra-core",
+        "--test",
+        "independent_core_review_tests",
+        "--offline",
+        "review_",
+        "--",
+        "--ignored",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "status": "Failed",
+      "exit_code": 101,
+      "timed_out": false,
+      "elapsed_ms": 1610,
+      "stdout": "\nrunning 22 tests\ntest review_actual_execution_and_evidence_settlement_failures_are_observable ... ok\ntest review_approval_update_failure_rolls_back_prior_reservation_and_audit ... ok\ntest review_atomic_consumption_and_budget_contention_are_serialized ... ok\ntest review_atomic_prepare_cannot_consume_a_while_reserving_for_b ... FAILED\ntest review_atomic_prepare_cross_process_has_one_consumption_and_reservation ... ok\ntest review_atomic_prepare_separate_connections_have_one_winner ... ok\ntest review_budget_denial_preserves_issued_grant_for_exact_retry ... ok\ntest review_compound_error_keeps_typed_primary_source ... FAILED\ntest review_compound_evidence_error_redacts_untrusted_metadata ... FAILED\ntest review_compound_execution_error_redacts_backend_sensitive_message ... FAILED\ntest review_either_audit_failure_rolls_back_approval_budget_and_sequence ... ok\ntest review_invalid_expired_and_stale_approvals_do_not_reserve_or_consume ... ok\ntest review_no_grant_prepare_revalidates_context_after_policy_decision ... FAILED\ntest review_paused_session_cannot_dispatch_new_work ... FAILED\ntest review_policy_preview_does_not_grant_with_another_sessions_receipt ... FAILED\ntest review_prepare_debug_does_not_disclose_authorization_parameters ... FAILED\ntest review_provider_action_cost_cannot_be_under_reserved ... FAILED\ntest review_public_context_registration_cannot_lower_trusted_floor ... FAILED\ntest review_real_process_exit_after_prepare_preserves_pair_but_cannot_replay ... ok\ntest review_same_context_synchronization_does_not_invalidate_issued_memory_grant ... FAILED\ntest review_service_denials_never_call_backend_or_mutate_budget_approval ... ok\ntest review_successful_settlement_preserves_unknown_usage_without_compound_error ... ok\n\nfailures:\n\nfailures:\n    review_atomic_prepare_cannot_consume_a_while_reserving_for_b\n    review_compound_error_keeps_typed_primary_source\n    review_compound_evidence_error_redacts_untrusted_metadata\n    review_compound_execution_error_redacts_backend_sensitive_message\n    review_no_grant_prepare_revalidates_context_after_policy_decision\n    review_paused_session_cannot_dispatch_new_work\n    review_policy_preview_does_not_grant_with_another_sessions_receipt\n    review_prepare_debug_does_not_disclose_authorization_parameters\n    review_provider_action_cost_cannot_be_under_reserved\n    review_public_context_registration_cannot_lower_trusted_floor\n    review_same_context_synchronization_does_not_invalidate_issued_memory_grant\n\ntest result: FAILED. 11 passed; 11 failed; 0 ignored; 0 measured; 1 filtered out; finished in 1.37s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\n     Running tests\\independent_core_review_tests.rs (target\\debug\\deps\\independent_core_review_tests-edc7f5173a63c85d.exe)\n\nthread 'review_atomic_prepare_cannot_consume_a_while_reserving_for_b' (12572) panicked at crates\\sentra-core\\tests\\independent_core_review_tests.rs:390:5:\none transaction consumed session A approval while charging session B; A=0, B=7\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\nthread 'review_compound_error_keeps_typed_primary_source' (26332) panicked at crates\\sentra-core\\tests\\independent_core_review_tests.rs:957:5:\nboth primary error objects were flattened into strings and Error::source is absent: [false, false]\n\nthread 'review_compound_evidence_error_redacts_untrusted_metadata' (2024) panicked at crates\\sentra-core\\tests\\independent_core_review_tests.rs:933:5:\ncompound service diagnostics disclose untrusted evidence metadata\n\nthread 'review_compound_execution_error_redacts_backend_sensitive_message' (20200) panicked at crates\\sentra-core\\tests\\independent_core_review_tests.rs:916:5:\ncompound service diagnostics disclose the backend message canary\n\nthread 'review_no_grant_prepare_revalidates_context_after_policy_decision' (24752) panicked at crates\\sentra-core\\tests\\independent_core_review_tests.rs:427:5:\nthe no-grant prepare request cannot express or recheck the authorized generation/revision/classification\n\nthread 'review_paused_session_cannot_dispatch_new_work' (17796) panicked at crates\\sentra-core\\tests\\independent_core_review_tests.rs:452:5:\nPAUSED state was treated as execution-eligible\n\nthread 'review_policy_preview_does_not_grant_with_another_sessions_receipt' (1980) panicked at crates\\sentra-core\\tests\\independent_core_review_tests.rs:507:5:\nevaluate_action returned Granted based only on Some(grant), without binding it to session B\n\nthread 'review_prepare_debug_does_not_disclose_authorization_parameters' (7580) panicked at crates\\sentra-core\\tests\\independent_core_review_tests.rs:489:5:\nPrepareExecutionRequest derived Debug exposes its ApprovalIntent/action arguments\n\nthread 'review_provider_action_cost_cannot_be_under_reserved' (10580) panicked at crates\\sentra-core\\tests\\independent_core_review_tests.rs:470:5:\ncanonical action declares 200 micro-USD against a 100 limit but caller reserves/settles zero\n\nthread 'review_public_context_registration_cannot_lower_trusted_floor' (22052) panicked at crates\\sentra-core\\tests\\independent_core_review_tests.rs:333:5:\nrequest-side PolicyEngine and broker setters lowered a trusted Restricted floor to Public: [false, false]\n\nthread 'review_same_context_synchronization_does_not_invalidate_issued_memory_grant' (24700) panicked at crates\\sentra-core\\tests\\independent_core_review_tests.rs:360:5:\na no-op synchronization rotated generation and invalidated the issued grant\nerror: test failed, to rerun pass `-p sentra-core --test independent_core_review_tests`\n",
+      "summaries": [
+        {
+          "passed": 11,
+          "failed": 11,
+          "ignored": 0,
+          "filtered": 1
+        }
+      ],
+      "tests": [
+        {
+          "name": "review_actual_execution_and_evidence_settlement_failures_are_observable",
+          "status": "Passed"
+        },
+        {
+          "name": "review_approval_update_failure_rolls_back_prior_reservation_and_audit",
+          "status": "Passed"
+        },
+        {
+          "name": "review_atomic_consumption_and_budget_contention_are_serialized",
+          "status": "Passed"
+        },
+        {
+          "name": "review_atomic_prepare_cannot_consume_a_while_reserving_for_b",
+          "status": "Failed"
+        },
+        {
+          "name": "review_atomic_prepare_cross_process_has_one_consumption_and_reservation",
+          "status": "Passed"
+        },
+        {
+          "name": "review_atomic_prepare_separate_connections_have_one_winner",
+          "status": "Passed"
+        },
+        {
+          "name": "review_budget_denial_preserves_issued_grant_for_exact_retry",
+          "status": "Passed"
+        },
+        {
+          "name": "review_compound_error_keeps_typed_primary_source",
+          "status": "Failed"
+        },
+        {
+          "name": "review_compound_evidence_error_redacts_untrusted_metadata",
+          "status": "Failed"
+        },
+        {
+          "name": "review_compound_execution_error_redacts_backend_sensitive_message",
+          "status": "Failed"
+        },
+        {
+          "name": "review_either_audit_failure_rolls_back_approval_budget_and_sequence",
+          "status": "Passed"
+        },
+        {
+          "name": "review_invalid_expired_and_stale_approvals_do_not_reserve_or_consume",
+          "status": "Passed"
+        },
+        {
+          "name": "review_no_grant_prepare_revalidates_context_after_policy_decision",
+          "status": "Failed"
+        },
+        {
+          "name": "review_paused_session_cannot_dispatch_new_work",
+          "status": "Failed"
+        },
+        {
+          "name": "review_policy_preview_does_not_grant_with_another_sessions_receipt",
+          "status": "Failed"
+        },
+        {
+          "name": "review_prepare_debug_does_not_disclose_authorization_parameters",
+          "status": "Failed"
+        },
+        {
+          "name": "review_provider_action_cost_cannot_be_under_reserved",
+          "status": "Failed"
+        },
+        {
+          "name": "review_public_context_registration_cannot_lower_trusted_floor",
+          "status": "Failed"
+        },
+        {
+          "name": "review_real_process_exit_after_prepare_preserves_pair_but_cannot_replay",
+          "status": "Passed"
+        },
+        {
+          "name": "review_same_context_synchronization_does_not_invalidate_issued_memory_grant",
+          "status": "Failed"
+        },
+        {
+          "name": "review_service_denials_never_call_backend_or_mutate_budget_approval",
+          "status": "Passed"
+        },
+        {
+          "name": "review_successful_settlement_preserves_unknown_usage_without_compound_error",
+          "status": "Passed"
+        }
+      ]
+    }
+  ],
+  "note": "Adversarial assertions require secure behavior. Failed assertions are findings, not silently accepted observations. They are explicitly executed here although ignored by ordinary workspace runs. No production fault hooks."
+}

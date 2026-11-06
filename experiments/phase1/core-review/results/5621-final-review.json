@@ -1,0 +1,88 @@
+{
+  "increment": "5.6.2.1",
+  "observed_at_utc": "2026-11-06T03:28:55.335Z",
+  "source_preservation": {
+    "original_files": 193,
+    "changed_original_files": [
+      "PROGRESS.md"
+    ],
+    "unexpected_changed_original_files": [],
+    "preservation": {
+      "branch": true,
+      "head": true,
+      "refs": true,
+      "history": true,
+      "index": true,
+      "index_file_sha256": true
+    },
+    "final_review_input_drift": []
+  },
+  "git": {
+    "branch": "refs/heads/develop",
+    "head": "a4362f61750fb90374f13b02f11052ef8adf2c34",
+    "index_file_sha256": "f75ed732d543da079bcabacd13335a579277746c05422ccc99ba165fef58224d",
+    "status": " M PROGRESS.md\n?? crates/sentra-core/tests/independent_core_review_tests.rs\n?? docs/phase1/INCREMENT_5_6_2_1_INDEPENDENT_REVIEW.md\n?? experiments/phase1/authorization/results/1793934396429.json\n?? experiments/phase1/core-review/Validate-5.6.2.1.ps1\n?? experiments/phase1/core-review/results/5621-1793933555806.json\n?? experiments/phase1/core-review/results/5621-1793933908453.json\n?? experiments/phase1/core-review/results/5621-1793934123762.json\n?? experiments/phase1/core-review/results/5621-1793934349382.json\n?? experiments/phase1/core-review/results/5621-directory-repeats.json\n?? experiments/phase1/core-review/results/5621-final-review.json\n?? experiments/phase1/persistence/results/1793934396412.json\n?? experiments/phase1/workspace/results/1793934396430.json",
+    "tracking": "refs/heads/develop a4362f61750fb90374f13b02f11052ef8adf2c34 refs/remotes/origin/develop",
+    "ahead_behind": "0\t0",
+    "index_entries_sha256": "c0489ca92cd034198d0f096a06fed66e3ce571229e70c914320e117dc4107153",
+    "refs_sha256": "0d5b544e8c9d1481554b8951d1457412a0ffad5ea8a908b9b7b2f36de23064fa",
+    "history_sha256": "439441c72dfabb684d70456cca255432b7945c18754cf6f8095932af3d4057ae",
+    "modified_tracked": 1,
+    "untracked": 12,
+    "staged": 0
+  },
+  "documentation": {
+    "documents": [
+      "PROGRESS.md",
+      "docs/phase1/INCREMENT_5_6_2_1_INDEPENDENT_REVIEW.md"
+    ],
+    "local_links": 78,
+    "table_blocks": 9,
+    "requirements": 41,
+    "adrs": [
+      {
+        "path": "docs/adr/0001-platform-scope-and-phase-boundary.md",
+        "status": "Accepted"
+      },
+      {
+        "path": "docs/adr/0002-conditional-rust-core.md",
+        "status": "Proposed"
+      },
+      {
+        "path": "docs/adr/0003-local-modular-control-plane.md",
+        "status": "Accepted"
+      },
+      {
+        "path": "docs/adr/0004-vm-boundary-for-untrusted-execution.md",
+        "status": "Accepted"
+      },
+      {
+        "path": "docs/adr/0005-capability-scoped-process-adapters.md",
+        "status": "Accepted"
+      },
+      {
+        "path": "docs/adr/0006-evidence-and-independent-verification.md",
+        "status": "Accepted"
+      },
+      {
+        "path": "docs/adr/0007-open-source-and-integration-licensing.md",
+        "status": "Proposed"
+      }
+    ],
+    "failures": []
+  },
+  "inventory": {
+    "discovered": 233,
+    "unique_names": 233,
+    "explicit_review": [
+      {
+        "passed": 11,
+        "failed": 12,
+        "ignored": 0,
+        "filtered": 1
+      }
+    ],
+    "rule": "Any failure takes precedence: 218 Passed, 13 Failed, two child helpers = 233 discovered. One existing workspace case is intermittent; no overlapping commands/repeats added."
+  },
+  "note": "Read-only Git and source verification. Built-in Bun hashing fingerprints review inputs, not application approval cryptography."
+}

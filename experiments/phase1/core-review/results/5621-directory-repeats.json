@@ -1,0 +1,365 @@
+{
+  "observed_at_utc": "2026-11-06T03:08:59.6690180+00:00",
+  "checks": [
+    {
+      "round": 1,
+      "arguments": [
+        "test",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "--offline",
+        "workspace_directory_change_invalidates_retained_observation",
+        "--",
+        "--exact"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout": "\nrunning 1 test\ntest workspace_directory_change_invalidates_retained_observation ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.01s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\n"
+    },
+    {
+      "round": 2,
+      "arguments": [
+        "test",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "--offline",
+        "workspace_directory_change_invalidates_retained_observation",
+        "--",
+        "--exact"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout": "\nrunning 1 test\ntest workspace_directory_change_invalidates_retained_observation ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\n"
+    },
+    {
+      "round": 3,
+      "arguments": [
+        "test",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "--offline",
+        "workspace_directory_change_invalidates_retained_observation",
+        "--",
+        "--exact"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout": "\nrunning 1 test\ntest workspace_directory_change_invalidates_retained_observation ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\n"
+    },
+    {
+      "round": 4,
+      "arguments": [
+        "test",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "--offline",
+        "workspace_directory_change_invalidates_retained_observation",
+        "--",
+        "--exact"
+      ],
+      "exit_code": 101,
+      "timed_out": false,
+      "stdout": "\nrunning 1 test\ntest workspace_directory_change_invalidates_retained_observation ... FAILED\n\nfailures:\n\n---- workspace_directory_change_invalidates_retained_observation stdout ----\n\nthread 'workspace_directory_change_invalidates_retained_observation' (21036) panicked at crates\\sentra-core\\tests\\workspace_tests.rs:392:37:\ncalled `Result::unwrap_err()` on an `Ok` value: WorkspaceEntry { relative_path: \"dir\", kind: Directory, size_bytes: 0, modified: Some(SystemTime { intervals: 134384081369271805 }), repository_metadata: None, classification: Confidential }\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    workspace_directory_change_invalidates_retained_observation\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\nerror: test failed, to rerun pass `-p sentra-core --test workspace_tests`\n"
+    },
+    {
+      "round": 5,
+      "arguments": [
+        "test",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "--offline",
+        "workspace_directory_change_invalidates_retained_observation",
+        "--",
+        "--exact"
+      ],
+      "exit_code": 101,
+      "timed_out": false,
+      "stdout": "\nrunning 1 test\ntest workspace_directory_change_invalidates_retained_observation ... FAILED\n\nfailures:\n\n---- workspace_directory_change_invalidates_retained_observation stdout ----\n\nthread 'workspace_directory_change_invalidates_retained_observation' (22560) panicked at crates\\sentra-core\\tests\\workspace_tests.rs:392:37:\ncalled `Result::unwrap_err()` on an `Ok` value: WorkspaceEntry { relative_path: \"dir\", kind: Directory, size_bytes: 0, modified: Some(SystemTime { intervals: 134384081370965829 }), repository_metadata: None, classification: Confidential }\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    workspace_directory_change_invalidates_retained_observation\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\nerror: test failed, to rerun pass `-p sentra-core --test workspace_tests`\n"
+    },
+    {
+      "round": 6,
+      "arguments": [
+        "test",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "--offline",
+        "workspace_directory_change_invalidates_retained_observation",
+        "--",
+        "--exact"
+      ],
+      "exit_code": 101,
+      "timed_out": false,
+      "stdout": "\nrunning 1 test\ntest workspace_directory_change_invalidates_retained_observation ... FAILED\n\nfailures:\n\n---- workspace_directory_change_invalidates_retained_observation stdout ----\n\nthread 'workspace_directory_change_invalidates_retained_observation' (26456) panicked at crates\\sentra-core\\tests\\workspace_tests.rs:392:37:\ncalled `Result::unwrap_err()` on an `Ok` value: WorkspaceEntry { relative_path: \"dir\", kind: Directory, size_bytes: 0, modified: Some(SystemTime { intervals: 134384081372715212 }), repository_metadata: None, classification: Confidential }\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    workspace_directory_change_invalidates_retained_observation\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.01s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\nerror: test failed, to rerun pass `-p sentra-core --test workspace_tests`\n"
+    },
+    {
+      "round": 7,
+      "arguments": [
+        "test",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "--offline",
+        "workspace_directory_change_invalidates_retained_observation",
+        "--",
+        "--exact"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout": "\nrunning 1 test\ntest workspace_directory_change_invalidates_retained_observation ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\n"
+    },
+    {
+      "round": 8,
+      "arguments": [
+        "test",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "--offline",
+        "workspace_directory_change_invalidates_retained_observation",
+        "--",
+        "--exact"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout": "\nrunning 1 test\ntest workspace_directory_change_invalidates_retained_observation ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.01s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\n"
+    },
+    {
+      "round": 9,
+      "arguments": [
+        "test",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "--offline",
+        "workspace_directory_change_invalidates_retained_observation",
+        "--",
+        "--exact"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout": "\nrunning 1 test\ntest workspace_directory_change_invalidates_retained_observation ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\n"
+    },
+    {
+      "round": 10,
+      "arguments": [
+        "test",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "--offline",
+        "workspace_directory_change_invalidates_retained_observation",
+        "--",
+        "--exact"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout": "\nrunning 1 test\ntest workspace_directory_change_invalidates_retained_observation ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.01s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\n"
+    },
+    {
+      "round": 11,
+      "arguments": [
+        "test",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "--offline",
+        "workspace_directory_change_invalidates_retained_observation",
+        "--",
+        "--exact"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout": "\nrunning 1 test\ntest workspace_directory_change_invalidates_retained_observation ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\n"
+    },
+    {
+      "round": 12,
+      "arguments": [
+        "test",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "--offline",
+        "workspace_directory_change_invalidates_retained_observation",
+        "--",
+        "--exact"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout": "\nrunning 1 test\ntest workspace_directory_change_invalidates_retained_observation ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\n"
+    },
+    {
+      "round": 13,
+      "arguments": [
+        "test",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "--offline",
+        "workspace_directory_change_invalidates_retained_observation",
+        "--",
+        "--exact"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout": "\nrunning 1 test\ntest workspace_directory_change_invalidates_retained_observation ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\n"
+    },
+    {
+      "round": 14,
+      "arguments": [
+        "test",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "--offline",
+        "workspace_directory_change_invalidates_retained_observation",
+        "--",
+        "--exact"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout": "\nrunning 1 test\ntest workspace_directory_change_invalidates_retained_observation ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\n"
+    },
+    {
+      "round": 15,
+      "arguments": [
+        "test",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "--offline",
+        "workspace_directory_change_invalidates_retained_observation",
+        "--",
+        "--exact"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout": "\nrunning 1 test\ntest workspace_directory_change_invalidates_retained_observation ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\n"
+    },
+    {
+      "round": 16,
+      "arguments": [
+        "test",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "--offline",
+        "workspace_directory_change_invalidates_retained_observation",
+        "--",
+        "--exact"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout": "\nrunning 1 test\ntest workspace_directory_change_invalidates_retained_observation ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\n"
+    },
+    {
+      "round": 17,
+      "arguments": [
+        "test",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "--offline",
+        "workspace_directory_change_invalidates_retained_observation",
+        "--",
+        "--exact"
+      ],
+      "exit_code": 101,
+      "timed_out": false,
+      "stdout": "\nrunning 1 test\ntest workspace_directory_change_invalidates_retained_observation ... FAILED\n\nfailures:\n\n---- workspace_directory_change_invalidates_retained_observation stdout ----\n\nthread 'workspace_directory_change_invalidates_retained_observation' (2896) panicked at crates\\sentra-core\\tests\\workspace_tests.rs:392:37:\ncalled `Result::unwrap_err()` on an `Ok` value: WorkspaceEntry { relative_path: \"dir\", kind: Directory, size_bytes: 0, modified: Some(SystemTime { intervals: 134384081391340569 }), repository_metadata: None, classification: Confidential }\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    workspace_directory_change_invalidates_retained_observation\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.01s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\nerror: test failed, to rerun pass `-p sentra-core --test workspace_tests`\n"
+    },
+    {
+      "round": 18,
+      "arguments": [
+        "test",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "--offline",
+        "workspace_directory_change_invalidates_retained_observation",
+        "--",
+        "--exact"
+      ],
+      "exit_code": 101,
+      "timed_out": false,
+      "stdout": "\nrunning 1 test\ntest workspace_directory_change_invalidates_retained_observation ... FAILED\n\nfailures:\n\n---- workspace_directory_change_invalidates_retained_observation stdout ----\n\nthread 'workspace_directory_change_invalidates_retained_observation' (29192) panicked at crates\\sentra-core\\tests\\workspace_tests.rs:392:37:\ncalled `Result::unwrap_err()` on an `Ok` value: WorkspaceEntry { relative_path: \"dir\", kind: Directory, size_bytes: 0, modified: Some(SystemTime { intervals: 134384081393001142 }), repository_metadata: None, classification: Confidential }\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    workspace_directory_change_invalidates_retained_observation\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\nerror: test failed, to rerun pass `-p sentra-core --test workspace_tests`\n"
+    },
+    {
+      "round": 19,
+      "arguments": [
+        "test",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "--offline",
+        "workspace_directory_change_invalidates_retained_observation",
+        "--",
+        "--exact"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout": "\nrunning 1 test\ntest workspace_directory_change_invalidates_retained_observation ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\n"
+    },
+    {
+      "round": 20,
+      "arguments": [
+        "test",
+        "--package",
+        "sentra-core",
+        "--test",
+        "workspace_tests",
+        "--offline",
+        "workspace_directory_change_invalidates_retained_observation",
+        "--",
+        "--exact"
+      ],
+      "exit_code": 101,
+      "timed_out": false,
+      "stdout": "\nrunning 1 test\ntest workspace_directory_change_invalidates_retained_observation ... FAILED\n\nfailures:\n\n---- workspace_directory_change_invalidates_retained_observation stdout ----\n\nthread 'workspace_directory_change_invalidates_retained_observation' (14972) panicked at crates\\sentra-core\\tests\\workspace_tests.rs:392:37:\ncalled `Result::unwrap_err()` on an `Ok` value: WorkspaceEntry { relative_path: \"dir\", kind: Directory, size_bytes: 0, modified: Some(SystemTime { intervals: 134384081396537925 }), repository_metadata: None, classification: Confidential }\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    workspace_directory_change_invalidates_retained_observation\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\nerror: test failed, to rerun pass `-p sentra-core --test workspace_tests`\n"
+    }
+  ]
+}
