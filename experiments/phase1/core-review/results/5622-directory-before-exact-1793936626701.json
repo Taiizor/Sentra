@@ -1,0 +1,102 @@
+[
+  {
+    "iteration": 1,
+    "exit_code": 0,
+    "output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 1 test\r\ntest workspace_directory_change_invalidates_retained_observation ... ok\r\n\r\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\r\n\r\n"
+  },
+  {
+    "iteration": 2,
+    "exit_code": 101,
+    "output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 1 test\r\n\r\nthread 'workspace_directory_change_invalidates_retained_observation' (4824) panicked at crates\\sentra-core\\tests\\workspace_tests.rs:392:37:\r\ncalled `Result::unwrap_err()` on an `Ok` value: WorkspaceEntry { relative_path: \"dir\", kind: Directory, size_bytes: 0, modified: Some(SystemTime { intervals: 134384102225876736 }), repository_metadata: None, classification: Confidential }\r\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\r\ntest workspace_directory_change_invalidates_retained_observation ... FAILED\r\n\r\nfailures:\r\n\r\nfailures:\r\n    workspace_directory_change_invalidates_retained_observation\r\n\r\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.01s\r\n\r\nerror: test failed, to rerun pass `-p sentra-core --test workspace_tests`\r\n"
+  },
+  {
+    "iteration": 3,
+    "exit_code": 0,
+    "output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 1 test\r\ntest workspace_directory_change_invalidates_retained_observation ... ok\r\n\r\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.01s\r\n\r\n"
+  },
+  {
+    "iteration": 4,
+    "exit_code": 101,
+    "output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 1 test\r\n\r\nthread 'workspace_directory_change_invalidates_retained_observation' (4600) panicked at crates\\sentra-core\\tests\\workspace_tests.rs:392:37:\r\ncalled `Result::unwrap_err()` on an `Ok` value: WorkspaceEntry { relative_path: \"dir\", kind: Directory, size_bytes: 0, modified: Some(SystemTime { intervals: 134384102230339856 }), repository_metadata: None, classification: Confidential }\r\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\r\ntest workspace_directory_change_invalidates_retained_observation ... FAILED\r\n\r\nfailures:\r\n\r\nfailures:\r\n    workspace_directory_change_invalidates_retained_observation\r\n\r\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\r\n\r\nerror: test failed, to rerun pass `-p sentra-core --test workspace_tests`\r\n"
+  },
+  {
+    "iteration": 5,
+    "exit_code": 0,
+    "output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 1 test\r\ntest workspace_directory_change_invalidates_retained_observation ... ok\r\n\r\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\r\n\r\n"
+  },
+  {
+    "iteration": 6,
+    "exit_code": 0,
+    "output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 1 test\r\ntest workspace_directory_change_invalidates_retained_observation ... ok\r\n\r\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.01s\r\n\r\n"
+  },
+  {
+    "iteration": 7,
+    "exit_code": 0,
+    "output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.09s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 1 test\r\ntest workspace_directory_change_invalidates_retained_observation ... ok\r\n\r\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\r\n\r\n"
+  },
+  {
+    "iteration": 8,
+    "exit_code": 0,
+    "output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 1 test\r\ntest workspace_directory_change_invalidates_retained_observation ... ok\r\n\r\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\r\n\r\n"
+  },
+  {
+    "iteration": 9,
+    "exit_code": 101,
+    "output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 1 test\r\n\r\nthread 'workspace_directory_change_invalidates_retained_observation' (26668) panicked at crates\\sentra-core\\tests\\workspace_tests.rs:392:37:\r\ncalled `Result::unwrap_err()` on an `Ok` value: WorkspaceEntry { relative_path: \"dir\", kind: Directory, size_bytes: 0, modified: Some(SystemTime { intervals: 134384102241655643 }), repository_metadata: None, classification: Confidential }\r\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\r\ntest workspace_directory_change_invalidates_retained_observation ... FAILED\r\n\r\nfailures:\r\n\r\nfailures:\r\n    workspace_directory_change_invalidates_retained_observation\r\n\r\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.01s\r\n\r\nerror: test failed, to rerun pass `-p sentra-core --test workspace_tests`\r\n"
+  },
+  {
+    "iteration": 10,
+    "exit_code": 0,
+    "output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 1 test\r\ntest workspace_directory_change_invalidates_retained_observation ... ok\r\n\r\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\r\n\r\n"
+  },
+  {
+    "iteration": 11,
+    "exit_code": 0,
+    "output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 1 test\r\ntest workspace_directory_change_invalidates_retained_observation ... ok\r\n\r\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.01s\r\n\r\n"
+  },
+  {
+    "iteration": 12,
+    "exit_code": 0,
+    "output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 1 test\r\ntest workspace_directory_change_invalidates_retained_observation ... ok\r\n\r\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.01s\r\n\r\n"
+  },
+  {
+    "iteration": 13,
+    "exit_code": 101,
+    "output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 1 test\r\n\r\nthread 'workspace_directory_change_invalidates_retained_observation' (7788) panicked at crates\\sentra-core\\tests\\workspace_tests.rs:392:37:\r\ncalled `Result::unwrap_err()` on an `Ok` value: WorkspaceEntry { relative_path: \"dir\", kind: Directory, size_bytes: 0, modified: Some(SystemTime { intervals: 134384102250841522 }), repository_metadata: None, classification: Confidential }\r\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\r\ntest workspace_directory_change_invalidates_retained_observation ... FAILED\r\n\r\nfailures:\r\n\r\nfailures:\r\n    workspace_directory_change_invalidates_retained_observation\r\n\r\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.01s\r\n\r\nerror: test failed, to rerun pass `-p sentra-core --test workspace_tests`\r\n"
+  },
+  {
+    "iteration": 14,
+    "exit_code": 0,
+    "output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 1 test\r\ntest workspace_directory_change_invalidates_retained_observation ... ok\r\n\r\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\r\n\r\n"
+  },
+  {
+    "iteration": 15,
+    "exit_code": 101,
+    "output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 1 test\r\n\r\nthread 'workspace_directory_change_invalidates_retained_observation' (2816) panicked at crates\\sentra-core\\tests\\workspace_tests.rs:392:37:\r\ncalled `Result::unwrap_err()` on an `Ok` value: WorkspaceEntry { relative_path: \"dir\", kind: Directory, size_bytes: 0, modified: Some(SystemTime { intervals: 134384102255466710 }), repository_metadata: None, classification: Confidential }\r\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\r\ntest workspace_directory_change_invalidates_retained_observation ... FAILED\r\n\r\nfailures:\r\n\r\nfailures:\r\n    workspace_directory_change_invalidates_retained_observation\r\n\r\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\r\n\r\nerror: test failed, to rerun pass `-p sentra-core --test workspace_tests`\r\n"
+  },
+  {
+    "iteration": 16,
+    "exit_code": 0,
+    "output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 1 test\r\ntest workspace_directory_change_invalidates_retained_observation ... ok\r\n\r\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\r\n\r\n"
+  },
+  {
+    "iteration": 17,
+    "exit_code": 101,
+    "output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 1 test\r\n\r\nthread 'workspace_directory_change_invalidates_retained_observation' (27052) panicked at crates\\sentra-core\\tests\\workspace_tests.rs:392:37:\r\ncalled `Result::unwrap_err()` on an `Ok` value: WorkspaceEntry { relative_path: \"dir\", kind: Directory, size_bytes: 0, modified: Some(SystemTime { intervals: 134384102259980550 }), repository_metadata: None, classification: Confidential }\r\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\r\ntest workspace_directory_change_invalidates_retained_observation ... FAILED\r\n\r\nfailures:\r\n\r\nfailures:\r\n    workspace_directory_change_invalidates_retained_observation\r\n\r\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.01s\r\n\r\nerror: test failed, to rerun pass `-p sentra-core --test workspace_tests`\r\n"
+  },
+  {
+    "iteration": 18,
+    "exit_code": 0,
+    "output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.09s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 1 test\r\ntest workspace_directory_change_invalidates_retained_observation ... ok\r\n\r\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s\r\n\r\n"
+  },
+  {
+    "iteration": 19,
+    "exit_code": 101,
+    "output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 1 test\r\n\r\nthread 'workspace_directory_change_invalidates_retained_observation' (28724) panicked at crates\\sentra-core\\tests\\workspace_tests.rs:392:37:\r\ncalled `Result::unwrap_err()` on an `Ok` value: WorkspaceEntry { relative_path: \"dir\", kind: Directory, size_bytes: 0, modified: Some(SystemTime { intervals: 134384102264538260 }), repository_metadata: None, classification: Confidential }\r\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\r\ntest workspace_directory_change_invalidates_retained_observation ... FAILED\r\n\r\nfailures:\r\n\r\nfailures:\r\n    workspace_directory_change_invalidates_retained_observation\r\n\r\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.01s\r\n\r\nerror: test failed, to rerun pass `-p sentra-core --test workspace_tests`\r\n"
+  },
+  {
+    "iteration": 20,
+    "exit_code": 0,
+    "output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 1 test\r\ntest workspace_directory_change_invalidates_retained_observation ... ok\r\n\r\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.01s\r\n\r\n"
+  }
+]

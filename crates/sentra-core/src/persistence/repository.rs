@@ -6,8 +6,8 @@ use super::{
     transaction::ManagedTransaction,
 };
 use crate::{
-    ApprovalId, Clock, CostUsd, EventId, Identifier, SecurityClassification, SessionId,
-    SessionMetadata, SessionState,
+    ApprovalId, Clock, CostUsd, EventId, Identifier, OperationAction, PolicyEngine,
+    SecurityClassification, SessionId, SessionMetadata, SessionState,
 };
 use rusqlite::params;
 use std::{fmt, sync::Arc};
@@ -30,6 +30,7 @@ pub struct PersistenceRepository {
 
 /// Trusted local controller capability for the SAME persistent repository.
 /// Never expose it to model/target/request handlers. It authenticates no human.
+#[derive(Clone)]
 pub struct PersistentApprovalAuthority {
     repository: PersistenceRepository,
 }
@@ -204,19 +205,84 @@ fn budget_used(
     model::unsigned(used).map_err(corrupt)
 }
 
-/// Parameters for atomically reserving budget and optionally consuming an approval grant.
+/// Owner-minted immutable operation context. Neither a caller DTO nor a grant.
+/// Its private repository seal cannot be reconstructed from serialized fields.
+#[derive(Clone)]
+pub struct ExecutionContext {
+    seal: Arc<()>,
+    snapshot: Snapshot,
+    session: SessionMetadata,
+    action: OperationAction,
+    classification: SecurityClassification,
+    amount: CostUsd,
+    requires_approval: bool,
+}
+impl fmt::Debug for ExecutionContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("ExecutionContext([redacted])")
+    }
+}
+impl ExecutionContext {
+    /// Authoritative owner of approval, reservation and audit records.
+    pub fn session_id(&self) -> SessionId {
+        self.session.session_id
+    }
+    /// Frozen generation; always revalidated at preparation, even without approval.
+    pub fn context_generation(&self) -> u64 {
+        self.snapshot.generation
+    }
+    /// Whether trusted policy requires an approval for this exact operation.
+    pub fn requires_approval(&self) -> bool {
+        self.requires_approval
+    }
+    /// Explicit privileged operation view, never included in diagnostic formatting.
+    pub fn action(&self) -> &OperationAction {
+        &self.action
+    }
+    /// Frozen target revision.
+    pub fn target_revision(&self) -> &str {
+        &self.snapshot.revision
+    }
+    /// Frozen processing classification.
+    pub fn classification(&self) -> SecurityClassification {
+        self.classification
+    }
+    fn intent(&self) -> ApprovalIntent<'_> {
+        ApprovalIntent {
+            session: &self.session,
+            context_generation: self.snapshot.generation,
+            target_revision: &self.snapshot.revision,
+            classification: self.classification,
+            action: &self.action,
+        }
+    }
+}
+
+/// Successful atomic preparation plus a live shared lifecycle fence.
+/// Keep this value alive through synchronous dispatch. It holds NO SQLite lock.
+pub struct PreparedExecution {
+    /// Committed reservation.
+    pub budget: BudgetRecord,
+    /// Committed approval consumption, when applicable.
+    pub consumption: Option<ConsumptionRecord>,
+    _admission: super::connection::SessionAdmission,
+}
+impl fmt::Debug for PreparedExecution {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("PreparedExecution([redacted live admission])")
+    }
+}
+
+/// One authority-minted context owns every mutation; no independent session,
+/// model, amount or caller-created ApprovalIntent can redirect the transaction.
 #[derive(Clone, Debug)]
 pub struct PrepareExecutionRequest<'a> {
     /// Unique budget reservation identifier.
     pub reservation_id: Identifier,
-    /// Associated session identifier.
-    pub session_id: SessionId,
-    /// Model identifier or task category string.
-    pub model_id: &'a str,
-    /// Estimated cost for budget reservation.
-    pub amount: CostUsd,
-    /// Optional approval grant and intent for atomic consumption.
-    pub grant_and_intent: Option<(&'a PersistentApprovalGrant, &'a ApprovalIntent<'a>)>,
+    /// Trusted, immutable operation and budget owner.
+    pub context: ExecutionContext,
+    /// Optional private receipt, revalidated against the context in SQL.
+    pub grant: Option<&'a PersistentApprovalGrant>,
     /// Audit event identifier for budget reservation.
     pub reservation_event: EventId,
     /// Audit event identifier for approval consumption.
@@ -307,6 +373,7 @@ impl PersistenceRepository {
         event: EventId,
         clock: &impl Clock,
     ) -> Result<TransitionRecord, PersistenceError> {
+        let _lifecycle = self.manager.session_admission(id, true)?;
         let sequence = self.manager.write(|tx| {
             let (_, session) = read_snapshot(tx, id)?.ok_or_else(|| error(Kind::Conflict))?;
             if session.state != from || !from.can_transition_to(to) { return Err(error(Kind::Conflict)); }
@@ -380,56 +447,32 @@ impl PersistenceRepository {
         &self,
         req: PrepareExecutionRequest<'_>,
         clock: &impl Clock,
-    ) -> Result<(BudgetRecord, Option<ConsumptionRecord>), PersistenceError> {
+    ) -> Result<PreparedExecution, PersistenceError> {
         model::parse_id(&req.reservation_id.to_string())?;
-        let amount_int = model::integer(req.amount.as_micro_usd())?;
-        if !model::valid_text(req.model_id) {
-            return Err(model::invalid());
+        let context = &req.context;
+        if !Arc::ptr_eq(&self.seal, &context.seal) {
+            return Err(error(Kind::ContextMismatch));
         }
-
-        if let Some((grant, _)) = req.grant_and_intent
+        let session_id = context.session_id();
+        let amount_int = model::integer(context.amount.as_micro_usd())?;
+        let model_id = match &context.action {
+            OperationAction::InvokeProvider { model_id, .. } => model_id.as_str(),
+            _ => "synthetic-task",
+        };
+        if let Some(grant) = req.grant
             && !Arc::ptr_eq(&self.seal, &grant.seal)
         {
             return Err(error(Kind::InvalidApproval));
         }
-
-        self.manager.write(|tx| {
+        let admission = self.manager.session_admission(session_id, false)?;
+        let (budget, consumption) = self.manager.write(|tx| {
             let now = model::time_text(clock.now())?;
-
-            // 1. If an approval grant is provided, validate it against current context and row
-            let approval_data = if let Some((grant, intent)) = req.grant_and_intent {
-                let snapshot = current(tx, intent)?;
-                if snapshot != grant.snapshot {
-                    return Err(error(Kind::ContextMismatch));
-                }
-                let row = read_approval(tx, grant.request_id())?;
-                binding_matches(&row, &snapshot, intent)?;
-                let mut comparison = row.clone();
-                comparison.state = grant.approval.state.clone();
-                if comparison != grant.approval {
-                    return Err(error(Kind::InvalidApproval));
-                }
-                if row.state == "CONSUMED" {
-                    return Err(error(Kind::ApprovalReused));
-                }
-                if row.state != "ISSUED" {
-                    return Err(error(Kind::InvalidApproval));
-                }
-                validate_time(&row, &now)?;
-                Some((grant, intent, row))
-            } else {
-                None
-            };
-
-            // 2. Validate session and budget availability
-            let (sess_snapshot, sess_record) =
-                read_snapshot(tx, req.session_id)?.ok_or_else(|| error(Kind::Conflict))?;
-            if sess_record.state.is_terminal() {
-                return Err(error(Kind::PolicyDenied));
-            }
-            if budget_used(tx, req.session_id)?
-                .checked_add(req.amount.as_micro_usd())
-                .is_none_or(|total| total > sess_snapshot.budget_limit_micro_usd)
+            // Mandatory for ALL operations, including those requiring no grant.
+            self.validate_execution_context(tx, context)?;
+            let approval_data = self.validate_execution_grant(tx, context, req.grant, &now)?;
+            if budget_used(tx, session_id)?
+                .checked_add(context.amount.as_micro_usd())
+                .is_none_or(|total| total > context.snapshot.budget_limit_micro_usd)
             {
                 return Err(error(Kind::BudgetExceeded));
             }
@@ -437,23 +480,23 @@ impl PersistenceRepository {
             // 3. Perform budget reservation
             tx.execute(
                 "INSERT INTO budget_reservations(reservation_id,session_id,model_id,reserved_cost_micro_usd,state,reserved_at) VALUES(?1,?2,?3,?4,'RESERVED',?5)",
-                params![req.reservation_id.to_string(), req.session_id.to_string(), req.model_id, amount_int, now],
+                params![req.reservation_id.to_string(), session_id.to_string(), model_id, amount_int, now],
             )?;
             audit(
                 tx,
-                req.session_id,
+                session_id,
                 req.reservation_event,
-                ("BudgetReserved", sess_record.classification_floor),
+                ("BudgetReserved", context.classification),
                 &now,
-                None,
+                Some(&context.action.action_digest()),
                 &serde_json::json!({
                     "reservation_id": req.reservation_id.to_string(),
-                    "micro_usd": req.amount.as_micro_usd()
+                    "micro_usd": context.amount.as_micro_usd()
                 }),
             )?;
 
             // 4. Perform approval consumption (if grant was provided)
-            let consumption_record = if let Some((grant, intent, row)) = approval_data {
+            let consumption_record = if let Some(row) = approval_data {
                 let changed = tx.execute(
                     "UPDATE approval_requests SET state='CONSUMED',consumed_at=?1,consumed_action_digest=?2 WHERE request_id=?3 AND session_id=?4 AND context_generation=?5 AND target_revision=?6 AND action_name=?7 AND action_digest=?2 AND classification=?8 AND state='ISSUED' AND created_at<=?1 AND issued_at<=?1 AND expires_at>?1 AND receipt_token=?9",
                     params![
@@ -473,9 +516,9 @@ impl PersistenceRepository {
                 }
                 let sequence = audit(
                     tx,
-                    intent.session.session_id,
+                    session_id,
                     req.consumption_event,
-                    ("ApprovalConsumed", intent.classification),
+                    ("ApprovalConsumed", context.classification),
                     &now,
                     Some(&row.action_digest),
                     &serde_json::json!({
@@ -484,7 +527,7 @@ impl PersistenceRepository {
                     }),
                 )?;
                 Some(ConsumptionRecord {
-                    request_id: grant.request_id(),
+                    request_id: req.grant.expect("validated receipt").request_id(),
                     audit_sequence: sequence,
                 })
             } else {
@@ -494,12 +537,96 @@ impl PersistenceRepository {
             Ok((
                 BudgetRecord {
                     reservation_id: req.reservation_id,
-                    reserved: req.amount,
+                    reserved: context.amount,
                     actual: None,
                     state: "RESERVED".into(),
                 },
                 consumption_record,
             ))
+        })?;
+        Ok(PreparedExecution {
+            budget,
+            consumption,
+            _admission: admission,
+        })
+    }
+
+    fn validate_execution_context(
+        &self,
+        tx: &mut ManagedTransaction<'_>,
+        context: &ExecutionContext,
+    ) -> Result<(), PersistenceError> {
+        if !Arc::ptr_eq(&self.seal, &context.seal) {
+            return Err(error(Kind::ContextMismatch));
+        }
+        let (snapshot, record) =
+            read_snapshot(tx, context.session_id())?.ok_or_else(|| error(Kind::ContextMismatch))?;
+        if snapshot != context.snapshot {
+            return Err(error(Kind::ContextMismatch));
+        }
+        if !record.state.allows_execution() || context.classification < record.classification_floor
+        {
+            return Err(error(Kind::PolicyDenied));
+        }
+        crate::policy::engine::validate_operation_constraints(
+            context.classification,
+            &context.action,
+        )
+        .map_err(|_| error(Kind::PolicyDenied))?;
+        Ok(())
+    }
+
+    fn validate_execution_grant(
+        &self,
+        tx: &mut ManagedTransaction<'_>,
+        context: &ExecutionContext,
+        grant: Option<&PersistentApprovalGrant>,
+        now: &str,
+    ) -> Result<Option<StoredApproval>, PersistenceError> {
+        let Some(grant) = grant else {
+            return if context.requires_approval {
+                Err(error(Kind::InvalidApproval))
+            } else {
+                Ok(None)
+            };
+        };
+        if !Arc::ptr_eq(&self.seal, &grant.seal) {
+            return Err(error(Kind::InvalidApproval));
+        }
+        if context.snapshot != grant.snapshot {
+            return Err(error(Kind::ContextMismatch));
+        }
+        let row = read_approval(tx, grant.request_id())?;
+        binding_matches(&row, &context.snapshot, &context.intent())?;
+        let mut comparison = row.clone();
+        comparison.state = grant.approval.state.clone();
+        if comparison != grant.approval {
+            return Err(error(Kind::InvalidApproval));
+        }
+        if row.state == "CONSUMED" {
+            return Err(error(Kind::ApprovalReused));
+        }
+        if row.state != "ISSUED" {
+            return Err(error(Kind::InvalidApproval));
+        }
+        validate_time(&row, now)?;
+        Ok(Some(row))
+    }
+
+    /// Non-consuming advisory check; preparation repeats every check atomically.
+    pub fn validate_execution(
+        &self,
+        context: &ExecutionContext,
+        grant: Option<&PersistentApprovalGrant>,
+        clock: &impl Clock,
+    ) -> Result<(), PersistenceError> {
+        let _admission = self
+            .manager
+            .session_admission(context.session_id(), false)?;
+        self.manager.write(|tx| {
+            self.validate_execution_context(tx, context)?;
+            self.validate_execution_grant(tx, context, grant, &model::time_text(clock.now())?)?;
+            Ok(())
         })
     }
 
@@ -511,6 +638,38 @@ impl PersistenceRepository {
 }
 
 impl PersistentApprovalAuthority {
+    /// Freeze trusted persistent context and immutable policy evaluation. Possession
+    /// of this controller is privileged; ordinary request handlers cannot mint it.
+    pub fn execution_context(
+        &self,
+        session: SessionId,
+        classification: SecurityClassification,
+        action: &OperationAction,
+        amount: CostUsd,
+        policy: &PolicyEngine,
+    ) -> Result<ExecutionContext, PersistenceError> {
+        model::integer(amount.as_micro_usd())?;
+        self.repository.manager.write(|tx| {
+            let (snapshot, record) =
+                read_snapshot(tx, session)?.ok_or_else(|| error(Kind::ContextMismatch))?;
+            if !record.state.allows_execution() {
+                return Err(error(Kind::PolicyDenied));
+            }
+            let requires_approval = policy
+                .evaluate_authoritative(record.classification_floor, classification, action, amount)
+                .map_err(|_| error(Kind::PolicyDenied))?;
+            Ok(ExecutionContext {
+                seal: Arc::clone(&self.repository.seal),
+                snapshot,
+                session: record.metadata,
+                action: action.clone(),
+                classification,
+                amount,
+                requires_approval,
+            })
+        })
+    }
+
     /// Register a new session or replace its trusted security context, incrementing
     /// generation atomically. IDs are provided by the trusted caller; collisions deny.
     pub fn register_session(
@@ -522,6 +681,10 @@ impl PersistentApprovalAuthority {
         event: EventId,
         clock: &impl Clock,
     ) -> Result<SessionRecord, PersistenceError> {
+        let _lifecycle = self
+            .repository
+            .manager
+            .session_admission(metadata.session_id, true)?;
         let dto = MetadataDto::from_domain(metadata)?;
         model::integer(budget_limit.as_micro_usd())?;
         if !model::valid_text(revision) {
@@ -654,6 +817,30 @@ impl PersistentApprovalAuthority {
         event: EventId,
         clock: &impl Clock,
     ) -> Result<BudgetRecord, PersistenceError> {
+        self.settle_budget_owned(None, id, status, event, clock)
+    }
+
+    /// Session-bound settlement for service request paths. A foreign reservation
+    /// cannot be reconciled by merely presenting its identifier.
+    pub fn settle_budget_for_session(
+        &self,
+        session: SessionId,
+        id: Identifier,
+        status: SettlementStatus,
+        event: EventId,
+        clock: &impl Clock,
+    ) -> Result<BudgetRecord, PersistenceError> {
+        self.settle_budget_owned(Some(session), id, status, event, clock)
+    }
+
+    fn settle_budget_owned(
+        &self,
+        owner: Option<SessionId>,
+        id: Identifier,
+        status: SettlementStatus,
+        event: EventId,
+        clock: &impl Clock,
+    ) -> Result<BudgetRecord, PersistenceError> {
         if let Some(actual) = status.actual_cost() {
             model::integer(actual.as_micro_usd())?;
         }
@@ -670,6 +857,7 @@ impl PersistentApprovalAuthority {
             }
             let session =
                 SessionId::from_bytes(*model::parse_id(&session).map_err(corrupt)?.as_bytes());
+            if owner.is_some_and(|expected| expected != session) { return Err(error(Kind::ContextMismatch)); }
             let (_, record) =
                 read_snapshot(tx, session)?.ok_or_else(|| error(Kind::Conflict))?;
             let reserved = model::unsigned(reserved).map_err(corrupt)?;

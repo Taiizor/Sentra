@@ -1,4 +1,5 @@
 use std::{
+    ffi::OsString,
     fmt, fs,
     path::{Component, Path, PathBuf},
     sync::Arc,
@@ -52,6 +53,8 @@ pub struct ResolvedWorkspacePath {
     root: WorkspaceRoot,
     relative: PathBuf,
     pins: Vec<Pin>,
+    // Exact bounded child names, independent of delayed/coarse directory mtimes.
+    children: Option<Vec<OsString>>,
 }
 
 impl ResolvedWorkspacePath {
@@ -218,10 +221,17 @@ impl WorkspaceBoundary {
             .strip_prefix(&self.root.0.canonical)
             .map_err(|_| WorkspaceError::new(WorkspaceErrorKind::OutsideRoot, operation))?;
         platform::validate_pins(&pins, operation)?;
+        let children = directory_names(
+            &current,
+            relative,
+            &pins.last().expect("entry pin").observed,
+        )?;
+        platform::validate_pins(&pins, operation)?;
         Ok(ResolvedWorkspacePath {
             root: self.root.clone(),
             relative: relative.to_path_buf(),
             pins,
+            children,
         })
     }
 
@@ -244,6 +254,7 @@ impl WorkspaceBoundary {
             .map_err(|e| WorkspaceError::io(e, operation).at(&resolved.relative))?;
         let current = self.resolve_relative(&resolved.relative)?;
         if !platform::same_observation(&pin.observed, &metadata)
+            || resolved.children != current.children
             || !platform::same_observation(
                 &metadata,
                 &current.pins.last().expect("current pin").observed,
@@ -281,4 +292,40 @@ impl WorkspaceBoundary {
             classification: self.root.classification(),
         })
     }
+}
+
+/// Name-only inventory: no child metadata, content or symlink target is opened.
+/// Git metadata remains opaque. Exceeding either hard bound rejects observation.
+fn directory_names(
+    path: &Path,
+    relative: &Path,
+    metadata: &fs::Metadata,
+) -> Result<Option<Vec<OsString>>, WorkspaceError> {
+    if platform::kind(metadata) != WorkspaceEntryKind::Directory
+        || relative
+            .file_name()
+            .is_some_and(|name| name.eq_ignore_ascii_case(".git"))
+    {
+        return Ok(None);
+    }
+    let operation = WorkspaceOperation::ReadDirectory;
+    let mut names = Vec::new();
+    let mut bytes = 0usize;
+    for entry in fs::read_dir(path).map_err(|e| WorkspaceError::io(e, operation))? {
+        let name = entry
+            .map_err(|e| WorkspaceError::io(e, operation))?
+            .file_name();
+        bytes = bytes
+            .checked_add(name.as_encoded_bytes().len())
+            .ok_or_else(|| WorkspaceError::new(WorkspaceErrorKind::InvalidLimits, operation))?;
+        if names.len() >= 20_000 || bytes > 4 * 1024 * 1024 {
+            return Err(WorkspaceError::new(
+                WorkspaceErrorKind::InvalidLimits,
+                operation,
+            ));
+        }
+        names.push(name);
+    }
+    names.sort_unstable();
+    Ok(Some(names))
 }

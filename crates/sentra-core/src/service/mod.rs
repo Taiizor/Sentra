@@ -12,6 +12,6 @@ mod lifecycle;
 
 pub use config::CoreServiceConfig;
 pub use core::{CoreService, ServicePolicyDecision, TaskExecutionReport, TaskExecutionRequest};
-pub use error::{ServiceError, ServiceErrorKind};
+pub use error::{ExecutionOutcomeError, ServiceError, ServiceErrorKind, ServicePrimaryError};
 pub use harness::{CoreServiceHarness, HarnessDirectory};
 pub use lifecycle::{CancellationPhase, CancellationReason, CancellationReport};

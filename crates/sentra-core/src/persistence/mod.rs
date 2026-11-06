@@ -24,6 +24,13 @@
 //!     PersistentApprovalAuthority { repository }
 //! }
 //! ```
+//! Nor can callers forge or mutate the authoritative execution context:
+//! ```compile_fail
+//! use sentra_core::{SessionId, persistence::ExecutionContext};
+//! fn redirect(context: &mut ExecutionContext) {
+//!     context.session.session_id = SessionId::new();
+//! }
+//! ```
 
 mod connection;
 mod error;
@@ -41,4 +48,7 @@ pub use model::{
     ApprovalIntent, AuditRecord, BudgetRecord, ConsumptionRecord, PersistentApprovalGrant,
     SessionRecord, SettlementStatus, TransitionRecord,
 };
-pub use repository::{PersistenceRepository, PersistentApprovalAuthority, PrepareExecutionRequest};
+pub use repository::{
+    ExecutionContext, PersistenceRepository, PersistentApprovalAuthority, PrepareExecutionRequest,
+    PreparedExecution,
+};

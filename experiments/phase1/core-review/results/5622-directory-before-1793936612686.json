@@ -1,0 +1,122 @@
+[
+  {
+    "stdout": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.42s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 0 tests\r\n\r\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s\r\n\r\n",
+    "exit_code": 0,
+    "iteration": 1,
+    "at": "2026-11-06T03:43:27.7070296Z"
+  },
+  {
+    "stdout": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 0 tests\r\n\r\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s\r\n\r\n",
+    "exit_code": 0,
+    "iteration": 2,
+    "at": "2026-11-06T03:43:28.4150251Z"
+  },
+  {
+    "stdout": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 0 tests\r\n\r\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s\r\n\r\n",
+    "exit_code": 0,
+    "iteration": 3,
+    "at": "2026-11-06T03:43:28.6398447Z"
+  },
+  {
+    "stdout": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 0 tests\r\n\r\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s\r\n\r\n",
+    "exit_code": 0,
+    "iteration": 4,
+    "at": "2026-11-06T03:43:28.8608246Z"
+  },
+  {
+    "stdout": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 0 tests\r\n\r\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s\r\n\r\n",
+    "exit_code": 0,
+    "iteration": 5,
+    "at": "2026-11-06T03:43:29.0742754Z"
+  },
+  {
+    "stdout": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 0 tests\r\n\r\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s\r\n\r\n",
+    "exit_code": 0,
+    "iteration": 6,
+    "at": "2026-11-06T03:43:29.2976013Z"
+  },
+  {
+    "stdout": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 0 tests\r\n\r\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s\r\n\r\n",
+    "exit_code": 0,
+    "iteration": 7,
+    "at": "2026-11-06T03:43:29.5131754Z"
+  },
+  {
+    "stdout": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 0 tests\r\n\r\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s\r\n\r\n",
+    "exit_code": 0,
+    "iteration": 8,
+    "at": "2026-11-06T03:43:29.7261526Z"
+  },
+  {
+    "stdout": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 0 tests\r\n\r\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s\r\n\r\n",
+    "exit_code": 0,
+    "iteration": 9,
+    "at": "2026-11-06T03:43:29.9534655Z"
+  },
+  {
+    "stdout": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 0 tests\r\n\r\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s\r\n\r\n",
+    "exit_code": 0,
+    "iteration": 10,
+    "at": "2026-11-06T03:43:30.1748800Z"
+  },
+  {
+    "stdout": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 0 tests\r\n\r\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s\r\n\r\n",
+    "exit_code": 0,
+    "iteration": 11,
+    "at": "2026-11-06T03:43:30.3971940Z"
+  },
+  {
+    "stdout": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 0 tests\r\n\r\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s\r\n\r\n",
+    "exit_code": 0,
+    "iteration": 12,
+    "at": "2026-11-06T03:43:30.6197594Z"
+  },
+  {
+    "stdout": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 0 tests\r\n\r\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s\r\n\r\n",
+    "exit_code": 0,
+    "iteration": 13,
+    "at": "2026-11-06T03:43:30.8378828Z"
+  },
+  {
+    "stdout": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 0 tests\r\n\r\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s\r\n\r\n",
+    "exit_code": 0,
+    "iteration": 14,
+    "at": "2026-11-06T03:43:31.0701986Z"
+  },
+  {
+    "stdout": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 0 tests\r\n\r\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s\r\n\r\n",
+    "exit_code": 0,
+    "iteration": 15,
+    "at": "2026-11-06T03:43:31.2915053Z"
+  },
+  {
+    "stdout": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 0 tests\r\n\r\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s\r\n\r\n",
+    "exit_code": 0,
+    "iteration": 16,
+    "at": "2026-11-06T03:43:31.5061321Z"
+  },
+  {
+    "stdout": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 0 tests\r\n\r\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s\r\n\r\n",
+    "exit_code": 0,
+    "iteration": 17,
+    "at": "2026-11-06T03:43:31.7231998Z"
+  },
+  {
+    "stdout": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 0 tests\r\n\r\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s\r\n\r\n",
+    "exit_code": 0,
+    "iteration": 18,
+    "at": "2026-11-06T03:43:31.9466728Z"
+  },
+  {
+    "stdout": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.11s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 0 tests\r\n\r\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s\r\n\r\n",
+    "exit_code": 0,
+    "iteration": 19,
+    "at": "2026-11-06T03:43:32.1919745Z"
+  },
+  {
+    "stdout": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s\r\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\r\n\r\nrunning 0 tests\r\n\r\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s\r\n\r\n",
+    "exit_code": 0,
+    "iteration": 20,
+    "at": "2026-11-06T03:43:32.4452474Z"
+  }
+]

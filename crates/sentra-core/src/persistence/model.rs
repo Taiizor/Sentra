@@ -189,7 +189,7 @@ impl Snapshot {
 
 /// Current intent supplied for comparison with authoritative persisted context.
 /// This struct itself conveys no approval or issuance provenance.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct ApprovalIntent<'a> {
     /// Expected session metadata, compared to the stored security snapshot.
     pub session: &'a SessionMetadata,
@@ -201,6 +201,12 @@ pub struct ApprovalIntent<'a> {
     pub classification: SecurityClassification,
     /// Complete typed operation, canonically compared on every attempt.
     pub action: &'a OperationAction,
+}
+
+impl fmt::Debug for ApprovalIntent<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("ApprovalIntent([redacted comparison data])")
+    }
 }
 
 #[derive(Clone, PartialEq, Eq)]

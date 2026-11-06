@@ -68,7 +68,7 @@ impl PolicyEngine {
         &self.approval_broker
     }
 
-    /// Synchronizes or installs a trusted session context and classification floor into the engine's approval broker.
+    /// Check an already owner-installed context; this cannot install or replace it.
     pub fn register_session_context(
         &self,
         session: &SessionMetadata,
@@ -77,6 +77,33 @@ impl PolicyEngine {
     ) -> Result<(), DenialReason> {
         self.approval_broker
             .set_session_context(session, target_revision, minimum_classification)
+    }
+
+    /// Evaluate rules against a snapshot supplied ONLY by the persistent authority.
+    /// The persistent service does not synchronize a second in-memory authority.
+    pub(crate) fn evaluate_authoritative(
+        &self,
+        floor: SecurityClassification,
+        classification: SecurityClassification,
+        action: &OperationAction,
+        amount: CostUsd,
+    ) -> Result<bool, DenialReason> {
+        validate_operation_constraints(classification, action)?;
+        if classification < floor {
+            return Err(DenialReason::MissingAuthorization(
+                "classification floor".into(),
+            ));
+        }
+        if let OperationAction::InvokeProvider { estimated_cost, .. } = action
+            && *estimated_cost != amount
+        {
+            return Err(DenialReason::MissingAuthorization(
+                "inconsistent cost bound".into(),
+            ));
+        }
+        Ok(action.is_sensitive()
+            || classification == SecurityClassification::Restricted
+            || amount > self.config.max_auto_budget)
     }
 
     /// Evaluates an operation request against session context, classification, and approval grants.

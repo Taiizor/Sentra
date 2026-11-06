@@ -6,7 +6,7 @@ use crate::{
     Clock, CostUsd, EventId, EvidenceArtifact, EvidenceEnvelope, EvidenceVerifier,
     ExecutionBackend, ExecutionEngine, ExecutionError, ExecutionId, ExecutionRequest,
     ExecutionResult, ExecutionScope, ExecutionStatus, Identifier, OperatingMode, OperationAction,
-    PolicyDecision, PolicyEngine, ResourceLimits, ResourceUsage, SecurityClassification, SessionId,
+    PolicyEngine, ResourceLimits, ResourceUsage, SecurityClassification, SessionId,
     SessionMetadata, SessionState, TaskId, TimestampUtc,
     persistence::{
         ApprovalIntent, PersistenceRepository, PersistentApprovalAuthority,
@@ -40,7 +40,7 @@ pub enum ServicePolicyDecision {
 }
 
 /// Comprehensive parameters for executing a task through `CoreService`.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct TaskExecutionRequest {
     /// Target session identifier.
     pub session_id: SessionId,
@@ -116,7 +116,7 @@ pub struct TaskExecutionReport {
 /// # Security Invariants
 /// 1. Untrusted target code execution is strictly disabled fail-closed.
 /// 2. Workspace boundary canonicalization and symlink/junction quarantine are non-negotiable.
-/// 3. Approvals are cryptographically bound, single-use, and atomically consumed.
+/// 3. Approvals have private issuance provenance and exact canonical binding, single-use, and atomically consumed.
 /// 4. Budget settlement on uncertain, timed-out, or failed outcomes preserves conservative reservation hold.
 /// 5. Execution result validation exhaustively checks status consistency and correlation (F-551-01, F-551-05).
 /// 6. Evidence verification enforces 50 MiB bounds, exact byte length matching, and media types.
@@ -136,10 +136,11 @@ impl CoreService {
         config: CoreServiceConfig,
         repository: PersistenceRepository,
         authority: PersistentApprovalAuthority,
-        policy_engine: PolicyEngine,
+        mut policy_engine: PolicyEngine,
         execution_backend: Arc<dyn ExecutionBackend>,
         clock: Arc<dyn Clock>,
     ) -> Self {
+        policy_engine.set_max_auto_budget(config.max_auto_budget);
         let evidence_verifier = if let Some(ref types) = config.allowed_media_types {
             EvidenceVerifier::new()
                 .with_max_size(config.max_evidence_size_bytes)
@@ -244,13 +245,6 @@ impl CoreService {
             )
             .map_err(ServiceError::persistence)?;
 
-        // Step 5: Synchronize session context with policy engine
-        let _ = self.policy_engine.register_session_context(
-            &metadata,
-            target_revision,
-            classification_floor,
-        );
-
         Ok(session_id)
     }
 
@@ -347,55 +341,38 @@ impl CoreService {
         classification: SecurityClassification,
         grant: Option<&PersistentApprovalGrant>,
     ) -> Result<ServicePolicyDecision, ServiceError> {
-        let session = self.get_session(session_id)?;
-        if session.state.is_terminal() {
-            return Err(ServiceError::invalid_state(
-                "Cannot evaluate policy on a terminal session",
-            ));
-        }
-
-        // Ensure policy engine has current session context
-        let _ = self.policy_engine.register_session_context(
-            &session.metadata,
-            &session.target_revision,
-            session.classification_floor,
-        );
-
-        // Security classification floor enforcement
-        if classification < session.classification_floor {
-            return Ok(ServicePolicyDecision::Denied {
-                reason: format!(
-                    "Classification '{classification:?}' is below session floor '{:?}'",
-                    session.classification_floor
-                ),
-            });
-        }
-
-        // Evaluate using default-deny policy engine
-        let decision = self.policy_engine.evaluate(
-            &session.metadata,
+        let amount = match action {
+            OperationAction::InvokeProvider { estimated_cost, .. } => *estimated_cost,
+            _ => CostUsd::ZERO,
+        };
+        let context = match self.authority.execution_context(
+            session_id,
             classification,
             action,
-            None,
-            &self.clock,
-        );
-
-        match decision {
-            PolicyDecision::Granted => Ok(ServicePolicyDecision::Granted),
-            PolicyDecision::Denied { reason } => Ok(ServicePolicyDecision::Denied {
-                reason: reason.to_string(),
-            }),
-            PolicyDecision::NeedsApproval { request, .. } => {
-                if grant.is_some() {
-                    // Caller presented a grant; it will be validated and consumed during task execution
-                    Ok(ServicePolicyDecision::Granted)
-                } else {
-                    Ok(ServicePolicyDecision::NeedsApproval {
-                        action_name: action.action_name(),
-                        description: request.explanation,
-                    })
-                }
+            amount,
+            &self.policy_engine,
+        ) {
+            Ok(context) => context,
+            Err(_) => {
+                return Ok(ServicePolicyDecision::Denied {
+                    reason: "Authoritative context or policy denied".into(),
+                });
             }
+        };
+        if context.requires_approval() && grant.is_none() {
+            return Ok(ServicePolicyDecision::NeedsApproval {
+                action_name: action.action_name(),
+                description: "Explicit approval required".into(),
+            });
+        }
+        match self
+            .repository
+            .validate_execution(&context, grant, &self.clock)
+        {
+            Ok(()) => Ok(ServicePolicyDecision::Granted),
+            Err(_) => Ok(ServicePolicyDecision::Denied {
+                reason: "Approval or authoritative context invalid".into(),
+            }),
         }
     }
 
@@ -481,104 +458,54 @@ impl CoreService {
         req: TaskExecutionRequest,
     ) -> Result<TaskExecutionReport, ServiceError> {
         let session = self.get_session(req.session_id)?;
-        if session.state.is_terminal() {
+        if !session.state.allows_execution() {
             return Err(ServiceError::invalid_state(
-                "Cannot execute task on a terminal session",
+                "Session is not eligible for task admission",
             ));
         }
-
-        // Step 1: Policy & Approval Verification
-        // 1a. Security classification floor enforcement (F-561-01)
-        if req.classification < session.classification_floor {
-            return Err(ServiceError::policy_denied(format!(
-                "Requested classification '{:?}' is below session classification floor '{:?}'",
-                req.classification, session.classification_floor
-            )));
-        }
-
-        // 1b. Synchronize session context with policy engine
-        let _ = self.policy_engine.register_session_context(
-            &session.metadata,
-            &session.target_revision,
-            session.classification_floor,
-        );
-
-        // 1c. Mandatory policy evaluation at execution boundary (F-561-01)
-        let policy_decision = self.policy_engine.evaluate(
-            &session.metadata,
-            req.classification,
-            &req.action,
-            None,
-            &self.clock,
-        );
-
-        match policy_decision {
-            PolicyDecision::Denied { reason } => {
-                return Err(ServiceError::policy_denied(reason.to_string()));
-            }
-            PolicyDecision::NeedsApproval { request, .. } => {
-                if req.grant.is_none() {
-                    return Err(ServiceError::policy_denied(format!(
-                        "Action '{}' requires an approval grant: {}",
-                        req.action.action_name(),
-                        request.explanation
-                    )));
+        let context = self
+            .authority
+            .execution_context(
+                req.session_id,
+                req.classification,
+                &req.action,
+                req.estimated_cost,
+                &self.policy_engine,
+            )
+            .map_err(|error| match error.kind {
+                crate::persistence::PersistenceErrorKind::PolicyDenied => {
+                    ServiceError::policy_denied("Authoritative policy denied")
                 }
-            }
-            PolicyDecision::Granted => {
-                let requires_approval = req.action.is_sensitive() || req.scope.is_untrusted();
-                if requires_approval && req.grant.is_none() {
-                    return Err(ServiceError::policy_denied(format!(
-                        "Action '{}' requires an approval grant",
-                        req.action.action_name()
-                    )));
-                }
-            }
+                _ => ServiceError::persistence(error),
+            })?;
+        if (context.requires_approval() || req.scope.is_untrusted()) && req.grant.is_none() {
+            return Err(ServiceError::policy_denied("Explicit approval required"));
         }
-
-        // Step 2: Atomic Budget Reservation & Single-Use Approval Consumption (F-561-02)
-        // If budget reservation fails (e.g. BudgetExceeded), the entire transaction rolls back
-        // and the approval grant is preserved unconsumed for future retries.
         let reservation_id = Identifier::new_sequential(0x5345_4e54_5241_0007);
-        let model_id = match &req.action {
-            OperationAction::InvokeProvider { model_id, .. } => model_id.as_str(),
-            _ => "synthetic-task",
-        };
-
-        let grant_and_intent = if let Some(ref g) = req.grant {
-            let intent = ApprovalIntent {
-                session: &session.metadata,
-                context_generation: session.context_generation,
-                target_revision: &session.target_revision,
-                classification: req.classification,
-                action: &req.action,
-            };
-            Some((g, intent))
-        } else {
-            None
-        };
-
-        let prep_req = crate::persistence::PrepareExecutionRequest {
-            reservation_id,
-            session_id: req.session_id,
-            model_id,
-            amount: req.estimated_cost,
-            grant_and_intent: grant_and_intent.as_ref().map(|(g, intent)| (*g, intent)),
-            reservation_event: EventId::new(),
-            consumption_event: EventId::new(),
-        };
-
-        self.repository
-            .reserve_budget_and_consume_approval(prep_req, &self.clock)
+        let prepared = self
+            .repository
+            .reserve_budget_and_consume_approval(
+                crate::persistence::PrepareExecutionRequest {
+                    reservation_id,
+                    context: context.clone(),
+                    grant: req.grant.as_ref(),
+                    reservation_event: EventId::new(),
+                    consumption_event: EventId::new(),
+                },
+                &self.clock,
+            )
             .map_err(|e| match e.kind {
                 crate::persistence::PersistenceErrorKind::BudgetExceeded => {
-                    ServiceError::budget_exceeded(format!("Budget reservation failed: {e}"))
+                    ServiceError::budget_exceeded("Budget exhausted")
                 }
                 crate::persistence::PersistenceErrorKind::InvalidApproval
                 | crate::persistence::PersistenceErrorKind::ApprovalReused
                 | crate::persistence::PersistenceErrorKind::ApprovalExpired
                 | crate::persistence::PersistenceErrorKind::ContextMismatch => {
-                    ServiceError::approval_invalid(format!("Approval consumption failed: {e}"))
+                    ServiceError::approval_invalid("Approval or context mismatch")
+                }
+                crate::persistence::PersistenceErrorKind::PolicyDenied => {
+                    ServiceError::policy_denied("Authoritative context denied")
                 }
                 _ => ServiceError::persistence(e),
             })?;
@@ -590,8 +517,8 @@ impl CoreService {
             session_id: req.session_id,
             task_id: req.task_id,
             scope: req.scope,
-            action: req.action,
-            target_revision: session.target_revision.clone(),
+            action: context.action().clone(),
+            target_revision: context.target_revision().into(),
             resource_limits: req.resource_limits.unwrap_or_default(),
             classification: req.classification,
             created_at: self.clock.now(),
@@ -600,6 +527,8 @@ impl CoreService {
         // Step 4: Dispatch Execution Request
         let exec_result: Result<ExecutionResult, ExecutionError> =
             self.execution_engine.dispatch(&request);
+        // Release the lifecycle fence after synchronous dispatch, before settlement.
+        drop(prepared);
 
         let exec_result = match exec_result {
             Ok(res) => res,
@@ -607,7 +536,8 @@ impl CoreService {
                 // On dispatch error (e.g. BackendUnavailable, BackendFault, CorrelationMismatch):
                 // Preserve conservative budget reservation! Zero budget is released.
                 // F-561-03: Never silently ignore budget settlement failure!
-                if let Err(settle_err) = self.authority.settle_budget(
+                if let Err(settle_err) = self.authority.settle_budget_for_session(
+                    context.session_id(),
                     reservation_id,
                     SettlementStatus::CancelledUncertain,
                     EventId::new(),
@@ -630,7 +560,8 @@ impl CoreService {
                 Err(ev_err) => {
                     // Evidence validation failure: abort and settle budget conservatively
                     // F-561-03: Never silently ignore budget settlement failure!
-                    if let Err(settle_err) = self.authority.settle_budget(
+                    if let Err(settle_err) = self.authority.settle_budget_for_session(
+                        context.session_id(),
                         reservation_id,
                         SettlementStatus::UncertainPartial,
                         EventId::new(),
@@ -646,24 +577,33 @@ impl CoreService {
         }
 
         // Step 6: Settle Budget
+        // No actual monetary usage is supplied by this backend contract. An
+        // estimate is a reservation bound, never a measurement of actual usage.
         let settlement = match exec_result.status {
-            ExecutionStatus::Completed => {
-                // Completed: release unconsumed difference
-                SettlementStatus::Completed(req.estimated_cost)
-            }
             ExecutionStatus::TimedOut | ExecutionStatus::Cancelled => {
-                // Uncertain / timed out: preserve conservative reservation ceiling
                 SettlementStatus::CancelledUncertain
             }
-            ExecutionStatus::Failed => {
-                // Application failure with recorded usage
-                SettlementStatus::CancelledWithUsage(req.estimated_cost)
+            ExecutionStatus::Completed | ExecutionStatus::Failed => {
+                SettlementStatus::UncertainPartial
             }
         };
-
-        self.authority
-            .settle_budget(reservation_id, settlement, EventId::new(), &self.clock)
-            .map_err(ServiceError::persistence)?;
+        if let Err(secondary) = self.authority.settle_budget_for_session(
+            context.session_id(),
+            reservation_id,
+            settlement,
+            EventId::new(),
+            &self.clock,
+        ) {
+            return Err(if exec_result.status == ExecutionStatus::Completed {
+                ServiceError::persistence(secondary)
+            } else {
+                ServiceError::outcome_with_settlement_failure(
+                    exec_result.status,
+                    exec_result.exit_code,
+                    secondary,
+                )
+            });
+        }
 
         Ok(TaskExecutionReport {
             execution_id: exec_result.execution_id,
@@ -706,7 +646,8 @@ impl CoreService {
         // Conservative budget settlement on cancellation (if reservation exists)
         if let Some(res_id) = reservation_id {
             self.authority
-                .settle_budget(
+                .settle_budget_for_session(
+                    session_id,
                     res_id,
                     report.settlement_status,
                     EventId::new(),
@@ -716,5 +657,11 @@ impl CoreService {
         }
 
         Ok(report)
+    }
+}
+
+impl std::fmt::Debug for TaskExecutionRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("TaskExecutionRequest([redacted])")
     }
 }
