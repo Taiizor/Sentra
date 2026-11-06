@@ -37,6 +37,9 @@ pub enum PersistenceErrorKind {
     InvalidApproval,
     /// Trusted current context does not match the intended operation.
     ContextMismatch,
+    /// Effective immutable rules do not match the owner-registered policy, or
+    /// legacy state lacks verifiable policy binding. No permissive default.
+    PolicyMismatch,
     /// A live execution admission prevents a concurrent lifecycle/context update.
     ContextBusy,
     /// A grant has already been consumed.

@@ -1,0 +1,1609 @@
+{
+  "increment": "Phase 1 / Increment 5.3.1",
+  "observed_at_utc": "2026-11-06T13:45:28.7046373+00:00",
+  "environment": {
+    "powershell": "7.6.9",
+    "os": "Microsoft Windows 10.0.26300",
+    "architecture": "X64"
+  },
+  "artifacts": {
+    "requested_target_dir": null,
+    "resolved_target_dir": "E:/MyProject/Mix/GitHub/Sentra/target",
+    "archive": "E:/MyProject/Mix/GitHub/Sentra/target/debug/libsentra_core.rlib",
+    "dependency_dir": "E:/MyProject/Mix/GitHub/Sentra/target/debug/deps",
+    "probe": "E:/MyProject/Mix/GitHub/Sentra/target/authorization-validation/5c8f413c9c6f4c2abe9554374440e024/policy-context-probe.exe",
+    "archive_sha256": "c4951b36e6be5f4b0ebd30b18fad92ded91e0edda4ebcf435051f4e3fabf4a2a",
+    "probe_sha256": "57a7cca8284d51ca707eca5fe240aa7464aa8eb85da682fc120340c03ad4c9dd"
+  },
+  "input_sha256": {
+    "Cargo.toml": "ed8c7a2be82195af0ec64bb0b33f355f66f47f9d8f04224f0a6a22dd39a2dd32",
+    "Cargo.lock": "fb6713bff071fa0a334ed5925e6c225be5f9167efdb1311d491bcc53af7c221b",
+    "crates/sentra-core/Cargo.toml": "2fa3c69c2d52e1f54292db83897f70286e61ca27d3caeb4af539dc2efa759fa7",
+    "experiments/phase1/workspace/PolicyContextProbe.rs": "7a3aea5fc79e58a52836858787dd0ac6cb86f317df5be993a735f55a2f06beb6",
+    "experiments/phase1/authorization/Validate.ps1": "1d0e146a8d9d5127acdbce1bc5269c139131d33f7a00137d32c6447e38cc2318",
+    "crates/sentra-core/src/audit/event.rs": "39b67aed6d79a3cd870f96ff7eb1cfab7b23b77dcb089da070e1f13fbc29b443",
+    "crates/sentra-core/src/audit/mod.rs": "0e96769b8ba9d29bba489f0985fcd0697f5c57ce189e78af0c450a2bfe244734",
+    "crates/sentra-core/src/common/clock.rs": "bdd454eb800886d50ab267822e27a2a8f677599aaab02ac65bf32caff3681a4c",
+    "crates/sentra-core/src/common/mod.rs": "c3b31f5c989c4eae942f930f2982b942b33891f27ca8fdc7b1768c61ec8c5274",
+    "crates/sentra-core/src/domain/classification.rs": "860f9bdad583489a80e57928f7beafafb31e4aae3e4b7fb908a60023f4b0930b",
+    "crates/sentra-core/src/domain/error.rs": "751ea216e4a840a84e954a15abee0d120f3e2737509cf02d6a4c7dcd640ee51c",
+    "crates/sentra-core/src/domain/id.rs": "e647c6b812924816a5a163079f2dd5bafa52090c1f8859ad098e5039aa7f4638",
+    "crates/sentra-core/src/domain/mod.rs": "97df5ea95d42ebbdd4c4342eebcd57e39a3085046588c14731cd70dc5b6125a3",
+    "crates/sentra-core/src/domain/time.rs": "a6dc1ee086339dc9906ed40fbb841cb70122ac36420512bb138d8cce64d25c00",
+    "crates/sentra-core/src/evidence/error.rs": "a5d0d61db4ebf25b690c63830d950b9d9fa06c883dffbc3c1865ad752ee041e7",
+    "crates/sentra-core/src/evidence/mod.rs": "0aa52dd3af8c14c6d1ab530e71aca9a09909efbfd2ff21b54b1a2dd9571661e9",
+    "crates/sentra-core/src/evidence/model.rs": "28b01239a9e97a47f38a74cee2c02a35a7ccc9b558ee5a7c8c3f838af6d14abd",
+    "crates/sentra-core/src/evidence/verifier.rs": "7d7f51c065eacb8f05f4db7bfd3452427c9562dfa6f1c3a495837768699bb383",
+    "crates/sentra-core/src/execution/backend.rs": "80725d19447fd1db679b9a66979dc78c68cf459073e2840b9125a71cdf9f9c15",
+    "crates/sentra-core/src/execution/engine.rs": "28f1a6c5aa304fbc3765efcc8aad96c46012d1f6c23e955c01cb4b2c4823a952",
+    "crates/sentra-core/src/execution/error.rs": "2c49ad412e6362ae8432f8d9b6588221c4303dc74e2147e68b868b7c283d2bec",
+    "crates/sentra-core/src/execution/mod.rs": "9114e1cce503daccf8b67066f0bf64b01c46c67e0bbe5e86b0f4cce7486046ab",
+    "crates/sentra-core/src/execution/model.rs": "4e2430d5339da7aec97b79e1f559960839bafad4a93da23a7eaed1e4264755cb",
+    "crates/sentra-core/src/execution/scope.rs": "786030c5757bebd3293433e826d482a0a9099cd3a84f69d8a20803403a87bd27",
+    "crates/sentra-core/src/lib.rs": "74776e51fbf3ebde2288b844151a3a4854f0fee46a67d564ef1a1f35da1f314b",
+    "crates/sentra-core/src/persistence/connection.rs": "e9ee1270a2bf95702b3865165cf54483a5a844459cc3831edd9e12fd9a38e794",
+    "crates/sentra-core/src/persistence/error.rs": "176661d10b9b44a60a32154ced7c0632a0c47a4b51fa2d5189b3615f71ddadd7",
+    "crates/sentra-core/src/persistence/migration.rs": "fa8b9d4a421a1bd5fc3e4811a263d59b318b7be4a502fac5c7001af20b3bc3d2",
+    "crates/sentra-core/src/persistence/mod.rs": "740a5f4f4c3204a20f25cf5536d322a4f9572fe130c442ea80854a6218372b1b",
+    "crates/sentra-core/src/persistence/model.rs": "a8c3b62bee743344077823a8defd28bbd11e3bc0a374951432745111b1abd984",
+    "crates/sentra-core/src/persistence/repository.rs": "0d6b334ef73c89bc74550958133d513bc360ac84a8c2fea276d42e25caa9da1a",
+    "crates/sentra-core/src/persistence/transaction.rs": "2f5b841f178d68b4cf389dfa017221110aa6ced2da4b2e8299fa55568ac4965a",
+    "crates/sentra-core/src/policy/action.rs": "9a5a96813c95187c0f8f56b8034fd9be297153d87c28a84e2c58575d27aa9262",
+    "crates/sentra-core/src/policy/approval.rs": "957eb49d603139d72fba3f667e6f787ae621b4f842769c5760e6aded3871df45",
+    "crates/sentra-core/src/policy/budget.rs": "9c9f5245fcbf9f531ef6c076a9a5496829c4447132f368baa3497f9f03ed6ee1",
+    "crates/sentra-core/src/policy/decision.rs": "2ea03bcdd4a58d4dc827f3cf4da984749c138d7553682b67f150b86d9efb97af",
+    "crates/sentra-core/src/policy/engine.rs": "c602c702226fba9cdcc9bdf0172442f90992022d0d0b264e189e39fe4e92f3ec",
+    "crates/sentra-core/src/policy/mod.rs": "b6ac2e7e94a202bbdec594beb3ea96e7b8a07eb7ee82786746ce1694f35ebc12",
+    "crates/sentra-core/src/service/config.rs": "1e8d217add46452ca8d6ed86b1024b1d71c03bde99a0aed4eda0814d14a61061",
+    "crates/sentra-core/src/service/core.rs": "af28af1530e7267621104b11955dddc9dadcd29ab7ddaa5738065a4f58fd5230",
+    "crates/sentra-core/src/service/error.rs": "ece62450d6d04aa21e7decbe6631259df80ecc3ff24bb912e735c475ef59bf3d",
+    "crates/sentra-core/src/service/harness.rs": "371f8d70a8d9341a39fa77bfa60b6d7a123a3256d238a71275eaa19c119a7ca2",
+    "crates/sentra-core/src/service/lifecycle.rs": "0b38522d00c648494f2573bf8165306ccae1647f3907fe545d6763312ef914a1",
+    "crates/sentra-core/src/service/mod.rs": "d74e06b1d5076e6aeaa2ea7bf095c853144532709a7118ce041c7e32689e6f1b",
+    "crates/sentra-core/src/session/machine.rs": "d540af726063cd5c108dd05c5bb729dc93d6ba2a9fb5d8733977f3736820cf11",
+    "crates/sentra-core/src/session/metadata.rs": "befa1d8d088ea3539d043fe407f3c75b865fb011d3ae05c12a96f66c85a43931",
+    "crates/sentra-core/src/session/mod.rs": "eb74a1d363dcb7a41ef5307fe1c1f2ea62fa63c05aa26f6845475378aa9c7fd6",
+    "crates/sentra-core/src/session/state.rs": "9797330f4f6b20f66e637446607f90d4d358b6964d1051130be099a98896edb0",
+    "crates/sentra-core/src/workspace/boundary.rs": "6d5bbb95bead1d0d29dd4984d49153b9c077baaaeb1b1281fdf76780933198c1",
+    "crates/sentra-core/src/workspace/discovery.rs": "0e54cf60dc7aab30caa934ccd0509949c2b5cb64be53a97d8f181a27c6cfef0d",
+    "crates/sentra-core/src/workspace/error.rs": "60ce8a1585d3250ba8639135b11ca99f4cc6895cb8251fafd1ed7caa8e133e2a",
+    "crates/sentra-core/src/workspace/mod.rs": "152d90a1c1bafb2e2e366af2175ee7bc4c8ae7bd5f882310c6266ab895e2a9e0",
+    "crates/sentra-core/src/workspace/model.rs": "461db7a3791607724d0d39183bf12ab64a67ac8b3ac2c15fe619b7b4aaa30653",
+    "crates/sentra-core/src/workspace/platform.rs": "9b5f51919bfd496600bdd0b5ae2eca1a097cf4bbd7c1f2fb39826270490186a0",
+    "crates/sentra-core/tests/authorization_isolation_review_tests.rs": "4b71a5b1380a08f9e485ffb03e1f2ff1caedcbe17a90b585074d4682428edd48",
+    "crates/sentra-core/tests/authorization_tests.rs": "7435b52fa8dc07a911d1169e2abcca34b366db65908bf2d4759069e646bc1345",
+    "crates/sentra-core/tests/domain_tests.rs": "e8e19591e1f841320facef1f714cec89ac5eff77f8cd7b5cce319f84c2fb0c26",
+    "crates/sentra-core/tests/evidence_tests.rs": "723cee517cc0ed2ab5a9712a1863ac58b5ac7d08baf0f389725c0b04d90db45b",
+    "crates/sentra-core/tests/execution_evidence_adversarial_tests.rs": "79b949862e7967005c4d67bd2917699abfedf2f74247284641b70eb213ef3fee",
+    "crates/sentra-core/tests/execution_tests.rs": "5619682beec1facb8c959c2ed92a8b68d94170edc2f465254477eeab99064bfd",
+    "crates/sentra-core/tests/independent_core_review_tests.rs": "4033723160b9adb14a86090e3c8e20ec1123ae6d533f92455917e306076b7aa6",
+    "crates/sentra-core/tests/persistence_tests.rs": "4555431322d64cfb31b749cb0dbfe2742e56d4748c6fb437d22586d76d378e99",
+    "crates/sentra-core/tests/policy_tests.rs": "3f9780084f272250d04cf5ead05d35a3f50110b0ced37141f2e4065f257188ae",
+    "crates/sentra-core/tests/security_tests.rs": "590a9f424f9feb86cf5fbfa400ec1b291d611cf2a6fee076fb5ef66af3c22042",
+    "crates/sentra-core/tests/service_tests.rs": "5655db7c8e001c0bf68c6d66caa77c8289e4ab3c7be892f1a5215bcc24581c62",
+    "crates/sentra-core/tests/session_tests.rs": "9915e30233c9dd04ac8b0cddc2e3ffe8b040c4cbd2250c4e09c81f2a7b713d17",
+    "crates/sentra-core/tests/support/persistence.rs": "9d15af2aaf201418b3d573a1e72613dd6838ef3e9673cf76e4a555c255fb8453",
+    "crates/sentra-core/tests/workspace_tests.rs": "c06efa517b26934b7c8a927f48924c51f8ff3a0602b23acaf7173dcbaa004ef6"
+  },
+  "inputs_unchanged": true,
+  "third_party_dependencies": 3,
+  "approved_dependencies": true,
+  "checks": [
+    {
+      "name": "rustc-version",
+      "executable": "C:/Users/Taiizor/.cargo/bin/rustc.exe",
+      "arguments": [
+        "-vV"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 100,
+      "stdout": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.0\nLLVM version: 23.1.1\n",
+      "stderr": "",
+      "tests": [],
+      "summaries": []
+    },
+    {
+      "name": "cargo-version",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "--version"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 69,
+      "stdout": "cargo 1.99.0 (5f94df478 2026-08-27)\n",
+      "stderr": "",
+      "tests": [],
+      "summaries": []
+    },
+    {
+      "name": "dependency-metadata",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "metadata",
+        "--offline",
+        "--no-deps",
+        "--format-version=1"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 77,
+      "stdout": "{\"packages\":[{\"name\":\"sentra-core\",\"version\":\"0.1.0\",\"id\":\"path+file:///E:/MyProject/Mix/GitHub/Sentra/crates/sentra-core#0.1.0\",\"license\":null,\"license_file\":null,\"description\":\"Sentra Core Engine Foundation\",\"source\":null,\"dependencies\":[{\"name\":\"rusqlite\",\"source\":\"registry+https://github.com/rust-lang/crates.io-index\",\"req\":\"=0.32.1\",\"kind\":null,\"rename\":null,\"optional\":false,\"uses_default_features\":false,\"features\":[\"bundled\"],\"target\":null,\"registry\":null},{\"name\":\"serde\",\"source\":\"registry+https://github.com/rust-lang/crates.io-index\",\"req\":\"=1.0.229\",\"kind\":null,\"rename\":null,\"optional\":false,\"uses_default_features\":true,\"features\":[\"derive\"],\"target\":null,\"registry\":null},{\"name\":\"serde_json\",\"source\":\"registry+https://github.com/rust-lang/crates.io-index\",\"req\":\"=1.0.154\",\"kind\":null,\"rename\":null,\"optional\":false,\"uses_default_features\":true,\"features\":[],\"target\":null,\"registry\":null}],\"targets\":[{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"sentra_core\",\"src_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\src\\\\lib.rs\",\"edition\":\"2024\",\"doc\":true,\"doctest\":true,\"test\":true},{\"kind\":[\"test\"],\"crate_types\":[\"bin\"],\"name\":\"authorization_isolation_review_tests\",\"src_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\tests\\\\authorization_isolation_review_tests.rs\",\"edition\":\"2024\",\"doc\":false,\"doctest\":false,\"test\":true},{\"kind\":[\"test\"],\"crate_types\":[\"bin\"],\"name\":\"authorization_tests\",\"src_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\tests\\\\authorization_tests.rs\",\"edition\":\"2024\",\"doc\":false,\"doctest\":false,\"test\":true},{\"kind\":[\"test\"],\"crate_types\":[\"bin\"],\"name\":\"domain_tests\",\"src_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\tests\\\\domain_tests.rs\",\"edition\":\"2024\",\"doc\":false,\"doctest\":false,\"test\":true},{\"kind\":[\"test\"],\"crate_types\":[\"bin\"],\"name\":\"evidence_tests\",\"src_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\tests\\\\evidence_tests.rs\",\"edition\":\"2024\",\"doc\":false,\"doctest\":false,\"test\":true},{\"kind\":[\"test\"],\"crate_types\":[\"bin\"],\"name\":\"execution_evidence_adversarial_tests\",\"src_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\tests\\\\execution_evidence_adversarial_tests.rs\",\"edition\":\"2024\",\"doc\":false,\"doctest\":false,\"test\":true},{\"kind\":[\"test\"],\"crate_types\":[\"bin\"],\"name\":\"execution_tests\",\"src_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\tests\\\\execution_tests.rs\",\"edition\":\"2024\",\"doc\":false,\"doctest\":false,\"test\":true},{\"kind\":[\"test\"],\"crate_types\":[\"bin\"],\"name\":\"independent_core_review_tests\",\"src_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\tests\\\\independent_core_review_tests.rs\",\"edition\":\"2024\",\"doc\":false,\"doctest\":false,\"test\":true},{\"kind\":[\"test\"],\"crate_types\":[\"bin\"],\"name\":\"persistence_tests\",\"src_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\tests\\\\persistence_tests.rs\",\"edition\":\"2024\",\"doc\":false,\"doctest\":false,\"test\":true},{\"kind\":[\"test\"],\"crate_types\":[\"bin\"],\"name\":\"policy_tests\",\"src_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\tests\\\\policy_tests.rs\",\"edition\":\"2024\",\"doc\":false,\"doctest\":false,\"test\":true},{\"kind\":[\"test\"],\"crate_types\":[\"bin\"],\"name\":\"security_tests\",\"src_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\tests\\\\security_tests.rs\",\"edition\":\"2024\",\"doc\":false,\"doctest\":false,\"test\":true},{\"kind\":[\"test\"],\"crate_types\":[\"bin\"],\"name\":\"service_tests\",\"src_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\tests\\\\service_tests.rs\",\"edition\":\"2024\",\"doc\":false,\"doctest\":false,\"test\":true},{\"kind\":[\"test\"],\"crate_types\":[\"bin\"],\"name\":\"session_tests\",\"src_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\tests\\\\session_tests.rs\",\"edition\":\"2024\",\"doc\":false,\"doctest\":false,\"test\":true},{\"kind\":[\"test\"],\"crate_types\":[\"bin\"],\"name\":\"workspace_tests\",\"src_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\tests\\\\workspace_tests.rs\",\"edition\":\"2024\",\"doc\":false,\"doctest\":false,\"test\":true}],\"features\":{},\"manifest_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\Cargo.toml\",\"metadata\":null,\"publish\":[],\"authors\":[\"Sentra Team\"],\"categories\":[],\"keywords\":[],\"readme\":null,\"repository\":null,\"homepage\":null,\"documentation\":null,\"edition\":\"2024\",\"links\":null,\"default_run\":null,\"rust_version\":null}],\"workspace_members\":[\"path+file:///E:/MyProject/Mix/GitHub/Sentra/crates/sentra-core#0.1.0\"],\"workspace_default_members\":[\"path+file:///E:/MyProject/Mix/GitHub/Sentra/crates/sentra-core#0.1.0\"],\"resolve\":null,\"target_directory\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\",\"build_directory\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\",\"version\":1,\"workspace_root\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\",\"metadata\":null}\n",
+      "stderr": "",
+      "tests": [],
+      "summaries": []
+    },
+    {
+      "name": "format",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 377,
+      "stdout": "",
+      "stderr": "",
+      "tests": [],
+      "summaries": []
+    },
+    {
+      "name": "check",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "check",
+        "--offline",
+        "--workspace",
+        "--all-targets"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 174,
+      "stdout": "",
+      "stderr": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s\n",
+      "tests": [],
+      "summaries": []
+    },
+    {
+      "name": "clippy",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "clippy",
+        "--offline",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 333,
+      "stdout": "",
+      "stderr": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.16s\n",
+      "tests": [],
+      "summaries": []
+    },
+    {
+      "name": "workspace-tests",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "test",
+        "--offline",
+        "--workspace"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 8905,
+      "stdout": "\nrunning 14 tests\ntest persistence::model::tests::malformed_unicode_identifiers_timestamps_and_numeric_limits_fail_without_panics ... ok\ntest persistence::transaction::tests::backoff_stays_in_approved_range_and_varies_by_ticket ... ok\ntest persistence::transaction::tests::non_contention_and_failed_rollback_are_never_retried ... ok\ntest persistence::transaction::tests::caught_statement_failure_still_cannot_commit_partial_work ... ok\ntest persistence::transaction::tests::rollback_failure_is_distinct_from_the_statement_failure ... ok\ntest workspace::discovery::tests::unstable_directory_retracts_its_subtree_without_string_prefix_collisions ... ok\ntest persistence::transaction::tests::sqlite_page_limit_full_aborts_without_partial_rows ... ok\ntest policy::approval::tests::poisoned_broker_denies_context_issuance_and_consumption ... ok\ntest workspace::platform::tests::reparse_and_unknown_attributes_override_ordinary_types ... ok\ntest persistence::migration::tests::migration_line_endings_are_stable_and_failed_ddl_leaves_no_partial_schema ... ok\ntest persistence::transaction::tests::actual_begin_contention_stops_after_five_whole_operation_attempts ... ok\ntest workspace::platform::tests::replacement_by_symlink_between_check_and_open_is_rejected ... ok\ntest persistence::connection::tests::managed_connection_really_enforces_foreign_keys_and_closes_all_clones ... ok\ntest persistence::transaction::tests::real_busy_snapshot_retries_the_whole_transaction_with_fresh_reads ... ok\n\ntest result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s\n\n\nrunning 22 tests\ntest independent_error_accessors_sanitize_constructor_bypass_and_keep_secondary_numbers ... ok\ntest immutable_policy_clone_and_different_engine_cannot_override_registered_rules ... ok\ntest independent_context_generation_rotates_on_repeated_owner_registration ... ok\ntest failed_policy_registration_audit_rolls_back_epoch_and_preserves_legitimate_grant ... ok\ntest independent_backend_unwind_releases_fence_without_refunding_or_reusing_approval ... ok\ntest independent_budget_wait_then_context_change_rejects_old_approval ... ok\ntest policy_binding_is_persistent_across_separate_manager_reconstruction ... ok\ntest policy_aba_never_restores_old_context_or_approval ... ok\ntest legacy_unbound_snapshot_requires_explicit_owner_policy_binding_without_data_recreation ... ok\ntest policy_change_invalidates_automatic_context_pending_request_and_issued_approval ... ok\ntest independent_simultaneous_old_and_current_contexts_have_only_current_winner ... ok\ntest independent_cross_session_prepare_preserves_both_owners_and_matching_grant ... ok\ntest policy_update_cannot_race_live_service_dispatch_and_old_service_cannot_dispatch_afterward ... ok\ntest preview_second_stage_storage_corruption_is_not_an_ordinary_grant_denial ... ok\ntest preview_all_decisions_are_non_consuming_and_leave_every_persistent_table_unchanged ... ok\ntest preview_sql_read_error_retains_extended_code_without_disclosing_sql_diagnostics ... ok\ntest regression_closed_database_policy_preview_preserves_typed_error ... ok\ntest regression_different_immutable_policy_requires_registration_and_invalidates_old_context ... ok\ntest unchanged_effective_policy_is_a_non_mutating_registration_and_keeps_valid_grant ... ok\ntest preview_missing_and_corrupt_authoritative_state_propagates_typed_failure ... ok\ntest independent_real_lifecycle_pause_wait_terminal_and_resume_boundaries ... ok\ntest independent_sql_settlement_fault_keeps_both_typed_causes_and_rolls_back_cleanup ... ok\n\ntest result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.64s\n\n\nrunning 27 tests\ntest broker_engine_and_authority_preserve_send_sync_contract ... ok\ntest caller_metadata_cannot_replace_registered_workspace_actor_policy_or_mode ... ok\ntest canonical_framing_handles_delimiters_unicode_empty_args_and_optional_fields ... ok\ntest changing_request_display_metadata_cannot_change_issued_binding_or_expiry ... ok\ntest checkout_target_order_is_canonical_but_target_set_is_bound ... ok\ntest classification_is_bound_and_presented_grant_cannot_take_automatic_fallback ... ok\ntest clock_before_issue_or_creation_cannot_authorize_future_receipts ... ok\ntest copying_all_visible_grant_fields_cannot_forge_broker_provenance ... ok\ntest diagnostics_do_not_disclose_receipt_payloads_or_tokens ... ok\ntest different_registered_session_cannot_use_a_grant_even_with_same_target ... ok\ntest duplicate_issuance_revocation_and_unknown_request_are_denied ... ok\ntest every_operation_parameter_change_is_denied_without_consuming_matching_grant ... ok\ntest every_public_grant_field_is_integrity_checked_without_consuming_original ... ok\ntest exact_issued_operation_authorizes_once_through_policy_and_broker ... ok\ntest expiry_is_exclusive_for_issuance_and_consumption_with_existing_clock ... ok\ntest grant_from_another_broker_is_not_accepted ... ok\ntest known_request_id_without_registered_issuance_is_not_authorization ... ok\ntest malformed_operations_cannot_request_or_consume_approval ... ok\ntest malformed_required_context_is_rejected_without_replacing_valid_context ... ok\ntest missing_context_and_missing_required_grant_fail_closed ... ok\ntest original_a_to_b_probe_denies_then_allows_a_exactly_once ... ok\ntest stale_pending_request_cannot_be_issued_after_trusted_context_change ... ok\ntest trusted_classification_floor_blocks_caller_downgrade_without_a_grant ... ok\ntest trusted_target_revision_change_invalidates_grant_even_after_aba_restore ... ok\ntest trusted_workspace_rebinding_invalidates_original_target_grant ... ok\ntest concurrency_only_mismatches_then_legitimate_matching_attempt_repeat_32_rounds ... ok\ntest concurrency_two_matching_and_six_mismatching_attempts_repeat_64_rounds ... ok\n\ntest result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s\n\n\nrunning 9 tests\ntest test_deterministic_and_sequential_identifiers ... ok\ntest test_identifier_bytes_roundtrip ... ok\ntest test_identifier_invalid_strings ... ok\ntest test_security_classification_egress_and_parsing ... ok\ntest test_security_classification_ranking_and_pairwise_flow ... ok\ntest test_timestamp_expiry_and_arithmetic ... ok\ntest test_timestamp_invalid_rfc3339 ... ok\ntest test_timestamp_utc_roundtrip_and_rfc3339 ... ok\ntest test_typed_identifiers ... ok\n\ntest result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 9 tests\ntest cryptographic_verification_explicitly_unavailable_offline ... ok\ntest invalid_media_type_syntax_and_whitelist_enforcement ... ok\ntest invalid_metadata_producer_role_rejected ... ok\ntest length_mismatch_detected_and_rejected ... ok\ntest malformed_declared_sha256_format_rejected ... ok\ntest missing_payload_when_positive_length_declared ... ok\ntest oversized_evidence_rejected_immediately ... ok\ntest sensitive_content_redacted_in_debug_formatting ... ok\ntest valid_evidence_structural_verification_success ... ok\n\ntest result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 11 tests\ntest adversarial_arbitrary_arguments_ignored_by_synthetic_backend ... ok\ntest adversarial_evidence_payload_exceeding_ceiling_by_one_byte ... ok\ntest adversarial_forged_synthetic_fixture_identifiers_rejected ... ok\ntest adversarial_mime_type_syntax_and_parameter_handling ... ok\ntest adversarial_oversized_resource_limits_and_revision_tampering ... ok\ntest adversarial_scope_and_action_inconsistencies ... ok\ntest adversarial_sensitive_data_not_leaked_in_any_formatting ... ok\ntest adversarial_syntactically_valid_sha256_never_bypasses_offline_gate ... ok\ntest cross_increment_uncertain_execution_retains_conservative_budget_hold ... ok\ntest execution_engine_detects_and_rejects_correlation_mismatch ... ok\ntest execution_engine_handles_contradictory_mock_backend ... ok\n\ntest result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 8 tests\ntest conservative_budget_accounting_on_uncertain_execution_outcome ... ok\ntest execution_engine_dispatch_untrusted_workload_intercepted ... ok\ntest execution_scope_predicates_and_formatting ... ok\ntest invalid_and_forged_execution_requests_fail_validation ... ok\ntest no_host_docker_or_wsl2_fallback_declared_in_capabilities ... ok\ntest synthetic_backend_strictly_rejects_untrusted_workload ... ok\ntest synthetic_fixture_scope_validation_and_execution ... ok\ntest untrusted_workload_rejected_by_default_fail_closed_backend ... ok\n\ntest result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 31 tests\ntest owned_5621_process ... ignored, Owned subprocess helper; explicitly launched only by the process-boundary parent test\ntest review_atomic_prepare_cannot_consume_a_while_reserving_for_b ... ok\ntest remediation_foreign_context_seal_and_foreign_budget_settlement_fail_closed ... ok\ntest review_approval_update_failure_rolls_back_prior_reservation_and_audit ... ok\ntest remediation_success_outcome_settlement_failure_has_only_typed_persistence_cause ... ok\ntest review_compound_evidence_error_redacts_untrusted_metadata ... ok\ntest remediation_context_updates_are_fenced_through_dispatch_without_holding_sqlite ... ok\ntest review_budget_denial_preserves_issued_grant_for_exact_retry ... ok\ntest review_atomic_prepare_separate_connections_have_one_winner ... ok\ntest remediation_context_change_before_prepare_invalidates_approved_and_automatic_paths ... ok\ntest review_compound_execution_error_redacts_backend_sensitive_message ... ok\ntest review_atomic_consumption_and_budget_contention_are_serialized ... ok\ntest review_atomic_prepare_cross_process_has_one_consumption_and_reservation ... ok\ntest review_compound_error_keeps_typed_primary_source ... ok\ntest review_actual_execution_and_evidence_settlement_failures_are_observable ... ok\ntest review_either_audit_failure_rolls_back_approval_budget_and_sequence ... ok\ntest review_prepare_debug_does_not_disclose_authorization_parameters ... ok\ntest review_no_grant_prepare_revalidates_context_after_policy_decision ... ok\ntest review_policy_preview_does_not_grant_with_another_sessions_receipt ... ok\ntest review_provider_action_cost_cannot_be_under_reserved ... ok\ntest review_public_context_registration_cannot_lower_trusted_floor ... ok\ntest review_paused_session_cannot_dispatch_new_work ... ok\ntest review_invalid_expired_and_stale_approvals_do_not_reserve_or_consume ... ok\ntest review_same_context_synchronization_does_not_invalidate_issued_memory_grant ... ok\ntest remediation_estimates_never_become_measured_actual_usage ... ok\ntest review_service_denials_never_call_backend_or_mutate_budget_approval ... ok\ntest remediation_prepare_binds_all_action_parameters_and_preserves_matching_receipt ... ok\ntest review_real_process_exit_after_prepare_preserves_pair_but_cannot_replay ... ok\ntest review_non_success_results_keep_primary_outcome_when_settlement_fails ... ok\ntest review_successful_settlement_preserves_unknown_usage_without_compound_error ... ok\ntest remediation_terminal_paused_waiting_and_unscoped_sessions_deny_admission ... ok\n\ntest result: ok. 30 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.79s\n\n\nrunning 43 tests\ntest approval_failed_audit_does_not_consume_valid_receipt ... ok\ntest approval_expiration_boundary_clock_reversal_and_revocation_fail_closed ... ok\ntest audit_retains_security_context_and_redacts_ordinary_diagnostics ... ok\ntest approval_changes_to_action_arguments_target_revision_generation_or_class_are_denied ... ok\ntest budget_audit_failure_rolls_back_reservation_and_settlement ... ok\ntest audit_failure_rolls_back_state_and_no_success_is_reported ... ok\ntest approval_modified_session_metadata_is_not_trusted ... ok\ntest approval_unknown_pending_missing_context_and_foreign_provenance_are_denied ... ok\ntest approval_context_reregistration_rejects_old_generation_even_after_revision_aba ... ok\ntest approval_row_provenance_mutation_and_missing_snapshot_are_not_accepted ... ok\ntest approval_reopen_requires_privileged_recovery_and_replay_stays_rejected ... ok\ntest connection_invalid_paths_fail_without_creating_files ... ok\ntest approval_concurrent_matching_and_mismatching_consumers_preserve_single_use ... ok\ntest budget_concurrent_reservations_cannot_overspend ... ok\ntest approval_separate_connections_have_one_database_consumer ... ok\ntest approval_cross_process_exactly_one_consumes_and_audit_is_atomic ... ok\ntest budget_overflow_invalid_values_overruns_and_unsafe_limit_reduction_are_denied ... ok\ntest owned_persistence_process_worker ... ignored, Owned subprocess helper; the three parent tests execute it with explicit fixture pipes\ntest budget_settlement_status_cancelled_with_usage_and_helpers ... ok\ntest connection_fresh_pragmas_schema_integrity_and_clean_shutdown ... ok\ntest budget_settlement_status_completed_releases_difference_and_finalizes ... ok\ntest budget_separate_connections_cannot_exceed_shared_limit ... ok\ntest detailed_integrity_check_reports_structured_fk_violations ... ok\ntest budget_unknown_cancelled_or_partial_usage_retains_full_reservation ... ok\ntest migration_rejects_unrelated_database_without_overwriting ... ok\ntest migrations_enforce_foreign_keys_audit_uniqueness_and_budget_checks ... ok\ntest migration_newer_schema_is_rejected_without_overwriting ... ok\ntest persistent_original_a_to_b_probe_denied_then_a_succeeds_once ... ok\ntest migration_real_process_interruption_leaves_fresh_database_recoverable ... ok\ntest open_database_with_existing_foreign_key_violation_fails_closed ... ok\ntest windows_unc_device_drive_relative_and_reserved_paths_are_rejected ... ok\ntest migration_repeated_initialization_preserves_supported_data ... ok\ntest windows_static_symlink_database_parent_and_wal_are_rejected ... ok\ntest persistent_policy_denies_unknown_malformed_write_down_and_terminal_session ... ok\ntest quarantine_halts_closes_and_preserves_db_wal_and_shm_in_place ... ok\ntest recovery_corrupt_database_fails_closed_and_preserves_original_bytes ... ok\ntest runtime_integrity_check_detects_foreign_key_violations_and_halts_manager ... ok\ntest recovery_real_process_termination_preserves_committed_and_discards_uncommitted ... ok\ntest approval_all_action_parameter_changes_are_bound_without_consuming_original ... ok\ntest migration_drift_missing_history_and_unknown_trigger_fail_closed ... ok\ntest windows_locked_database_initialization_fails_without_overwriting ... ok\ntest busy_timeout_is_real_and_distinct_from_stale_snapshot ... ok\ntest wal_long_lived_reader_blocks_shutdown_then_release_allows_truncation ... ok\n\ntest result: ok. 42 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 6.09s\n\n\nrunning 9 tests\ntest test_approval_grant_expiry ... ok\ntest test_approval_grant_lifecycle_and_single_use_replay_prevention ... ok\ntest test_approval_grant_mismatch_rejections ... ok\ntest test_capability_vs_policy_authorization_separation ... ok\ntest test_default_deny_unknown_operation ... ok\ntest test_restricted_classification_always_requires_approval ... ok\ntest test_revoked_approval_request ... ok\ntest test_safe_operation_auto_granted_for_non_restricted ... ok\ntest test_sensitive_actions_require_approval ... ok\n\ntest result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 10 tests\ntest test_action_digest_argument_delimiter_injection_resistance ... ok\ntest test_action_digest_modify_checkout_target_binding_and_canonical_sorting ... ok\ntest test_bell_lapadula_flow_enforcement_prevents_write_down ... ok\ntest test_budget_threshold_boundary_precision ... ok\ntest test_classification_check_never_accidentally_grants_unknown_operation ... ok\ntest test_cost_usd_fixed_point_exact_arithmetic ... ok\ntest test_cost_usd_rejects_nan_infinity_and_negative_amounts ... ok\ntest test_failed_validation_does_not_consume_grant ... ok\ntest test_uuid_version_variant_and_production_fail_closed ... ok\ntest test_concurrent_single_use_approval_consumption_exact_winner ... ok\n\ntest result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n\n\nrunning 19 tests\ntest test_service_error_compound_settlement_failure_contracts ... ok\ntest test_execute_task_enforces_policy_engine_denial_for_unknown_operation ... ok\ntest test_missing_session_context_fails_closed ... ok\ntest test_execute_task_enforces_classification_floor_rejection ... ok\ntest test_conservative_budget_reservation_and_limit_enforcement ... ok\ntest test_policy_denial_unknown_operation_and_classification_downgrade ... ok\ntest test_backend_unavailable_for_untrusted_workloads ... ok\ntest test_backend_fault_and_invalid_result_remediation_f_551_01 ... ok\ntest test_execute_task_enforces_policy_denial_on_information_flow_violation ... ok\ntest test_approval_rejection_and_replay_prevention ... ok\ntest test_execution_identifier_mismatch_remediation_f_551_05 ... ok\ntest test_budget_exhaustion_does_not_consume_valid_approval_grant ... ok\ntest test_audit_consistency_and_diagnostic_redaction ... ok\ntest test_invalid_approval_grant_leaves_no_budget_reservation ... ok\ntest test_persistence_failure_and_terminal_session_state ... ok\ntest test_successful_synthetic_workflow ... ok\ntest test_evidence_validation_failure ... ok\ntest test_workspace_boundary_rejection ... ok\ntest test_timeout_and_cancellation_lifecycle ... ok\n\ntest result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s\n\n\nrunning 5 tests\ntest test_complete_9x9_transition_matrix ... ok\ntest test_metadata_validation ... ok\ntest test_state_machine_invalid_transition_invariants ... ok\ntest test_state_machine_valid_lifecycle_and_audit_emission ... ok\ntest test_terminal_states_are_permanent ... ok\n\ntest result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 41 tests\ntest workspace_classification_is_preserved_and_does_not_issue_grants ... ok\ntest workspace_absolute_case_alias_uses_filesystem_semantics ... ok\ntest workspace_directory_change_invalidates_retained_observation ... ok\ntest workspace_directory_child_change_is_detected_with_identical_timestamp ... ok\ntest workspace_external_directory_symlink_hides_outside_metadata ... ok\ntest workspace_discovery_normal_nested_and_empty_directories ... ok\ntest workspace_file_size_limit_quarantines_without_content_read ... ok\ntest workspace_entry_limit_distinguishes_exact_capacity_from_overflow ... ok\ntest workspace_depth_limits_report_partial_instead_of_clean ... ok\ntest workspace_file_symlink_external_target_is_quarantined ... ok\ntest workspace_file_symlink_internal_target_is_quarantined ... ok\ntest workspace_git_directory_is_opaque_including_case_alias ... ok\ntest workspace_git_pointer_and_invalid_manifests_are_not_read ... ok\ntest workspace_limits_and_content_read_requests_are_validated ... ok\ntest workspace_inventory_byte_limit_stops_with_explicit_status ... ok\ntest workspace_internal_directory_symlink_is_not_traversed ... ok\ntest workspace_missing_leaf_is_not_a_valid_future_path ... ok\ntest workspace_metadata_changed_after_resolution_is_rejected ... ok\ntest workspace_missing_root_and_file_root_fail_typed ... ok\ntest workspace_nul_ads_reserved_names_and_win32_aliases_fail_closed ... ok\ntest workspace_nested_and_cyclic_symlinks_terminate_without_following ... ok\ntest workspace_nested_entries_cannot_exceed_global_budget ... ok\ntest workspace_observation_is_bound_to_root_instance_not_equal_path_string ... ok\ntest workspace_no_discovered_build_hook_script_or_executable_is_run ... ok\ntest workspace_ordinary_diagnostics_redact_absolute_and_relative_payloads ... ok\ntest workspace_outside_sibling_and_string_prefix_collision_are_rejected ... ok\ntest workspace_oversized_path_is_rejected_before_io ... ok\ntest workspace_parent_components_are_never_lexically_excused ... ok\ntest workspace_preexisting_writer_changes_invalidate_retained_observation ... ok\ntest workspace_relative_root_is_resolved_against_actual_cwd ... ok\ntest workspace_scale_10000_file_measurement ... ignored, explicit 10,000-file benchmark; run experiments/phase1/workspace/Validate.ps1\ntest workspace_replacement_with_symlink_before_resolution_is_rejected ... ok\ntest workspace_relative_absolute_dot_and_repeated_separators ... ok\ntest workspace_root_and_root_ancestor_symlinks_are_rejected ... ok\ntest workspace_root_dot_is_canonicalized_without_changing_process_cwd ... ok\ntest workspace_windows_junction_is_quarantined_without_target_traversal ... ignored, requires owned junction fixture; run experiments/phase1/workspace/Validate.ps1\ntest workspace_windows_permission_denied_is_not_accepted ... ignored, requires owned deny-ACL fixture; run experiments/phase1/workspace/Validate.ps1\ntest workspace_retained_handles_deny_observed_rename_attempts ... ok\ntest workspace_unc_devices_and_ambiguous_prefixes_fail_before_access ... ok\ntest workspace_total_file_length_limit_reports_incomplete ... ok\ntest workspace_valid_root_is_canonical_and_session_classified ... ok\n\ntest result: ok. 38 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.07s\n\n\nrunning 7 tests\ntest crates\\sentra-core\\src\\lib.rs - persistence (line 36) - compile fail ... ok\ntest crates\\sentra-core\\src\\lib.rs - persistence (line 55) - compile fail ... ok\ntest crates\\sentra-core\\src\\lib.rs - persistence (line 48) - compile fail ... ok\ntest crates\\sentra-core\\src\\policy\\approval.rs - policy::approval::ApprovalBroker (line 181) - compile fail ... ok\ntest crates\\sentra-core\\src\\lib.rs - persistence (line 43) - compile fail ... ok\ntest crates\\sentra-core\\src\\policy\\approval.rs - policy::approval::ApprovalBroker (line 188) - compile fail ... ok\ntest crates\\sentra-core\\src\\policy\\engine.rs - policy::engine::PolicyEngine (line 17) - compile fail ... ok\n\ntest result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.17s\n     Running unittests src\\lib.rs (target\\debug\\deps\\sentra_core-00c9e4f85497a2ae.exe)\n     Running tests\\authorization_isolation_review_tests.rs (target\\debug\\deps\\authorization_isolation_review_tests-57a1ef59703656af.exe)\n     Running tests\\authorization_tests.rs (target\\debug\\deps\\authorization_tests-574798ad1a4c5c48.exe)\n     Running tests\\domain_tests.rs (target\\debug\\deps\\domain_tests-19e090a29a1217a7.exe)\n     Running tests\\evidence_tests.rs (target\\debug\\deps\\evidence_tests-050f646b2eddc6a5.exe)\n     Running tests\\execution_evidence_adversarial_tests.rs (target\\debug\\deps\\execution_evidence_adversarial_tests-38d2167105ad325c.exe)\n     Running tests\\execution_tests.rs (target\\debug\\deps\\execution_tests-68741f1bf7215e86.exe)\n     Running tests\\independent_core_review_tests.rs (target\\debug\\deps\\independent_core_review_tests-edc7f5173a63c85d.exe)\n     Running tests\\persistence_tests.rs (target\\debug\\deps\\persistence_tests-48c8beef783b5470.exe)\n     Running tests\\policy_tests.rs (target\\debug\\deps\\policy_tests-341512b267e4bb9f.exe)\n     Running tests\\security_tests.rs (target\\debug\\deps\\security_tests-d0008c3dff484d47.exe)\n     Running tests\\service_tests.rs (target\\debug\\deps\\service_tests-01cd4c1a145305b0.exe)\n     Running tests\\session_tests.rs (target\\debug\\deps\\session_tests-83dd2836579b1dad.exe)\n     Running tests\\workspace_tests.rs (target\\debug\\deps\\workspace_tests-0fc0a9f4ef05c150.exe)\n   Doc-tests sentra_core\n",
+      "tests": [
+        {
+          "name": "persistence::model::tests::malformed_unicode_identifiers_timestamps_and_numeric_limits_fail_without_panics",
+          "status": "Passed"
+        },
+        {
+          "name": "persistence::transaction::tests::backoff_stays_in_approved_range_and_varies_by_ticket",
+          "status": "Passed"
+        },
+        {
+          "name": "persistence::transaction::tests::non_contention_and_failed_rollback_are_never_retried",
+          "status": "Passed"
+        },
+        {
+          "name": "persistence::transaction::tests::caught_statement_failure_still_cannot_commit_partial_work",
+          "status": "Passed"
+        },
+        {
+          "name": "persistence::transaction::tests::rollback_failure_is_distinct_from_the_statement_failure",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace::discovery::tests::unstable_directory_retracts_its_subtree_without_string_prefix_collisions",
+          "status": "Passed"
+        },
+        {
+          "name": "persistence::transaction::tests::sqlite_page_limit_full_aborts_without_partial_rows",
+          "status": "Passed"
+        },
+        {
+          "name": "policy::approval::tests::poisoned_broker_denies_context_issuance_and_consumption",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace::platform::tests::reparse_and_unknown_attributes_override_ordinary_types",
+          "status": "Passed"
+        },
+        {
+          "name": "persistence::migration::tests::migration_line_endings_are_stable_and_failed_ddl_leaves_no_partial_schema",
+          "status": "Passed"
+        },
+        {
+          "name": "persistence::transaction::tests::actual_begin_contention_stops_after_five_whole_operation_attempts",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace::platform::tests::replacement_by_symlink_between_check_and_open_is_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "persistence::connection::tests::managed_connection_really_enforces_foreign_keys_and_closes_all_clones",
+          "status": "Passed"
+        },
+        {
+          "name": "persistence::transaction::tests::real_busy_snapshot_retries_the_whole_transaction_with_fresh_reads",
+          "status": "Passed"
+        },
+        {
+          "name": "independent_error_accessors_sanitize_constructor_bypass_and_keep_secondary_numbers",
+          "status": "Passed"
+        },
+        {
+          "name": "immutable_policy_clone_and_different_engine_cannot_override_registered_rules",
+          "status": "Passed"
+        },
+        {
+          "name": "independent_context_generation_rotates_on_repeated_owner_registration",
+          "status": "Passed"
+        },
+        {
+          "name": "failed_policy_registration_audit_rolls_back_epoch_and_preserves_legitimate_grant",
+          "status": "Passed"
+        },
+        {
+          "name": "independent_backend_unwind_releases_fence_without_refunding_or_reusing_approval",
+          "status": "Passed"
+        },
+        {
+          "name": "independent_budget_wait_then_context_change_rejects_old_approval",
+          "status": "Passed"
+        },
+        {
+          "name": "policy_binding_is_persistent_across_separate_manager_reconstruction",
+          "status": "Passed"
+        },
+        {
+          "name": "policy_aba_never_restores_old_context_or_approval",
+          "status": "Passed"
+        },
+        {
+          "name": "legacy_unbound_snapshot_requires_explicit_owner_policy_binding_without_data_recreation",
+          "status": "Passed"
+        },
+        {
+          "name": "policy_change_invalidates_automatic_context_pending_request_and_issued_approval",
+          "status": "Passed"
+        },
+        {
+          "name": "independent_simultaneous_old_and_current_contexts_have_only_current_winner",
+          "status": "Passed"
+        },
+        {
+          "name": "independent_cross_session_prepare_preserves_both_owners_and_matching_grant",
+          "status": "Passed"
+        },
+        {
+          "name": "policy_update_cannot_race_live_service_dispatch_and_old_service_cannot_dispatch_afterward",
+          "status": "Passed"
+        },
+        {
+          "name": "preview_second_stage_storage_corruption_is_not_an_ordinary_grant_denial",
+          "status": "Passed"
+        },
+        {
+          "name": "preview_all_decisions_are_non_consuming_and_leave_every_persistent_table_unchanged",
+          "status": "Passed"
+        },
+        {
+          "name": "preview_sql_read_error_retains_extended_code_without_disclosing_sql_diagnostics",
+          "status": "Passed"
+        },
+        {
+          "name": "regression_closed_database_policy_preview_preserves_typed_error",
+          "status": "Passed"
+        },
+        {
+          "name": "regression_different_immutable_policy_requires_registration_and_invalidates_old_context",
+          "status": "Passed"
+        },
+        {
+          "name": "unchanged_effective_policy_is_a_non_mutating_registration_and_keeps_valid_grant",
+          "status": "Passed"
+        },
+        {
+          "name": "preview_missing_and_corrupt_authoritative_state_propagates_typed_failure",
+          "status": "Passed"
+        },
+        {
+          "name": "independent_real_lifecycle_pause_wait_terminal_and_resume_boundaries",
+          "status": "Passed"
+        },
+        {
+          "name": "independent_sql_settlement_fault_keeps_both_typed_causes_and_rolls_back_cleanup",
+          "status": "Passed"
+        },
+        {
+          "name": "broker_engine_and_authority_preserve_send_sync_contract",
+          "status": "Passed"
+        },
+        {
+          "name": "caller_metadata_cannot_replace_registered_workspace_actor_policy_or_mode",
+          "status": "Passed"
+        },
+        {
+          "name": "canonical_framing_handles_delimiters_unicode_empty_args_and_optional_fields",
+          "status": "Passed"
+        },
+        {
+          "name": "changing_request_display_metadata_cannot_change_issued_binding_or_expiry",
+          "status": "Passed"
+        },
+        {
+          "name": "checkout_target_order_is_canonical_but_target_set_is_bound",
+          "status": "Passed"
+        },
+        {
+          "name": "classification_is_bound_and_presented_grant_cannot_take_automatic_fallback",
+          "status": "Passed"
+        },
+        {
+          "name": "clock_before_issue_or_creation_cannot_authorize_future_receipts",
+          "status": "Passed"
+        },
+        {
+          "name": "copying_all_visible_grant_fields_cannot_forge_broker_provenance",
+          "status": "Passed"
+        },
+        {
+          "name": "diagnostics_do_not_disclose_receipt_payloads_or_tokens",
+          "status": "Passed"
+        },
+        {
+          "name": "different_registered_session_cannot_use_a_grant_even_with_same_target",
+          "status": "Passed"
+        },
+        {
+          "name": "duplicate_issuance_revocation_and_unknown_request_are_denied",
+          "status": "Passed"
+        },
+        {
+          "name": "every_operation_parameter_change_is_denied_without_consuming_matching_grant",
+          "status": "Passed"
+        },
+        {
+          "name": "every_public_grant_field_is_integrity_checked_without_consuming_original",
+          "status": "Passed"
+        },
+        {
+          "name": "exact_issued_operation_authorizes_once_through_policy_and_broker",
+          "status": "Passed"
+        },
+        {
+          "name": "expiry_is_exclusive_for_issuance_and_consumption_with_existing_clock",
+          "status": "Passed"
+        },
+        {
+          "name": "grant_from_another_broker_is_not_accepted",
+          "status": "Passed"
+        },
+        {
+          "name": "known_request_id_without_registered_issuance_is_not_authorization",
+          "status": "Passed"
+        },
+        {
+          "name": "malformed_operations_cannot_request_or_consume_approval",
+          "status": "Passed"
+        },
+        {
+          "name": "malformed_required_context_is_rejected_without_replacing_valid_context",
+          "status": "Passed"
+        },
+        {
+          "name": "missing_context_and_missing_required_grant_fail_closed",
+          "status": "Passed"
+        },
+        {
+          "name": "original_a_to_b_probe_denies_then_allows_a_exactly_once",
+          "status": "Passed"
+        },
+        {
+          "name": "stale_pending_request_cannot_be_issued_after_trusted_context_change",
+          "status": "Passed"
+        },
+        {
+          "name": "trusted_classification_floor_blocks_caller_downgrade_without_a_grant",
+          "status": "Passed"
+        },
+        {
+          "name": "trusted_target_revision_change_invalidates_grant_even_after_aba_restore",
+          "status": "Passed"
+        },
+        {
+          "name": "trusted_workspace_rebinding_invalidates_original_target_grant",
+          "status": "Passed"
+        },
+        {
+          "name": "concurrency_only_mismatches_then_legitimate_matching_attempt_repeat_32_rounds",
+          "status": "Passed"
+        },
+        {
+          "name": "concurrency_two_matching_and_six_mismatching_attempts_repeat_64_rounds",
+          "status": "Passed"
+        },
+        {
+          "name": "test_deterministic_and_sequential_identifiers",
+          "status": "Passed"
+        },
+        {
+          "name": "test_identifier_bytes_roundtrip",
+          "status": "Passed"
+        },
+        {
+          "name": "test_identifier_invalid_strings",
+          "status": "Passed"
+        },
+        {
+          "name": "test_security_classification_egress_and_parsing",
+          "status": "Passed"
+        },
+        {
+          "name": "test_security_classification_ranking_and_pairwise_flow",
+          "status": "Passed"
+        },
+        {
+          "name": "test_timestamp_expiry_and_arithmetic",
+          "status": "Passed"
+        },
+        {
+          "name": "test_timestamp_invalid_rfc3339",
+          "status": "Passed"
+        },
+        {
+          "name": "test_timestamp_utc_roundtrip_and_rfc3339",
+          "status": "Passed"
+        },
+        {
+          "name": "test_typed_identifiers",
+          "status": "Passed"
+        },
+        {
+          "name": "cryptographic_verification_explicitly_unavailable_offline",
+          "status": "Passed"
+        },
+        {
+          "name": "invalid_media_type_syntax_and_whitelist_enforcement",
+          "status": "Passed"
+        },
+        {
+          "name": "invalid_metadata_producer_role_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "length_mismatch_detected_and_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "malformed_declared_sha256_format_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "missing_payload_when_positive_length_declared",
+          "status": "Passed"
+        },
+        {
+          "name": "oversized_evidence_rejected_immediately",
+          "status": "Passed"
+        },
+        {
+          "name": "sensitive_content_redacted_in_debug_formatting",
+          "status": "Passed"
+        },
+        {
+          "name": "valid_evidence_structural_verification_success",
+          "status": "Passed"
+        },
+        {
+          "name": "adversarial_arbitrary_arguments_ignored_by_synthetic_backend",
+          "status": "Passed"
+        },
+        {
+          "name": "adversarial_evidence_payload_exceeding_ceiling_by_one_byte",
+          "status": "Passed"
+        },
+        {
+          "name": "adversarial_forged_synthetic_fixture_identifiers_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "adversarial_mime_type_syntax_and_parameter_handling",
+          "status": "Passed"
+        },
+        {
+          "name": "adversarial_oversized_resource_limits_and_revision_tampering",
+          "status": "Passed"
+        },
+        {
+          "name": "adversarial_scope_and_action_inconsistencies",
+          "status": "Passed"
+        },
+        {
+          "name": "adversarial_sensitive_data_not_leaked_in_any_formatting",
+          "status": "Passed"
+        },
+        {
+          "name": "adversarial_syntactically_valid_sha256_never_bypasses_offline_gate",
+          "status": "Passed"
+        },
+        {
+          "name": "cross_increment_uncertain_execution_retains_conservative_budget_hold",
+          "status": "Passed"
+        },
+        {
+          "name": "execution_engine_detects_and_rejects_correlation_mismatch",
+          "status": "Passed"
+        },
+        {
+          "name": "execution_engine_handles_contradictory_mock_backend",
+          "status": "Passed"
+        },
+        {
+          "name": "conservative_budget_accounting_on_uncertain_execution_outcome",
+          "status": "Passed"
+        },
+        {
+          "name": "execution_engine_dispatch_untrusted_workload_intercepted",
+          "status": "Passed"
+        },
+        {
+          "name": "execution_scope_predicates_and_formatting",
+          "status": "Passed"
+        },
+        {
+          "name": "invalid_and_forged_execution_requests_fail_validation",
+          "status": "Passed"
+        },
+        {
+          "name": "no_host_docker_or_wsl2_fallback_declared_in_capabilities",
+          "status": "Passed"
+        },
+        {
+          "name": "synthetic_backend_strictly_rejects_untrusted_workload",
+          "status": "Passed"
+        },
+        {
+          "name": "synthetic_fixture_scope_validation_and_execution",
+          "status": "Passed"
+        },
+        {
+          "name": "untrusted_workload_rejected_by_default_fail_closed_backend",
+          "status": "Passed"
+        },
+        {
+          "name": "owned_5621_process",
+          "status": "Not Tested"
+        },
+        {
+          "name": "review_atomic_prepare_cannot_consume_a_while_reserving_for_b",
+          "status": "Passed"
+        },
+        {
+          "name": "remediation_foreign_context_seal_and_foreign_budget_settlement_fail_closed",
+          "status": "Passed"
+        },
+        {
+          "name": "review_approval_update_failure_rolls_back_prior_reservation_and_audit",
+          "status": "Passed"
+        },
+        {
+          "name": "remediation_success_outcome_settlement_failure_has_only_typed_persistence_cause",
+          "status": "Passed"
+        },
+        {
+          "name": "review_compound_evidence_error_redacts_untrusted_metadata",
+          "status": "Passed"
+        },
+        {
+          "name": "remediation_context_updates_are_fenced_through_dispatch_without_holding_sqlite",
+          "status": "Passed"
+        },
+        {
+          "name": "review_budget_denial_preserves_issued_grant_for_exact_retry",
+          "status": "Passed"
+        },
+        {
+          "name": "review_atomic_prepare_separate_connections_have_one_winner",
+          "status": "Passed"
+        },
+        {
+          "name": "remediation_context_change_before_prepare_invalidates_approved_and_automatic_paths",
+          "status": "Passed"
+        },
+        {
+          "name": "review_compound_execution_error_redacts_backend_sensitive_message",
+          "status": "Passed"
+        },
+        {
+          "name": "review_atomic_consumption_and_budget_contention_are_serialized",
+          "status": "Passed"
+        },
+        {
+          "name": "review_atomic_prepare_cross_process_has_one_consumption_and_reservation",
+          "status": "Passed"
+        },
+        {
+          "name": "review_compound_error_keeps_typed_primary_source",
+          "status": "Passed"
+        },
+        {
+          "name": "review_actual_execution_and_evidence_settlement_failures_are_observable",
+          "status": "Passed"
+        },
+        {
+          "name": "review_either_audit_failure_rolls_back_approval_budget_and_sequence",
+          "status": "Passed"
+        },
+        {
+          "name": "review_prepare_debug_does_not_disclose_authorization_parameters",
+          "status": "Passed"
+        },
+        {
+          "name": "review_no_grant_prepare_revalidates_context_after_policy_decision",
+          "status": "Passed"
+        },
+        {
+          "name": "review_policy_preview_does_not_grant_with_another_sessions_receipt",
+          "status": "Passed"
+        },
+        {
+          "name": "review_provider_action_cost_cannot_be_under_reserved",
+          "status": "Passed"
+        },
+        {
+          "name": "review_public_context_registration_cannot_lower_trusted_floor",
+          "status": "Passed"
+        },
+        {
+          "name": "review_paused_session_cannot_dispatch_new_work",
+          "status": "Passed"
+        },
+        {
+          "name": "review_invalid_expired_and_stale_approvals_do_not_reserve_or_consume",
+          "status": "Passed"
+        },
+        {
+          "name": "review_same_context_synchronization_does_not_invalidate_issued_memory_grant",
+          "status": "Passed"
+        },
+        {
+          "name": "remediation_estimates_never_become_measured_actual_usage",
+          "status": "Passed"
+        },
+        {
+          "name": "review_service_denials_never_call_backend_or_mutate_budget_approval",
+          "status": "Passed"
+        },
+        {
+          "name": "remediation_prepare_binds_all_action_parameters_and_preserves_matching_receipt",
+          "status": "Passed"
+        },
+        {
+          "name": "review_real_process_exit_after_prepare_preserves_pair_but_cannot_replay",
+          "status": "Passed"
+        },
+        {
+          "name": "review_non_success_results_keep_primary_outcome_when_settlement_fails",
+          "status": "Passed"
+        },
+        {
+          "name": "review_successful_settlement_preserves_unknown_usage_without_compound_error",
+          "status": "Passed"
+        },
+        {
+          "name": "remediation_terminal_paused_waiting_and_unscoped_sessions_deny_admission",
+          "status": "Passed"
+        },
+        {
+          "name": "approval_failed_audit_does_not_consume_valid_receipt",
+          "status": "Passed"
+        },
+        {
+          "name": "approval_expiration_boundary_clock_reversal_and_revocation_fail_closed",
+          "status": "Passed"
+        },
+        {
+          "name": "audit_retains_security_context_and_redacts_ordinary_diagnostics",
+          "status": "Passed"
+        },
+        {
+          "name": "approval_changes_to_action_arguments_target_revision_generation_or_class_are_denied",
+          "status": "Passed"
+        },
+        {
+          "name": "budget_audit_failure_rolls_back_reservation_and_settlement",
+          "status": "Passed"
+        },
+        {
+          "name": "audit_failure_rolls_back_state_and_no_success_is_reported",
+          "status": "Passed"
+        },
+        {
+          "name": "approval_modified_session_metadata_is_not_trusted",
+          "status": "Passed"
+        },
+        {
+          "name": "approval_unknown_pending_missing_context_and_foreign_provenance_are_denied",
+          "status": "Passed"
+        },
+        {
+          "name": "approval_context_reregistration_rejects_old_generation_even_after_revision_aba",
+          "status": "Passed"
+        },
+        {
+          "name": "approval_row_provenance_mutation_and_missing_snapshot_are_not_accepted",
+          "status": "Passed"
+        },
+        {
+          "name": "approval_reopen_requires_privileged_recovery_and_replay_stays_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "connection_invalid_paths_fail_without_creating_files",
+          "status": "Passed"
+        },
+        {
+          "name": "approval_concurrent_matching_and_mismatching_consumers_preserve_single_use",
+          "status": "Passed"
+        },
+        {
+          "name": "budget_concurrent_reservations_cannot_overspend",
+          "status": "Passed"
+        },
+        {
+          "name": "approval_separate_connections_have_one_database_consumer",
+          "status": "Passed"
+        },
+        {
+          "name": "approval_cross_process_exactly_one_consumes_and_audit_is_atomic",
+          "status": "Passed"
+        },
+        {
+          "name": "budget_overflow_invalid_values_overruns_and_unsafe_limit_reduction_are_denied",
+          "status": "Passed"
+        },
+        {
+          "name": "owned_persistence_process_worker",
+          "status": "Not Tested"
+        },
+        {
+          "name": "budget_settlement_status_cancelled_with_usage_and_helpers",
+          "status": "Passed"
+        },
+        {
+          "name": "connection_fresh_pragmas_schema_integrity_and_clean_shutdown",
+          "status": "Passed"
+        },
+        {
+          "name": "budget_settlement_status_completed_releases_difference_and_finalizes",
+          "status": "Passed"
+        },
+        {
+          "name": "budget_separate_connections_cannot_exceed_shared_limit",
+          "status": "Passed"
+        },
+        {
+          "name": "detailed_integrity_check_reports_structured_fk_violations",
+          "status": "Passed"
+        },
+        {
+          "name": "budget_unknown_cancelled_or_partial_usage_retains_full_reservation",
+          "status": "Passed"
+        },
+        {
+          "name": "migration_rejects_unrelated_database_without_overwriting",
+          "status": "Passed"
+        },
+        {
+          "name": "migrations_enforce_foreign_keys_audit_uniqueness_and_budget_checks",
+          "status": "Passed"
+        },
+        {
+          "name": "migration_newer_schema_is_rejected_without_overwriting",
+          "status": "Passed"
+        },
+        {
+          "name": "persistent_original_a_to_b_probe_denied_then_a_succeeds_once",
+          "status": "Passed"
+        },
+        {
+          "name": "migration_real_process_interruption_leaves_fresh_database_recoverable",
+          "status": "Passed"
+        },
+        {
+          "name": "open_database_with_existing_foreign_key_violation_fails_closed",
+          "status": "Passed"
+        },
+        {
+          "name": "windows_unc_device_drive_relative_and_reserved_paths_are_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "migration_repeated_initialization_preserves_supported_data",
+          "status": "Passed"
+        },
+        {
+          "name": "windows_static_symlink_database_parent_and_wal_are_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "persistent_policy_denies_unknown_malformed_write_down_and_terminal_session",
+          "status": "Passed"
+        },
+        {
+          "name": "quarantine_halts_closes_and_preserves_db_wal_and_shm_in_place",
+          "status": "Passed"
+        },
+        {
+          "name": "recovery_corrupt_database_fails_closed_and_preserves_original_bytes",
+          "status": "Passed"
+        },
+        {
+          "name": "runtime_integrity_check_detects_foreign_key_violations_and_halts_manager",
+          "status": "Passed"
+        },
+        {
+          "name": "recovery_real_process_termination_preserves_committed_and_discards_uncommitted",
+          "status": "Passed"
+        },
+        {
+          "name": "approval_all_action_parameter_changes_are_bound_without_consuming_original",
+          "status": "Passed"
+        },
+        {
+          "name": "migration_drift_missing_history_and_unknown_trigger_fail_closed",
+          "status": "Passed"
+        },
+        {
+          "name": "windows_locked_database_initialization_fails_without_overwriting",
+          "status": "Passed"
+        },
+        {
+          "name": "busy_timeout_is_real_and_distinct_from_stale_snapshot",
+          "status": "Passed"
+        },
+        {
+          "name": "wal_long_lived_reader_blocks_shutdown_then_release_allows_truncation",
+          "status": "Passed"
+        },
+        {
+          "name": "test_approval_grant_expiry",
+          "status": "Passed"
+        },
+        {
+          "name": "test_approval_grant_lifecycle_and_single_use_replay_prevention",
+          "status": "Passed"
+        },
+        {
+          "name": "test_approval_grant_mismatch_rejections",
+          "status": "Passed"
+        },
+        {
+          "name": "test_capability_vs_policy_authorization_separation",
+          "status": "Passed"
+        },
+        {
+          "name": "test_default_deny_unknown_operation",
+          "status": "Passed"
+        },
+        {
+          "name": "test_restricted_classification_always_requires_approval",
+          "status": "Passed"
+        },
+        {
+          "name": "test_revoked_approval_request",
+          "status": "Passed"
+        },
+        {
+          "name": "test_safe_operation_auto_granted_for_non_restricted",
+          "status": "Passed"
+        },
+        {
+          "name": "test_sensitive_actions_require_approval",
+          "status": "Passed"
+        },
+        {
+          "name": "test_action_digest_argument_delimiter_injection_resistance",
+          "status": "Passed"
+        },
+        {
+          "name": "test_action_digest_modify_checkout_target_binding_and_canonical_sorting",
+          "status": "Passed"
+        },
+        {
+          "name": "test_bell_lapadula_flow_enforcement_prevents_write_down",
+          "status": "Passed"
+        },
+        {
+          "name": "test_budget_threshold_boundary_precision",
+          "status": "Passed"
+        },
+        {
+          "name": "test_classification_check_never_accidentally_grants_unknown_operation",
+          "status": "Passed"
+        },
+        {
+          "name": "test_cost_usd_fixed_point_exact_arithmetic",
+          "status": "Passed"
+        },
+        {
+          "name": "test_cost_usd_rejects_nan_infinity_and_negative_amounts",
+          "status": "Passed"
+        },
+        {
+          "name": "test_failed_validation_does_not_consume_grant",
+          "status": "Passed"
+        },
+        {
+          "name": "test_uuid_version_variant_and_production_fail_closed",
+          "status": "Passed"
+        },
+        {
+          "name": "test_concurrent_single_use_approval_consumption_exact_winner",
+          "status": "Passed"
+        },
+        {
+          "name": "test_service_error_compound_settlement_failure_contracts",
+          "status": "Passed"
+        },
+        {
+          "name": "test_execute_task_enforces_policy_engine_denial_for_unknown_operation",
+          "status": "Passed"
+        },
+        {
+          "name": "test_missing_session_context_fails_closed",
+          "status": "Passed"
+        },
+        {
+          "name": "test_execute_task_enforces_classification_floor_rejection",
+          "status": "Passed"
+        },
+        {
+          "name": "test_conservative_budget_reservation_and_limit_enforcement",
+          "status": "Passed"
+        },
+        {
+          "name": "test_policy_denial_unknown_operation_and_classification_downgrade",
+          "status": "Passed"
+        },
+        {
+          "name": "test_backend_unavailable_for_untrusted_workloads",
+          "status": "Passed"
+        },
+        {
+          "name": "test_backend_fault_and_invalid_result_remediation_f_551_01",
+          "status": "Passed"
+        },
+        {
+          "name": "test_execute_task_enforces_policy_denial_on_information_flow_violation",
+          "status": "Passed"
+        },
+        {
+          "name": "test_approval_rejection_and_replay_prevention",
+          "status": "Passed"
+        },
+        {
+          "name": "test_execution_identifier_mismatch_remediation_f_551_05",
+          "status": "Passed"
+        },
+        {
+          "name": "test_budget_exhaustion_does_not_consume_valid_approval_grant",
+          "status": "Passed"
+        },
+        {
+          "name": "test_audit_consistency_and_diagnostic_redaction",
+          "status": "Passed"
+        },
+        {
+          "name": "test_invalid_approval_grant_leaves_no_budget_reservation",
+          "status": "Passed"
+        },
+        {
+          "name": "test_persistence_failure_and_terminal_session_state",
+          "status": "Passed"
+        },
+        {
+          "name": "test_successful_synthetic_workflow",
+          "status": "Passed"
+        },
+        {
+          "name": "test_evidence_validation_failure",
+          "status": "Passed"
+        },
+        {
+          "name": "test_workspace_boundary_rejection",
+          "status": "Passed"
+        },
+        {
+          "name": "test_timeout_and_cancellation_lifecycle",
+          "status": "Passed"
+        },
+        {
+          "name": "test_complete_9x9_transition_matrix",
+          "status": "Passed"
+        },
+        {
+          "name": "test_metadata_validation",
+          "status": "Passed"
+        },
+        {
+          "name": "test_state_machine_invalid_transition_invariants",
+          "status": "Passed"
+        },
+        {
+          "name": "test_state_machine_valid_lifecycle_and_audit_emission",
+          "status": "Passed"
+        },
+        {
+          "name": "test_terminal_states_are_permanent",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_classification_is_preserved_and_does_not_issue_grants",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_absolute_case_alias_uses_filesystem_semantics",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_directory_change_invalidates_retained_observation",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_directory_child_change_is_detected_with_identical_timestamp",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_external_directory_symlink_hides_outside_metadata",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_discovery_normal_nested_and_empty_directories",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_file_size_limit_quarantines_without_content_read",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_entry_limit_distinguishes_exact_capacity_from_overflow",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_depth_limits_report_partial_instead_of_clean",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_file_symlink_external_target_is_quarantined",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_file_symlink_internal_target_is_quarantined",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_git_directory_is_opaque_including_case_alias",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_git_pointer_and_invalid_manifests_are_not_read",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_limits_and_content_read_requests_are_validated",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_inventory_byte_limit_stops_with_explicit_status",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_internal_directory_symlink_is_not_traversed",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_missing_leaf_is_not_a_valid_future_path",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_metadata_changed_after_resolution_is_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_missing_root_and_file_root_fail_typed",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_nul_ads_reserved_names_and_win32_aliases_fail_closed",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_nested_and_cyclic_symlinks_terminate_without_following",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_nested_entries_cannot_exceed_global_budget",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_observation_is_bound_to_root_instance_not_equal_path_string",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_no_discovered_build_hook_script_or_executable_is_run",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_ordinary_diagnostics_redact_absolute_and_relative_payloads",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_outside_sibling_and_string_prefix_collision_are_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_oversized_path_is_rejected_before_io",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_parent_components_are_never_lexically_excused",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_preexisting_writer_changes_invalidate_retained_observation",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_relative_root_is_resolved_against_actual_cwd",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_scale_10000_file_measurement",
+          "status": "Not Tested"
+        },
+        {
+          "name": "workspace_replacement_with_symlink_before_resolution_is_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_relative_absolute_dot_and_repeated_separators",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_root_and_root_ancestor_symlinks_are_rejected",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_root_dot_is_canonicalized_without_changing_process_cwd",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_windows_junction_is_quarantined_without_target_traversal",
+          "status": "Not Tested"
+        },
+        {
+          "name": "workspace_windows_permission_denied_is_not_accepted",
+          "status": "Not Tested"
+        },
+        {
+          "name": "workspace_retained_handles_deny_observed_rename_attempts",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_unc_devices_and_ambiguous_prefixes_fail_before_access",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_total_file_length_limit_reports_incomplete",
+          "status": "Passed"
+        },
+        {
+          "name": "workspace_valid_root_is_canonical_and_session_classified",
+          "status": "Passed"
+        },
+        {
+          "name": "crates\\sentra-core\\src\\lib.rs - persistence (line 36) - compile fail",
+          "status": "Passed"
+        },
+        {
+          "name": "crates\\sentra-core\\src\\lib.rs - persistence (line 55) - compile fail",
+          "status": "Passed"
+        },
+        {
+          "name": "crates\\sentra-core\\src\\lib.rs - persistence (line 48) - compile fail",
+          "status": "Passed"
+        },
+        {
+          "name": "crates\\sentra-core\\src\\policy\\approval.rs - policy::approval::ApprovalBroker (line 181) - compile fail",
+          "status": "Passed"
+        },
+        {
+          "name": "crates\\sentra-core\\src\\lib.rs - persistence (line 43) - compile fail",
+          "status": "Passed"
+        },
+        {
+          "name": "crates\\sentra-core\\src\\policy\\approval.rs - policy::approval::ApprovalBroker (line 188) - compile fail",
+          "status": "Passed"
+        },
+        {
+          "name": "crates\\sentra-core\\src\\policy\\engine.rs - policy::engine::PolicyEngine (line 17) - compile fail",
+          "status": "Passed"
+        }
+      ],
+      "summaries": [
+        {
+          "passed": 14,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 22,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 27,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 30,
+          "failed": 0,
+          "ignored": 1
+        },
+        {
+          "passed": 42,
+          "failed": 0,
+          "ignored": 1
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 19,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 38,
+          "failed": 0,
+          "ignored": 3
+        },
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "grant-binding-regressions",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "test",
+        "--offline",
+        "--package",
+        "sentra-core",
+        "--test",
+        "authorization_tests"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 311,
+      "stdout": "\nrunning 27 tests\ntest broker_engine_and_authority_preserve_send_sync_contract ... ok\ntest caller_metadata_cannot_replace_registered_workspace_actor_policy_or_mode ... ok\ntest changing_request_display_metadata_cannot_change_issued_binding_or_expiry ... ok\ntest canonical_framing_handles_delimiters_unicode_empty_args_and_optional_fields ... ok\ntest checkout_target_order_is_canonical_but_target_set_is_bound ... ok\ntest classification_is_bound_and_presented_grant_cannot_take_automatic_fallback ... ok\ntest clock_before_issue_or_creation_cannot_authorize_future_receipts ... ok\ntest copying_all_visible_grant_fields_cannot_forge_broker_provenance ... ok\ntest diagnostics_do_not_disclose_receipt_payloads_or_tokens ... ok\ntest different_registered_session_cannot_use_a_grant_even_with_same_target ... ok\ntest duplicate_issuance_revocation_and_unknown_request_are_denied ... ok\ntest every_public_grant_field_is_integrity_checked_without_consuming_original ... ok\ntest every_operation_parameter_change_is_denied_without_consuming_matching_grant ... ok\ntest exact_issued_operation_authorizes_once_through_policy_and_broker ... ok\ntest expiry_is_exclusive_for_issuance_and_consumption_with_existing_clock ... ok\ntest grant_from_another_broker_is_not_accepted ... ok\ntest known_request_id_without_registered_issuance_is_not_authorization ... ok\ntest malformed_operations_cannot_request_or_consume_approval ... ok\ntest malformed_required_context_is_rejected_without_replacing_valid_context ... ok\ntest missing_context_and_missing_required_grant_fail_closed ... ok\ntest original_a_to_b_probe_denies_then_allows_a_exactly_once ... ok\ntest stale_pending_request_cannot_be_issued_after_trusted_context_change ... ok\ntest trusted_classification_floor_blocks_caller_downgrade_without_a_grant ... ok\ntest trusted_target_revision_change_invalidates_grant_even_after_aba_restore ... ok\ntest trusted_workspace_rebinding_invalidates_original_target_grant ... ok\ntest concurrency_only_mismatches_then_legitimate_matching_attempt_repeat_32_rounds ... ok\ntest concurrency_two_matching_and_six_mismatching_attempts_repeat_64_rounds ... ok\n\ntest result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\n     Running tests\\authorization_tests.rs (target\\debug\\deps\\authorization_tests-574798ad1a4c5c48.exe)\n",
+      "tests": [
+        {
+          "name": "broker_engine_and_authority_preserve_send_sync_contract",
+          "status": "Passed"
+        },
+        {
+          "name": "caller_metadata_cannot_replace_registered_workspace_actor_policy_or_mode",
+          "status": "Passed"
+        },
+        {
+          "name": "changing_request_display_metadata_cannot_change_issued_binding_or_expiry",
+          "status": "Passed"
+        },
+        {
+          "name": "canonical_framing_handles_delimiters_unicode_empty_args_and_optional_fields",
+          "status": "Passed"
+        },
+        {
+          "name": "checkout_target_order_is_canonical_but_target_set_is_bound",
+          "status": "Passed"
+        },
+        {
+          "name": "classification_is_bound_and_presented_grant_cannot_take_automatic_fallback",
+          "status": "Passed"
+        },
+        {
+          "name": "clock_before_issue_or_creation_cannot_authorize_future_receipts",
+          "status": "Passed"
+        },
+        {
+          "name": "copying_all_visible_grant_fields_cannot_forge_broker_provenance",
+          "status": "Passed"
+        },
+        {
+          "name": "diagnostics_do_not_disclose_receipt_payloads_or_tokens",
+          "status": "Passed"
+        },
+        {
+          "name": "different_registered_session_cannot_use_a_grant_even_with_same_target",
+          "status": "Passed"
+        },
+        {
+          "name": "duplicate_issuance_revocation_and_unknown_request_are_denied",
+          "status": "Passed"
+        },
+        {
+          "name": "every_public_grant_field_is_integrity_checked_without_consuming_original",
+          "status": "Passed"
+        },
+        {
+          "name": "every_operation_parameter_change_is_denied_without_consuming_matching_grant",
+          "status": "Passed"
+        },
+        {
+          "name": "exact_issued_operation_authorizes_once_through_policy_and_broker",
+          "status": "Passed"
+        },
+        {
+          "name": "expiry_is_exclusive_for_issuance_and_consumption_with_existing_clock",
+          "status": "Passed"
+        },
+        {
+          "name": "grant_from_another_broker_is_not_accepted",
+          "status": "Passed"
+        },
+        {
+          "name": "known_request_id_without_registered_issuance_is_not_authorization",
+          "status": "Passed"
+        },
+        {
+          "name": "malformed_operations_cannot_request_or_consume_approval",
+          "status": "Passed"
+        },
+        {
+          "name": "malformed_required_context_is_rejected_without_replacing_valid_context",
+          "status": "Passed"
+        },
+        {
+          "name": "missing_context_and_missing_required_grant_fail_closed",
+          "status": "Passed"
+        },
+        {
+          "name": "original_a_to_b_probe_denies_then_allows_a_exactly_once",
+          "status": "Passed"
+        },
+        {
+          "name": "stale_pending_request_cannot_be_issued_after_trusted_context_change",
+          "status": "Passed"
+        },
+        {
+          "name": "trusted_classification_floor_blocks_caller_downgrade_without_a_grant",
+          "status": "Passed"
+        },
+        {
+          "name": "trusted_target_revision_change_invalidates_grant_even_after_aba_restore",
+          "status": "Passed"
+        },
+        {
+          "name": "trusted_workspace_rebinding_invalidates_original_target_grant",
+          "status": "Passed"
+        },
+        {
+          "name": "concurrency_only_mismatches_then_legitimate_matching_attempt_repeat_32_rounds",
+          "status": "Passed"
+        },
+        {
+          "name": "concurrency_two_matching_and_six_mismatching_attempts_repeat_64_rounds",
+          "status": "Passed"
+        }
+      ],
+      "summaries": [
+        {
+          "passed": 27,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "repeat-concurrency",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "test",
+        "--offline",
+        "--package",
+        "sentra-core",
+        "--test",
+        "authorization_tests",
+        "concurrency_",
+        "--",
+        "--nocapture"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 298,
+      "stdout": "\nrunning 2 tests\nCONCURRENCY rounds=32 mismatches=256 legitimate_successes=32\ntest concurrency_only_mismatches_then_legitimate_matching_attempt_repeat_32_rounds ... ok\nCONCURRENCY rounds=64 matching_successes=64 matching_replays=64 mismatches=384\ntest concurrency_two_matching_and_six_mismatching_attempts_repeat_64_rounds ... ok\n\ntest result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 25 filtered out; finished in 0.12s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\n     Running tests\\authorization_tests.rs (target\\debug\\deps\\authorization_tests-574798ad1a4c5c48.exe)\n",
+      "tests": [
+        {
+          "name": "concurrency_only_mismatches_then_legitimate_matching_attempt_repeat_32_rounds",
+          "status": "Passed"
+        },
+        {
+          "name": "concurrency_two_matching_and_six_mismatching_attempts_repeat_64_rounds",
+          "status": "Passed"
+        }
+      ],
+      "summaries": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "probe-format",
+      "executable": "C:/Users/Taiizor/.cargo/bin/rustfmt.exe",
+      "arguments": [
+        "--edition=2024",
+        "--check",
+        "E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/workspace/PolicyContextProbe.rs"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 95,
+      "stdout": "",
+      "stderr": "",
+      "tests": [],
+      "summaries": []
+    },
+    {
+      "name": "probe-library-artifact",
+      "executable": "C:/Users/Taiizor/.cargo/bin/cargo.exe",
+      "arguments": [
+        "build",
+        "--offline",
+        "--package",
+        "sentra-core",
+        "--message-format=json"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 151,
+      "stdout": "{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\proc-macro2-1.0.107\\\\Cargo.toml\",\"target\":{\"kind\":[\"custom-build\"],\"crate_types\":[\"bin\"],\"name\":\"build-script-build\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\proc-macro2-1.0.107\\\\build.rs\",\"edition\":\"2021\",\"doc\":false,\"doctest\":false,\"test\":false},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[\"proc-macro\"],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\proc-macro2-9d7af17d92bf0b9d\\\\build-script-build.exe\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\proc-macro2-9d7af17d92bf0b9d\\\\build_script_build.pdb\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#zerocopy@0.8.63\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\zerocopy-0.8.63\\\\Cargo.toml\",\"target\":{\"kind\":[\"custom-build\"],\"crate_types\":[\"bin\"],\"name\":\"build-script-build\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\zerocopy-0.8.63\\\\build.rs\",\"edition\":\"2021\",\"doc\":false,\"doctest\":false,\"test\":false},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[\"simd\"],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\zerocopy-ef7a53b151e3c9f2\\\\build-script-build.exe\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\zerocopy-ef7a53b151e3c9f2\\\\build_script_build.pdb\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#version_check@0.9.5\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\version_check-0.9.5\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"version_check\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\version_check-0.9.5\\\\src\\\\lib.rs\",\"edition\":\"2015\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libversion_check-75637173cbd0681e.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libversion_check-75637173cbd0681e.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"build-script-executed\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107\",\"linked_libs\":[],\"linked_paths\":[],\"cfgs\":[\"wrap_proc_macro\",\"proc_macro_span_location\",\"proc_macro_span_file\"],\"env\":[],\"out_dir\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\proc-macro2-ee9908e9b35b6824\\\\out\"}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#find-msvc-tools@0.1.15\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\find-msvc-tools-0.1.15\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"find_msvc_tools\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\find-msvc-tools-0.1.15\\\\src\\\\lib.rs\",\"edition\":\"2021\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libfind_msvc_tools-adb7c23c7a53b8b9.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libfind_msvc_tools-adb7c23c7a53b8b9.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#shlex@2.0.1\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\shlex-2.0.1\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"shlex\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\shlex-2.0.1\\\\src\\\\lib.rs\",\"edition\":\"2018\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[\"default\",\"std\"],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libshlex-91357ed9fe8ce172.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libshlex-91357ed9fe8ce172.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.27\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\unicode-ident-1.0.27\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"unicode_ident\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\unicode-ident-1.0.27\\\\src\\\\lib.rs\",\"edition\":\"2021\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libunicode_ident-39043f17255bc3d9.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libunicode_ident-39043f17255bc3d9.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#quote@1.0.47\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\quote-1.0.47\\\\Cargo.toml\",\"target\":{\"kind\":[\"custom-build\"],\"crate_types\":[\"bin\"],\"name\":\"build-script-build\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\quote-1.0.47\\\\build.rs\",\"edition\":\"2021\",\"doc\":false,\"doctest\":false,\"test\":false},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[\"proc-macro\"],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\quote-e793a786515284ea\\\\build-script-build.exe\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\quote-e793a786515284ea\\\\build_script_build.pdb\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#vcpkg@0.2.15\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\vcpkg-0.2.15\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"vcpkg\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\vcpkg-0.2.15\\\\src\\\\lib.rs\",\"edition\":\"2015\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libvcpkg-143480a137a999f3.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libvcpkg-143480a137a999f3.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#cfg-if@1.0.5\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\cfg-if-1.0.5\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"cfg_if\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\cfg-if-1.0.5\\\\src\\\\lib.rs\",\"edition\":\"2018\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libcfg_if-2b24ccfe03051850.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libcfg_if-2b24ccfe03051850.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#pkg-config@0.3.34\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\pkg-config-0.3.34\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"pkg_config\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\pkg-config-0.3.34\\\\src\\\\lib.rs\",\"edition\":\"2021\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libpkg_config-1f77afca1fd61252.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libpkg_config-1f77afca1fd61252.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#once_cell@1.21.4\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\once_cell-1.21.4\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"once_cell\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\once_cell-1.21.4\\\\src\\\\lib.rs\",\"edition\":\"2021\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[\"alloc\",\"race\"],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libonce_cell-1958c96622a847b0.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libonce_cell-1958c96622a847b0.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.229\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\serde_core-1.0.229\\\\Cargo.toml\",\"target\":{\"kind\":[\"custom-build\"],\"crate_types\":[\"bin\"],\"name\":\"build-script-build\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\serde_core-1.0.229\\\\build.rs\",\"edition\":\"2021\",\"doc\":false,\"doctest\":false,\"test\":false},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[\"result\",\"std\"],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\serde_core-eb0d235ec0efeb85\\\\build-script-build.exe\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\serde_core-eb0d235ec0efeb85\\\\build_script_build.pdb\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#zmij@1.0.23\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\zmij-1.0.23\\\\Cargo.toml\",\"target\":{\"kind\":[\"custom-build\"],\"crate_types\":[\"bin\"],\"name\":\"build-script-build\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\zmij-1.0.23\\\\build.rs\",\"edition\":\"2021\",\"doc\":false,\"doctest\":false,\"test\":false},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\zmij-28122050922d0260\\\\build-script-build.exe\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\zmij-28122050922d0260\\\\build_script_build.pdb\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#serde@1.0.229\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\serde-1.0.229\\\\Cargo.toml\",\"target\":{\"kind\":[\"custom-build\"],\"crate_types\":[\"bin\"],\"name\":\"build-script-build\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\serde-1.0.229\\\\build.rs\",\"edition\":\"2021\",\"doc\":false,\"doctest\":false,\"test\":false},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[\"default\",\"derive\",\"serde_derive\",\"std\"],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\serde-26b22a789f3b855b\\\\build-script-build.exe\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\serde-26b22a789f3b855b\\\\build_script_build.pdb\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.154\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\serde_json-1.0.154\\\\Cargo.toml\",\"target\":{\"kind\":[\"custom-build\"],\"crate_types\":[\"bin\"],\"name\":\"build-script-build\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\serde_json-1.0.154\\\\build.rs\",\"edition\":\"2021\",\"doc\":false,\"doctest\":false,\"test\":false},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[\"default\",\"std\"],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\serde_json-08c75143f393a6d3\\\\build-script-build.exe\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\serde_json-08c75143f393a6d3\\\\build_script_build.pdb\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#memchr@2.8.3\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\memchr-2.8.3\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"memchr\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\memchr-2.8.3\\\\src\\\\lib.rs\",\"edition\":\"2021\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[\"alloc\",\"std\"],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libmemchr-a929db610668d555.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libmemchr-a929db610668d555.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#ahash@0.8.12\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\ahash-0.8.12\\\\Cargo.toml\",\"target\":{\"kind\":[\"custom-build\"],\"crate_types\":[\"bin\"],\"name\":\"build-script-build\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\ahash-0.8.12\\\\build.rs\",\"edition\":\"2018\",\"doc\":false,\"doctest\":false,\"test\":false},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\ahash-cc165a566e39ad2f\\\\build-script-build.exe\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\ahash-cc165a566e39ad2f\\\\build_script_build.pdb\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"build-script-executed\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#zerocopy@0.8.63\",\"linked_libs\":[],\"linked_paths\":[],\"cfgs\":[],\"env\":[],\"out_dir\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\zerocopy-3d093c446d94462c\\\\out\"}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\proc-macro2-1.0.107\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"proc_macro2\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\proc-macro2-1.0.107\\\\src\\\\lib.rs\",\"edition\":\"2021\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[\"proc-macro\"],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libproc_macro2-7e9c2814854a0b50.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libproc_macro2-7e9c2814854a0b50.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"build-script-executed\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#quote@1.0.47\",\"linked_libs\":[],\"linked_paths\":[],\"cfgs\":[],\"env\":[],\"out_dir\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\quote-71327a382cc007cb\\\\out\"}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#cc@1.10.0\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\cc-1.10.0\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"cc\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\cc-1.10.0\\\\src\\\\lib.rs\",\"edition\":\"2021\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libcc-c4c754578d41b882.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libcc-c4c754578d41b882.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"build-script-executed\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.229\",\"linked_libs\":[],\"linked_paths\":[],\"cfgs\":[],\"env\":[],\"out_dir\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\serde_core-102a72aa17c671b9\\\\out\"}\n{\"reason\":\"build-script-executed\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#zmij@1.0.23\",\"linked_libs\":[],\"linked_paths\":[],\"cfgs\":[],\"env\":[],\"out_dir\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\zmij-0bdc5a19cbee0067\\\\out\"}\n{\"reason\":\"build-script-executed\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.154\",\"linked_libs\":[],\"linked_paths\":[],\"cfgs\":[\"fast_arithmetic=\\\"64\\\"\"],\"env\":[],\"out_dir\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\serde_json-677f9c640833813a\\\\out\"}\n{\"reason\":\"build-script-executed\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#serde@1.0.229\",\"linked_libs\":[],\"linked_paths\":[],\"cfgs\":[\"if_docsrs_then_no_serde_core\"],\"env\":[],\"out_dir\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\serde-3f86b32c12642343\\\\out\"}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#smallvec@1.16.4\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\smallvec-1.16.4\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"smallvec\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\smallvec-1.16.4\\\\src\\\\lib.rs\",\"edition\":\"2018\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libsmallvec-563d0e10601938f5.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libsmallvec-563d0e10601938f5.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#fallible-iterator@0.3.0\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\fallible-iterator-0.3.0\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"fallible_iterator\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\fallible-iterator-0.3.0\\\\src\\\\lib.rs\",\"edition\":\"2018\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[\"alloc\",\"default\"],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libfallible_iterator-9c2e51e71ca31bd6.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libfallible_iterator-9c2e51e71ca31bd6.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#bitflags@2.13.2\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\bitflags-2.13.2\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"bitflags\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\bitflags-2.13.2\\\\src\\\\lib.rs\",\"edition\":\"2021\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libbitflags-28ba422a1f6b8545.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libbitflags-28ba422a1f6b8545.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#itoa@1.0.18\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\itoa-1.0.18\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"itoa\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\itoa-1.0.18\\\\src\\\\lib.rs\",\"edition\":\"2021\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libitoa-f142addd5c0ea3c5.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libitoa-f142addd5c0ea3c5.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#fallible-streaming-iterator@0.1.9\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\fallible-streaming-iterator-0.1.9\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"fallible_streaming_iterator\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\fallible-streaming-iterator-0.1.9\\\\src\\\\lib.rs\",\"edition\":\"2015\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libfallible_streaming_iterator-e46d446ce9f07f3b.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libfallible_streaming_iterator-e46d446ce9f07f3b.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"build-script-executed\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#ahash@0.8.12\",\"linked_libs\":[],\"linked_paths\":[],\"cfgs\":[\"folded_multiply\"],\"env\":[],\"out_dir\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\ahash-b83aef3c42545648\\\\out\"}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#zerocopy@0.8.63\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\zerocopy-0.8.63\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"zerocopy\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\zerocopy-0.8.63\\\\src\\\\lib.rs\",\"edition\":\"2021\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[\"simd\"],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libzerocopy-7891883968d17f9a.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libzerocopy-7891883968d17f9a.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#libsqlite3-sys@0.30.1\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\libsqlite3-sys-0.30.1\\\\Cargo.toml\",\"target\":{\"kind\":[\"custom-build\"],\"crate_types\":[\"bin\"],\"name\":\"build-script-build\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\libsqlite3-sys-0.30.1\\\\build.rs\",\"edition\":\"2021\",\"doc\":false,\"doctest\":false,\"test\":false},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[\"bundled\",\"bundled_bindings\",\"cc\",\"default\",\"min_sqlite_version_3_14_0\",\"pkg-config\",\"vcpkg\"],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\libsqlite3-sys-923390537c625077\\\\build-script-build.exe\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\libsqlite3-sys-923390537c625077\\\\build_script_build.pdb\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#quote@1.0.47\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\quote-1.0.47\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"quote\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\quote-1.0.47\\\\src\\\\lib.rs\",\"edition\":\"2021\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[\"proc-macro\"],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libquote-4f7880b362e3e0a5.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libquote-4f7880b362e3e0a5.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.229\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\serde_core-1.0.229\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"serde_core\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\serde_core-1.0.229\\\\src\\\\lib.rs\",\"edition\":\"2021\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[\"result\",\"std\"],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libserde_core-ff5b30545d6eac9e.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libserde_core-ff5b30545d6eac9e.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#zmij@1.0.23\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\zmij-1.0.23\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"zmij\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\zmij-1.0.23\\\\src\\\\lib.rs\",\"edition\":\"2021\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libzmij-71c165423b435dd3.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libzmij-71c165423b435dd3.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#ahash@0.8.12\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\ahash-0.8.12\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"ahash\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\ahash-0.8.12\\\\src\\\\lib.rs\",\"edition\":\"2018\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libahash-151e2fccdc412528.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libahash-151e2fccdc412528.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"build-script-executed\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#libsqlite3-sys@0.30.1\",\"linked_libs\":[\"static=sqlite3\"],\"linked_paths\":[\"native=D:\\\\Program Files\\\\Microsoft Visual Studio\\\\2026\\\\Insiders\\\\VC\\\\Tools\\\\MSVC\\\\14.52.37025\\\\atlmfc\\\\lib\\\\x64\",\"native=E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\libsqlite3-sys-932b2007a2b5b5c3\\\\out\"],\"cfgs\":[],\"env\":[],\"out_dir\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\build\\\\libsqlite3-sys-932b2007a2b5b5c3\\\\out\"}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#syn@3.0.9\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\syn-3.0.9\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"syn\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\syn-3.0.9\\\\src\\\\lib.rs\",\"edition\":\"2021\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[\"clone-impls\",\"derive\",\"parsing\",\"printing\",\"proc-macro\"],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libsyn-28f1f701bc77d142.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libsyn-28f1f701bc77d142.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.154\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\serde_json-1.0.154\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"serde_json\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\serde_json-1.0.154\\\\src\\\\lib.rs\",\"edition\":\"2021\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[\"default\",\"std\"],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libserde_json-a1cececa463fe88d.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libserde_json-a1cececa463fe88d.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.14.5\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\hashbrown-0.14.5\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"hashbrown\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\hashbrown-0.14.5\\\\src\\\\lib.rs\",\"edition\":\"2021\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[\"ahash\",\"inline-more\"],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libhashbrown-4fd579c68130e978.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libhashbrown-4fd579c68130e978.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#serde_derive@1.0.229\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\serde_derive-1.0.229\\\\Cargo.toml\",\"target\":{\"kind\":[\"proc-macro\"],\"crate_types\":[\"proc-macro\"],\"name\":\"serde_derive\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\serde_derive-1.0.229\\\\src\\\\lib.rs\",\"edition\":\"2021\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[\"default\"],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\serde_derive-30889d5b36adad90.dll\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\serde_derive-30889d5b36adad90.dll.lib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\serde_derive-30889d5b36adad90.dll.exp\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\serde_derive-30889d5b36adad90.pdb\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#libsqlite3-sys@0.30.1\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\libsqlite3-sys-0.30.1\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"libsqlite3_sys\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\libsqlite3-sys-0.30.1\\\\src\\\\lib.rs\",\"edition\":\"2021\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[\"bundled\",\"bundled_bindings\",\"cc\",\"default\",\"min_sqlite_version_3_14_0\",\"pkg-config\",\"vcpkg\"],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\liblibsqlite3_sys-6038f9b20df5da5a.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\liblibsqlite3_sys-6038f9b20df5da5a.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#hashlink@0.9.1\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\hashlink-0.9.1\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"hashlink\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\hashlink-0.9.1\\\\src\\\\lib.rs\",\"edition\":\"2018\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libhashlink-a948dc42121602d3.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libhashlink-a948dc42121602d3.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#serde@1.0.229\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\serde-1.0.229\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"serde\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\serde-1.0.229\\\\src\\\\lib.rs\",\"edition\":\"2021\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[\"default\",\"derive\",\"serde_derive\",\"std\"],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libserde-396cad9cc6ba1f1a.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libserde-396cad9cc6ba1f1a.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"registry+https://github.com/rust-lang/crates.io-index#rusqlite@0.32.1\",\"manifest_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\rusqlite-0.32.1\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"rusqlite\",\"src_path\":\"C:\\\\Users\\\\Taiizor\\\\.cargo\\\\registry\\\\src\\\\index.crates.io-1949cf8c6b5b557f\\\\rusqlite-0.32.1\\\\src\\\\lib.rs\",\"edition\":\"2021\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[\"bundled\",\"modern_sqlite\"],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\librusqlite-d6ef7b75ae602769.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\librusqlite-d6ef7b75ae602769.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"compiler-artifact\",\"package_id\":\"path+file:///E:/MyProject/Mix/GitHub/Sentra/crates/sentra-core#0.1.0\",\"manifest_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\Cargo.toml\",\"target\":{\"kind\":[\"lib\"],\"crate_types\":[\"lib\"],\"name\":\"sentra_core\",\"src_path\":\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\crates\\\\sentra-core\\\\src\\\\lib.rs\",\"edition\":\"2024\",\"doc\":true,\"doctest\":true,\"test\":true},\"profile\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"test\":false},\"features\":[],\"filenames\":[\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\libsentra_core.rlib\",\"E:\\\\MyProject\\\\Mix\\\\GitHub\\\\Sentra\\\\target\\\\debug\\\\deps\\\\libsentra_core-8b8ba05e2b63b4d0.rmeta\"],\"executable\":null,\"fresh\":true}\n{\"reason\":\"build-finished\",\"success\":true}\n",
+      "stderr": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s\n",
+      "tests": [],
+      "summaries": []
+    },
+    {
+      "name": "original-probe-compile",
+      "executable": "C:/Users/Taiizor/.cargo/bin/rustc.exe",
+      "arguments": [
+        "--edition=2024",
+        "--crate-name",
+        "policy_context_probe",
+        "E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/workspace/PolicyContextProbe.rs",
+        "--extern",
+        "sentra_core=E:/MyProject/Mix/GitHub/Sentra/target/debug/libsentra_core.rlib",
+        "-L",
+        "dependency=E:/MyProject/Mix/GitHub/Sentra/target/debug/deps",
+        "-o",
+        "E:/MyProject/Mix/GitHub/Sentra/target/authorization-validation/5c8f413c9c6f4c2abe9554374440e024/policy-context-probe.exe"
+      ],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 409,
+      "stdout": "",
+      "stderr": "",
+      "tests": [],
+      "summaries": []
+    },
+    {
+      "name": "original-a-to-b-probe",
+      "executable": "E:/MyProject/Mix/GitHub/Sentra/target/authorization-validation/5c8f413c9c6f4c2abe9554374440e024/policy-context-probe.exe",
+      "arguments": [],
+      "status": "Passed",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_ms": 12466,
+      "stdout": "POLICY_CONTEXT_BINDING=Passed: mismatched metadata action rejected; matching action accepted once; replay rejected\n",
+      "stderr": "",
+      "tests": [],
+      "summaries": []
+    }
+  ],
+  "workspace_summary": {
+    "Passed": 260.0,
+    "Failed": 0.0,
+    "Not Tested": 5.0
+  },
+  "repeated_concurrency_verified": true,
+  "not_tested": [
+    "Three unchanged 5.3 Windows fixture/scale cases are explicitly ignored by ordinary workspace tests; prior results remain historical.",
+    "Remote human authentication, persistent/cross-process receipts, external dispatch, Linux/macOS/ARM64 and filesystem containment remain outside this correction."
+  ]
+}

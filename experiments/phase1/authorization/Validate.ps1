@@ -1,17 +1,24 @@
 [CmdletBinding()]
-param([ValidateRange(1, 60)][int] $CommandTimeoutSeconds = 60)
+param([ValidateRange(1, 300)][int] $CommandTimeoutSeconds = 180)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath("$PSScriptRoot/../../..").Replace([char]92, [char]47)
-$outputRoot = "$repoRoot/target/authorization-validation"
-[IO.Directory]::CreateDirectory($outputRoot) | Out-Null
 $resultRoot = "$PSScriptRoot/results"
 [IO.Directory]::CreateDirectory($resultRoot) | Out-Null
 $resultPath = "$resultRoot/$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()).json"
 $probeSource = "$repoRoot/experiments/phase1/workspace/PolicyContextProbe.rs"
-$probeExecutable = "$outputRoot/policy-context-probe.exe"
+$probeExecutable = $null
+$resolvedTarget = $null
+$archive = $null
+$dependencyRoot = $null
+$archiveSha256 = $null
+$probeSha256 = $null
 $checks = [Collections.Generic.List[object]]::new()
+# A cold offline target compiles dependencies/tests and launches the complete
+# workspace. Its 60-second legacy budget expired after 215 passing runtime
+# cases on Windows. Keep a bounded command budget, matching the core/persistence
+# runners; this changes no assertion, SQLite busy timeout or execution quota.
 
 function Get-InputHashes {
     $hashes = [ordered]@{}
@@ -57,6 +64,14 @@ try {
     $checks.Add((Invoke-Recorded 'rustc-version' 'rustc' @('-vV')))
     $checks.Add((Invoke-Recorded 'cargo-version' 'cargo' @('--version')))
     $checks.Add((Invoke-Recorded 'dependency-metadata' 'cargo' @('metadata', '--offline', '--no-deps', '--format-version=1')))
+    $targetMetadata = $checks[$checks.Count - 1]
+    if ($targetMetadata.status -ne 'Passed') { throw 'Cargo target metadata unavailable; no artifact fallback is permitted' }
+    $resolvedTarget = [IO.Path]::GetFullPath(($targetMetadata.stdout | ConvertFrom-Json).target_directory).Replace([char]92, [char]47)
+    # A unique executable for this invocation cannot accidentally reuse an old
+    # probe from either the default directory or a previous alternative run.
+    $outputRoot = [IO.Path]::Combine($resolvedTarget, 'authorization-validation', [guid]::NewGuid().ToString('N')).Replace([char]92, [char]47)
+    [IO.Directory]::CreateDirectory($outputRoot) | Out-Null
+    $probeExecutable = "$outputRoot/policy-context-probe.exe"
     $checks.Add((Invoke-Recorded 'format' 'cargo' @('fmt', '--all', '--', '--check')))
     $checks.Add((Invoke-Recorded 'check' 'cargo' @('check', '--offline', '--workspace', '--all-targets')))
     $checks.Add((Invoke-Recorded 'clippy' 'cargo' @('clippy', '--offline', '--workspace', '--all-targets', '--all-features', '--', '-D', 'warnings')))
@@ -70,9 +85,21 @@ try {
         $archives = @($build.stdout -split "`n" | Where-Object { $_.StartsWith('{') } | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object { $_.reason -eq 'compiler-artifact' -and $_.target.name -eq 'sentra_core' } | ForEach-Object { $_.filenames } | Where-Object { $_.EndsWith('.rlib') })
         if ($archives.Count -ne 1) { throw 'Expected one reviewed Core library archive' }
         $archive = $archives[0].Replace([char]92, [char]47)
-        $compiled = Invoke-Recorded 'original-probe-compile' 'rustc' @('--edition=2024', '--crate-name', 'policy_context_probe', $probeSource, '--extern', "sentra_core=$archive", '-L', "dependency=$repoRoot/target/debug/deps", '-o', $probeExecutable)
+        $archive = [IO.Path]::GetFullPath($archive).Replace([char]92, [char]47)
+        $relativeArchive = [IO.Path]::GetRelativePath($resolvedTarget, $archive)
+        if ([IO.Path]::IsPathRooted($relativeArchive) -or ($relativeArchive -split '[/\\]')[0] -eq '..' -or -not [IO.File]::Exists($archive)) {
+            throw 'Cargo archive is outside this invocation target directory or unavailable'
+        }
+        $archiveDirectory = [IO.Path]::GetDirectoryName($archive)
+        $dependencyRoot = if ([IO.Path]::GetFileName($archiveDirectory) -eq 'deps') { $archiveDirectory } else { [IO.Path]::Combine($archiveDirectory, 'deps') }
+        $dependencyRoot = $dependencyRoot.Replace([char]92, [char]47)
+        if (-not [IO.Directory]::Exists($dependencyRoot)) { throw 'Dependency directory for the actual Cargo archive is unavailable' }
+        $archiveSha256 = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+        $compiled = Invoke-Recorded 'original-probe-compile' 'rustc' @('--edition=2024', '--crate-name', 'policy_context_probe', $probeSource, '--extern', "sentra_core=$archive", '-L', "dependency=$dependencyRoot", '-o', $probeExecutable)
         $checks.Add($compiled)
         if ($compiled.status -eq 'Passed') {
+            if (-not [IO.File]::Exists($probeExecutable)) { throw 'This invocation produced no probe executable' }
+            $probeSha256 = (Get-FileHash -LiteralPath $probeExecutable -Algorithm SHA256).Hash.ToLowerInvariant()
             $probe = Invoke-Recorded 'original-a-to-b-probe' $probeExecutable @()
             if ($probe.status -eq 'Passed' -and $probe.stdout -notmatch 'POLICY_CONTEXT_BINDING=Passed: mismatched metadata action rejected; matching action accepted once; replay rejected') { $probe.status = 'Failed' }
             $checks.Add($probe)
@@ -93,7 +120,7 @@ foreach ($check in $checks) {
 $metadataCheck = $checks | Where-Object { $_.name -eq 'dependency-metadata' } | Select-Object -First 1
 $dependencyCount = $null
 $approvedDependencies = $false
-if ($metadataCheck.status -eq 'Passed') {
+if ($null -ne $metadataCheck -and $metadataCheck.status -eq 'Passed') {
     $metadata = $metadataCheck.stdout | ConvertFrom-Json
     $dependencyCount = @($metadata.packages | ForEach-Object { $_.dependencies } | Where-Object { $null -ne $_ }).Count
     $dependencies = @($metadata.packages | Where-Object { $_.name -eq 'sentra-core' } | ForEach-Object { $_.dependencies })
@@ -107,12 +134,15 @@ if ($metadataCheck.status -eq 'Passed') {
 }
 $workspace = $checks | Where-Object { $_.name -eq 'workspace-tests' } | Select-Object -First 1
 $repeat = $checks | Where-Object { $_.name -eq 'repeat-concurrency' } | Select-Object -First 1
-$concurrencyVerified = $repeat.status -eq 'Passed' -and $repeat.stdout -match 'CONCURRENCY rounds=64 matching_successes=64 matching_replays=64 mismatches=384' -and $repeat.stdout -match 'CONCURRENCY rounds=32 mismatches=256 legitimate_successes=32'
+$concurrencyVerified = $null -ne $repeat -and $repeat.status -eq 'Passed' -and $repeat.stdout -match 'CONCURRENCY rounds=64 matching_successes=64 matching_replays=64 mismatches=384' -and $repeat.stdout -match 'CONCURRENCY rounds=32 mismatches=256 legitimate_successes=32'
+$workspaceSummaries = if ($null -ne $workspace) { @($workspace.summaries) } else { @() }
 $report = [ordered]@{
     increment = 'Phase 1 / Increment 5.3.1'; observed_at_utc = [DateTimeOffset]::UtcNow.ToString('o')
     environment = [ordered]@{ powershell = $PSVersionTable.PSVersion.ToString(); os = [Runtime.InteropServices.RuntimeInformation]::OSDescription; architecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() }
+    artifacts = [ordered]@{ requested_target_dir = $env:CARGO_TARGET_DIR; resolved_target_dir = $resolvedTarget; archive = $archive; dependency_dir = $dependencyRoot; probe = $probeExecutable; archive_sha256 = $archiveSha256; probe_sha256 = $probeSha256 }
+    command_timeout_seconds = $CommandTimeoutSeconds
     input_sha256 = $inputs; inputs_unchanged = $unchanged; third_party_dependencies = $dependencyCount; approved_dependencies = $approvedDependencies; checks = $checks.ToArray()
-    workspace_summary = [ordered]@{ Passed = ($workspace.summaries.passed | Measure-Object -Sum).Sum; Failed = ($workspace.summaries.failed | Measure-Object -Sum).Sum; 'Not Tested' = ($workspace.summaries.ignored | Measure-Object -Sum).Sum }
+    workspace_summary = [ordered]@{ Passed = ($workspaceSummaries | ForEach-Object { $_.passed } | Measure-Object -Sum).Sum; Failed = ($workspaceSummaries | ForEach-Object { $_.failed } | Measure-Object -Sum).Sum; 'Not Tested' = ($workspaceSummaries | ForEach-Object { $_.ignored } | Measure-Object -Sum).Sum }
     repeated_concurrency_verified = $concurrencyVerified
     not_tested = @('Three unchanged 5.3 Windows fixture/scale cases are explicitly ignored by ordinary workspace tests; prior results remain historical.', 'Remote human authentication, persistent/cross-process receipts, external dispatch, Linux/macOS/ARM64 and filesystem containment remain outside this correction.')
 }

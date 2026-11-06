@@ -97,6 +97,9 @@ fn current(
         .map_err(|_| error(Kind::PolicyDenied))?;
     let (snapshot, session) = read_snapshot(tx, intent.session.session_id)?
         .ok_or_else(|| error(Kind::ContextMismatch))?;
+    if snapshot.policy_identity.is_none() {
+        return Err(error(Kind::PolicyMismatch));
+    }
     if session.state.is_terminal() || intent.classification < session.classification_floor {
         return Err(error(Kind::PolicyDenied));
     }
@@ -247,6 +250,14 @@ impl ExecutionContext {
     pub fn classification(&self) -> SecurityClassification {
         self.classification
     }
+    /// Canonical immutable effective rule version registered by the owner.
+    /// The context generation is also its authoritative policy/approval epoch.
+    pub fn policy_version(&self) -> &str {
+        self.snapshot
+            .policy_identity
+            .as_deref()
+            .expect("minted policy binding")
+    }
     fn intent(&self) -> ApprovalIntent<'_> {
         ApprovalIntent {
             session: &self.session,
@@ -266,6 +277,18 @@ pub struct PreparedExecution {
     /// Committed approval consumption, when applicable.
     pub consumption: Option<ConsumptionRecord>,
     _admission: super::connection::SessionAdmission,
+}
+
+/// Non-consuming preview result. Operational/invalid-storage failures remain
+/// typed errors rather than being disguised as an authorization decision.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExecutionPreview {
+    /// Current context and any required receipt validate; nothing was consumed.
+    Granted,
+    /// The current state or presented receipt does not authorize the action.
+    Denied,
+    /// Current context validates but its required receipt is absent.
+    NeedsApproval,
 }
 impl fmt::Debug for PreparedExecution {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -614,19 +637,40 @@ impl PersistenceRepository {
     }
 
     /// Non-consuming advisory check; preparation repeats every check atomically.
-    pub fn validate_execution(
+    pub fn preview_execution(
         &self,
         context: &ExecutionContext,
         grant: Option<&PersistentApprovalGrant>,
         clock: &impl Clock,
-    ) -> Result<(), PersistenceError> {
+    ) -> Result<ExecutionPreview, PersistenceError> {
         let _admission = self
             .manager
             .session_admission(context.session_id(), false)?;
         self.manager.write(|tx| {
-            self.validate_execution_context(tx, context)?;
-            self.validate_execution_grant(tx, context, grant, &model::time_text(clock.now())?)?;
-            Ok(())
+            match self.validate_execution_context(tx, context) {
+                Err(e) if e.kind == Kind::PolicyDenied => return Ok(ExecutionPreview::Denied),
+                Err(e) => return Err(e),
+                Ok(()) => {}
+            }
+            if context.requires_approval && grant.is_none() {
+                return Ok(ExecutionPreview::NeedsApproval);
+            }
+            match self.validate_execution_grant(tx, context, grant, &model::time_text(clock.now())?)
+            {
+                Ok(_) => Ok(ExecutionPreview::Granted),
+                Err(e)
+                    if matches!(
+                        e.kind,
+                        Kind::InvalidApproval
+                            | Kind::ContextMismatch
+                            | Kind::ApprovalExpired
+                            | Kind::ApprovalReused
+                    ) =>
+                {
+                    Ok(ExecutionPreview::Denied)
+                }
+                Err(e) => Err(e),
+            }
         })
     }
 
@@ -655,6 +699,9 @@ impl PersistentApprovalAuthority {
             if !record.state.allows_execution() {
                 return Err(error(Kind::PolicyDenied));
             }
+            if snapshot.policy_identity.as_deref() != Some(policy.policy_identity().as_str()) {
+                return Err(error(Kind::PolicyMismatch));
+            }
             let requires_approval = policy
                 .evaluate_authoritative(record.classification_floor, classification, action, amount)
                 .map_err(|_| error(Kind::PolicyDenied))?;
@@ -681,6 +728,49 @@ impl PersistentApprovalAuthority {
         event: EventId,
         clock: &impl Clock,
     ) -> Result<SessionRecord, PersistenceError> {
+        self.register_session_bound(
+            metadata,
+            revision,
+            floor,
+            (budget_limit, None),
+            event,
+            clock,
+        )
+    }
+
+    /// Bind immutable effective rules through the existing trusted lifecycle and
+    /// exclusive dispatch fence. The tuple pairs the session limit with its rules.
+    /// Identical policy AND context are a no-op. Any effective change advances
+    /// the persisted context generation, also the policy/approval epoch.
+    pub fn register_session_with_policy(
+        &self,
+        metadata: &SessionMetadata,
+        revision: &str,
+        floor: SecurityClassification,
+        policy: (CostUsd, &PolicyEngine),
+        event: EventId,
+        clock: &impl Clock,
+    ) -> Result<SessionRecord, PersistenceError> {
+        self.register_session_bound(
+            metadata,
+            revision,
+            floor,
+            (policy.0, Some(policy.1)),
+            event,
+            clock,
+        )
+    }
+
+    fn register_session_bound(
+        &self,
+        metadata: &SessionMetadata,
+        revision: &str,
+        floor: SecurityClassification,
+        policy: (CostUsd, Option<&PolicyEngine>),
+        event: EventId,
+        clock: &impl Clock,
+    ) -> Result<SessionRecord, PersistenceError> {
+        let (budget_limit, policy) = policy;
         let _lifecycle = self
             .repository
             .manager
@@ -692,12 +782,24 @@ impl PersistentApprovalAuthority {
         }
         self.repository.manager.write(|tx| {
             let old = read_snapshot(tx, metadata.session_id)?;
+            let policy_identity = match policy {
+                Some(engine) => engine.policy_identity(),
+                None => match &old {
+                    Some((snapshot, _)) => snapshot.policy_identity.clone().ok_or_else(|| error(Kind::PolicyMismatch))?,
+                    None => PolicyEngine::new().policy_identity(),
+                },
+            };
             let generation = if let Some((snapshot, record)) = &old {
                 if record.state.is_terminal() || record.metadata.created_at_utc != metadata.created_at_utc { return Err(error(Kind::ContextMismatch)); }
                 if budget_used(tx, metadata.session_id)? > budget_limit.as_micro_usd() { return Err(error(Kind::BudgetExceeded)); }
+                if policy.is_some() && snapshot.policy_identity.as_deref() == Some(policy_identity.as_str())
+                    && snapshot.metadata == dto && snapshot.revision == revision
+                    && record.classification_floor == floor && record.budget_limit == budget_limit {
+                    return Ok(record.clone());
+                }
                 snapshot.generation.checked_add(1).ok_or_else(model::invalid)?
             } else { 1 };
-            let snapshot = Snapshot {version:1, metadata:dto.clone(),generation,revision:revision.into(),classification_floor:floor.as_str().into(),budget_limit_micro_usd:budget_limit.as_micro_usd()};
+            let snapshot = Snapshot {version:2, metadata:dto.clone(),generation,revision:revision.into(),classification_floor:floor.as_str().into(),budget_limit_micro_usd:budget_limit.as_micro_usd(),policy_identity:Some(policy_identity)};
             let json = snapshot.json()?;
             let now_time = clock.now(); if now_time < metadata.created_at_utc { return Err(model::invalid()); }
             let now = model::time_text(now_time)?;

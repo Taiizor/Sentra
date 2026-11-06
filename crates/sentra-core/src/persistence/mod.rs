@@ -49,6 +49,6 @@ pub use model::{
     SessionRecord, SettlementStatus, TransitionRecord,
 };
 pub use repository::{
-    ExecutionContext, PersistenceRepository, PersistentApprovalAuthority, PrepareExecutionRequest,
-    PreparedExecution,
+    ExecutionContext, ExecutionPreview, PersistenceRepository, PersistentApprovalAuthority,
+    PrepareExecutionRequest, PreparedExecution,
 };
