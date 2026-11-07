@@ -26,6 +26,8 @@ The other original gates remain: measured Windows x86_64 MSVC; spaces/Unicode/CR
 
 The single-foundation-session model remains: project identity aliases that SessionId. Many task/attempt records do not imply many sessions. **OQ-25 remains open. F-611-02 remains open before Phase 2 production readiness.**
 
+Dated design refinement, Increment 0.2: [IMPLEMENTATION_CONTRACTS](IMPLEMENTATION_CONTRACTS.md) makes filesystem, writer-fencing and explicit recovery handoffs concrete; [IMPLEMENTATION_READINESS](IMPLEMENTATION_READINESS.md) records decisions, blockers and ordered acceptance gates. Its persistent-guard proposal offers an alternative proof of old writers' logical retirement, not an assumption that version checks or new locks fence existing connections. Physical quiescence requirements for uncertain/raw family preservation remain. These refinements are Proposed and require explicit acceptance/runtime proof; they change no historical experiment, original criterion or closure decision.
+
 ### 1.2 Inspected baseline and evidence limits
 
 Entry was clean `develop`, HEAD `8d36d43fd8572a526a1d2111e5caa1626d0992cf`, local upstream `origin/develop`, 0 ahead/behind, 282 index entries, no staged/modified/untracked files. Physical index SHA-256: `fa846e21e34632eacf03aada5ef9367ca112a168d800e6cd7a9742630bdb1bc7`. Reference targets, reachable history, staged entries and tracked-file hashes were captured in memory before editing.
