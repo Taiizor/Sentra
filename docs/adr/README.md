@@ -11,6 +11,11 @@ ADRs record the rationale and reversal conditions for important choices. **Accep
 | [0005](0005-capability-scoped-process-adapters.md) | Capability-scoped out-of-process adapters and shared client services | Accepted | Schema conformance and MCP/API gates |
 | [0006](0006-evidence-and-independent-verification.md) | Evidence-based findings and independent patch verification | Accepted | Oracle/lifecycle/evaluation corpus in Phase 2 |
 | [0007](0007-open-source-and-integration-licensing.md) | OSI license selection and independent integration license review | Proposed | Owner choice and exact-version review before distribution |
+| [0008](0008-recoverable-local-operations.md) | Fenced session continuation and durable dispatch/result recovery | Proposed | Owner/security acceptance, exact migration compatibility and crash/authorization evidence |
+| [0009](0009-verified-content-and-blob-reconciliation.md) | Immutable SHA-256 content, canonical manifests and blob reconciliation | Proposed | Safe Windows identity/publication, audited crypto and content/GC crash evidence |
+| [0010](0010-explicit-initialization-recovery.md) | Explicit operator recovery for incomplete initialization (F-611-02) | Proposed | Owner selection, preservation/authority and Windows crash verification before Phase 2 production readiness |
+
+The three remediation proposals above refine the [Phase 1 gap analysis](../phase1/PHASE1_GAP_ANALYSIS.md) through [REMEDIATION_ARCHITECTURE](../phase1/REMEDIATION_ARCHITECTURE.md). They do not change the original seven decisions, approve implementation, satisfy missing runtime evidence or close Phase 1. **Phase 1 remains NOT APPROVED; Phase 2 is not authorized.**
 
 ## Maintenance
 
