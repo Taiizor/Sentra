@@ -73,3 +73,7 @@ No SHA-256 package was found in the inspected local registry cache. Cached getra
 - Final SCF-1 schema/test vectors, precise quota accounting/dedup confidentiality and retention/backup pin policy.
 
 No dependent content acquisition/promotion implementation proceeds by assuming these answers. Acceptance requires explicit architectural/security review and separate implementation authorization.
+
+## Increment 0.2 contract refinement — Proposed
+
+The [filesystem contract](../phase1/IMPLEMENTATION_CONTRACTS.md#2-recoverable-filesystem-contract) separates verified profile/held identity, same-volume no-replace collision handling, immutable CAS link creation, source-name cleanup and explicit process/OS/power durability scopes. A safe provider and integrated proof are still blocked; the hard-link candidate is not an atomic move or a SQLite database publication choice. [DEP-SHA256-01](../phase1/IMPLEMENTATION_READINESS.md#3-dependency-decision-record--dep-sha256-01) formally remains Blocked for insufficient evidence despite sha2 being the preferred evaluation direction. No dependency, profile or stronger guarantee is accepted by this reference. Status remains **Proposed**.

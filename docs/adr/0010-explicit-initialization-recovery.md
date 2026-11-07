@@ -76,3 +76,7 @@ The detailed comparison and crash matrix are in [architecture section 9](../phas
 - Exact proof required to complete a legacy Created session without fabricating immutable input identity.
 - Recovery-plan persistence/authorization surface, retention policy and explicit command scope.
 - Restore activation/preservation capacity and supported filesystem flush guarantees; no implementation proceeds without their resolution.
+
+## Increment 0.2 contract refinement — Proposed
+
+The [operator recovery contract](../phase1/IMPLEMENTATION_CONTRACTS.md#5-explicit-operator-recovery-contract--f-611-02) specifies diagnosis/plan/apply, the exact same-session CompleteFoundationInitialization action, existing-broker consent with atomic SQL consumption/lifecycle/audit, receipt-based idempotency and conservative legacy/corrupt refusal. The command surface and broker extension are proposals only; no recovery API exists by this reference. A changed source cannot execute a stale plan; only a verified committed receipt permits an AlreadyApplied lookup. The [readiness plan](../phase1/IMPLEMENTATION_READINESS.md) retains acceptance, preservation and crash-test gates. F-611-02 remains Open and status remains **Proposed**.

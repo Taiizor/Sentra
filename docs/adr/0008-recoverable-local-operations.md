@@ -76,3 +76,7 @@ Protected store ownership, activation/ID allocation, migration preservation and 
 - DG-6 mock-only provider seam acceptance and exact bounded task/output/storage enforcement points.
 
 Acceptance requires owner/architecture/security approval and explicit disposition of these gates; documentation alone closes no Phase 1 implementation criterion.
+
+## Increment 0.2 contract refinement — Proposed
+
+The [implementation contracts](../phase1/IMPLEMENTATION_CONTRACTS.md#3-sqlite-writer-fencing-and-migration-contract) recommend connection-lifetime admission/drain, immutable tokens and persistent all-table DML guards as a concrete candidate for proving that supported old connections cannot commit after migration, including after migrator death. This is not an implemented fence or a claim that legacy clients obey new locks. Logical retirement requires the complete guard/legacy/cached-statement proof; physical quiescence remains necessary for raw recovery-family capture and unsupported writers. Until independently proved and explicitly accepted, existing-store upgrades remain blocked. Optional rusqlite feature/backup topology approval and the [readiness gates](../phase1/IMPLEMENTATION_READINESS.md) are separate prerequisites. Status remains **Proposed**.
