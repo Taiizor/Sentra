@@ -15,7 +15,10 @@
 //! 7. **Resource Teardown**: Disposable VM disk diffs and temporary directories are wiped.
 //! 8. **Auditability**: Every stage is immutably logged to the audit ledger.
 
-use crate::{ExecutionId, TimestampUtc, persistence::SettlementStatus};
+use crate::{
+    AttemptId, ExecutionId, SessionId, SessionState, TaskId, TimestampUtc,
+    persistence::{AttemptState, SettlementStatus},
+};
 
 /// Trigger reason for task cancellation.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -135,4 +138,38 @@ impl CancellationReport {
             notes: "Worker termination could not be confirmed; conservative budget reservation preserved",
         }
     }
+}
+
+/// Reconciled attempt status during session continuation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReconciledAttempt {
+    /// Unique attempt identifier.
+    pub attempt_id: AttemptId,
+    /// Parent task identifier.
+    pub task_id: TaskId,
+    /// Prior lifecycle state before reconciliation.
+    pub previous_state: AttemptState,
+    /// Reconciled lifecycle state after continuation.
+    pub reconciled_state: AttemptState,
+    /// Whether budget reservation remains conservatively held.
+    pub budget_held: bool,
+}
+
+/// Comprehensive report produced when resuming an interrupted session.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SessionResumeReport {
+    /// Target session identifier.
+    pub session_id: SessionId,
+    /// State of session before resumption.
+    pub previous_state: SessionState,
+    /// State of session after resumption.
+    pub resumed_state: SessionState,
+    /// Advanced context generation invalidating stale authorizations.
+    pub new_context_generation: u64,
+    /// Reconciled incomplete attempts.
+    pub reconciled_attempts: Vec<ReconciledAttempt>,
+    /// Completed tasks that are preserved and skipped.
+    pub completed_tasks: Vec<TaskId>,
+    /// Remaining tasks awaiting execution.
+    pub pending_tasks: Vec<TaskId>,
 }
