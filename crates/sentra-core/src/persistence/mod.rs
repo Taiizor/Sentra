@@ -51,5 +51,5 @@ pub use model::{
 };
 pub use repository::{
     ExecutionContext, ExecutionPreview, PersistenceRepository, PersistentApprovalAuthority,
-    PrepareExecutionRequest, PreparedExecution,
+    PrepareAttemptRequest, PrepareExecutionRequest, PreparedExecution, RecordAttemptRequest,
 };
