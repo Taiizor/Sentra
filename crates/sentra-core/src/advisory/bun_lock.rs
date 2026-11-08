@@ -12,9 +12,10 @@ use crate::advisory::{
 
 /// Parses a `bun.lock` content string into structured package records.
 pub fn parse_bun_lock(content: &str) -> Result<Vec<PackageRecord>, AdvisoryError> {
-    let trimmed = content.trim();
+    let sanitized = strip_json_trailing_commas(content);
+    let trimmed = sanitized.trim();
 
-    // 1. If it starts with '{', attempt JSON parsing (modern Bun 1.2+ format)
+    // 1. If it starts with '{', attempt JSON parsing (modern Bun 1.1/1.2 format)
     if trimmed.starts_with('{') {
         if let Ok(packages) = parse_bun_json_format(trimmed)
             && !packages.is_empty()
@@ -31,6 +32,42 @@ pub fn parse_bun_lock(content: &str) -> Result<Vec<PackageRecord>, AdvisoryError
 
     // 2. Otherwise, attempt Yarn-compatible line parser (earlier Bun text format)
     parse_yarn_lock(content)
+}
+
+/// Sanitizes JSON text by stripping trailing commas before closing braces/brackets and single-line comments.
+fn strip_json_trailing_commas(input: &str) -> String {
+    // 1. Strip comments
+    let mut no_comments = String::with_capacity(input.len());
+    for line in input.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("//") {
+            continue;
+        }
+        no_comments.push_str(line);
+        no_comments.push('\n');
+    }
+
+    // 2. Remove trailing commas before } or ]
+    let bytes = no_comments.as_bytes();
+    let mut clean = String::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b',' {
+            let mut j = i + 1;
+            while j < bytes.len()
+                && (bytes[j] == b' ' || bytes[j] == b'\t' || bytes[j] == b'\r' || bytes[j] == b'\n')
+            {
+                j += 1;
+            }
+            if j < bytes.len() && (bytes[j] == b'}' || bytes[j] == b']') {
+                i += 1;
+                continue;
+            }
+        }
+        clean.push(bytes[i] as char);
+        i += 1;
+    }
+    clean
 }
 
 /// Parses the standard Bun text JSON lockfile structure:
@@ -57,13 +94,22 @@ fn parse_bun_json_format(content: &str) -> Result<Vec<PackageRecord>, AdvisoryEr
             }
 
             match val {
-                // Bun 1.2 array entry format: "lodash": ["lodash@4.17.21", "https://...", { ... }]
+                // Bun 1.2 array entry format: "lodash": ["lodash@4.17.21", "https://...", { ... }, "sha512-..."]
                 serde_json::Value::Array(arr) => {
                     if let Some(first_str) = arr.first().and_then(|v| v.as_str()) {
                         if let Some((name, version)) = split_package_specifier(first_str) {
                             let mut record = PackageRecord::new(name, version);
-                            if let Some(second_str) = arr.get(1).and_then(|v| v.as_str()) {
-                                record.source = Some(second_str.to_string());
+                            for item in arr.iter().skip(1) {
+                                if let Some(s) = item.as_str() {
+                                    if s.starts_with("http://") || s.starts_with("https://") {
+                                        record.source = Some(s.to_string());
+                                    } else if s.starts_with("sha512-")
+                                        || s.starts_with("sha1-")
+                                        || s.starts_with("sha256-")
+                                    {
+                                        record.checksum = Some(s.to_string());
+                                    }
+                                }
                             }
                             packages_map.insert((name.to_string(), version.to_string()), record);
                         } else if let Some((_, version)) =
