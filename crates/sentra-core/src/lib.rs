@@ -30,6 +30,8 @@ pub mod evidence;
 pub mod execution;
 /// Immutable input manifests, canonical source snapshots, and content hashing.
 pub mod manifest;
+/// Local Model Context Protocol (MCP) server, stdio transport, and shared application services.
+pub mod mcp;
 /// Local SQLite connection, migration and durable repository primitives.
 pub mod persistence;
 /// Subprocess plugin SDK, versioned adapter protocols, and capability fencing.
@@ -83,6 +85,11 @@ pub use execution::{
 pub use manifest::{
     ManifestError, ManifestErrorKind, OperationManifest, SnapshotLimits, SourceFileRole,
     SourceSnapshot, SourceSnapshotEntry, capture_source_snapshot,
+};
+pub use mcp::{
+    DEFAULT_MAX_LINE_BYTES, McpErrorCode, McpErrorObject, McpRequest, McpResponse, McpServer,
+    RequestId, ToolDefinition, canonical_tool_definitions, process_transport_line,
+    verify_transport_allowed,
 };
 pub use plugin::{
     AdapterFamily, HostStatus, PluginCapability, PluginError, PluginErrorKind, PluginHost,
