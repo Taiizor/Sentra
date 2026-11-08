@@ -4,20 +4,16 @@ mod support;
 
 use rusqlite::{Connection, params};
 use sentra_core::{
-    ApprovalId, AttemptId, CostUsd, EventId, ExecutionId, Identifier, ManifestId, MockClock,
-    OperationAction, PolicyEngine, SecurityClassification as Class, SessionId, SessionMetadata,
-    SessionState, TaskId, TimestampUtc,
+    AttemptId, Clock, CostUsd, ExecutionId, Identifier, ManifestId, OperationAction, PolicyEngine,
+    SecurityClassification as Class, SessionState, TaskId,
     persistence::{
-        AttemptOutcome, AttemptRecord, AttemptState, ManifestKind, ManifestRecord,
-        PersistenceError, PersistenceErrorKind as Kind, PersistenceRepository,
-        PersistentApprovalAuthority, PrepareAttemptRequest, RecordAttemptRequest, SettlementStatus,
-        SqliteConnectionManager, TaskRecord, TaskState,
+        AttemptOutcome, AttemptState, ManifestKind, PersistenceError, PersistenceErrorKind as Kind,
+        PersistenceRepository, PrepareAttemptRequest, RecordAttemptRequest,
+        SqliteConnectionManager, TaskState,
     },
-    service::{
-        CoreService, CoreServiceConfig, CoreServiceHarness, ReconciledAttempt, SessionResumeReport,
-    },
+    service::CoreServiceHarness,
 };
-use std::{fs, sync::Arc};
+use std::fs;
 use support::*;
 
 fn denied<T>(result: Result<T, PersistenceError>, expected: Kind) {
@@ -622,22 +618,22 @@ fn test_session_resumption_e2e_reconciliation() {
     harness
         .service
         .repository()
-        .create_task(session_id, t1_id, 1, "Completed Task", harness.service.clock())
+        .create_task(session_id, t1_id, 1, "Completed Task", harness.clock.as_ref())
         .unwrap();
     harness
         .service
         .repository()
-        .create_task(session_id, t2_id, 2, "Running Task", harness.service.clock())
+        .create_task(session_id, t2_id, 2, "Running Task", harness.clock.as_ref())
         .unwrap();
     harness
         .service
         .repository()
-        .create_task(session_id, t3_id, 3, "Prepared Task", harness.service.clock())
+        .create_task(session_id, t3_id, 3, "Prepared Task", harness.clock.as_ref())
         .unwrap();
     harness
         .service
         .repository()
-        .create_task(session_id, t4_id, 4, "Recorded Task", harness.service.clock())
+        .create_task(session_id, t4_id, 4, "Recorded Task", harness.clock.as_ref())
         .unwrap();
 
     // Task 1: Completed
@@ -649,7 +645,7 @@ fn test_session_resumption_e2e_reconciliation() {
             TaskState::Pending,
             TaskState::InProgress,
             event(),
-            harness.service.clock(),
+            harness.clock.as_ref(),
         )
         .unwrap();
     harness
@@ -660,7 +656,7 @@ fn test_session_resumption_e2e_reconciliation() {
             TaskState::InProgress,
             TaskState::Completed,
             event(),
-            harness.service.clock(),
+            harness.clock.as_ref(),
         )
         .unwrap();
 
@@ -679,7 +675,7 @@ fn test_session_resumption_e2e_reconciliation() {
                 action_digest: "digest-2".into(),
                 manifest_id: None,
             },
-            harness.service.clock(),
+            harness.clock.as_ref(),
         )
         .unwrap();
     let res2_id = sentra_core::ReservationId::from_bytes(*Identifier::new_deterministic(200, 2).as_bytes());
@@ -711,18 +707,18 @@ fn test_session_resumption_e2e_reconciliation() {
                 reservation_event: event(),
                 consumption_event: event(),
             },
-            harness.service.clock(),
+            harness.clock.as_ref(),
         )
         .unwrap();
     harness
         .service
         .repository()
-        .record_release(att2_id, harness.service.clock())
+        .record_release(att2_id, harness.clock.as_ref())
         .unwrap();
     harness
         .service
         .repository()
-        .confirm_running(att2_id, harness.service.clock())
+        .confirm_running(att2_id, harness.clock.as_ref())
         .unwrap();
 
     // Task 3: Prepared attempt
@@ -740,7 +736,7 @@ fn test_session_resumption_e2e_reconciliation() {
                 action_digest: "digest-3".into(),
                 manifest_id: None,
             },
-            harness.service.clock(),
+            harness.clock.as_ref(),
         )
         .unwrap();
     let res3_id = sentra_core::ReservationId::from_bytes(*Identifier::new_deterministic(200, 3).as_bytes());
@@ -771,7 +767,7 @@ fn test_session_resumption_e2e_reconciliation() {
                 reservation_event: event(),
                 consumption_event: event(),
             },
-            harness.service.clock(),
+            harness.clock.as_ref(),
         )
         .unwrap();
 
@@ -790,7 +786,7 @@ fn test_session_resumption_e2e_reconciliation() {
                 action_digest: "digest-4".into(),
                 manifest_id: None,
             },
-            harness.service.clock(),
+            harness.clock.as_ref(),
         )
         .unwrap();
 
