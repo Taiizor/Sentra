@@ -136,12 +136,19 @@ pub struct CoreService {
 /// Request parameters for admitting an execution attempt result.
 #[derive(Clone, Debug)]
 pub struct AdmitResultRequest<'a> {
+    /// Active session identifier.
     pub session_id: SessionId,
+    /// Identifier of the attempt whose result is being admitted.
     pub attempt_id: AttemptId,
+    /// Terminal outcome of the attempt.
     pub outcome: crate::persistence::AttemptOutcome,
+    /// Optional process exit code.
     pub exit_code: Option<i32>,
+    /// Optional resource usage metrics.
     pub resource_usage: Option<ResourceUsage>,
+    /// Evidence envelopes emitted by the execution attempt.
     pub evidence_envelopes: &'a [EvidenceEnvelope],
+    /// Final actual cost incurred by the attempt, if known.
     pub actual_cost: Option<CostUsd>,
 }
 
@@ -529,15 +536,9 @@ impl CoreService {
     /// idempotently as a duplicate no-op without secondary budget deductions or duplicate audit events.
     pub fn admit_task_result(
         &self,
-        session_id: SessionId,
-        attempt_id: AttemptId,
-        outcome: crate::persistence::AttemptOutcome,
-        exit_code: Option<i32>,
-        resource_usage: Option<ResourceUsage>,
-        evidence_envelopes: &[EvidenceEnvelope],
-        actual_cost: Option<CostUsd>,
+        req: AdmitResultRequest<'_>,
     ) -> Result<crate::persistence::AttemptRecord, ServiceError> {
-        let session = self.get_session(session_id)?;
+        let session = self.get_session(req.session_id)?;
         if session.state.is_terminal() {
             return Err(ServiceError::invalid_state(
                 "Cannot admit result on a terminal session",
@@ -546,12 +547,12 @@ impl CoreService {
 
         let _admission = self
             .repository
-            .session_admission(session_id, false)
+            .session_admission(req.session_id, false)
             .map_err(ServiceError::persistence)?;
 
         // Verify and store evidence envelopes
         let mut evidence_digests = Vec::new();
-        for envelope in evidence_envelopes {
+        for envelope in req.evidence_envelopes {
             self.evidence_verifier
                 .verify_envelope(envelope)
                 .map_err(ServiceError::evidence)?;
@@ -565,18 +566,18 @@ impl CoreService {
         }
 
         let details = serde_json::json!({
-            "exit_code": exit_code,
-            "resource_usage": resource_usage,
+            "exit_code": req.exit_code,
+            "resource_usage": req.resource_usage,
             "evidence_digests": evidence_digests,
         });
         let details_json = details.to_string();
 
         self.repository
             .record_result(
-                attempt_id,
-                outcome,
+                req.attempt_id,
+                req.outcome,
                 Some(&details_json),
-                actual_cost,
+                req.actual_cost,
                 &self.clock,
             )
             .map_err(ServiceError::persistence)

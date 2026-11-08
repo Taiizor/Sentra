@@ -12,7 +12,10 @@ mod lifecycle;
 mod local_workspace;
 
 pub use config::CoreServiceConfig;
-pub use core::{CoreService, ServicePolicyDecision, TaskExecutionReport, TaskExecutionRequest};
+pub use core::{
+    AdmitResultRequest, CoreService, ServicePolicyDecision, TaskExecutionReport,
+    TaskExecutionRequest,
+};
 pub use error::{ExecutionOutcomeError, ServiceError, ServiceErrorKind, ServicePrimaryError};
 pub use harness::{CoreServiceHarness, HarnessDirectory};
 pub use lifecycle::{
