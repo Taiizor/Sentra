@@ -15,7 +15,10 @@ pub use config::CoreServiceConfig;
 pub use core::{CoreService, ServicePolicyDecision, TaskExecutionReport, TaskExecutionRequest};
 pub use error::{ExecutionOutcomeError, ServiceError, ServiceErrorKind, ServicePrimaryError};
 pub use harness::{CoreServiceHarness, HarnessDirectory};
-pub use lifecycle::{CancellationPhase, CancellationReason, CancellationReport};
+pub use lifecycle::{
+    CancellationPhase, CancellationReason, CancellationReport, ReconciledAttempt,
+    SessionResumeReport,
+};
 pub use local_workspace::{
     LocalSessionSummary, LocalWorkspace, LocalWorkspaceError, LocalWorkspaceErrorKind,
     LocalWorkspaceReport,
