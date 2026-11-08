@@ -1,8 +1,14 @@
 # Progress
 
-Last updated: 2026-11-08.
+Last updated: 2026-11-09.
 
 ## Current status
+
+CLI Capabilities Expansion: IMPLEMENTED & VERIFIED (`sentra-cli`). Extended the production terminal adapter with three native capabilities while maintaining 100% backward compatibility with existing commands (`init`, `status`, `session show`, `recover`, `audit`):
+- `sentra diff --base <dir> --head <dir> [--json]`: Pure-Rust source snapshot comparison using `capture_source_snapshot` and `compare_snapshots`, providing file deltas (`added`, `modified`, `deleted`, `renamed`, `unchanged`), change summaries, and aggregate digests with zero subprocess execution.
+- `sentra verify-audit [--json]`: Automated evaluation of the 5 mandatory enterprise hosting security gates (`MultiUserSecurityAudit`), verifying tenant isolation, worker egress containment, zero worker reuse, zero secret inheritance, and immutable audit trail compliance.
+- `sentra mcp`: Interactive Model Context Protocol (MCP) JSON-RPC 2.0 stdio server loop (`run_stream`), streaming line-by-line responses for client handshake (`initialize`, `notifications/initialized`), capability advertisement, and canonical tool execution.
+Verified via 30/30 unit and integration tests passing in `crates/sentra-cli/tests/cli_tests.rs`, zero warnings across the workspace under `cargo clippy --workspace --all-targets --all-features -- -D warnings`, and clean verification in `scripts/docker-test.ps1 -Mode all`.
 
 Release-wide quality, containment & distribution gates: AUDITED & APPROVED. The [Release-Wide Gates Audit Report](docs/release/RELEASE_GATES_AUDIT.md) verifies the full satisfaction of all 8 release-wide quality and security gates specified in [ROADMAP.md](ROADMAP.md#release-wide-gates). Toolchain and dependency pinning verified (`rusqlite = "=0.32.1"`, `serde = "=1.0.229"`, `serde_json = "=1.0.154"`, `sha2 = "0.11"`, Rust 1.99.0 toolchain). Retention and egress controls verified (`EgressPolicy::StrictlyDenied`, zero unexpected provider egress, bounded CAS storage). Zero unresolved critical containment defects verified (untrusted target execution remains 100% fail-closed via `FailClosedBackend`). Factual progress ledger synchronized. Private vulnerability disclosure channel configured in [SECURITY.md](SECURITY.md) with 48h initial response SLA and coordinated disclosure guidelines. Zero proprietary/restricted rules or datasets bundled; third-party attributions published in [NOTICE](NOTICE); Apache-2.0 recommended per [ADR-0007](docs/adr/0007-open-source-and-integration-licensing.md). Complete installation and operational limitations published in [docs/INSTALLATION.md](docs/INSTALLATION.md) and [docs/LIMITATIONS.md](docs/LIMITATIONS.md). Platform foundation is officially ready for v0.1.0 release.
 

@@ -1,11 +1,12 @@
 use std::{
     ffi::OsString,
     fs,
+    io::{Cursor, Write},
     path::{Path, PathBuf},
-    process::{Command, Output},
+    process::{Command, Output, Stdio},
 };
 
-use sentra_cli::{Command as CliCommand, parse, run};
+use sentra_cli::{Command as CliCommand, parse, run, run_with_input};
 use sentra_core::{
     CostUsd, OperatingMode, SecurityClassification, SessionId, SystemClock,
     persistence::{PersistenceRepository, SqliteConnectionManager},
@@ -574,4 +575,246 @@ fn binary_audit_parses_arguments() {
             ..
         } if ws == Path::new("my_ws")
     ));
+}
+
+#[test]
+fn diff_parses_arguments() {
+    let res = parse(&args(&[
+        "diff", "--base", "dir_a", "--head", "dir_b", "--json",
+    ]))
+    .unwrap();
+    assert!(res.json);
+    assert!(matches!(
+        res.command,
+        CliCommand::Diff { base, head } if base == Path::new("dir_a") && head == Path::new("dir_b")
+    ));
+
+    // Order reversed
+    let res2 = parse(&args(&["diff", "--head", "dir_head", "--base", "dir_base"])).unwrap();
+    assert!(!res2.json);
+    assert!(matches!(
+        res2.command,
+        CliCommand::Diff { base, head } if base == Path::new("dir_base") && head == Path::new("dir_head")
+    ));
+
+    // Rejects missing arguments or duplicates
+    assert!(parse(&args(&["diff", "--base", "a"])).is_err());
+    assert!(parse(&args(&["diff", "--head", "b"])).is_err());
+    assert!(
+        parse(&args(&[
+            "diff", "--base", "a", "--head", "b", "--base", "c"
+        ]))
+        .is_err()
+    );
+    assert!(parse(&args(&["diff", "--base", "a", "--head", "b", "--unknown"])).is_err());
+}
+
+#[test]
+fn verify_audit_and_mcp_parse_arguments() {
+    let mcp = parse(&args(&["mcp"])).unwrap();
+    assert!(!mcp.json);
+    assert!(matches!(mcp.command, CliCommand::Mcp));
+
+    let mcp_json = parse(&args(&["mcp", "--json"])).unwrap();
+    assert!(mcp_json.json);
+    assert!(matches!(mcp_json.command, CliCommand::Mcp));
+
+    assert!(parse(&args(&["mcp", "unexpected"])).is_err());
+
+    let audit = parse(&args(&["verify-audit"])).unwrap();
+    assert!(!audit.json);
+    assert!(matches!(audit.command, CliCommand::VerifyAudit));
+
+    let audit_json = parse(&args(&["verify-audit", "--json"])).unwrap();
+    assert!(audit_json.json);
+    assert!(matches!(audit_json.command, CliCommand::VerifyAudit));
+
+    assert!(parse(&args(&["verify-audit", "--extra"])).is_err());
+}
+
+#[test]
+fn diff_computes_directory_differences_human_and_json() {
+    let temp_dir = std::env::temp_dir().join(format!("sentra_diff_test_{}", SessionId::new()));
+    fs::create_dir_all(&temp_dir).unwrap();
+    let base = temp_dir.join("base");
+    let head = temp_dir.join("head");
+    fs::create_dir_all(&base).unwrap();
+    fs::create_dir_all(&head).unwrap();
+
+    fs::write(base.join("unchanged.txt"), "unchanged content\n").unwrap();
+    fs::write(head.join("unchanged.txt"), "unchanged content\n").unwrap();
+
+    fs::write(base.join("modified.rs"), "fn old() {}\n").unwrap();
+    fs::write(head.join("modified.rs"), "fn new_func() {}\n").unwrap();
+
+    fs::write(base.join("deleted.txt"), "goodbye\n").unwrap();
+    fs::write(head.join("added.rs"), "fn added() {}\n").unwrap();
+
+    // Human output
+    let resp = run(
+        &args(&[
+            "diff",
+            "--base",
+            base.to_str().unwrap(),
+            "--head",
+            head.to_str().unwrap(),
+        ]),
+        Path::new(""),
+    );
+    assert_eq!(resp.exit_code, 0);
+    assert!(resp.stdout.contains("Sentra snapshot diff: completed"));
+    assert!(resp.stdout.contains("Files added: 1"));
+    assert!(resp.stdout.contains("Files modified: 1"));
+    assert!(resp.stdout.contains("Files deleted: 1"));
+    assert!(resp.stdout.contains("Files unchanged: 1"));
+    assert!(resp.stdout.contains("Rust files changed: 2"));
+    assert!(resp.stdout.contains("Untrusted execution: disabled"));
+    assert!(resp.stderr.is_empty());
+
+    // JSON output
+    let resp_json = run(
+        &args(&[
+            "diff",
+            "--base",
+            base.to_str().unwrap(),
+            "--head",
+            head.to_str().unwrap(),
+            "--json",
+        ]),
+        Path::new(""),
+    );
+    assert_eq!(resp_json.exit_code, 0);
+    assert!(resp_json.stdout.contains("\"command\":\"diff\""));
+    assert!(resp_json.stdout.contains("\"schema_version\":1"));
+    assert!(resp_json.stdout.contains("\"added_files\":1"));
+    assert!(resp_json.stdout.contains("\"modified_files\":1"));
+    assert!(resp_json.stdout.contains("\"deleted_files\":1"));
+    assert!(resp_json.stdout.contains("\"unchanged_files\":1"));
+    assert!(resp_json.stdout.contains("\"untrusted_execution\":false"));
+
+    fs::remove_dir_all(&temp_dir).unwrap();
+}
+
+#[test]
+fn diff_invalid_workspace_fails_closed() {
+    let resp = run(
+        &args(&[
+            "diff",
+            "--base",
+            "nonexistent_directory_base_xyz",
+            "--head",
+            "nonexistent_directory_head_xyz",
+            "--json",
+        ]),
+        Path::new(""),
+    );
+    assert_eq!(resp.exit_code, 4);
+    assert_eq!(
+        resp.stderr,
+        "{\"schema_version\":1,\"error\":\"invalid_workspace\"}\n"
+    );
+}
+
+#[test]
+fn verify_audit_executes_five_gates() {
+    let resp = run(&args(&["verify-audit"]), Path::new(""));
+    assert_eq!(resp.exit_code, 0);
+    assert!(
+        resp.stdout
+            .contains("Sentra multi-user security audit: approved")
+    );
+    assert!(resp.stdout.contains("Tenant isolation: passed"));
+    assert!(resp.stdout.contains("Worker egress containment: passed"));
+    assert!(resp.stdout.contains("Cross-tenant worker reuse: passed"));
+    assert!(resp.stdout.contains("Zero secret inheritance: passed"));
+    assert!(resp.stdout.contains("Immutable audit trail: passed"));
+    assert!(resp.stdout.contains("Untrusted execution: disabled"));
+
+    let resp_json = run(&args(&["verify-audit", "--json"]), Path::new(""));
+    assert_eq!(resp_json.exit_code, 0);
+    assert!(resp_json.stdout.contains("\"command\":\"verify-audit\""));
+    assert!(resp_json.stdout.contains("\"status\":\"approved\""));
+    assert!(resp_json.stdout.contains("\"approved\":true"));
+    assert!(resp_json.stdout.contains("\"gate_tenant_isolation\":true"));
+    assert!(
+        resp_json
+            .stdout
+            .contains("\"gate_worker_egress_containment\":true")
+    );
+    assert!(
+        resp_json
+            .stdout
+            .contains("\"gate_cross_tenant_worker_reuse\":true")
+    );
+    assert!(
+        resp_json
+            .stdout
+            .contains("\"gate_zero_secret_inheritance\":true")
+    );
+    assert!(
+        resp_json
+            .stdout
+            .contains("\"gate_immutable_audit_trail\":true")
+    );
+}
+
+#[test]
+fn mcp_stdio_server_loop() {
+    let input_lines = concat!(
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"1.0\"}}}\n",
+        "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}\n",
+        "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}\n"
+    );
+    let mut cursor = Cursor::new(input_lines.as_bytes());
+    let resp = run_with_input(&args(&["mcp"]), Path::new(""), &mut cursor);
+    assert_eq!(resp.exit_code, 0);
+    assert!(resp.stderr.is_empty());
+
+    let lines: Vec<&str> = resp.stdout.lines().collect();
+    // Notification does not respond, so exactly 2 responses
+    assert_eq!(lines.len(), 2);
+
+    // Response 1: initialize result
+    assert!(lines[0].contains("\"id\":1"));
+    assert!(lines[0].contains("\"protocolVersion\":\"2026-07-28\""));
+    assert!(lines[0].contains("\"name\":\"sentra-mcp\""));
+
+    // Response 2: tools/list
+    assert!(lines[1].contains("\"id\":2"));
+    assert!(lines[1].contains("\"tools\""));
+    assert!(lines[1].contains("session_status"));
+}
+
+#[test]
+fn binary_mcp_and_diff_and_verify_audit_subprocesses() {
+    // 1. Binary verify-audit
+    let audit_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["verify-audit", "--json"])
+        .output()
+        .unwrap();
+    assert!(audit_out.status.success());
+    let audit_stdout = String::from_utf8(audit_out.stdout).unwrap();
+    assert!(audit_stdout.contains("\"command\":\"verify-audit\""));
+    assert!(audit_stdout.contains("\"status\":\"approved\""));
+
+    // 2. Binary mcp over stdio pipe
+    let mut mcp_child = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .arg("mcp")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    let init_req = "{\"jsonrpc\":\"2.0\",\"id\":99,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"bin-test\",\"version\":\"1.0\"}}}\n";
+    {
+        let mut stdin = mcp_child.stdin.take().unwrap();
+        stdin.write_all(init_req.as_bytes()).unwrap();
+        // Drop stdin to send EOF
+    }
+    let mcp_out = mcp_child.wait_with_output().unwrap();
+    assert!(mcp_out.status.success());
+    let mcp_stdout = String::from_utf8(mcp_out.stdout).unwrap();
+    assert!(mcp_stdout.contains("\"id\":99"));
+    assert!(mcp_stdout.contains("\"protocolVersion\":\"2026-07-28\""));
+    assert!(mcp_stdout.contains("\"name\":\"sentra-mcp\""));
 }

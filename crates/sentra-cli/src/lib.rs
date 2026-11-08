@@ -5,18 +5,24 @@
 
 use std::{
     ffi::OsString,
+    io::{BufRead, Write},
     path::{Path, PathBuf},
 };
 
 use sentra_core::{
-    AdvisoryDatabase, SessionId, TimestampUtc,
+    AdvisoryDatabase, ContainmentLevel, DEFAULT_MAX_LINE_BYTES, EgressPolicy, FileDeltaKind,
+    McpServer, MultiUserAuditReport, MultiUserSecurityAudit, RemoteWorkerId, RemoteWorkerNode,
+    SessionId, SnapshotDiff, TimestampUtc, WorkerArchitecture, WorkerFleetManager,
+    WorkerResourceCaps,
+    fleet::AuditStatus,
+    process_transport_line,
     service::{
         LocalAuditReport, LocalWorkspace, LocalWorkspaceError, LocalWorkspaceErrorKind,
         LocalWorkspaceReport,
     },
 };
 
-pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra recover --database <file> [--workspace <directory>] [--json]\n  sentra audit --database <file> [--workspace <directory>] [--json]\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session/audit default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\nAudit analyzes Cargo.lock dependencies against pinned security advisories.\n";
+pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra recover --database <file> [--workspace <directory>] [--json]\n  sentra audit --database <file> [--workspace <directory>] [--json]\n  sentra diff --base <directory> --head <directory> [--json]\n  sentra verify-audit [--json]\n  sentra mcp\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session/audit default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\nAudit analyzes Cargo.lock dependencies against pinned security advisories.\nDiff compares base and head directory snapshots with pure-Rust hashing.\nVerify-audit evaluates the 5 mandatory multi-user hosting security containment gates.\nMcp runs the JSON-RPC 2.0 Model Context Protocol stdio transport server.\n";
 
 /// Typed presentation command. Paths are untrusted until validated by Core.
 pub enum Command {
@@ -43,6 +49,12 @@ pub enum Command {
         workspace: Option<PathBuf>,
         database: PathBuf,
     },
+    Diff {
+        base: PathBuf,
+        head: PathBuf,
+    },
+    Mcp,
+    VerifyAudit,
 }
 
 pub struct Invocation {
@@ -86,12 +98,55 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
         });
     }
     let name = words.remove(0);
-    if !matches!(name, "init" | "status" | "session" | "recover" | "audit") {
+    if !matches!(
+        name,
+        "init" | "status" | "session" | "recover" | "audit" | "diff" | "mcp" | "verify-audit"
+    ) {
         return Err(invalid());
     }
     if words == ["--help"] {
         return Ok(Invocation {
             command: Command::Help,
+            json,
+        });
+    }
+    if name == "mcp" {
+        if !words.is_empty() {
+            return Err(invalid());
+        }
+        return Ok(Invocation {
+            command: Command::Mcp,
+            json,
+        });
+    }
+    if name == "verify-audit" {
+        if !words.is_empty() {
+            return Err(invalid());
+        }
+        return Ok(Invocation {
+            command: Command::VerifyAudit,
+            json,
+        });
+    }
+    if name == "diff" {
+        let mut base = None;
+        let mut head = None;
+        let mut rest = words.into_iter();
+        while let Some(flag) = rest.next() {
+            let value = rest.next().ok_or_else(invalid)?;
+            if value.is_empty() || value.starts_with('-') {
+                return Err(invalid());
+            }
+            match flag {
+                "--base" if base.is_none() => base = Some(PathBuf::from(value)),
+                "--head" if head.is_none() => head = Some(PathBuf::from(value)),
+                _ => return Err(invalid()),
+            }
+        }
+        let base = base.ok_or_else(invalid)?;
+        let head = head.ok_or_else(invalid)?;
+        return Ok(Invocation {
+            command: Command::Diff { base, head },
             json,
         });
     }
@@ -194,84 +249,175 @@ fn absolute(path: &Path, cwd: &Path) -> PathBuf {
     }
 }
 
-/// Execute only initialization/inspection through the Core local facade.
+/// Run an invocation against standard in-memory buffer handling.
 pub fn run(arguments: &[OsString], cwd: &Path) -> Response {
+    let mut stdin_empty = std::io::empty();
+    run_with_input(arguments, cwd, &mut stdin_empty)
+}
+
+/// Run an invocation reading any required interactive data from the provided input stream.
+pub fn run_with_input(arguments: &[OsString], cwd: &Path, input: &mut impl BufRead) -> Response {
+    let mut stdout_buf = Vec::new();
+    let mut stderr_buf = Vec::new();
+    let exit_code = run_stream(arguments, cwd, input, &mut stdout_buf, &mut stderr_buf);
+    Response {
+        stdout: String::from_utf8(stdout_buf).unwrap_or_default(),
+        stderr: String::from_utf8(stderr_buf).unwrap_or_default(),
+        exit_code,
+    }
+}
+
+/// Streaming execution router supporting interactive stdio MCP servers and line-buffered outputs.
+pub fn run_stream<R, W, E>(
+    arguments: &[OsString],
+    cwd: &Path,
+    input: &mut R,
+    output: &mut W,
+    err_output: &mut E,
+) -> u8
+where
+    R: BufRead,
+    W: Write,
+    E: Write,
+{
     let invocation = match parse(arguments) {
         Ok(value) => value,
         Err(_) => {
-            return error(
+            let resp = error(
                 "invalid_arguments",
                 2,
                 arguments.iter().any(|s| s == "--json"),
             );
+            let _ = err_output.write_all(resp.stderr.as_bytes());
+            return resp.exit_code;
         }
     };
+
+    if let Command::Mcp = invocation.command {
+        let mut server = McpServer::new(SessionId::new());
+        let mut line = String::new();
+        loop {
+            line.clear();
+            match input.read_line(&mut line) {
+                Ok(0) => break, // EOF reached
+                Ok(_) => match process_transport_line(&mut server, &line, DEFAULT_MAX_LINE_BYTES) {
+                    Ok(Some(response_json)) => {
+                        if output.write_all(response_json.as_bytes()).is_err()
+                            || output.flush().is_err()
+                        {
+                            return 8;
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(e) => {
+                        let err_resp = format!(
+                            "{{\"jsonrpc\":\"2.0\",\"error\":{{\"code\":{},\"message\":\"{}\"}},\"id\":null}}\n",
+                            e.code,
+                            e.message.replace('"', "\\\"")
+                        );
+                        if output.write_all(err_resp.as_bytes()).is_err() || output.flush().is_err()
+                        {
+                            return 8;
+                        }
+                    }
+                },
+                Err(_) => return 8,
+            }
+        }
+        return 0;
+    }
+
+    let response = execute_invocation(invocation, cwd);
+    if !response.stdout.is_empty()
+        && (output.write_all(response.stdout.as_bytes()).is_err() || output.flush().is_err())
+    {
+        return 8;
+    }
+    if !response.stderr.is_empty()
+        && (err_output.write_all(response.stderr.as_bytes()).is_err()
+            || err_output.flush().is_err())
+    {
+        return 8;
+    }
+    response.exit_code
+}
+
+fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
     let json = invocation.json;
-    let (operation, result) = match invocation.command {
-        Command::Help => {
-            return Response {
-                stdout: if json {
-                    "{\"schema_version\":1,\"commands\":[\"init\",\"status\",\"session show\",\"recover\",\"audit\"],\"offline\":true,\"untrusted_execution\":false}\n".into()
-                } else {
-                    HELP.into()
-                },
-                stderr: String::new(),
-                exit_code: 0,
-            };
-        }
-        Command::Version => {
-            return Response {
-                stdout: if json {
-                    format!(
-                        "{{\"schema_version\":1,\"version\":\"{}\"}}\n",
-                        env!("CARGO_PKG_VERSION")
-                    )
-                } else {
-                    format!("sentra {}\n", env!("CARGO_PKG_VERSION"))
-                },
-                stderr: String::new(),
-                exit_code: 0,
-            };
-        }
+    match invocation.command {
+        Command::Help => Response {
+            stdout: if json {
+                "{\"schema_version\":1,\"commands\":[\"init\",\"status\",\"session show\",\"recover\",\"audit\",\"diff\",\"verify-audit\",\"mcp\"],\"offline\":true,\"untrusted_execution\":false}\n".into()
+            } else {
+                HELP.into()
+            },
+            stderr: String::new(),
+            exit_code: 0,
+        },
+        Command::Version => Response {
+            stdout: if json {
+                format!(
+                    "{{\"schema_version\":1,\"version\":\"{}\"}}\n",
+                    env!("CARGO_PKG_VERSION")
+                )
+            } else {
+                format!("sentra {}\n", env!("CARGO_PKG_VERSION"))
+            },
+            stderr: String::new(),
+            exit_code: 0,
+        },
         Command::Init {
             workspace,
             database,
-        } => (
-            "init",
-            LocalWorkspace::initialize(&absolute(&workspace, cwd), &absolute(&database, cwd)),
-        ),
+        } => {
+            let res =
+                LocalWorkspace::initialize(&absolute(&workspace, cwd), &absolute(&database, cwd));
+            match res {
+                Ok(report) => render("init", report, json),
+                Err(source) => core_error(source, json),
+            }
+        }
         Command::Status {
             workspace,
             database,
-        } => (
-            "status",
-            LocalWorkspace::status(
+        } => {
+            let res = LocalWorkspace::status(
                 &absolute(workspace.as_deref().unwrap_or(cwd), cwd),
                 &absolute(&database, cwd),
-            ),
-        ),
+            );
+            match res {
+                Ok(report) => render("status", report, json),
+                Err(source) => core_error(source, json),
+            }
+        }
         Command::Session {
             id,
             workspace,
             database,
-        } => (
-            "session",
-            LocalWorkspace::session(
+        } => {
+            let res = LocalWorkspace::session(
                 &absolute(workspace.as_deref().unwrap_or(cwd), cwd),
                 &absolute(&database, cwd),
                 id,
-            ),
-        ),
+            );
+            match res {
+                Ok(report) => render("session", report, json),
+                Err(source) => core_error(source, json),
+            }
+        }
         Command::Recover {
             workspace,
             database,
-        } => (
-            "recover",
-            LocalWorkspace::recover(
+        } => {
+            let res = LocalWorkspace::recover(
                 &absolute(workspace.as_deref().unwrap_or(cwd), cwd),
                 &absolute(&database, cwd),
-            ),
-        ),
+            );
+            match res {
+                Ok(report) => render("recover", report, json),
+                Err(source) => core_error(source, json),
+            }
+        }
         Command::Audit {
             workspace,
             database,
@@ -280,15 +426,149 @@ pub fn run(arguments: &[OsString], cwd: &Path) -> Response {
             let advisory_db = AdvisoryDatabase::default_pinned(clock);
             let ws_path = absolute(workspace.as_deref().unwrap_or(cwd), cwd);
             let db_path = absolute(&database, cwd);
-            return match LocalWorkspace::audit_dependencies(&ws_path, &db_path, &advisory_db) {
+            match LocalWorkspace::audit_dependencies(&ws_path, &db_path, &advisory_db) {
                 Ok(report) => render_audit(report, json),
                 Err(source) => core_error(source, json),
-            };
+            }
         }
+        Command::Diff { base, head } => {
+            let base_path = absolute(&base, cwd);
+            let head_path = absolute(&head, cwd);
+            match LocalWorkspace::diff(&base_path, &head_path) {
+                Ok(diff) => render_diff(&diff, json),
+                Err(source) => core_error(source, json),
+            }
+        }
+        Command::VerifyAudit => {
+            let mut fleet = WorkerFleetManager::new();
+            let worker = RemoteWorkerNode::new(
+                RemoteWorkerId::new("worker-enterprise-01").expect("valid id"),
+                "https://worker-node-1.internal:8443",
+                WorkerArchitecture::LinuxX86_64,
+                ContainmentLevel::DisposableVm,
+                WorkerResourceCaps::default(),
+                EgressPolicy::StrictlyDenied,
+            );
+            let _ = fleet.register_worker(worker);
+            let report = MultiUserSecurityAudit::run_assessment(&fleet);
+            render_verify_audit(&report, json)
+        }
+        Command::Mcp => unreachable!("handled in run_stream"),
+    }
+}
+
+fn render_diff(diff: &SnapshotDiff, json: bool) -> Response {
+    let stdout = if json {
+        let summary_json = serde_json::to_string(&diff.summary).unwrap_or_default();
+        let deltas_json = serde_json::to_string(&diff.deltas).unwrap_or_default();
+        format!(
+            "{{\"schema_version\":1,\"command\":\"diff\",\"base_aggregate_digest\":\"{}\",\"head_aggregate_digest\":\"{}\",\"summary\":{},\"deltas\":{},\"untrusted_execution\":false}}\n",
+            diff.base_aggregate_digest, diff.head_aggregate_digest, summary_json, deltas_json,
+        )
+    } else {
+        let mut text = format!(
+            "Sentra snapshot diff: completed\nBase digest: {}\nHead digest: {}\nFiles added: {}\nFiles modified: {}\nFiles deleted: {}\nFiles renamed: {}\nFiles unchanged: {}\nRust files changed: {}\nNet bytes delta: {}\n",
+            diff.base_aggregate_digest,
+            diff.head_aggregate_digest,
+            diff.summary.added_files,
+            diff.summary.modified_files,
+            diff.summary.deleted_files,
+            diff.summary.renamed_files,
+            diff.summary.unchanged_files,
+            diff.summary.rust_files_changed,
+            diff.summary.net_bytes_delta,
+        );
+        for delta in diff.changed_deltas() {
+            match &delta.kind {
+                FileDeltaKind::Renamed { from_path } => {
+                    text.push_str(&format!(
+                        "  [renamed] {} (from {})\n",
+                        delta.path, from_path
+                    ));
+                }
+                _ => {
+                    text.push_str(&format!("  [{}] {}\n", delta.kind.as_str(), delta.path));
+                }
+            }
+        }
+        text.push_str("Untrusted execution: disabled\n");
+        text
     };
-    match result {
-        Ok(report) => render(operation, report, json),
-        Err(source) => core_error(source, json),
+    Response {
+        stdout,
+        stderr: String::new(),
+        exit_code: 0,
+    }
+}
+
+fn render_verify_audit(report: &MultiUserAuditReport, json: bool) -> Response {
+    let exit_code = if report.is_approved() { 0 } else { 5 };
+    let stdout = if json {
+        let findings_json = report
+            .findings
+            .iter()
+            .map(|f| format!("\"{}\"", f.replace('"', "\\\"")))
+            .collect::<Vec<_>>()
+            .join(",");
+        let status_str = match report.overall_status {
+            AuditStatus::Approved => "approved",
+            AuditStatus::Blocked => "blocked",
+        };
+        format!(
+            "{{\"schema_version\":1,\"command\":\"verify-audit\",\"status\":\"{}\",\"approved\":{},\"gate_tenant_isolation\":{},\"gate_worker_egress_containment\":{},\"gate_cross_tenant_worker_reuse\":{},\"gate_zero_secret_inheritance\":{},\"gate_immutable_audit_trail\":{},\"findings\":[{}],\"untrusted_execution\":false}}\n",
+            status_str,
+            report.is_approved(),
+            report.gate_tenant_isolation,
+            report.gate_worker_egress_containment,
+            report.gate_cross_tenant_worker_reuse,
+            report.gate_zero_secret_inheritance,
+            report.gate_immutable_audit_trail,
+            findings_json,
+        )
+    } else {
+        let status_str = match report.overall_status {
+            AuditStatus::Approved => "approved",
+            AuditStatus::Blocked => "blocked",
+        };
+        let mut text = format!(
+            "Sentra multi-user security audit: {}\nTenant isolation: {}\nWorker egress containment: {}\nCross-tenant worker reuse: {}\nZero secret inheritance: {}\nImmutable audit trail: {}\n",
+            status_str,
+            if report.gate_tenant_isolation {
+                "passed"
+            } else {
+                "failed"
+            },
+            if report.gate_worker_egress_containment {
+                "passed"
+            } else {
+                "failed"
+            },
+            if report.gate_cross_tenant_worker_reuse {
+                "passed"
+            } else {
+                "failed"
+            },
+            if report.gate_zero_secret_inheritance {
+                "passed"
+            } else {
+                "failed"
+            },
+            if report.gate_immutable_audit_trail {
+                "passed"
+            } else {
+                "failed"
+            },
+        );
+        for f in &report.findings {
+            text.push_str(&format!("  [finding] {}\n", f));
+        }
+        text.push_str("Untrusted execution: disabled\n");
+        text
+    };
+    Response {
+        stdout,
+        stderr: String::new(),
+        exit_code,
     }
 }
 

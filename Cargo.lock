@@ -196,6 +196,8 @@ name = "sentra-cli"
 version = "0.1.0"
 dependencies = [
  "sentra-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
