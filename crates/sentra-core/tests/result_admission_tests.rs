@@ -292,38 +292,40 @@ fn test_record_result_atomic_transition_on_cancellation() {
 }
 
 #[test]
-fn test_record_result_exact_duplicate_is_idempotent_no_op() {
+fn test_admit_task_result_exact_duplicate_is_idempotent_no_op() {
     let h = Harness::budget(200_000);
     advance_session_to_running(&h);
 
+    let service = create_test_service(&h);
     let (attempt_id, _task_id, res_id) = create_running_attempt(&h, 90, 100, 50_000);
-    let details = serde_json::json!({"status": "success", "exit_code": 0}).to_string();
     let cost = Some(CostUsd::from_micro_usd(30_000));
 
     // First call: succeeds
-    let first = h
-        .repo
-        .record_result(
+    let first = service
+        .admit_task_result(AdmitResultRequest {
+            session_id: h.metadata.session_id,
             attempt_id,
-            AttemptOutcome::Completed,
-            Some(&details),
-            cost,
-            &h.clock,
-        )
+            outcome: AttemptOutcome::Completed,
+            exit_code: Some(0),
+            resource_usage: None,
+            evidence_envelopes: &[],
+            actual_cost: cost,
+        })
         .unwrap();
 
     let audit_count_after_first = h.audit_count();
 
     // Replay identical call a SECOND time (Exact duplicate per R1-R7)
-    let second = h
-        .repo
-        .record_result(
+    let second = service
+        .admit_task_result(AdmitResultRequest {
+            session_id: h.metadata.session_id,
             attempt_id,
-            AttemptOutcome::Completed,
-            Some(&details),
-            cost,
-            &h.clock,
-        )
+            outcome: AttemptOutcome::Completed,
+            exit_code: Some(0),
+            resource_usage: None,
+            evidence_envelopes: &[],
+            actual_cost: cost,
+        })
         .unwrap();
 
     assert_eq!(first.attempt_id, second.attempt_id);
@@ -347,34 +349,41 @@ fn test_record_result_exact_duplicate_is_idempotent_no_op() {
 }
 
 #[test]
-fn test_record_result_conflicting_outcome_denied_with_conflict() {
+fn test_admit_task_result_conflicting_outcome_denied() {
     let h = Harness::budget(200_000);
     advance_session_to_running(&h);
 
+    let service = create_test_service(&h);
     let (attempt_id, _, _) = create_running_attempt(&h, 110, 120, 50_000);
-    let details = serde_json::json!({"status": "success"}).to_string();
 
     // First: record Completed
-    h.repo
-        .record_result(
+    service
+        .admit_task_result(AdmitResultRequest {
+            session_id: h.metadata.session_id,
             attempt_id,
-            AttemptOutcome::Completed,
-            Some(&details),
-            None,
-            &h.clock,
-        )
+            outcome: AttemptOutcome::Completed,
+            exit_code: Some(0),
+            resource_usage: None,
+            evidence_envelopes: &[],
+            actual_cost: None,
+        })
         .unwrap();
 
     // Conflicting replay: Attempt to change outcome to Failed
-    let conflict_res = h.repo.record_result(
+    let conflict_res = service.admit_task_result(AdmitResultRequest {
+        session_id: h.metadata.session_id,
         attempt_id,
-        AttemptOutcome::Failed,
-        Some(&details),
-        None,
-        &h.clock,
-    );
+        outcome: AttemptOutcome::Failed,
+        exit_code: Some(0),
+        resource_usage: None,
+        evidence_envelopes: &[],
+        actual_cost: None,
+    });
 
-    assert_eq!(conflict_res.unwrap_err().kind, Kind::Conflict);
+    assert_eq!(
+        conflict_res.unwrap_err().kind,
+        ServiceErrorKind::InvalidState
+    );
 
     // Verify original Completed outcome preserved intact
     let att = h.repo.get_attempt(attempt_id).unwrap().unwrap();
@@ -382,41 +391,79 @@ fn test_record_result_conflicting_outcome_denied_with_conflict() {
 }
 
 #[test]
-fn test_record_result_conflicting_details_denied_with_conflict() {
+fn test_admit_task_result_conflicting_details_denied() {
     let h = Harness::budget(200_000);
     advance_session_to_running(&h);
 
+    let service = create_test_service(&h);
     let (attempt_id, _, _) = create_running_attempt(&h, 130, 140, 50_000);
 
-    h.repo
-        .record_result(
+    service
+        .admit_task_result(AdmitResultRequest {
+            session_id: h.metadata.session_id,
             attempt_id,
-            AttemptOutcome::Completed,
-            Some("{\"exit\": 0}"),
-            None,
-            &h.clock,
-        )
+            outcome: AttemptOutcome::Completed,
+            exit_code: Some(0),
+            resource_usage: None,
+            evidence_envelopes: &[],
+            actual_cost: None,
+        })
         .unwrap();
 
-    // Conflicting replay: different details
-    let conflict = h.repo.record_result(
+    // Conflicting replay: different exit code
+    let conflict = service.admit_task_result(AdmitResultRequest {
+        session_id: h.metadata.session_id,
         attempt_id,
-        AttemptOutcome::Completed,
-        Some("{\"exit\": 1}"),
-        None,
-        &h.clock,
-    );
+        outcome: AttemptOutcome::Completed,
+        exit_code: Some(1),
+        resource_usage: None,
+        evidence_envelopes: &[],
+        actual_cost: None,
+    });
 
-    assert_eq!(conflict.unwrap_err().kind, Kind::Conflict);
+    assert_eq!(conflict.unwrap_err().kind, ServiceErrorKind::InvalidState);
 }
 
 #[test]
-fn test_record_result_conflicting_cost_denied_with_conflict() {
+fn test_admit_task_result_conflicting_cost_denied() {
     let h = Harness::budget(200_000);
     advance_session_to_running(&h);
 
+    let service = create_test_service(&h);
     let (attempt_id, _, _) = create_running_attempt(&h, 150, 160, 50_000);
 
+    service
+        .admit_task_result(AdmitResultRequest {
+            session_id: h.metadata.session_id,
+            attempt_id,
+            outcome: AttemptOutcome::Completed,
+            exit_code: None,
+            resource_usage: None,
+            evidence_envelopes: &[],
+            actual_cost: Some(CostUsd::from_micro_usd(20_000)),
+        })
+        .unwrap();
+
+    // Conflicting replay: different actual cost
+    let conflict = service.admit_task_result(AdmitResultRequest {
+        session_id: h.metadata.session_id,
+        attempt_id,
+        outcome: AttemptOutcome::Completed,
+        exit_code: None,
+        resource_usage: None,
+        evidence_envelopes: &[],
+        actual_cost: Some(CostUsd::from_micro_usd(40_000)),
+    });
+
+    assert_eq!(conflict.unwrap_err().kind, ServiceErrorKind::InvalidState);
+}
+
+#[test]
+fn test_record_result_terminal_attempt_denied_with_conflict() {
+    let h = Harness::budget(200_000);
+    advance_session_to_running(&h);
+
+    let (attempt_id, _, _) = create_running_attempt(&h, 160, 165, 50_000);
     h.repo
         .record_result(
             attempt_id,
@@ -427,16 +474,15 @@ fn test_record_result_conflicting_cost_denied_with_conflict() {
         )
         .unwrap();
 
-    // Conflicting replay: different actual cost
-    let conflict = h.repo.record_result(
+    // Repeated call at repository layer strictly fails closed with Conflict
+    let res = h.repo.record_result(
         attempt_id,
         AttemptOutcome::Completed,
         None,
-        Some(CostUsd::from_micro_usd(40_000)),
+        Some(CostUsd::from_micro_usd(20_000)),
         &h.clock,
     );
-
-    assert_eq!(conflict.unwrap_err().kind, Kind::Conflict);
+    assert_eq!(res.unwrap_err().kind, Kind::Conflict);
 }
 
 #[test]
