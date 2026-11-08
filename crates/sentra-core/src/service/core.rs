@@ -3,7 +3,7 @@
 use std::{path::Path, sync::Arc};
 
 use crate::{
-    Clock, CostUsd, EventId, EvidenceArtifact, EvidenceEnvelope, EvidenceVerifier,
+    AttemptId, Clock, CostUsd, EventId, EvidenceArtifact, EvidenceEnvelope, EvidenceVerifier,
     ExecutionBackend, ExecutionEngine, ExecutionError, ExecutionId, ExecutionRequest,
     ExecutionResult, ExecutionScope, ExecutionStatus, Identifier, ManifestId, OperatingMode,
     OperationAction, PolicyEngine, ResourceLimits, ResourceUsage, SecurityClassification,
@@ -131,6 +131,18 @@ pub struct CoreService {
     evidence_verifier: EvidenceVerifier,
     clock: Arc<dyn Clock>,
     blob_store: Option<Arc<dyn BlobStore>>,
+}
+
+/// Request parameters for admitting an execution attempt result.
+#[derive(Clone, Debug)]
+pub struct AdmitResultRequest<'a> {
+    pub session_id: SessionId,
+    pub attempt_id: AttemptId,
+    pub outcome: crate::persistence::AttemptOutcome,
+    pub exit_code: Option<i32>,
+    pub resource_usage: Option<ResourceUsage>,
+    pub evidence_envelopes: &'a [EvidenceEnvelope],
+    pub actual_cost: Option<CostUsd>,
 }
 
 impl CoreService {
@@ -501,6 +513,70 @@ impl CoreService {
                 ManifestKind::Operation,
                 &content_digest,
                 &canonical_json,
+                &self.clock,
+            )
+            .map_err(ServiceError::persistence)
+    }
+
+    /// Admits and settles an execution attempt result through the atomic result protocol.
+    ///
+    /// Validates session non-terminal state, stores evidence envelopes into `BlobStore` (if configured),
+    /// packages result metadata and evidence digests, advances the attempt state to `ResultRecorded`,
+    /// settles budget reservations atomically, and transitions the parent task to its terminal state.
+    ///
+    /// # Replay Determinism
+    /// If an identical result is re-submitted for an already-settled attempt, the operation succeeds
+    /// idempotently as a duplicate no-op without secondary budget deductions or duplicate audit events.
+    pub fn admit_task_result(
+        &self,
+        session_id: SessionId,
+        attempt_id: AttemptId,
+        outcome: crate::persistence::AttemptOutcome,
+        exit_code: Option<i32>,
+        resource_usage: Option<ResourceUsage>,
+        evidence_envelopes: &[EvidenceEnvelope],
+        actual_cost: Option<CostUsd>,
+    ) -> Result<crate::persistence::AttemptRecord, ServiceError> {
+        let session = self.get_session(session_id)?;
+        if session.state.is_terminal() {
+            return Err(ServiceError::invalid_state(
+                "Cannot admit result on a terminal session",
+            ));
+        }
+
+        let _admission = self
+            .repository
+            .session_admission(session_id, false)
+            .map_err(ServiceError::persistence)?;
+
+        // Verify and store evidence envelopes
+        let mut evidence_digests = Vec::new();
+        for envelope in evidence_envelopes {
+            self.evidence_verifier
+                .verify_envelope(envelope)
+                .map_err(ServiceError::evidence)?;
+
+            if let Some(ref store) = self.blob_store {
+                let blob_id = store
+                    .put_evidence_envelope(envelope)
+                    .map_err(|e| ServiceError::invalid_state(e.to_string()))?;
+                evidence_digests.push(blob_id.to_string());
+            }
+        }
+
+        let details = serde_json::json!({
+            "exit_code": exit_code,
+            "resource_usage": resource_usage,
+            "evidence_digests": evidence_digests,
+        });
+        let details_json = details.to_string();
+
+        self.repository
+            .record_result(
+                attempt_id,
+                outcome,
+                Some(&details_json),
+                actual_cost,
                 &self.clock,
             )
             .map_err(ServiceError::persistence)

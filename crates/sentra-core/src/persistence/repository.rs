@@ -1853,6 +1853,37 @@ impl PersistenceRepository {
             )?.ok_or_else(|| error(Kind::Conflict))?;
             let mut attempt = parse_attempt_tuple(raw_attempt)?;
 
+            if attempt.state == AttemptState::ResultRecorded {
+                if attempt.terminal_outcome == Some(outcome) {
+                    let details_match = match (details_json, attempt.terminal_details_json.as_deref()) {
+                        (Some(a), Some(b)) => a == b,
+                        (None, None) => true,
+                        _ => false,
+                    };
+                    if details_match {
+                        if let Some(res_id) = attempt.reservation_id {
+                            let res_cost: Option<Option<i64>> = tx.optional(
+                                "SELECT actual_cost_micro_usd FROM budget_reservations WHERE reservation_id=?1",
+                                [res_id.to_string()],
+                                |r| r.get(0),
+                            )?;
+                            if let Some(existing_opt) = res_cost {
+                                let cost_match = match (actual_cost, existing_opt) {
+                                    (Some(act), Some(exist)) => act.as_micro_usd() as i64 == exist,
+                                    (None, None) => true,
+                                    _ => false,
+                                };
+                                if !cost_match {
+                                    return Err(error(Kind::Conflict));
+                                }
+                            }
+                        }
+                        return Ok(attempt);
+                    }
+                }
+                return Err(error(Kind::Conflict));
+            }
+
             if !matches!(attempt.state, AttemptState::RunningConfirmed | AttemptState::ReleaseRecorded) {
                 return Err(error(Kind::Conflict));
             }
@@ -1928,6 +1959,17 @@ impl PersistenceRepository {
                     }
                 }
             }
+
+            // Update associated task state conditionally in tasks table
+            let (new_task_state, is_terminal) = match outcome {
+                AttemptOutcome::Completed => ("COMPLETED", true),
+                AttemptOutcome::Failed | AttemptOutcome::TimedOut => ("FAILED", true),
+                AttemptOutcome::Cancelled => ("CANCELLED", true),
+            };
+            tx.execute(
+                "UPDATE tasks SET state=?1, updated_at=?2, completed_at=?3 WHERE task_id=?4 AND (state='IN_PROGRESS' OR state='PENDING')",
+                params![new_task_state, now, if is_terminal { Some(now.as_str()) } else { None }, attempt.task_id.to_string()],
+            )?;
 
             audit(
                 tx,
