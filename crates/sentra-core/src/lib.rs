@@ -34,6 +34,8 @@ pub mod manifest;
 pub mod persistence;
 /// Security policy engine, decisions, and approval brokers.
 pub mod policy;
+/// Capability-scoped model provider abstraction and privacy-preserving gateway.
+pub mod provider;
 /// Integrated Core Service coordination foundation.
 pub mod service;
 /// Session lifecycle, state machine, and metadata.
@@ -42,6 +44,8 @@ pub mod session;
 pub mod storage;
 /// Canonical workspace boundaries, indirection quarantine and metadata-only discovery.
 pub mod workspace;
+/// Verification bundle lifecycle, disposable worker containment, and benchmark evaluation.
+pub mod verification;
 
 pub use advisory::{
     Advisory, AdvisoryAuditResult, AdvisoryDatabase, AdvisoryError, AdvisoryErrorKind,
@@ -80,6 +84,19 @@ pub use policy::{
     ApprovalAuthority, ApprovalBroker, ApprovalGrant, ApprovalRequest, BudgetPolicyConfig, CostUsd,
     DenialReason, OperationAction, PolicyDecision, PolicyEngine,
 };
+pub use provider::{
+    Body as ProviderBody, Capabilities as ProviderCapabilities, DataClass as ProviderDataClass,
+    Diagnostic as ProviderDiagnostic, DiagnosticCode as ProviderDiagnosticCode,
+    ErrorKind as ProviderErrorKind, Failure as ProviderFailure, Feature as ProviderFeature,
+    Format as ProviderFormat, Gateway as ProviderGateway, Ledger as ProviderLedger,
+    LocalInferenceEndpointProvider, LocalStatus as ProviderLocalStatus,
+    Location as ProviderLocation, Model as ProviderModel, Operation as ProviderOperation,
+    Policy as ProviderPolicy, Progress as ProviderProgress, Provider, Rates as ProviderRates,
+    RedactionFilter, Request as ProviderRequest, Response as ProviderResponse,
+    Script as ProviderScript, SharedTrace, SyntheticMockProvider, Terminal as ProviderTerminal,
+    Trace as ProviderTrace, Usage as ProviderUsage, Value as ProviderValue,
+    VirtualControl as ProviderVirtualControl, full_model,
+};
 pub use service::{
     AdmitResultRequest, CancellationPhase, CancellationReason, CancellationReport, CoreService,
     CoreServiceConfig, CoreServiceHarness, LocalAuditReport, ReconciledAttempt, ServiceError,
@@ -92,4 +109,10 @@ pub use session::{
 pub use storage::{
     BlobId, BlobMetadata, BlobStore, FileSystemCasBlobStore, StorageError, StorageErrorKind,
     StorageLimits, StorageUsage,
+};
+pub use verification::{
+    AttemptDenominator, ChangeCase, ChangeCaseCategory, ConfusionMatrix, ContainmentLevel,
+    CorpusEvaluationReport, EgressPolicy, PatchVerificationOutcome, TestRunEvidence, TestStatus,
+    VerificationBundle, WorkerArchitecture, WorkerError, WorkerErrorKind, WorkerProfile,
+    WorkerReadinessReport, WorkerResourceCaps, evaluate_corpus, reference_20_case_corpus,
 };
