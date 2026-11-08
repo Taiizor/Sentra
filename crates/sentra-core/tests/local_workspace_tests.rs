@@ -7,7 +7,7 @@ use std::{
 
 use sentra_core::{
     CoreService, CoreServiceConfig, CostUsd, FailClosedBackend, OperatingMode, PolicyEngine,
-    SecurityClassification, SessionId, SystemClock,
+    SecurityClassification, SessionId, SessionState, SystemClock,
     persistence::{PersistenceRepository, SqliteConnectionManager},
     service::{LocalWorkspace, LocalWorkspaceErrorKind},
 };
@@ -487,4 +487,165 @@ fn quarantined_internal_symlinks_are_not_followed_by_initialization() {
     assert_eq!(fs::read(outside.join("secret")).unwrap(), b"do-not-read");
     assert_eq!(fs::read_dir(outside).unwrap().count(), 1);
     fs::remove_dir(link).unwrap();
+}
+
+#[test]
+fn recover_unfinished_created_session_completes_foundation() {
+    let f = Fixture::new();
+    let manager = SqliteConnectionManager::open(&f.db, &SystemClock).unwrap();
+    let (_, authority) = PersistenceRepository::with_authority(manager.clone());
+    let metadata = sentra_core::SessionMetadata::new(
+        SessionId::new(),
+        sentra_core::Clock::now(&SystemClock),
+        fs::canonicalize(&f.workspace).unwrap().to_str().unwrap(),
+        OperatingMode::ContinuousReview,
+        "fixture-operator",
+        "fixture-policy",
+    )
+    .unwrap();
+    let expected_session_id = metadata.session_id;
+    authority
+        .register_session(
+            &metadata,
+            "fixture-revision",
+            SecurityClassification::Internal,
+            CostUsd::ZERO,
+            sentra_core::EventId::new(),
+            &SystemClock,
+        )
+        .unwrap();
+    manager.shutdown().unwrap();
+
+    // Verify both init and status fail closed with Incomplete
+    assert_eq!(
+        LocalWorkspace::initialize(&f.workspace, &f.db)
+            .unwrap_err()
+            .kind,
+        LocalWorkspaceErrorKind::Incomplete
+    );
+    assert_eq!(
+        LocalWorkspace::status(&f.workspace, &f.db)
+            .unwrap_err()
+            .kind,
+        LocalWorkspaceErrorKind::Incomplete
+    );
+
+    // Explicit operator recovery recovers the session without manual file deletion
+    let report = LocalWorkspace::recover(&f.workspace, &f.db).unwrap();
+    assert!(report.initialized);
+    assert!(!report.created);
+    let session = report.session.unwrap();
+    assert_eq!(session.session_id, expected_session_id);
+    assert_eq!(session.state, SessionState::Scoped);
+
+    // Subsequent status succeeds cleanly
+    let status_report = LocalWorkspace::status(&f.workspace, &f.db).unwrap();
+    assert!(status_report.initialized);
+    assert_eq!(
+        status_report.session.unwrap().session_id,
+        expected_session_id
+    );
+}
+
+#[test]
+fn recover_incomplete_schema_only_store_completes_foundation() {
+    let f = Fixture::new();
+    SqliteConnectionManager::open(&f.db, &SystemClock)
+        .unwrap()
+        .shutdown()
+        .unwrap();
+
+    // Verify both init and status fail closed with Incomplete
+    assert_eq!(
+        LocalWorkspace::initialize(&f.workspace, &f.db)
+            .unwrap_err()
+            .kind,
+        LocalWorkspaceErrorKind::Incomplete
+    );
+    assert_eq!(
+        LocalWorkspace::status(&f.workspace, &f.db)
+            .unwrap_err()
+            .kind,
+        LocalWorkspaceErrorKind::Incomplete
+    );
+
+    // Explicit operator recovery creates missing foundation session
+    let report = LocalWorkspace::recover(&f.workspace, &f.db).unwrap();
+    assert!(report.initialized);
+    assert!(report.created);
+    assert_eq!(report.session.unwrap().state, SessionState::Scoped);
+
+    // Subsequent status succeeds cleanly
+    let status_report = LocalWorkspace::status(&f.workspace, &f.db).unwrap();
+    assert!(status_report.initialized);
+}
+
+#[test]
+fn recover_already_initialized_store_is_idempotent() {
+    let f = Fixture::new();
+    let initial = LocalWorkspace::initialize(&f.workspace, &f.db).unwrap();
+    let expected_session_id = initial.session.unwrap().session_id;
+
+    // Operator recovery on a healthy initialized store is an idempotent no-op
+    let recovery = LocalWorkspace::recover(&f.workspace, &f.db).unwrap();
+    assert!(recovery.initialized);
+    assert!(!recovery.created);
+    assert_eq!(recovery.session.unwrap().session_id, expected_session_id);
+}
+
+#[test]
+fn recover_corrupt_database_fails_closed_and_preserves_bytes() {
+    let f = Fixture::new();
+    let corrupt_bytes = b"corrupted-sqlite-header-and-garbage-data-payload";
+    fs::write(&f.db, corrupt_bytes).unwrap();
+
+    let err = LocalWorkspace::recover(&f.workspace, &f.db);
+    assert!(err.is_err());
+    assert_eq!(fs::read(&f.db).unwrap(), corrupt_bytes);
+}
+
+#[test]
+fn recover_workspace_mismatch_fails_closed() {
+    let f = Fixture::new();
+    let other_workspace = f.root.join("other_workspace");
+    fs::create_dir(&other_workspace).unwrap();
+
+    let manager = SqliteConnectionManager::open(&f.db, &SystemClock).unwrap();
+    let (_, authority) = PersistenceRepository::with_authority(manager.clone());
+    let metadata = sentra_core::SessionMetadata::new(
+        SessionId::new(),
+        sentra_core::Clock::now(&SystemClock),
+        fs::canonicalize(&other_workspace)
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        OperatingMode::ContinuousReview,
+        "fixture-operator",
+        "fixture-policy",
+    )
+    .unwrap();
+    authority
+        .register_session(
+            &metadata,
+            "fixture-revision",
+            SecurityClassification::Internal,
+            CostUsd::ZERO,
+            sentra_core::EventId::new(),
+            &SystemClock,
+        )
+        .unwrap();
+    manager.shutdown().unwrap();
+
+    // Recovery from a mismatched workspace fails closed with WorkspaceMismatch
+    let err = LocalWorkspace::recover(&f.workspace, &f.db).unwrap_err();
+    assert_eq!(err.kind, LocalWorkspaceErrorKind::WorkspaceMismatch);
+}
+
+#[test]
+fn recover_absent_database_fails_closed() {
+    let f = Fixture::new();
+    let missing_db = f.root.join("storage/missing_file.db");
+
+    let err = LocalWorkspace::recover(&f.workspace, &missing_db).unwrap_err();
+    assert_eq!(err.kind, LocalWorkspaceErrorKind::Incomplete);
 }

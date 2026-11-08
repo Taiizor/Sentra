@@ -6,7 +6,10 @@ use std::{
 };
 
 use sentra_cli::{Command as CliCommand, parse, run};
-use sentra_core::SessionId;
+use sentra_core::{
+    CostUsd, OperatingMode, SecurityClassification, SessionId, SystemClock,
+    persistence::{PersistenceRepository, SqliteConnectionManager},
+};
 
 fn args(words: &[&str]) -> Vec<OsString> {
     words.iter().map(OsString::from).collect()
@@ -424,4 +427,73 @@ fn relative_paths_are_resolved_against_invocation_directory() {
     let result = run(&arguments, &f.root);
     assert_eq!(result.exit_code, 0);
     assert!(f.db.is_file());
+}
+
+#[test]
+fn binary_recover_completes_interrupted_bootstrap() {
+    let f = Fixture::new();
+    let manager = SqliteConnectionManager::open(&f.db, &SystemClock).unwrap();
+    let (_, authority) = PersistenceRepository::with_authority(manager.clone());
+    let metadata = sentra_core::SessionMetadata::new(
+        SessionId::new(),
+        sentra_core::Clock::now(&SystemClock),
+        fs::canonicalize(&f.workspace).unwrap().to_str().unwrap(),
+        OperatingMode::ContinuousReview,
+        "fixture-operator",
+        "fixture-policy",
+    )
+    .unwrap();
+    let expected_session_id = metadata.session_id.to_string();
+    authority
+        .register_session(
+            &metadata,
+            "fixture-revision",
+            SecurityClassification::Internal,
+            CostUsd::ZERO,
+            sentra_core::EventId::new(),
+            &SystemClock,
+        )
+        .unwrap();
+    manager.shutdown().unwrap();
+
+    // Verify sentra status fails closed with exit code 6 (incomplete_storage)
+    let status_before = f.invoke(&f.command("status"));
+    assert_eq!(status_before.status.code(), Some(6));
+
+    // Execute sentra recover
+    let recover_output = f.invoke(&f.command("recover"));
+    assert_eq!(recover_output.status.code(), Some(0));
+    let recover_text = String::from_utf8(recover_output.stdout).unwrap();
+    assert!(recover_text.contains("\"command\":\"recover\""));
+    assert!(recover_text.contains("\"initialized\":true"));
+    assert!(recover_text.contains(&expected_session_id));
+
+    // Verify subsequent sentra status succeeds cleanly with exit code 0
+    let status_after = f.invoke(&f.command("status"));
+    assert_eq!(status_after.status.code(), Some(0));
+    let status_text = String::from_utf8(status_after.stdout).unwrap();
+    assert!(status_text.contains(&expected_session_id));
+}
+
+#[test]
+fn binary_recover_parses_arguments_and_fails_on_corrupt() {
+    let f = Fixture::new();
+    let corrupt_payload = b"not-a-valid-sqlite-database-file";
+    fs::write(&f.db, corrupt_payload).unwrap();
+
+    // Recover fails on corrupt database and preserves original bytes
+    let output = f.invoke(&f.command("recover"));
+    assert_eq!(output.status.code(), Some(5));
+    assert_eq!(fs::read(&f.db).unwrap(), corrupt_payload);
+
+    // Parse tests
+    assert!(matches!(
+        parse(&args(&["recover", "--database", "local.db"]))
+            .unwrap()
+            .command,
+        CliCommand::Recover {
+            workspace: None,
+            ..
+        }
+    ));
 }

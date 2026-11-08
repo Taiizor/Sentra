@@ -325,6 +325,12 @@ impl CoreService {
             .map_err(ServiceError::persistence)
     }
 
+    pub(super) fn session_count(&self) -> Result<usize, ServiceError> {
+        self.repository
+            .session_count()
+            .map_err(ServiceError::persistence)
+    }
+
     /// Transitions a session to a new lifecycle state.
     pub fn transition_session(
         &self,

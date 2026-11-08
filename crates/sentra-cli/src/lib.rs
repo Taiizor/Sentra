@@ -13,7 +13,7 @@ use sentra_core::{
     service::{LocalWorkspace, LocalWorkspaceError, LocalWorkspaceErrorKind, LocalWorkspaceReport},
 };
 
-pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\n";
+pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra recover --database <file> [--workspace <directory>] [--json]\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\n";
 
 /// Typed presentation command. Paths are untrusted until validated by Core.
 pub enum Command {
@@ -29,6 +29,10 @@ pub enum Command {
     },
     Session {
         id: SessionId,
+        workspace: Option<PathBuf>,
+        database: PathBuf,
+    },
+    Recover {
         workspace: Option<PathBuf>,
         database: PathBuf,
     },
@@ -75,7 +79,7 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
         });
     }
     let name = words.remove(0);
-    if !matches!(name, "init" | "status" | "session") {
+    if !matches!(name, "init" | "status" | "session" | "recover") {
         return Err(invalid());
     }
     if words == ["--help"] {
@@ -123,6 +127,10 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
         },
         "session" => Command::Session {
             id: id.ok_or_else(invalid)?,
+            workspace,
+            database,
+        },
+        "recover" => Command::Recover {
             workspace,
             database,
         },
@@ -192,7 +200,7 @@ pub fn run(arguments: &[OsString], cwd: &Path) -> Response {
         Command::Help => {
             return Response {
                 stdout: if json {
-                    "{\"schema_version\":1,\"commands\":[\"init\",\"status\",\"session show\"],\"offline\":true,\"untrusted_execution\":false}\n".into()
+                    "{\"schema_version\":1,\"commands\":[\"init\",\"status\",\"session show\",\"recover\"],\"offline\":true,\"untrusted_execution\":false}\n".into()
                 } else {
                     HELP.into()
                 },
@@ -241,6 +249,16 @@ pub fn run(arguments: &[OsString], cwd: &Path) -> Response {
                 &absolute(workspace.as_deref().unwrap_or(cwd), cwd),
                 &absolute(&database, cwd),
                 id,
+            ),
+        ),
+        Command::Recover {
+            workspace,
+            database,
+        } => (
+            "recover",
+            LocalWorkspace::recover(
+                &absolute(workspace.as_deref().unwrap_or(cwd), cwd),
+                &absolute(&database, cwd),
             ),
         ),
     };

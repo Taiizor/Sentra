@@ -588,6 +588,14 @@ impl PersistenceRepository {
         })
     }
 
+    /// Returns the total number of sessions in the store.
+    pub(crate) fn session_count(&self) -> Result<usize, PersistenceError> {
+        self.manager.write(|tx| {
+            let count: i64 = tx.query("SELECT COUNT(*) FROM sessions", [], |r| r.get(0))?;
+            Ok(count as usize)
+        })
+    }
+
     /// Store a canonical pending request; this cannot issue or authorize a grant.
     pub fn request_approval(
         &self,
