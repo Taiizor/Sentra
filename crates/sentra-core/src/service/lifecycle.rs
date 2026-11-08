@@ -172,4 +172,6 @@ pub struct SessionResumeReport {
     pub completed_tasks: Vec<TaskId>,
     /// Remaining tasks awaiting execution.
     pub pending_tasks: Vec<TaskId>,
+    /// Tasks blocked by uncertain dependency or incomplete attempt.
+    pub blocked_tasks: Vec<TaskId>,
 }

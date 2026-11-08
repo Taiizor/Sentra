@@ -112,7 +112,7 @@ impl fmt::Debug for SqliteConnectionManager {
 
 /// OS-owned admission lease. Close releases the lock, including process death.
 /// Persistent lock files must never be unlinked while managers may be active.
-pub(crate) struct SessionAdmission {
+pub struct SessionAdmission {
     _file: File,
     _parents: Vec<File>,
 }

@@ -40,7 +40,7 @@ mod repository;
 mod transaction;
 
 pub use connection::{
-    CheckpointResult, ForeignKeyViolation, IntegrityReport, QuarantineReport,
+    CheckpointResult, ForeignKeyViolation, IntegrityReport, QuarantineReport, SessionAdmission,
     SqliteConnectionManager, SqliteSettings,
 };
 pub use error::{PersistenceError, PersistenceErrorKind};

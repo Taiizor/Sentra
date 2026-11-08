@@ -936,6 +936,279 @@ impl PersistenceRepository {
             .write(|tx| budget_used(tx, session).map(CostUsd::from_micro_usd))
     }
 
+    /// Acquires an OS file admission lock for the target session.
+    pub fn session_admission(
+        &self,
+        session: SessionId,
+        exclusive: bool,
+    ) -> Result<super::connection::SessionAdmission, PersistenceError> {
+        self.manager.session_admission(session, exclusive)
+    }
+
+    /// Atomically reconciles outstanding attempts, updates task states, advances fencing epoch,
+    /// and transitions session from Paused to Running within a single transaction.
+    pub fn reconcile_and_resume_session(
+        &self,
+        session_id: SessionId,
+        clock: &impl Clock,
+    ) -> Result<crate::service::SessionResumeReport, PersistenceError> {
+        model::parse_id(&session_id.to_string())?;
+        self.manager.write(|tx| {
+            // 1. Verify session exists and is not terminal
+            let (snapshot, record) = read_snapshot(tx, session_id)?
+                .ok_or_else(|| error(Kind::Conflict))?;
+            if record.state.is_terminal() {
+                return Err(error(Kind::PolicyDenied));
+            }
+
+            let now_time = clock.now();
+            let now = model::time_text(now_time)?;
+
+            // 2. Discover all attempts for this session
+            let attempt_rows = tx.collect(
+                "SELECT attempt_id, task_id, session_id, attempt_number, state, fencing_epoch, execution_id, action_name, action_digest, reservation_id, request_id, manifest_id, created_at, prepared_at, released_at, terminal_outcome, terminal_details_json, settled_at FROM attempts WHERE session_id=?1",
+                [session_id.to_string()],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get(10)?, r.get(11)?, r.get(12)?, r.get(13)?, r.get(14)?, r.get(15)?, r.get(16)?, r.get(17)?)),
+            )?;
+            let attempts: Vec<AttemptRecord> = attempt_rows
+                .into_iter()
+                .map(parse_attempt_tuple)
+                .collect::<Result<_, _>>()?;
+
+            let mut reconciled_attempts = Vec::new();
+            for attempt in attempts {
+                match attempt.state {
+                    AttemptState::ReleaseRecorded | AttemptState::RunningConfirmed => {
+                        // Mark attempt UNCERTAIN
+                        let changed = tx.execute(
+                            "UPDATE attempts SET state='UNCERTAIN', settled_at=?1 WHERE attempt_id=?2 AND (state='RELEASE_RECORDED' OR state='RUNNING_CONFIRMED')",
+                            params![now, attempt.attempt_id.to_string()],
+                        )?;
+                        if changed != 1 {
+                            return Err(error(Kind::Conflict));
+                        }
+
+                        // Ensure conservative budget hold
+                        if let Some(res_id) = attempt.reservation_id {
+                            tx.execute(
+                                "UPDATE budget_reservations SET state='CANCELLED', actual_cost_micro_usd=NULL, settled_at=NULL WHERE reservation_id=?1 AND actual_cost_micro_usd IS NULL",
+                                params![res_id.to_string()],
+                            )?;
+                        }
+
+                        // Transition task to BLOCKED if not already terminal or blocked
+                        let task_row = tx.optional(
+                            "SELECT state FROM tasks WHERE task_id=?1",
+                            [attempt.task_id.to_string()],
+                            |r| r.get::<_, String>(0),
+                        )?;
+                        if let Some(t_state_str) = task_row {
+                            let t_state = model::parse_task_state(&t_state_str).map_err(corrupt)?;
+                            if matches!(t_state, TaskState::Pending | TaskState::InProgress) {
+                                let t_changed = tx.execute(
+                                    "UPDATE tasks SET state='BLOCKED', updated_at=?1 WHERE task_id=?2 AND (state='PENDING' OR state='IN_PROGRESS')",
+                                    params![now, attempt.task_id.to_string()],
+                                )?;
+                                if t_changed != 1 {
+                                    return Err(error(Kind::Conflict));
+                                }
+                                audit(
+                                    tx,
+                                    session_id,
+                                    EventId::new(),
+                                    ("TaskBlocked", record.classification_floor),
+                                    &now,
+                                    Some(&attempt.action_digest),
+                                    &serde_json::json!({
+                                        "task_id": attempt.task_id.to_string(),
+                                        "reason": "UncertainAttemptInterruption",
+                                        "attempt_id": attempt.attempt_id.to_string(),
+                                    }),
+                                )?;
+                            }
+                        }
+
+                        audit(
+                            tx,
+                            session_id,
+                            EventId::new(),
+                            ("AttemptMarkedUncertain", record.classification_floor),
+                            &now,
+                            Some(&attempt.action_digest),
+                            &serde_json::json!({
+                                "attempt_id": attempt.attempt_id.to_string(),
+                                "fencing_epoch": attempt.fencing_epoch,
+                                "budget_held": attempt.reservation_id.is_some(),
+                            }),
+                        )?;
+
+                        reconciled_attempts.push(crate::service::ReconciledAttempt {
+                            attempt_id: attempt.attempt_id,
+                            task_id: attempt.task_id,
+                            previous_state: attempt.state,
+                            reconciled_state: AttemptState::Uncertain,
+                            budget_held: attempt.reservation_id.is_some(),
+                        });
+                    }
+                    AttemptState::Prepared | AttemptState::Recorded => {
+                        // Mark attempt NOT_STARTED_CONFIRMED
+                        let changed = tx.execute(
+                            "UPDATE attempts SET state='NOT_STARTED_CONFIRMED', settled_at=?1 WHERE attempt_id=?2 AND (state='RECORDED' OR state='PREPARED')",
+                            params![now, attempt.attempt_id.to_string()],
+                        )?;
+                        if changed != 1 {
+                            return Err(error(Kind::Conflict));
+                        }
+
+                        // Release budget cleanly
+                        if let Some(res_id) = attempt.reservation_id {
+                            tx.execute(
+                                "UPDATE budget_reservations SET state='CANCELLED', actual_cost_micro_usd=0, settled_at=?1 WHERE reservation_id=?2 AND actual_cost_micro_usd IS NULL",
+                                params![now, res_id.to_string()],
+                            )?;
+                        }
+
+                        audit(
+                            tx,
+                            session_id,
+                            EventId::new(),
+                            ("AttemptConfirmedNotStarted", record.classification_floor),
+                            &now,
+                            Some(&attempt.action_digest),
+                            &serde_json::json!({
+                                "attempt_id": attempt.attempt_id.to_string(),
+                            }),
+                        )?;
+
+                        reconciled_attempts.push(crate::service::ReconciledAttempt {
+                            attempt_id: attempt.attempt_id,
+                            task_id: attempt.task_id,
+                            previous_state: attempt.state,
+                            reconciled_state: AttemptState::NotStartedConfirmed,
+                            budget_held: false,
+                        });
+                    }
+                    AttemptState::ResultRecorded => {
+                        // Check if reservation is unsettled (F-20-03)
+                        let mut budget_held = false;
+                        if let Some(res_id) = attempt.reservation_id {
+                            let actual_opt: Option<Option<i64>> = tx.optional(
+                                "SELECT actual_cost_micro_usd FROM budget_reservations WHERE reservation_id=?1",
+                                [res_id.to_string()],
+                                |r| r.get(0),
+                            )?;
+                            if let Some(None) = actual_opt {
+                                budget_held = true;
+                            }
+                        }
+                        if budget_held {
+                            reconciled_attempts.push(crate::service::ReconciledAttempt {
+                                attempt_id: attempt.attempt_id,
+                                task_id: attempt.task_id,
+                                previous_state: AttemptState::ResultRecorded,
+                                reconciled_state: AttemptState::ResultRecorded,
+                                budget_held: true,
+                            });
+                        }
+                    }
+                    AttemptState::Uncertain | AttemptState::NotStartedConfirmed => {}
+                }
+            }
+
+            // 3. Atomically advance session context generation (fencing epoch)
+            let old_generation = snapshot.generation;
+            let new_generation = old_generation.checked_add(1).ok_or_else(model::invalid)?;
+            let mut new_snapshot = snapshot.clone();
+            new_snapshot.generation = new_generation;
+            let snapshot_json = new_snapshot.json()?;
+
+            tx.execute(
+                "UPDATE sessions SET context_generation=?1, updated_at=?2 WHERE session_id=?3",
+                params![model::integer(new_generation)?, now, session_id.to_string()],
+            )?;
+            tx.execute(
+                "INSERT INTO session_security_snapshots(session_id,context_generation,project_root,operator_id,policy_id,registered_at,snapshot_json) VALUES(?1,?2,?3,?4,?5,?6,?7)",
+                params![
+                    session_id.to_string(),
+                    model::integer(new_generation)?,
+                    record.metadata.workspace_root,
+                    record.metadata.operator_id,
+                    record.metadata.policy_digest,
+                    now,
+                    snapshot_json
+                ],
+            )?;
+            audit(
+                tx,
+                session_id,
+                EventId::new(),
+                ("SessionEpochAdvanced", record.classification_floor),
+                &now,
+                None,
+                &serde_json::json!({
+                    "previous_generation": old_generation,
+                    "new_generation": new_generation,
+                }),
+            )?;
+
+            // 4. Transition session state from Paused to Running if applicable
+            let resumed_state = if record.state == SessionState::Paused {
+                let s_changed = tx.execute(
+                    "UPDATE sessions SET state='RUNNING', updated_at=?1 WHERE session_id=?2 AND state='PAUSED'",
+                    params![now, session_id.to_string()],
+                )?;
+                if s_changed != 1 {
+                    return Err(error(Kind::Conflict));
+                }
+                audit(
+                    tx,
+                    session_id,
+                    EventId::new(),
+                    ("SessionTransition", record.classification_floor),
+                    &now,
+                    None,
+                    &serde_json::json!({
+                        "from": "PAUSED",
+                        "to": "RUNNING",
+                    }),
+                )?;
+                SessionState::Running
+            } else {
+                record.state
+            };
+
+            // 5. Query post-reconciliation final task states from tasks table (F-20-06)
+            let task_rows = tx.collect(
+                "SELECT task_id, state FROM tasks WHERE session_id=?1 ORDER BY sequence_number ASC",
+                [session_id.to_string()],
+                |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+            )?;
+            let mut completed_tasks = Vec::new();
+            let mut pending_tasks = Vec::new();
+            let mut blocked_tasks = Vec::new();
+            for (t_id_str, t_state_str) in task_rows {
+                let tid = TaskId::from_bytes(*model::parse_id(&t_id_str)?.as_bytes());
+                match t_state_str.as_str() {
+                    "COMPLETED" => completed_tasks.push(tid),
+                    "PENDING" | "IN_PROGRESS" => pending_tasks.push(tid),
+                    "BLOCKED" => blocked_tasks.push(tid),
+                    _ => {}
+                }
+            }
+
+            Ok(crate::service::SessionResumeReport {
+                session_id,
+                previous_state: record.state,
+                resumed_state,
+                new_context_generation: new_generation,
+                reconciled_attempts,
+                completed_tasks,
+                pending_tasks,
+                blocked_tasks,
+            })
+        })
+    }
+
     // -------------------------------------------------------------------------
     // Tasks Foundation (Schema V2)
     // -------------------------------------------------------------------------
@@ -1526,8 +1799,11 @@ impl PersistenceRepository {
                 return Err(error(Kind::Conflict));
             }
 
-            let (_, session) = read_snapshot(tx, attempt.session_id)?
+            let (snapshot, session) = read_snapshot(tx, attempt.session_id)?
                 .ok_or_else(|| error(Kind::Conflict))?;
+            if !session.state.allows_execution() || snapshot.generation != attempt.fencing_epoch {
+                return Err(error(Kind::ContextMismatch));
+            }
             let now = model::time_text(clock.now())?;
 
             let changed = tx.execute(
@@ -1555,12 +1831,14 @@ impl PersistenceRepository {
         })
     }
 
-    /// Records the verified terminal outcome for an attempt in `RESULT_RECORDED` state.
+    /// Records the verified terminal outcome for an attempt in `RESULT_RECORDED` state
+    /// and atomically settles the associated budget reservation if present.
     pub fn record_result(
         &self,
         attempt_id: AttemptId,
         outcome: AttemptOutcome,
         details_json: Option<&str>,
+        actual_cost: Option<CostUsd>,
         clock: &impl Clock,
     ) -> Result<AttemptRecord, PersistenceError> {
         model::parse_id(&attempt_id.to_string())?;
@@ -1579,8 +1857,12 @@ impl PersistenceRepository {
                 return Err(error(Kind::Conflict));
             }
 
-            let (_, session) = read_snapshot(tx, attempt.session_id)?
+            let (snapshot, session) = read_snapshot(tx, attempt.session_id)?
                 .ok_or_else(|| error(Kind::Conflict))?;
+            if snapshot.generation != attempt.fencing_epoch {
+                return Err(error(Kind::ContextMismatch));
+            }
+
             let now_time = clock.now();
             let now = model::time_text(now_time)?;
 
@@ -1595,6 +1877,56 @@ impl PersistenceRepository {
             )?;
             if changed != 1 {
                 return Err(error(Kind::Conflict));
+            }
+
+            // Atomically settle associated budget reservation if present (F-20-03)
+            if let Some(res_id) = attempt.reservation_id {
+                let res_row = tx.optional(
+                    "SELECT reserved_cost_micro_usd, actual_cost_micro_usd, state FROM budget_reservations WHERE reservation_id=?1",
+                    [res_id.to_string()],
+                    |r| Ok((r.get::<_, i64>(0)?, r.get::<_, Option<i64>>(1)?, r.get::<_, String>(2)?)),
+                )?.ok_or_else(|| error(Kind::Conflict))?;
+                let (reserved_int, existing_actual, _res_state) = res_row;
+                let reserved = model::unsigned(reserved_int).map_err(corrupt)?;
+
+                if existing_actual.is_none() {
+                    if let Some(actual) = actual_cost {
+                        if actual.as_micro_usd() > reserved {
+                            return Err(model::invalid());
+                        }
+                        let actual_int = model::integer(actual.as_micro_usd())?;
+                        let new_state = match outcome {
+                            AttemptOutcome::Completed => "SETTLED",
+                            AttemptOutcome::Cancelled => "CANCELLED",
+                            AttemptOutcome::Failed | AttemptOutcome::TimedOut => "SETTLED",
+                        };
+                        tx.execute(
+                            "UPDATE budget_reservations SET state=?1, actual_cost_micro_usd=?2, settled_at=?3 WHERE reservation_id=?4 AND actual_cost_micro_usd IS NULL",
+                            params![new_state, actual_int, now, res_id.to_string()],
+                        )?;
+                        audit(
+                            tx,
+                            attempt.session_id,
+                            EventId::new(),
+                            ("BudgetSettled", session.classification_floor),
+                            &now,
+                            Some(&attempt.action_digest),
+                            &serde_json::json!({
+                                "reservation_id": res_id.to_string(),
+                                "attempt_id": attempt_id.to_string(),
+                                "status": "COMPLETED",
+                                "actual_cost_micro_usd": actual.as_micro_usd(),
+                                "reserved_cost_micro_usd": reserved,
+                            }),
+                        )?;
+                    } else if outcome == AttemptOutcome::Cancelled {
+                        // Cancelled with unknown usage: retain full reservation conservatively
+                        tx.execute(
+                            "UPDATE budget_reservations SET state='CANCELLED', actual_cost_micro_usd=NULL, settled_at=NULL WHERE reservation_id=?1 AND actual_cost_micro_usd IS NULL",
+                            params![res_id.to_string()],
+                        )?;
+                    }
+                }
             }
 
             audit(
@@ -1644,8 +1976,8 @@ impl PersistenceRepository {
 
             if let Some(res_id) = attempt.reservation_id {
                 tx.execute(
-                    "UPDATE budget_reservations SET state='CANCELLED', actual_cost_micro_usd=NULL, settled_at=?1 WHERE reservation_id=?2 AND actual_cost_micro_usd IS NULL",
-                    params![now, res_id.to_string()],
+                    "UPDATE budget_reservations SET state='CANCELLED', actual_cost_micro_usd=NULL, settled_at=NULL WHERE reservation_id=?1 AND actual_cost_micro_usd IS NULL",
+                    params![res_id.to_string()],
                 )?;
             }
 

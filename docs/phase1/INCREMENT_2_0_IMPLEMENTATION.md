@@ -75,93 +75,83 @@ Schema V2 is defined in [crates/sentra-core/src/persistence/schema_v2.sql](../..
 ```sql
 -- Tasks table: represents discrete units of work within a session
 CREATE TABLE tasks (
-    session_id      TEXT NOT NULL,
-    task_id         TEXT NOT NULL,
-    state           TEXT NOT NULL,
-    kind            TEXT NOT NULL,
-    spec_json       TEXT NOT NULL,
-    priority        INTEGER NOT NULL DEFAULT 0,
-    created_at      TEXT NOT NULL,
-    updated_at      TEXT NOT NULL,
-    PRIMARY KEY (task_id),
-    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE RESTRICT,
-    CHECK (length(session_id) = 36),
-    CHECK (length(task_id) = 36),
-    CHECK (state IN ('CREATED', 'PENDING', 'DISPATCHED', 'RUNNING', 'BLOCKED', 'COMPLETED', 'FAILED', 'CANCELLED')),
-    CHECK (length(created_at) = 24 AND substr(created_at, 24, 1) = 'Z'),
-    CHECK (length(updated_at) = 24 AND substr(updated_at, 24, 1) = 'Z'),
-    CHECK (json_valid(spec_json))
+    task_id TEXT PRIMARY KEY NOT NULL CHECK(length(task_id) = 36),
+    session_id TEXT NOT NULL,
+    sequence_number INTEGER NOT NULL CHECK(sequence_number > 0),
+    title TEXT NOT NULL,
+    state TEXT NOT NULL CHECK(state IN ('PENDING','IN_PROGRESS','COMPLETED','FAILED','CANCELLED','BLOCKED')),
+    created_at TEXT NOT NULL CHECK(length(created_at) = 24),
+    updated_at TEXT NOT NULL CHECK(length(updated_at) = 24),
+    completed_at TEXT,
+    FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+    UNIQUE(session_id, sequence_number)
 );
+CREATE INDEX idx_tasks_session ON tasks(session_id, sequence_number);
+CREATE INDEX idx_tasks_state ON tasks(state);
 
 -- Manifests table: immutable execution specs and input digests
 CREATE TABLE manifests (
-    manifest_id     TEXT NOT NULL,
-    session_id      TEXT NOT NULL,
-    task_id         TEXT NOT NULL,
-    manifest_kind   TEXT NOT NULL,
-    digest_sha256   TEXT NOT NULL,
-    spec_json       TEXT NOT NULL,
-    created_at      TEXT NOT NULL,
-    PRIMARY KEY (manifest_id),
-    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE RESTRICT,
-    FOREIGN KEY (task_id) REFERENCES tasks(task_id) ON DELETE RESTRICT,
-    CHECK (length(manifest_id) = 36),
-    CHECK (length(session_id) = 36),
-    CHECK (length(task_id) = 36),
-    CHECK (length(digest_sha256) = 64),
-    CHECK (length(created_at) = 24 AND substr(created_at, 24, 1) = 'Z'),
-    CHECK (json_valid(spec_json))
+    manifest_id TEXT PRIMARY KEY NOT NULL CHECK(length(manifest_id) = 36),
+    session_id TEXT NOT NULL,
+    manifest_kind TEXT NOT NULL CHECK(manifest_kind IN ('SOURCE_SNAPSHOT','OPERATION','DISCOVERY')),
+    content_digest TEXT NOT NULL CHECK(length(content_digest) > 0),
+    created_at TEXT NOT NULL CHECK(length(created_at) = 24),
+    canonical_json TEXT NOT NULL CHECK(json_valid(canonical_json)),
+    FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
 );
+CREATE INDEX idx_manifests_session ON manifests(session_id);
+CREATE INDEX idx_manifests_digest ON manifests(content_digest);
 
 -- Attempts table: durable dispatch attempt records (outbox state machine)
 CREATE TABLE attempts (
-    attempt_id          TEXT NOT NULL,
-    session_id          TEXT NOT NULL,
-    task_id             TEXT NOT NULL,
-    manifest_id         TEXT NOT NULL,
-    attempt_number      INTEGER NOT NULL,
-    state               TEXT NOT NULL,
-    worker_id           TEXT,
-    worker_token_hash   TEXT,
-    reservation_id      TEXT,
-    approval_id         TEXT,
-    context_generation  INTEGER NOT NULL,
-    created_at          TEXT NOT NULL,
-    prepared_at         TEXT,
-    released_at         TEXT,
-    running_at          TEXT,
-    finished_at         TEXT,
-    outcome_status      TEXT,
-    error_message       TEXT,
-    result_digest       TEXT,
-    PRIMARY KEY (attempt_id),
-    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE RESTRICT,
-    FOREIGN KEY (task_id) REFERENCES tasks(task_id) ON DELETE RESTRICT,
-    FOREIGN KEY (manifest_id) REFERENCES manifests(manifest_id) ON DELETE RESTRICT,
-    FOREIGN KEY (reservation_id) REFERENCES budget_reservations(reservation_id) ON DELETE RESTRICT,
-    FOREIGN KEY (approval_id) REFERENCES approval_requests(request_id) ON DELETE RESTRICT,
-    CHECK (length(attempt_id) = 36),
-    CHECK (length(session_id) = 36),
-    CHECK (length(task_id) = 36),
-    CHECK (length(manifest_id) = 36),
-    CHECK (attempt_number >= 1),
-    CHECK (state IN ('RECORDED', 'PREPARED', 'RELEASE_RECORDED', 'RUNNING_CONFIRMED', 'RESULT_RECORDED', 'UNCERTAIN', 'NOT_STARTED_CONFIRMED')),
-    CHECK (context_generation >= 1),
-    CHECK (length(created_at) = 24 AND substr(created_at, 24, 1) = 'Z')
+    attempt_id TEXT PRIMARY KEY NOT NULL CHECK(length(attempt_id) = 36),
+    task_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    attempt_number INTEGER NOT NULL CHECK(attempt_number > 0),
+    state TEXT NOT NULL CHECK(state IN ('RECORDED','PREPARED','RELEASE_RECORDED','RUNNING_CONFIRMED','RESULT_RECORDED','UNCERTAIN','NOT_STARTED_CONFIRMED')),
+    fencing_epoch INTEGER NOT NULL CHECK(fencing_epoch > 0),
+    execution_id TEXT NOT NULL CHECK(length(execution_id) = 36),
+    action_name TEXT NOT NULL,
+    action_digest TEXT NOT NULL,
+    reservation_id TEXT,
+    request_id TEXT,
+    manifest_id TEXT,
+    created_at TEXT NOT NULL CHECK(length(created_at) = 24),
+    prepared_at TEXT,
+    released_at TEXT,
+    terminal_outcome TEXT CHECK(terminal_outcome IS NULL OR terminal_outcome IN ('COMPLETED','FAILED','CANCELLED','TIMED_OUT')),
+    terminal_details_json TEXT CHECK(terminal_details_json IS NULL OR json_valid(terminal_details_json)),
+    settled_at TEXT,
+    FOREIGN KEY(task_id) REFERENCES tasks(task_id) ON DELETE CASCADE,
+    FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+    FOREIGN KEY(reservation_id) REFERENCES budget_reservations(reservation_id),
+    FOREIGN KEY(request_id) REFERENCES approval_requests(request_id),
+    FOREIGN KEY(manifest_id) REFERENCES manifests(manifest_id),
+    UNIQUE(task_id, attempt_number),
+    UNIQUE(execution_id),
+    CHECK(state != 'PREPARED' OR (prepared_at IS NOT NULL)),
+    CHECK(state != 'RELEASE_RECORDED' OR (released_at IS NOT NULL)),
+    CHECK(state != 'RESULT_RECORDED' OR (terminal_outcome IS NOT NULL AND settled_at IS NOT NULL))
 );
+CREATE INDEX idx_attempts_task ON attempts(task_id, attempt_number);
+CREATE INDEX idx_attempts_session_state ON attempts(session_id, state);
+CREATE INDEX idx_attempts_execution ON attempts(execution_id);
 ```
 
 ### 4.2 Data Integrity and Constraints
-- **Strict Foreign Keys**: `ON DELETE RESTRICT` on all relationships ensures tasks, manifests, and attempts cannot be orphaned.
-- **UUID Invariant**: Every ID is checked for exact 36-character length (`length(...) = 36`).
-- **RFC3339 Timestamp Invariant**: Exact 24-character ISO 8601 UTC representation (`YYYY-MM-DDTHH:MM:SS.000Z`) with trailing `Z`.
-- **JSON Validity**: `json_valid(spec_json)` prevents malformed specifications.
-- **State Check Constraints**: Closed enums for `tasks.state` and `attempts.state`.
+- **Foreign Key Cascading vs Restrict**: `ON DELETE CASCADE` is applied to parent `sessions(session_id)` and `tasks(task_id)` to maintain clean session cleanup semantics, while foreign keys to auxiliary entities (`reservation_id`, `request_id`, `manifest_id`) use default RESTRICT semantics.
+- **UUID Length Validation**: Every ID is checked for exact 36-character length (`length(...) = 36`).
+- **Timestamp Length Validation**: Timestamps are checked for exact 24-character representation (`length(...) = 24`).
+- **JSON Validity**: `json_valid(canonical_json)` and `json_valid(terminal_details_json)` perform syntactic JSON validation in SQLite.
+- **Conditional State Check Constraints**: Ensures `prepared_at` is present for `PREPARED`, `released_at` is present for `RELEASE_RECORDED`, and `terminal_outcome` + `settled_at` are present for `RESULT_RECORDED`.
 - **Indices**: Dedicated indices for queries:
-  - `idx_tasks_session` on `tasks(session_id, state)`
-  - `idx_attempts_session` on `attempts(session_id, state)`
+  - `idx_tasks_session` on `tasks(session_id, sequence_number)`
+  - `idx_tasks_state` on `tasks(state)`
+  - `idx_manifests_session` on `manifests(session_id)`
+  - `idx_manifests_digest` on `manifests(content_digest)`
   - `idx_attempts_task` on `attempts(task_id, attempt_number)`
-  - `idx_manifests_digest` on `manifests(digest_sha256)`
+  - `idx_attempts_session_state` on `attempts(session_id, state)`
+  - `idx_attempts_execution` on `attempts(execution_id)`
 
 ---
 
