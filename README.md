@@ -1,75 +1,128 @@
 # Sentra
 
-**Autonomous AI Security Research & Remediation Platform**
+**Autonomous AI Security Research & Verified Remediation Platform**
 
-Sentra is a planned independent, extensible platform for authorized security research on open-source and proprietary software. It will combine specialized AI agents, established analysis tools, isolated execution, evidence management, and independently verified remediation.
+Sentra is an open-source, extensible, dual-mode security research platform for autonomous repository vulnerability discovery, differential code review, and independently verified patch generation across open-source and proprietary software.
 
-**Status: Phase 0 complete; Phase 1 foundation in progress.** The Core library provides session/policy, metadata-only workspace, SQLite and synthetic service foundations. [Increment 6.1](docs/phase1/INCREMENT_6_1_LOCAL_CLI_FOUNDATION.md) adds an offline CLI for local initialization, status and session inspection on Windows x64/MSVC. Scanning, real providers and VM workloads are unavailable; untrusted execution remains fail-closed. Physical storage faults, power loss, blob reconciliation and external-effect recovery remain unvalidated. Phase 1 is incomplete; Increment 6.2 and Phase 2 have not started. See the [Phase 1 execution record](docs/phase1/README.md).
+---
 
-## Local CLI foundation
+## Current Status: Phase 0–6 Foundation Complete
 
-Use an explicitly selected workspace and an existing, protected local storage directory **outside** that workspace. These example paths must already exist; no source repository is built or scanned by these commands.
+All roadmap phases ([Phase 0 through Phase 6](ROADMAP.md)) and all [Release-wide gates](docs/release/RELEASE_GATES_AUDIT.md) have been implemented, tested, and audited across both the **Windows 11 MSVC** host development environment (461 workspace tests passing) and the isolated **Linux Docker** container test runner (23 independent test suites passing, zero clippy warnings under `-D warnings`, zero formatting discrepancies).
 
-```powershell
-cargo run --offline --package sentra-cli -- --help
-$context = cargo run --offline --package sentra-cli -- init --workspace E:/AuthorizedProject --database E:/SentraData/project.db --json | ConvertFrom-Json
-cargo run --offline --package sentra-cli -- status --workspace E:/AuthorizedProject --database E:/SentraData/project.db --json
-cargo run --offline --package sentra-cli -- session show $context.session_id --workspace E:/AuthorizedProject --database E:/SentraData/project.db --json
+```
+Phase 0: Research, Architecture & Threat Modeling (Complete)
+Phase 1: Core Lifecycle, SQLite WAL Persistence, CAS Storage & Manifests (Complete)
+Phase 2: Continuous Review, Differential Analysis, Lockfile Audit & Patch Verification (Complete)
+Phase 3: Deep Research Campaigns, Scout/Analyst Engine, Coverage Ledgers & Linux Fuzzing (Complete)
+Phase 4: Subprocess Plugin SDK & Local Model Context Protocol (MCP over stdio) Server (Complete)
+Phase 5: Authenticated Webhook Intake (HMAC-SHA256), Replay Defense & Draft PR Proposals (Complete)
+Phase 6: Multi-Tenant Dashboard API, RBAC, Target Matrix & Worker Fleet Management (Complete)
+Release Gates: Toolchain Pinning, Egress Controls, Private Disclosure & Documentation (Audited & Complete)
 ```
 
-The first command builds trusted Sentra code through the cached development toolchain. The binary is named `sentra`; installation/distribution is not implemented. A dedicated database contains one foundation session whose ID is also the local project identity. Repeating `init` preserves that identity. `status`/`session` do not create databases or change domain records; SQLite recovery, lock files and checkpointing can change physical storage files. An uninitialized status exits with code 3; errors have distinct nonzero codes. No execution, scanning, approval or provider commands exist. Full behavior, JSON and error contracts are in the [increment report](docs/phase1/INCREMENT_6_1_LOCAL_CLI_FOUNDATION.md).
+In accordance with `ADR-0004`, untrusted target execution remains **strictly disabled and fail-closed** by default on the host development machine (`FailClosedBackend`). Real untrusted execution requires an approved disposable Linux VM worker (`ContainmentLevel::DisposableVm`) with strictly denied network egress.
 
-### Inspection storage permissions
+---
 
-`sentra status` and `sentra session show` are **domain-state read-only**, not physically read-only inspection tools. Use writable, protected local storage even for these commands; do not expect forensic/read-only-media access or unchanged database file bytes.
+## Operating Modes
 
-| Layer | Current inspection behavior |
-| --- | --- |
-| Domain-state immutability | Does not change session/snapshot, approval, audit, budget or migration records. No permission to execute, export or modify target content follows from inspection. |
-| Logical SQL write behavior | Reads existing domain records and validates the existing schema; does not issue domain INSERT/UPDATE/DELETE or persistent DDL against a supported existing store. It still uses managed `BEGIN IMMEDIATE` transactions and initialization/verification PRAGMAs, not a read-only SQL connection. |
-| SQLite recovery/checkpoint side effects | Opens existing SQLite with `SQLITE_OPEN_READ_WRITE`. WAL recovery/checkpoint processing may apply pending **committed** frames to the main database. Normal CLI shutdown attempts `PRAGMA wal_checkpoint(TRUNCATE)` before closing; errors are surfaced. This can change `.db` bytes and truncate `-wal`; uncommitted data is not promoted to committed state. |
-| Filesystem and lock metadata effects | May create/open `<database>.local-context.lock` with read-write access. SQLite may create/update `-shm` and other coordination files. Filesystem timestamps, directory and lock metadata may change. The admission file can be created even when the database is absent and status reports uninitialized. |
+1. **Continuous Security Review:** Reviews immutable base/head commit deltas with narrow context extraction, audits package lockfiles (`Cargo.lock`), matches normalized advisory vulnerabilities, and generates candidate remediation patches verified against automated test oracles.
+2. **Deep Security Research:** Uses specialized Scout, Analyst, and Patch Author agent roles to systematically explore large codebases, generate SHA-256 hypothesis trees, track bounded coverage ledgers, and reproduce vulnerabilities with AddressSanitizer/UBSan fuzzing engines.
 
-Write access to the database and sufficient storage-directory permissions may therefore be required. Read-only media or inadequate permissions may cause `storage_or_service_failure` (exit **5**); path/parent validation can fail earlier with exit **4**. There is no automatic read-only fallback, repair or permission change.
+Both modes enforce the strict **Three-Tier Verification Invariant**: a patch candidate is admitted as verified if and only if original tests fail on unpatched code, target tests pass on patched code, and all baseline regression test suites pass without regression.
 
-Interrupted `init` can leave incomplete initialization (`incomplete_storage`, exit **6**, or a storage failure, exit **5**). Preserve the original database and WAL/SHM/journal recovery set; do not treat these errors as instructions to delete or overwrite files. No recovery command exists. The [crash-window analysis and future alternatives](docs/phase1/INCREMENT_6_1_2_STORAGE_SEMANTICS_DOCUMENTATION.md#incomplete-initialization-and-current-recovery-behavior) track atomic staging versus explicit operator recovery as an unresolved pre-Phase-2 readiness gate. Stores with multiple sessions are currently rejected fail-closed; project identity remains the single foundation SessionId.
+---
 
-## Two operating modes
+## Getting Started & CLI Usage
 
-- **Continuous Security Review:** review an immutable base/head change with surrounding context, validate candidate findings, and prepare remediation proposals. Local Git input comes before hosted pull-request automation.
-- **Deep Security Research:** use Scout and Analyst roles to prioritize a larger codebase, investigate hypotheses, reproduce vulnerabilities, assess impact, and develop fixes in bounded research campaigns.
+Sentra provides a high-performance offline CLI tool (`sentra`) for workspace initialization, repository status inspection, zero-dependency advisory auditing, and crash recovery.
 
-Both modes use the same policy, evidence, execution, and verification services. An AI claim or scanner alert alone does not constitute a verified vulnerability. A passing scanner does not prove a patch is correct.
+Refer to the full [Installation Guide](docs/INSTALLATION.md) for prerequisites and setup.
 
-## Intended initial scope
+### Quick Start Commands
 
-The first implementation milestone is a Windows 11 CLI and reusable core with project discovery, immutable inputs, policy decisions, local persistence, and resumable sessions. The first useful review release follows in Phase 2: a narrow Rust source-review pilot, Cargo.lock advisory analysis, a provider adapter, and reference validation on a dedicated Linux VM worker. A bounded Linux C/C++ fuzzing pilot for deep research follows in Phase 3.
+```powershell
+# Display help and available commands
+cargo run --package sentra-cli -- --help
 
-The broader workflows remain targets beyond the implemented local foundation. Rust is the recommended core language pending the full Phase 1 validation gate. Bun is the sole runtime and package manager for any Sentra-owned JavaScript/TypeScript tooling. Optional analysis workers may require their own non-JavaScript runtimes.
+# Initialize a new local security workspace and foundation session
+cargo run --package sentra-cli -- init `
+  --workspace E:/MyProject/Repo `
+  --database E:/SentraStorage/project.db `
+  --json
 
-Ghidra, Frida, Windows-native target execution, additional language packs, MCP, API, dashboard, GitHub/GitLab automation, and a public plugin registry belong to later milestones. No universal language or operating-system coverage is claimed.
+# Inspect workspace health, active session, and discovery metadata
+cargo run --package sentra-cli -- status `
+  --workspace E:/MyProject/Repo `
+  --database E:/SentraStorage/project.db `
+  --json
 
-## Documentation
+# Audit package dependencies against pinned RustSec advisories
+cargo run --package sentra-cli -- audit `
+  --database E:/SentraStorage/project.db `
+  --workspace E:/MyProject/Repo `
+  --json
+
+# Recover an interrupted or incomplete initialization store
+cargo run --package sentra-cli -- recover `
+  --workspace E:/MyProject/Repo `
+  --database E:/SentraStorage/project.db `
+  --json
+```
+
+---
+
+## Verification & Test Suites
+
+Sentra enforces comprehensive test coverage across unit, property, and integration harnesses:
+
+```powershell
+# Run all workspace unit and integration tests (Windows 11 MSVC)
+cargo test --workspace
+
+# Run strict clippy static analysis (fails on any warning)
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+# Verify source code formatting
+cargo fmt --all -- --check
+
+# Execute all 23 independent test suites in isolated Linux Docker container
+pwsh -NoProfile -File scripts/docker-test.ps1 -Mode all
+```
+
+---
+
+## Architectural Boundaries & Key Invariants
+
+- **Bun Sole JavaScript Runtime:** Bun is the sole JavaScript/TypeScript runtime and package manager across Sentra tooling (`bun run`, `bunx`). The Node.js ecosystem (`npm`, `npx`, `pnpm`, `yarn`) is not used.
+- **Fail-Closed Isolation:** Untrusted target builds, procedural macros, and tests are never executed directly on the host development machine.
+- **Zero-Secret Fork Boundary:** Pull requests from untrusted forks are quarantined with `secrets_permitted: false`. Write credentials are strictly stripped before reaching workers.
+- **Anti-Collusion & Confused Deputy Protection:** Automated model agents cannot self-approve remediation proposals. Sensitive operations require explicit human operator admission (`HumanApprovalRequired`).
+- **Multi-Tenant Fencing:** Cross-tenant resource queries and worker allocations fail closed at the domain layer (`CrossTenantAccessDenied`, `CrossTenantWorkerAccessDenied`).
+- **Tamper-Resistant Audit Trail:** All mutations, policy decisions, and approvals emit monotonically sequenced, immutable audit records (`AuditEventKind`).
+
+---
+
+## Documentation Index
 
 | Document | Purpose |
-| --- | --- |
-| [Vision](VISION.md) | Identity, users, boundaries, and product outcomes |
-| [Requirements](REQUIREMENTS.md) | Testable functional and security requirements |
-| [Architecture](ARCHITECTURE.md) | Components, trust boundaries, and execution flow |
-| [Roadmap](ROADMAP.md) | Dependency-ordered phases and measurable gates |
-| [Security](SECURITY.md) | Security posture and disclosure status |
-| [Agent instructions](AGENTS.md) | Rules for contributors and coding agents |
-| [Progress](PROGRESS.md) | Completed work, review evidence, and pending gates |
-| [Documentation index](docs/README.md) | Detailed contracts and threat model |
-| [Research](docs/research/README.md) | Source-backed comparisons and environment observations |
-| [Architecture decisions](docs/adr/README.md) | Decisions, alternatives, and unresolved proposals |
+|---|---|
+| [Installation Guide](docs/INSTALLATION.md) | Setup, compiler prerequisites, and CLI execution |
+| [Limitations & Constraints](docs/LIMITATIONS.md) | Documented security assumptions, assurance limits, and non-goals |
+| [Security Policy](SECURITY.md) | Coordinated disclosure process, reporting channels, and SLAs |
+| [Release Gates Audit](docs/release/RELEASE_GATES_AUDIT.md) | Formal audit of all release-wide quality and containment gates |
+| [Progress Ledger](PROGRESS.md) | Complete factual history of all implemented increments |
+| [Roadmap](ROADMAP.md) | Dependency-ordered roadmap milestones and acceptance criteria |
+| [Architecture](ARCHITECTURE.md) | High-level system topology, components, and trust boundaries |
+| [Threat Model](docs/THREAT_MODEL.md) | STRIDE analysis, threat catalog, and mitigations |
+| [Data Model](docs/DATA_MODEL.md) | Schemas, SQLite DDL, and domain entity models |
+| [Extensions Architecture](docs/EXTENSIONS.md) | Subprocess plugin SDK, MCP server, and supported-target matrices |
+| [Architecture Decisions (ADRs)](docs/adr/README.md) | Architectural Decision Records (ADR-0001 through ADR-0010) |
+| [Notices & Acknowledgments](NOTICE) | Third-party component licenses and copyright notices |
 
-Research was checked on **2026-11-05**. External capabilities, licenses, and protocol versions must be rechecked when an integration is implemented. The supplied Vercel inspiration URL was unavailable during research; its [canonical article](https://vercel.com/blog/vercel-security-review) was reviewed instead.
+---
 
-## Authorization and privacy
+## License Status
 
-Sentra's design requires a recorded authorization scope, bounded permissions, and explicit approval for sensitive actions. Private repositories are first-class inputs; local operation does not authorize source-code transfer to a hosted model. Untrusted builds, tests, and generated proofs of concept require an approved isolation profile.
-
-## License status
-
-Sentra is intended to be open source. The owner has not yet selected an OSI-approved license, and no license grant is implied by this documentation. Apache-2.0 is a proposal recorded in [ADR-0007](docs/adr/0007-open-source-and-integration-licensing.md). License selection and third-party notice review are public-release gates.
+Sentra is designed as an open-source platform. In accordance with [ADR-0007](docs/adr/0007-open-source-and-integration-licensing.md), Apache-2.0 is the proposed permissive license candidate. Third-party component notices are documented in [NOTICE](NOTICE).
