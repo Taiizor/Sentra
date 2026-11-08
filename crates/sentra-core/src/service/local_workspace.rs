@@ -5,7 +5,10 @@ use std::{fmt, fs, path::Path, sync::Arc};
 use crate::{
     Clock, CostUsd, EventId, FailClosedBackend, Finding, OperatingMode, PolicyEngine,
     SecurityClassification, SessionId, SessionState, SystemClock, TaskId, TimestampUtc,
-    advisory::{AdvisoryAuditResult, AdvisoryDatabase, parse_cargo_lock},
+    advisory::{
+        AdvisoryAuditResult, AdvisoryDatabase, discover_workspace_lockfiles, parse_cargo_lock,
+        parse_lockfile_content,
+    },
     diff::{SnapshotDiff, compare_snapshots},
     manifest::{SnapshotLimits, capture_source_snapshot},
     persistence::{PersistenceError, PersistenceRepository, SqliteConnectionManager, TaskState},
@@ -269,14 +272,29 @@ impl LocalWorkspace {
             return Err(LocalWorkspaceError::new(Kind::WorkspaceMismatch));
         }
 
-        let lock_path = boundary.root().canonical_path().join("Cargo.lock");
-        let packages = if lock_path.is_file() {
-            let content = fs::read_to_string(&lock_path)
-                .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
-            parse_cargo_lock(&content).map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?
+        let discovered_lockfiles = discover_workspace_lockfiles(boundary.root().canonical_path());
+        let mut packages = Vec::new();
+        let mut primary_lockfile = "Cargo.lock".to_string();
+
+        if !discovered_lockfiles.is_empty() {
+            primary_lockfile = discovered_lockfiles[0].1.clone();
+            for (kind, filename) in &discovered_lockfiles {
+                let lock_path = boundary.root().canonical_path().join(filename);
+                if let Ok(content) = fs::read_to_string(&lock_path)
+                    && let Ok(pkgs) = parse_lockfile_content(*kind, &content)
+                {
+                    packages.extend(pkgs);
+                }
+            }
         } else {
-            Vec::new()
-        };
+            let lock_path = boundary.root().canonical_path().join("Cargo.lock");
+            if lock_path.is_file() {
+                let content = fs::read_to_string(&lock_path)
+                    .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
+                packages = parse_cargo_lock(&content)
+                    .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
+            }
+        }
 
         let now = clock.now();
         let audit_result = advisory_db
@@ -289,12 +307,13 @@ impl LocalWorkspace {
             .map_err(LocalWorkspaceError::persistence)?;
         let sequence_number = (existing_tasks.len() as u64) + 1;
 
+        let task_title = format!("{primary_lockfile} Dependency Advisory Audit");
         repository
             .create_task(
                 record.metadata.session_id,
                 task_id,
                 sequence_number,
-                "Cargo.lock Dependency Advisory Audit",
+                &task_title,
                 &*clock,
             )
             .map_err(LocalWorkspaceError::persistence)?;
@@ -319,8 +338,12 @@ impl LocalWorkspace {
             )
             .map_err(LocalWorkspaceError::persistence)?;
 
-        let candidate_findings =
-            audit_result.to_candidate_findings(record.metadata.session_id, task_id, now);
+        let candidate_findings = audit_result.to_candidate_findings_for_lockfile(
+            record.metadata.session_id,
+            task_id,
+            now,
+            &primary_lockfile,
+        );
 
         let report = LocalAuditReport {
             session_id: record.metadata.session_id,

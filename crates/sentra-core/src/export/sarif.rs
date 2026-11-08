@@ -206,6 +206,25 @@ pub fn generate_sarif_report(findings: &[Finding], tool_version: &str) -> SarifL
                     "Cargo.lock".to_string(),
                 )
             }
+            FindingSource::DependencyLockAdvisory {
+                advisory_id,
+                lockfile_path,
+                ..
+            } => {
+                let help = if advisory_id.starts_with("RUSTSEC-") {
+                    Some(format!("https://rustsec.org/advisories/{advisory_id}.html"))
+                } else if advisory_id.starts_with("GHSA-") {
+                    Some(format!("https://github.com/advisories/{advisory_id}"))
+                } else {
+                    None
+                };
+                (
+                    advisory_id.clone(),
+                    "DependencyVulnerability".to_string(),
+                    help,
+                    lockfile_path.clone(),
+                )
+            }
             FindingSource::StaticAnalysis { engine, rule_id } => (
                 rule_id.clone(),
                 format!("{engine}Rule"),

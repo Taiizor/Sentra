@@ -63,7 +63,9 @@ pub mod workspace;
 
 pub use advisory::{
     Advisory, AdvisoryAuditResult, AdvisoryDatabase, AdvisoryError, AdvisoryErrorKind,
-    AdvisoryMatch, PackageRecord, SemverVersion, VersionReq, parse_cargo_lock,
+    AdvisoryMatch, LockfileKind, PackageRecord, SemverVersion, VersionReq,
+    discover_workspace_lockfiles, parse_bun_lock, parse_cargo_lock, parse_deno_lock,
+    parse_lockfile_content, parse_package_lock, parse_pnpm_lock, parse_yarn_lock,
 };
 pub use audit::{AuditEvent, AuditEventKind};
 pub use common::{
