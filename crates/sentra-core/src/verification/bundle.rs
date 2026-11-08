@@ -1,6 +1,8 @@
 //! Verification bundle data models and attempt denominator accounting (REQ-F14, Roadmap Phase 2 Acceptance Criteria).
 
-use serde::{Deserialize, Serialize};
+use std::str::FromStr;
+
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
     common::crypto::sha256_prefixed,
@@ -34,7 +36,7 @@ impl TestStatus {
 }
 
 /// Evidentiary record of a concrete test harness run on a target codebase.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TestRunEvidence {
     /// Test identifier or harness command (e.g. `test_auth_bypass`).
     pub test_name: String,
@@ -50,6 +52,55 @@ pub struct TestRunEvidence {
     pub duration_ms: u64,
     /// Execution timestamp.
     pub executed_at: TimestampUtc,
+}
+
+#[derive(Serialize, Deserialize)]
+struct TestRunEvidencePayload {
+    test_name: String,
+    status: TestStatus,
+    exit_code: Option<i32>,
+    stdout: String,
+    stderr: String,
+    duration_ms: u64,
+    executed_at: String,
+}
+
+impl Serialize for TestRunEvidence {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let payload = TestRunEvidencePayload {
+            test_name: self.test_name.clone(),
+            status: self.status,
+            exit_code: self.exit_code,
+            stdout: self.stdout.clone(),
+            stderr: self.stderr.clone(),
+            duration_ms: self.duration_ms,
+            executed_at: self.executed_at.to_string(),
+        };
+        payload.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for TestRunEvidence {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let payload = TestRunEvidencePayload::deserialize(deserializer)?;
+        let executed_at =
+            TimestampUtc::from_str(&payload.executed_at).map_err(serde::de::Error::custom)?;
+        Ok(Self {
+            test_name: payload.test_name,
+            status: payload.status,
+            exit_code: payload.exit_code,
+            stdout: payload.stdout,
+            stderr: payload.stderr,
+            duration_ms: payload.duration_ms,
+            executed_at,
+        })
+    }
 }
 
 impl TestRunEvidence {
@@ -179,7 +230,7 @@ pub enum PatchVerificationOutcome {
 }
 
 /// Cryptographically bound verification bundle proving patch efficacy (REQ-F14).
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VerificationBundle {
     /// Deterministic bundle digest identifier (`sha256:...`).
     pub bundle_id: String,
@@ -209,32 +260,122 @@ pub struct VerificationBundle {
     pub created_at: TimestampUtc,
 }
 
+#[derive(Serialize, Deserialize)]
+struct VerificationBundlePayload {
+    bundle_id: String,
+    finding_id: String,
+    session_id: String,
+    task_id: String,
+    base_revision: String,
+    head_revision: String,
+    original_test_evidence: TestRunEvidence,
+    patched_test_evidence: TestRunEvidence,
+    regression_evidence: Vec<TestRunEvidence>,
+    patch_summary: String,
+    denominator: AttemptDenominator,
+    outcome: PatchVerificationOutcome,
+    created_at: String,
+}
+
+impl Serialize for VerificationBundle {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let payload = VerificationBundlePayload {
+            bundle_id: self.bundle_id.clone(),
+            finding_id: self.finding_id.to_string(),
+            session_id: self.session_id.to_string(),
+            task_id: self.task_id.to_string(),
+            base_revision: self.base_revision.clone(),
+            head_revision: self.head_revision.clone(),
+            original_test_evidence: self.original_test_evidence.clone(),
+            patched_test_evidence: self.patched_test_evidence.clone(),
+            regression_evidence: self.regression_evidence.clone(),
+            patch_summary: self.patch_summary.clone(),
+            denominator: self.denominator,
+            outcome: self.outcome,
+            created_at: self.created_at.to_string(),
+        };
+        payload.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for VerificationBundle {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let payload = VerificationBundlePayload::deserialize(deserializer)?;
+        let finding_id =
+            FindingId::from_str(&payload.finding_id).map_err(serde::de::Error::custom)?;
+        let session_id =
+            SessionId::from_str(&payload.session_id).map_err(serde::de::Error::custom)?;
+        let task_id = TaskId::from_str(&payload.task_id).map_err(serde::de::Error::custom)?;
+        let created_at =
+            TimestampUtc::from_str(&payload.created_at).map_err(serde::de::Error::custom)?;
+
+        Ok(Self {
+            bundle_id: payload.bundle_id,
+            finding_id,
+            session_id,
+            task_id,
+            base_revision: payload.base_revision,
+            head_revision: payload.head_revision,
+            original_test_evidence: payload.original_test_evidence,
+            patched_test_evidence: payload.patched_test_evidence,
+            regression_evidence: payload.regression_evidence,
+            patch_summary: payload.patch_summary,
+            denominator: payload.denominator,
+            outcome: payload.outcome,
+            created_at,
+        })
+    }
+}
+
+/// Input parameters for evaluating and building a patch verification bundle.
+#[derive(Clone, Debug)]
+pub struct VerificationInput {
+    /// Target finding identifier being addressed.
+    pub finding_id: FindingId,
+    /// Associated session identifier.
+    pub session_id: SessionId,
+    /// Associated task identifier.
+    pub task_id: TaskId,
+    /// Base commit or snapshot revision.
+    pub base_revision: String,
+    /// Candidate patch head revision.
+    pub head_revision: String,
+    /// Test evidence on the original unpatched codebase.
+    pub original_test: TestRunEvidence,
+    /// Test evidence on the patched codebase.
+    pub patched_test: TestRunEvidence,
+    /// Test evidence for the existing regression test suite.
+    pub regression_tests: Vec<TestRunEvidence>,
+    /// Unified diff or summary of the applied patch.
+    pub patch_summary: String,
+    /// Cumulative attempt denominator.
+    pub denominator: AttemptDenominator,
+    /// Evaluation timestamp.
+    pub now: TimestampUtc,
+}
+
 impl VerificationBundle {
     /// Evaluates and constructs a verification bundle enforcing strict original-fails/patched-passes rules.
-    pub fn evaluate_and_build(
-        finding_id: FindingId,
-        session_id: SessionId,
-        task_id: TaskId,
-        base_revision: impl Into<String>,
-        head_revision: impl Into<String>,
-        original_test: TestRunEvidence,
-        patched_test: TestRunEvidence,
-        regression_tests: Vec<TestRunEvidence>,
-        patch_summary: impl Into<String>,
-        mut denominator: AttemptDenominator,
-        now: TimestampUtc,
-    ) -> Self {
-        let base_rev = base_revision.into();
-        let head_rev = head_revision.into();
-        let patch_sum = patch_summary.into();
+    pub fn evaluate_and_build(input: VerificationInput) -> Self {
+        let mut denominator = input.denominator;
 
-        let outcome = if original_test.status != TestStatus::Failed {
+        let outcome = if input.original_test.status != TestStatus::Failed {
             denominator.record_no_fix();
             PatchVerificationOutcome::OriginalDidNotFail
-        } else if patched_test.status != TestStatus::Passed {
+        } else if input.patched_test.status != TestStatus::Passed {
             denominator.record_no_fix();
             PatchVerificationOutcome::PatchDidNotPass
-        } else if regression_tests.iter().any(|r| r.status != TestStatus::Passed) {
+        } else if input
+            .regression_tests
+            .iter()
+            .any(|r| r.status != TestStatus::Passed)
+        {
             denominator.record_regression_break();
             PatchVerificationOutcome::RegressionFailed
         } else {
@@ -244,24 +385,29 @@ impl VerificationBundle {
 
         let bundle_seed = format!(
             "{}:{}:{}:{}:{}:{:?}",
-            finding_id, session_id, task_id, base_rev, head_rev, outcome
+            input.finding_id,
+            input.session_id,
+            input.task_id,
+            input.base_revision,
+            input.head_revision,
+            outcome
         );
         let bundle_id = sha256_prefixed(bundle_seed.as_bytes());
 
         Self {
             bundle_id,
-            finding_id,
-            session_id,
-            task_id,
-            base_revision: base_rev,
-            head_revision: head_rev,
-            original_test_evidence: original_test,
-            patched_test_evidence: patched_test,
-            regression_evidence: regression_tests,
-            patch_summary: patch_sum,
+            finding_id: input.finding_id,
+            session_id: input.session_id,
+            task_id: input.task_id,
+            base_revision: input.base_revision,
+            head_revision: input.head_revision,
+            original_test_evidence: input.original_test,
+            patched_test_evidence: input.patched_test,
+            regression_evidence: input.regression_tests,
+            patch_summary: input.patch_summary,
             denominator,
             outcome,
-            created_at: now,
+            created_at: input.now,
         }
     }
 

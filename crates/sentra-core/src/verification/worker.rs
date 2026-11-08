@@ -121,7 +121,9 @@ impl WorkerProfile {
             checks_passed += 1;
             diagnostics.push("Check 2 (Resource bounds enforcement): PASSED".to_string());
         } else {
-            return Err(WorkerError::resource_violation("Resource ceilings exceed safety policy"));
+            return Err(WorkerError::resource_violation(
+                "Resource ceilings exceed safety policy",
+            ));
         }
 
         // Check 3: Egress isolation
@@ -129,7 +131,9 @@ impl WorkerProfile {
             checks_passed += 1;
             diagnostics.push("Check 3 (Network egress: Strictly Denied): PASSED".to_string());
         } else {
-            return Err(WorkerError::egress_violation("Egress must be strictly denied"));
+            return Err(WorkerError::egress_violation(
+                "Egress must be strictly denied",
+            ));
         }
 
         // Check 4: Path containment
@@ -137,15 +141,21 @@ impl WorkerProfile {
             checks_passed += 1;
             diagnostics.push("Check 4 (Path containment & traversal bounds): PASSED".to_string());
         } else {
-            return Err(WorkerError::containment("Path containment verification missing"));
+            return Err(WorkerError::containment(
+                "Path containment verification missing",
+            ));
         }
 
         // Check 5: Credential isolation
         if self.credential_isolation_verified {
             checks_passed += 1;
-            diagnostics.push("Check 5 (Credential isolation & host secret protection): PASSED".to_string());
+            diagnostics.push(
+                "Check 5 (Credential isolation & host secret protection): PASSED".to_string(),
+            );
         } else {
-            return Err(WorkerError::credential_leak("Credential isolation unverified"));
+            return Err(WorkerError::credential_leak(
+                "Credential isolation unverified",
+            ));
         }
 
         // Check 6: Ephemeral cleanup & crash recovery
@@ -153,7 +163,9 @@ impl WorkerProfile {
             checks_passed += 1;
             diagnostics.push("Check 6 (Crash recovery & ephemeral teardown): PASSED".to_string());
         } else {
-            return Err(WorkerError::cleanup("Cleanup and crash recovery unverified"));
+            return Err(WorkerError::cleanup(
+                "Cleanup and crash recovery unverified",
+            ));
         }
 
         Ok(WorkerReadinessReport {

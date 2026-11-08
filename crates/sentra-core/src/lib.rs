@@ -42,10 +42,10 @@ pub mod service;
 pub mod session;
 /// Content-addressed storage (CAS), blob publication, and quota management.
 pub mod storage;
-/// Canonical workspace boundaries, indirection quarantine and metadata-only discovery.
-pub mod workspace;
 /// Verification bundle lifecycle, disposable worker containment, and benchmark evaluation.
 pub mod verification;
+/// Canonical workspace boundaries, indirection quarantine and metadata-only discovery.
+pub mod workspace;
 
 pub use advisory::{
     Advisory, AdvisoryAuditResult, AdvisoryDatabase, AdvisoryError, AdvisoryErrorKind,
@@ -113,6 +113,7 @@ pub use storage::{
 pub use verification::{
     AttemptDenominator, ChangeCase, ChangeCaseCategory, ConfusionMatrix, ContainmentLevel,
     CorpusEvaluationReport, EgressPolicy, PatchVerificationOutcome, TestRunEvidence, TestStatus,
-    VerificationBundle, WorkerArchitecture, WorkerError, WorkerErrorKind, WorkerProfile,
-    WorkerReadinessReport, WorkerResourceCaps, evaluate_corpus, reference_20_case_corpus,
+    VerificationBundle, VerificationInput, WorkerArchitecture, WorkerError, WorkerErrorKind,
+    WorkerProfile, WorkerReadinessReport, WorkerResourceCaps, evaluate_corpus,
+    reference_20_case_corpus,
 };
