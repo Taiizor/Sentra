@@ -5,12 +5,13 @@ use std::{path::Path, sync::Arc};
 use crate::{
     Clock, CostUsd, EventId, EvidenceArtifact, EvidenceEnvelope, EvidenceVerifier,
     ExecutionBackend, ExecutionEngine, ExecutionError, ExecutionId, ExecutionRequest,
-    ExecutionResult, ExecutionScope, ExecutionStatus, Identifier, OperatingMode, OperationAction,
-    PolicyEngine, ResourceLimits, ResourceUsage, SecurityClassification, SessionId,
-    SessionMetadata, SessionState, TaskId, TimestampUtc,
+    ExecutionResult, ExecutionScope, ExecutionStatus, Identifier, ManifestId, OperatingMode,
+    OperationAction, PolicyEngine, ResourceLimits, ResourceUsage, SecurityClassification,
+    SessionId, SessionMetadata, SessionState, TaskId, TimestampUtc,
+    manifest::{OperationManifest, SnapshotLimits, SourceSnapshot, capture_source_snapshot},
     persistence::{
-        ApprovalIntent, PersistenceRepository, PersistentApprovalAuthority,
-        PersistentApprovalGrant, SessionRecord, SettlementStatus,
+        ApprovalIntent, ManifestKind, ManifestRecord, PersistenceRepository,
+        PersistentApprovalAuthority, PersistentApprovalGrant, SessionRecord, SettlementStatus,
     },
     service::{
         config::CoreServiceConfig,
@@ -362,6 +363,104 @@ impl CoreService {
             .map_err(ServiceError::workspace)?;
 
         Ok(result)
+    }
+
+    /// Captures a frozen, deterministic source snapshot of the workspace, computes its
+    /// cryptographic SHA-256 digest, and persists it as an immutable `ManifestRecord` (REQ-F01/F02).
+    pub fn capture_source_snapshot(
+        &self,
+        session_id: SessionId,
+        limits: Option<&SnapshotLimits>,
+    ) -> Result<(ManifestRecord, SourceSnapshot), ServiceError> {
+        let session = self.get_session(session_id)?;
+        if session.state.is_terminal() {
+            return Err(ServiceError::invalid_state(
+                "Cannot capture source snapshot on a terminal session",
+            ));
+        }
+
+        let _admission = self
+            .repository
+            .session_admission(session_id, false)
+            .map_err(ServiceError::persistence)?;
+
+        let boundary = WorkspaceBoundary::establish(
+            Path::new(&session.metadata.workspace_root),
+            session_id,
+            session.classification_floor,
+        )
+        .map_err(ServiceError::workspace)?;
+
+        let snapshot_limits = limits.cloned().unwrap_or_default();
+        let snapshot = capture_source_snapshot(&boundary, &snapshot_limits, &self.clock)
+            .map_err(|e| ServiceError::invalid_state(e.to_string()))?;
+
+        let canonical_json = snapshot
+            .to_canonical_json()
+            .map_err(|e| ServiceError::invalid_state(e.to_string()))?;
+
+        let manifest_id = ManifestId::new();
+        let record = self
+            .repository
+            .create_manifest(
+                manifest_id,
+                session_id,
+                ManifestKind::SourceSnapshot,
+                &snapshot.aggregate_digest,
+                &canonical_json,
+                &self.clock,
+            )
+            .map_err(ServiceError::persistence)?;
+
+        Ok((record, snapshot))
+    }
+
+    /// Creates and persists an immutable operation manifest bound to an optional source snapshot.
+    pub fn create_operation_manifest(
+        &self,
+        session_id: SessionId,
+        task_id: TaskId,
+        action: &OperationAction,
+        source_snapshot_digest: Option<&str>,
+    ) -> Result<ManifestRecord, ServiceError> {
+        let session = self.get_session(session_id)?;
+        if session.state.is_terminal() {
+            return Err(ServiceError::invalid_state(
+                "Cannot create operation manifest on a terminal session",
+            ));
+        }
+
+        let created_at = self.clock.now().to_rfc3339();
+
+        let op_manifest = OperationManifest {
+            version: OperationManifest::SCHEMA_VERSION,
+            session_id: session_id.to_string(),
+            task_id: task_id.to_string(),
+            action_name: action.action_name().to_string(),
+            action_digest: action.action_digest(),
+            source_snapshot_digest: source_snapshot_digest.map(|s| s.to_string()),
+            classification: session.classification_floor.as_str().to_string(),
+            created_at,
+        };
+
+        let canonical_json = op_manifest
+            .to_canonical_json()
+            .map_err(|e| ServiceError::invalid_state(e.to_string()))?;
+        let content_digest = op_manifest
+            .content_digest()
+            .map_err(|e| ServiceError::invalid_state(e.to_string()))?;
+
+        let manifest_id = ManifestId::new();
+        self.repository
+            .create_manifest(
+                manifest_id,
+                session_id,
+                ManifestKind::Operation,
+                &content_digest,
+                &canonical_json,
+                &self.clock,
+            )
+            .map_err(ServiceError::persistence)
     }
 
     // -------------------------------------------------------------------------

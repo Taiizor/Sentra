@@ -24,6 +24,8 @@ pub mod domain;
 pub mod evidence;
 /// Fail-closed execution engine and backend contracts.
 pub mod execution;
+/// Immutable input manifests, canonical source snapshots, and content hashing.
+pub mod manifest;
 /// Local SQLite connection, migration and durable repository primitives.
 pub mod persistence;
 /// Security policy engine, decisions, and approval brokers.
@@ -36,7 +38,9 @@ pub mod session;
 pub mod workspace;
 
 pub use audit::{AuditEvent, AuditEventKind};
-pub use common::{Clock, MockClock, SystemClock};
+pub use common::{
+    Clock, MockClock, Sha256Stream, SystemClock, sha256_bytes, sha256_digest, sha256_prefixed,
+};
 pub use domain::{
     ApprovalId, AttemptId, DomainError, EventId, EvidenceId, ExecutionId, Identifier, ManifestId,
     ReservationId, SecurityClassification, SessionId, SessionTransitionError, TaskId, TimestampUtc,
@@ -50,6 +54,10 @@ pub use execution::{
     BackendCapabilities, ExecutionBackend, ExecutionEngine, ExecutionError, ExecutionErrorKind,
     ExecutionRequest, ExecutionResult, ExecutionScope, ExecutionStatus, FailClosedBackend,
     ResourceLimits, ResourceUsage, SyntheticFixtureBackend,
+};
+pub use manifest::{
+    ManifestError, ManifestErrorKind, OperationManifest, SnapshotLimits, SourceFileRole,
+    SourceSnapshot, SourceSnapshotEntry, capture_source_snapshot,
 };
 pub use policy::{
     ApprovalAuthority, ApprovalBroker, ApprovalGrant, ApprovalRequest, BudgetPolicyConfig, CostUsd,
