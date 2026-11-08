@@ -3,9 +3,10 @@
 use std::{fmt, fs, path::Path, sync::Arc};
 
 use crate::{
-    CostUsd, FailClosedBackend, OperatingMode, PolicyEngine, SecurityClassification, SessionId,
-    SessionState, SystemClock, TimestampUtc,
-    persistence::{PersistenceError, PersistenceRepository, SqliteConnectionManager},
+    Clock, CostUsd, EventId, FailClosedBackend, Finding, OperatingMode, PolicyEngine,
+    SecurityClassification, SessionId, SessionState, SystemClock, TaskId, TimestampUtc,
+    advisory::{AdvisoryAuditResult, AdvisoryDatabase, parse_cargo_lock},
+    persistence::{PersistenceError, PersistenceRepository, SqliteConnectionManager, TaskState},
     workspace::WorkspaceBoundary,
 };
 
@@ -125,6 +126,19 @@ pub struct LocalWorkspaceReport {
     pub session: Option<LocalSessionSummary>,
 }
 
+/// Result returned after running an advisory dependency audit on the workspace (Requirement F-07).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LocalAuditReport {
+    /// Associated session identifier.
+    pub session_id: SessionId,
+    /// Task identifier assigned to this audit.
+    pub task_id: TaskId,
+    /// Consolidated audit result.
+    pub audit_result: AdvisoryAuditResult,
+    /// Authoritative candidate findings.
+    pub candidate_findings: Vec<Finding>,
+}
+
 enum Operation {
     Initialize,
     Status,
@@ -169,6 +183,132 @@ impl LocalWorkspace {
         database: &Path,
     ) -> Result<LocalWorkspaceReport, LocalWorkspaceError> {
         Self::run(workspace, database, Operation::Recover)
+    }
+
+    /// Runs a dependency security advisory audit against the workspace's Cargo.lock (Requirement F-07).
+    pub fn audit_dependencies(
+        workspace: &Path,
+        database: &Path,
+        advisory_db: &AdvisoryDatabase,
+    ) -> Result<LocalAuditReport, LocalWorkspaceError> {
+        use LocalWorkspaceErrorKind as Kind;
+        let boundary = WorkspaceBoundary::establish(
+            workspace,
+            SessionId::new(),
+            SecurityClassification::Internal,
+        )
+        .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
+        let parent = database
+            .parent()
+            .ok_or_else(|| LocalWorkspaceError::new(Kind::StorageLocation))?;
+        let storage = WorkspaceBoundary::establish(
+            parent,
+            SessionId::new(),
+            SecurityClassification::Internal,
+        )
+        .map_err(|_| LocalWorkspaceError::new(Kind::StorageLocation))?;
+        if storage
+            .root()
+            .canonical_path()
+            .starts_with(boundary.root().canonical_path())
+        {
+            return Err(LocalWorkspaceError::new(Kind::StorageLocation));
+        }
+        let _admission = SqliteConnectionManager::local_context_admission(database)
+            .map_err(LocalWorkspaceError::persistence)?;
+        let present = exists(database)?;
+        if !present {
+            return Err(LocalWorkspaceError::new(Kind::Incomplete));
+        }
+
+        let clock = Arc::new(SystemClock::new());
+        let manager = SqliteConnectionManager::open_existing(database, &clock)
+            .map_err(LocalWorkspaceError::persistence)?;
+        let (repository, authority) = PersistenceRepository::with_authority(manager.clone());
+        let service = CoreService::new(
+            CoreServiceConfig::default(),
+            repository.clone(),
+            authority,
+            PolicyEngine::new(),
+            Arc::new(FailClosedBackend::new()),
+            clock.clone(),
+        );
+
+        let record = service
+            .local_session()
+            .map_err(LocalWorkspaceError::service)?;
+
+        if record.state == SessionState::Created {
+            return Err(LocalWorkspaceError::new(Kind::Incomplete));
+        }
+        if Path::new(&record.metadata.workspace_root) != boundary.root().canonical_path() {
+            return Err(LocalWorkspaceError::new(Kind::WorkspaceMismatch));
+        }
+
+        let lock_path = boundary.root().canonical_path().join("Cargo.lock");
+        let packages = if lock_path.is_file() {
+            let content = fs::read_to_string(&lock_path)
+                .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
+            parse_cargo_lock(&content).map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?
+        } else {
+            Vec::new()
+        };
+
+        let now = clock.now();
+        let audit_result = advisory_db
+            .audit_packages(&packages, now, 30)
+            .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
+
+        let task_id = TaskId::new();
+        let existing_tasks = repository
+            .list_tasks(record.metadata.session_id)
+            .map_err(LocalWorkspaceError::persistence)?;
+        let sequence_number = (existing_tasks.len() as u64) + 1;
+
+        repository
+            .create_task(
+                record.metadata.session_id,
+                task_id,
+                sequence_number,
+                "Cargo.lock Dependency Advisory Audit",
+                &*clock,
+            )
+            .map_err(LocalWorkspaceError::persistence)?;
+
+        repository
+            .update_task_state(
+                task_id,
+                TaskState::Pending,
+                TaskState::InProgress,
+                EventId::new(),
+                &*clock,
+            )
+            .map_err(LocalWorkspaceError::persistence)?;
+
+        repository
+            .update_task_state(
+                task_id,
+                TaskState::InProgress,
+                TaskState::Completed,
+                EventId::new(),
+                &*clock,
+            )
+            .map_err(LocalWorkspaceError::persistence)?;
+
+        let candidate_findings =
+            audit_result.to_candidate_findings(record.metadata.session_id, task_id, now);
+
+        let report = LocalAuditReport {
+            session_id: record.metadata.session_id,
+            task_id,
+            audit_result,
+            candidate_findings,
+        };
+
+        match manager.shutdown() {
+            Ok(_) => Ok(report),
+            Err(error) => Err(LocalWorkspaceError::persistence(error)),
+        }
     }
 
     fn run(
