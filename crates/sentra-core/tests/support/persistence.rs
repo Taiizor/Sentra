@@ -1,4 +1,5 @@
 //! Owned synthetic fixtures only; no target repository content is read or run.
+#![allow(dead_code)]
 use sentra_core::{
     ApprovalId, Clock, CostUsd, EventId, Identifier, MockClock, OperatingMode, OperationAction,
     SecurityClassification as Class, SessionId, SessionMetadata, TimestampUtc,

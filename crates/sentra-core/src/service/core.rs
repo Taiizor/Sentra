@@ -356,16 +356,16 @@ impl CoreService {
                         .map_err(ServiceError::persistence)?;
 
                     // Mark task Blocked so it cannot be mistakenly auto-dispatched without operator review
-                    if let Ok(Some(task)) = self.repository.get_task(attempt.task_id) {
-                        if task.state == TaskState::InProgress || task.state == TaskState::Pending {
-                            let _ = self.repository.update_task_state(
-                                attempt.task_id,
-                                task.state,
-                                TaskState::Blocked,
-                                EventId::new(),
-                                &self.clock,
-                            );
-                        }
+                    if let Ok(Some(task)) = self.repository.get_task(attempt.task_id)
+                        && (task.state == TaskState::InProgress || task.state == TaskState::Pending)
+                    {
+                        let _ = self.repository.update_task_state(
+                            attempt.task_id,
+                            task.state,
+                            TaskState::Blocked,
+                            EventId::new(),
+                            &self.clock,
+                        );
                     }
 
                     reconciled_attempts.push(ReconciledAttempt {

@@ -1,7 +1,9 @@
 //! Safe std-only Windows metadata opens. No target content is opened for reading.
 
+#[cfg_attr(not(windows), allow(unused_imports))]
+use std::fs;
 use std::{
-    fs::{self, File, Metadata},
+    fs::{File, Metadata},
     path::{Component, Path, PathBuf},
 };
 

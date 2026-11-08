@@ -211,16 +211,41 @@ fn budget_used(
 }
 
 fn parse_task_tuple(
-    raw: (String, String, i64, String, String, String, String, Option<String>),
+    raw: (
+        String,
+        String,
+        i64,
+        String,
+        String,
+        String,
+        String,
+        Option<String>,
+    ),
 ) -> Result<TaskRecord, PersistenceError> {
-    let (task_id_str, session_id_str, seq, title, state_str, created_str, updated_str, completed_str) = raw;
+    let (
+        task_id_str,
+        session_id_str,
+        seq,
+        title,
+        state_str,
+        created_str,
+        updated_str,
+        completed_str,
+    ) = raw;
     let task_id = TaskId::from_bytes(*model::parse_id(&task_id_str).map_err(corrupt)?.as_bytes());
-    let session_id = SessionId::from_bytes(*model::parse_id(&session_id_str).map_err(corrupt)?.as_bytes());
+    let session_id = SessionId::from_bytes(
+        *model::parse_id(&session_id_str)
+            .map_err(corrupt)?
+            .as_bytes(),
+    );
     let sequence_number = model::unsigned(seq).map_err(corrupt)?;
     let state = model::parse_task_state(&state_str).map_err(corrupt)?;
     let created_at = model::parse_time(&created_str).map_err(corrupt)?;
     let updated_at = model::parse_time(&updated_str).map_err(corrupt)?;
-    let completed_at = completed_str.map(|s| model::parse_time(&s)).transpose().map_err(corrupt)?;
+    let completed_at = completed_str
+        .map(|s| model::parse_time(&s))
+        .transpose()
+        .map_err(corrupt)?;
 
     Ok(TaskRecord {
         task_id,
@@ -237,9 +262,18 @@ fn parse_task_tuple(
 fn parse_manifest_tuple(
     raw: (String, String, String, String, String, String),
 ) -> Result<ManifestRecord, PersistenceError> {
-    let (manifest_id_str, session_id_str, kind_str, content_digest, created_str, canonical_json) = raw;
-    let manifest_id = ManifestId::from_bytes(*model::parse_id(&manifest_id_str).map_err(corrupt)?.as_bytes());
-    let session_id = SessionId::from_bytes(*model::parse_id(&session_id_str).map_err(corrupt)?.as_bytes());
+    let (manifest_id_str, session_id_str, kind_str, content_digest, created_str, canonical_json) =
+        raw;
+    let manifest_id = ManifestId::from_bytes(
+        *model::parse_id(&manifest_id_str)
+            .map_err(corrupt)?
+            .as_bytes(),
+    );
+    let session_id = SessionId::from_bytes(
+        *model::parse_id(&session_id_str)
+            .map_err(corrupt)?
+            .as_bytes(),
+    );
     let manifest_kind = model::parse_manifest_kind(&kind_str).map_err(corrupt)?;
     let created_at = model::parse_time(&created_str).map_err(corrupt)?;
 
@@ -296,10 +330,22 @@ fn parse_attempt_tuple(raw: RawAttemptTuple) -> Result<AttemptRecord, Persistenc
         settled_str,
     ) = raw;
 
-    let attempt_id = AttemptId::from_bytes(*model::parse_id(&attempt_id_str).map_err(corrupt)?.as_bytes());
+    let attempt_id = AttemptId::from_bytes(
+        *model::parse_id(&attempt_id_str)
+            .map_err(corrupt)?
+            .as_bytes(),
+    );
     let task_id = TaskId::from_bytes(*model::parse_id(&task_id_str).map_err(corrupt)?.as_bytes());
-    let session_id = SessionId::from_bytes(*model::parse_id(&session_id_str).map_err(corrupt)?.as_bytes());
-    let execution_id = ExecutionId::from_bytes(*model::parse_id(&execution_id_str).map_err(corrupt)?.as_bytes());
+    let session_id = SessionId::from_bytes(
+        *model::parse_id(&session_id_str)
+            .map_err(corrupt)?
+            .as_bytes(),
+    );
+    let execution_id = ExecutionId::from_bytes(
+        *model::parse_id(&execution_id_str)
+            .map_err(corrupt)?
+            .as_bytes(),
+    );
     let attempt_number = model::unsigned(attempt_number).map_err(corrupt)?;
     let fencing_epoch = model::unsigned(fencing_epoch).map_err(corrupt)?;
     let state = model::parse_attempt_state(&state_str).map_err(corrupt)?;
@@ -318,10 +364,22 @@ fn parse_attempt_tuple(raw: RawAttemptTuple) -> Result<AttemptRecord, Persistenc
         .map_err(corrupt)?;
 
     let created_at = model::parse_time(&created_str).map_err(corrupt)?;
-    let prepared_at = prepared_str.map(|s| model::parse_time(&s)).transpose().map_err(corrupt)?;
-    let released_at = released_str.map(|s| model::parse_time(&s)).transpose().map_err(corrupt)?;
-    let terminal_outcome = outcome_str.map(|s| model::parse_attempt_outcome(&s)).transpose().map_err(corrupt)?;
-    let settled_at = settled_str.map(|s| model::parse_time(&s)).transpose().map_err(corrupt)?;
+    let prepared_at = prepared_str
+        .map(|s| model::parse_time(&s))
+        .transpose()
+        .map_err(corrupt)?;
+    let released_at = released_str
+        .map(|s| model::parse_time(&s))
+        .transpose()
+        .map_err(corrupt)?;
+    let terminal_outcome = outcome_str
+        .map(|s| model::parse_attempt_outcome(&s))
+        .transpose()
+        .map_err(corrupt)?;
+    let settled_at = settled_str
+        .map(|s| model::parse_time(&s))
+        .transpose()
+        .map_err(corrupt)?;
 
     Ok(AttemptRecord {
         attempt_id,
@@ -1047,8 +1105,7 @@ impl PersistenceRepository {
         if content_digest.trim().is_empty() {
             return Err(model::invalid());
         }
-        serde_json::from_str::<serde_json::Value>(canonical_json)
-            .map_err(|_| model::invalid())?;
+        serde_json::from_str::<serde_json::Value>(canonical_json).map_err(|_| model::invalid())?;
         self.manager.write(|tx| {
             let (_, session) = read_snapshot(tx, session_id)?
                 .ok_or_else(|| error(Kind::Conflict))?;
@@ -1093,7 +1150,10 @@ impl PersistenceRepository {
     }
 
     /// Retrieves a manifest by identifier.
-    pub fn get_manifest(&self, manifest_id: ManifestId) -> Result<Option<ManifestRecord>, PersistenceError> {
+    pub fn get_manifest(
+        &self,
+        manifest_id: ManifestId,
+    ) -> Result<Option<ManifestRecord>, PersistenceError> {
         model::parse_id(&manifest_id.to_string())?;
         self.manager.write(|tx| {
             let row = tx.optional(
@@ -1675,7 +1735,10 @@ impl PersistenceRepository {
     }
 
     /// Retrieves an attempt record by identifier.
-    pub fn get_attempt(&self, attempt_id: AttemptId) -> Result<Option<AttemptRecord>, PersistenceError> {
+    pub fn get_attempt(
+        &self,
+        attempt_id: AttemptId,
+    ) -> Result<Option<AttemptRecord>, PersistenceError> {
         model::parse_id(&attempt_id.to_string())?;
         self.manager.write(|tx| {
             let row = tx.optional(
@@ -1688,7 +1751,10 @@ impl PersistenceRepository {
     }
 
     /// Lists all attempts for a given task, ordered by attempt sequence number.
-    pub fn list_attempts_for_task(&self, task_id: TaskId) -> Result<Vec<AttemptRecord>, PersistenceError> {
+    pub fn list_attempts_for_task(
+        &self,
+        task_id: TaskId,
+    ) -> Result<Vec<AttemptRecord>, PersistenceError> {
         model::parse_id(&task_id.to_string())?;
         self.manager.write(|tx| {
             let rows = tx.collect(
@@ -1701,7 +1767,10 @@ impl PersistenceRepository {
     }
 
     /// Lists all attempts recorded for a given session.
-    pub fn list_attempts_for_session(&self, session_id: SessionId) -> Result<Vec<AttemptRecord>, PersistenceError> {
+    pub fn list_attempts_for_session(
+        &self,
+        session_id: SessionId,
+    ) -> Result<Vec<AttemptRecord>, PersistenceError> {
         model::parse_id(&session_id.to_string())?;
         self.manager.write(|tx| {
             let rows = tx.collect(
@@ -1714,7 +1783,10 @@ impl PersistenceRepository {
     }
 
     /// Returns the currently active (non-terminal) attempt for a task, if one exists.
-    pub fn get_active_attempt_for_task(&self, task_id: TaskId) -> Result<Option<AttemptRecord>, PersistenceError> {
+    pub fn get_active_attempt_for_task(
+        &self,
+        task_id: TaskId,
+    ) -> Result<Option<AttemptRecord>, PersistenceError> {
         model::parse_id(&task_id.to_string())?;
         self.manager.write(|tx| {
             let row = tx.optional(

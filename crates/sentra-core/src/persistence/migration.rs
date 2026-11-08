@@ -186,7 +186,7 @@ mod tests {
         );
         assert_ne!(
             checksum_for(&lf_v1),
-            checksum_for(&(lf_v1 + "\n-- real source drift"))
+            checksum_for(&(lf_v1.clone() + "\n-- real source drift"))
         );
 
         let db = Connection::open_in_memory().unwrap();
