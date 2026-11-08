@@ -6,6 +6,7 @@ pub mod worker;
 
 pub use bundle::{
     AttemptDenominator, PatchVerificationOutcome, TestRunEvidence, TestStatus, VerificationBundle,
+    VerificationInput,
 };
 pub use corpus::{
     ChangeCase, ChangeCaseCategory, ConfusionMatrix, CorpusEvaluationReport, evaluate_corpus,
