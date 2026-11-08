@@ -3,20 +3,24 @@
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use sentra_core::{
-    CostUsd, MockClock, OperatingMode, OperationAction, PolicyEngine,
-    SecurityClassification as Class, SessionId, TaskId, TimestampUtc,
+    SecurityClassification as Class, SessionId,
     common::crypto::{sha256_bytes, sha256_digest, sha256_prefixed},
-    manifest::{
-        ManifestErrorKind, OperationManifest, SnapshotLimits, SourceFileRole, SourceSnapshot,
-        capture_source_snapshot,
-    },
+    manifest::{OperationManifest, SourceFileRole, SourceSnapshot, SourceSnapshotEntry},
+    workspace::WorkspaceBoundary,
+};
+
+#[cfg(windows)]
+use std::sync::Arc;
+
+#[cfg(windows)]
+use sentra_core::{
+    CostUsd, MockClock, OperatingMode, OperationAction, PolicyEngine, TaskId, TimestampUtc,
+    manifest::{ManifestErrorKind, SnapshotLimits, capture_source_snapshot},
     persistence::{ManifestKind, PersistenceRepository, SqliteConnectionManager},
     service::{CoreService, CoreServiceConfig},
-    workspace::WorkspaceBoundary,
 };
 
 pub struct WorkspaceFixture {
@@ -74,6 +78,7 @@ impl WorkspaceFixture {
         &self.root
     }
 
+    #[cfg(windows)]
     pub fn db_path(&self) -> PathBuf {
         self.db_dir.join("sentra-manifest-test.db")
     }
@@ -93,6 +98,7 @@ impl Default for WorkspaceFixture {
     }
 }
 
+#[cfg(windows)]
 fn create_test_service(
     ws: &WorkspaceFixture,
 ) -> (
@@ -132,6 +138,10 @@ fn create_test_service(
     (service, session_id, repo, clock)
 }
 
+// =========================================================================
+// Platform-Independent Crypto and Data Model Tests
+// =========================================================================
+
 #[test]
 fn test_sha256_nist_vectors() {
     // NIST Test Vector 1: Empty string
@@ -164,6 +174,89 @@ fn test_sha256_nist_vectors() {
 }
 
 #[test]
+fn test_source_snapshot_canonical_json_roundtrip() {
+    let snap = SourceSnapshot {
+        version: SourceSnapshot::SCHEMA_VERSION,
+        session_id: "00000001-0000-0000-0000-000000000001".to_string(),
+        root_label: "test-workspace".to_string(),
+        entries: vec![
+            SourceSnapshotEntry {
+                path: "Cargo.toml".to_string(),
+                size_bytes: 42,
+                content_sha256: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+                    .to_string(),
+                role: SourceFileRole::CargoManifest,
+            },
+            SourceSnapshotEntry {
+                path: "src/lib.rs".to_string(),
+                size_bytes: 120,
+                content_sha256: "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"
+                    .to_string(),
+                role: SourceFileRole::RustSource,
+            },
+        ],
+        total_files: 2,
+        total_bytes: 162,
+        aggregate_digest: "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+            .to_string(),
+        created_at: "2026-11-08T18:00:00Z".to_string(),
+    };
+
+    let json = snap.to_canonical_json().unwrap();
+    let roundtrip = SourceSnapshot::from_canonical_json(&json).unwrap();
+    assert_eq!(roundtrip.version, snap.version);
+    assert_eq!(roundtrip.session_id, snap.session_id);
+    assert_eq!(roundtrip.entries, snap.entries);
+    assert_eq!(roundtrip.aggregate_digest, snap.aggregate_digest);
+}
+
+#[test]
+fn test_operation_manifest_canonical_json_roundtrip() {
+    let manifest = OperationManifest {
+        version: OperationManifest::SCHEMA_VERSION,
+        session_id: "00000001-0000-0000-0000-000000000001".to_string(),
+        task_id: "00000002-0000-0000-0000-000000000002".to_string(),
+        action_name: "DISCOVER_METADATA".to_string(),
+        action_digest: "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+            .to_string(),
+        source_snapshot_digest: Some(
+            "sha256:248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1".to_string(),
+        ),
+        classification: "INTERNAL".to_string(),
+        created_at: "2026-11-08T18:00:00Z".to_string(),
+    };
+
+    let json = manifest.to_canonical_json().unwrap();
+    let roundtrip = OperationManifest::from_canonical_json(&json).unwrap();
+    assert_eq!(roundtrip.version, manifest.version);
+    assert_eq!(roundtrip.task_id, manifest.task_id);
+    assert_eq!(roundtrip.action_name, manifest.action_name);
+    assert_eq!(
+        roundtrip.source_snapshot_digest,
+        manifest.source_snapshot_digest
+    );
+    assert_eq!(roundtrip.classification, manifest.classification);
+}
+
+#[cfg(not(windows))]
+#[test]
+fn test_workspace_boundary_fails_closed_on_unsupported_platform() {
+    let ws = WorkspaceFixture::new();
+    let session_id = SessionId::for_test_sequence(1);
+    let boundary_err =
+        WorkspaceBoundary::establish(ws.path(), session_id, Class::Internal).unwrap_err();
+    assert_eq!(
+        boundary_err.kind,
+        sentra_core::workspace::WorkspaceErrorKind::UnsupportedPlatform
+    );
+}
+
+// =========================================================================
+// Windows-Specific Workspace Integration and Persistence Tests
+// =========================================================================
+
+#[cfg(windows)]
+#[test]
 fn test_capture_source_snapshot_determinism() {
     let ws = WorkspaceFixture::new();
     let session_id = SessionId::for_test_sequence(1);
@@ -183,6 +276,7 @@ fn test_capture_source_snapshot_determinism() {
     assert!(snap1.aggregate_digest.starts_with("sha256:"));
 }
 
+#[cfg(windows)]
 #[test]
 fn test_source_snapshot_sensitivity_to_content_change() {
     let ws = WorkspaceFixture::new();
@@ -232,6 +326,7 @@ fn test_source_snapshot_sensitivity_to_content_change() {
     assert_eq!(main_before.content_sha256, main_after.content_sha256);
 }
 
+#[cfg(windows)]
 #[test]
 fn test_source_snapshot_sensitivity_to_file_addition_and_deletion() {
     let ws = WorkspaceFixture::new();
@@ -260,6 +355,7 @@ fn test_source_snapshot_sensitivity_to_file_addition_and_deletion() {
     );
 }
 
+#[cfg(windows)]
 #[test]
 fn test_source_snapshot_role_detection() {
     let ws = WorkspaceFixture::new();
@@ -286,6 +382,7 @@ fn test_source_snapshot_role_detection() {
     assert_eq!(find_role("config.json"), SourceFileRole::Configuration);
 }
 
+#[cfg(windows)]
 #[test]
 fn test_path_normalization_uses_forward_slashes_consistently() {
     let ws = WorkspaceFixture::new();
@@ -304,6 +401,7 @@ fn test_path_normalization_uses_forward_slashes_consistently() {
     }
 }
 
+#[cfg(windows)]
 #[test]
 fn test_git_directory_excluded_from_snapshot() {
     let ws = WorkspaceFixture::new();
@@ -332,6 +430,7 @@ fn test_git_directory_excluded_from_snapshot() {
     }
 }
 
+#[cfg(windows)]
 #[test]
 fn test_source_snapshot_file_size_limit_fails_closed() {
     let ws = WorkspaceFixture::new();
@@ -352,6 +451,7 @@ fn test_source_snapshot_file_size_limit_fails_closed() {
     assert_eq!(err.kind(), ManifestErrorKind::FileTooLarge);
 }
 
+#[cfg(windows)]
 #[test]
 fn test_source_snapshot_total_bytes_limit_fails_closed() {
     let ws = WorkspaceFixture::new();
@@ -369,6 +469,7 @@ fn test_source_snapshot_total_bytes_limit_fails_closed() {
     assert_eq!(err.kind(), ManifestErrorKind::TotalBytesExceeded);
 }
 
+#[cfg(windows)]
 #[test]
 fn test_source_snapshot_file_count_limit_fails_closed() {
     let ws = WorkspaceFixture::new();
@@ -386,6 +487,7 @@ fn test_source_snapshot_file_count_limit_fails_closed() {
     assert_eq!(err.kind(), ManifestErrorKind::FileCountExceeded);
 }
 
+#[cfg(windows)]
 #[test]
 fn test_core_service_capture_and_persist_source_snapshot() {
     let ws = WorkspaceFixture::new();
@@ -410,6 +512,7 @@ fn test_core_service_capture_and_persist_source_snapshot() {
     assert_eq!(roundtripped.entries, snapshot.entries);
 }
 
+#[cfg(windows)]
 #[test]
 fn test_operation_manifest_creation_and_persistence() {
     let ws = WorkspaceFixture::new();
