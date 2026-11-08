@@ -256,3 +256,22 @@ fn date_to_days(year: i32, month: u32, day: u32) -> u64 {
     days += (day - 1) as u64;
     days
 }
+
+impl serde::Serialize for TimestampUtc {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_rfc3339())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for TimestampUtc {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        FromStr::from_str(&s).map_err(serde::de::Error::custom)
+    }
+}

@@ -28,6 +28,8 @@ pub mod domain;
 pub mod evidence;
 /// Fail-closed execution engine and backend contracts.
 pub mod execution;
+/// Continuous hosted integrations, authenticated webhook intake, and delivery deduplication.
+pub mod hosted;
 /// Immutable input manifests, canonical source snapshots, and content hashing.
 pub mod manifest;
 /// Local Model Context Protocol (MCP) server, stdio transport, and shared application services.
@@ -59,7 +61,8 @@ pub use advisory::{
 };
 pub use audit::{AuditEvent, AuditEventKind};
 pub use common::{
-    Clock, MockClock, Sha256Stream, SystemClock, sha256_bytes, sha256_digest, sha256_prefixed,
+    Clock, MockClock, Sha256Stream, SystemClock, constant_time_eq, hmac_sha256, hmac_sha256_hex,
+    sha256_bytes, sha256_digest, sha256_prefixed,
 };
 pub use diff::{
     DiffError, DiffErrorKind, DiffHunk, DiffLine, DiffSummary, FileContentDiff, FileDelta,
@@ -81,6 +84,13 @@ pub use execution::{
     BackendCapabilities, ExecutionBackend, ExecutionEngine, ExecutionError, ExecutionErrorKind,
     ExecutionRequest, ExecutionResult, ExecutionScope, ExecutionStatus, FailClosedBackend,
     ResourceLimits, ResourceUsage, SyntheticFixtureBackend,
+};
+pub use hosted::{
+    DEFAULT_MAX_DRIFT_SECS, DEFAULT_MAX_LEDGER_CAPACITY, DeliveryLedger, DeliveryRecord,
+    DraftPrProposal, EventKind, ForkSecurityProfile, HostedCredentials, HostedPermission,
+    HostedProvider, PrAction, ProposalStatus, PullRequestPayload, PushPayload, StaleHeadGuard,
+    WebhookError, WebhookErrorKind, WebhookEvent, WebhookIntake, validate_commit_sha,
+    verify_github_signature, verify_gitlab_token,
 };
 pub use manifest::{
     ManifestError, ManifestErrorKind, OperationManifest, SnapshotLimits, SourceFileRole,
