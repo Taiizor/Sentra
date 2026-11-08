@@ -50,23 +50,26 @@ fn connection_fresh_pragmas_schema_integrity_and_clean_shutdown() {
         tables,
         [
             "approval_requests",
+            "attempts",
             "audit_events",
             "budget_reservations",
+            "manifests",
             "schema_migrations",
             "session_security_snapshots",
-            "sessions"
+            "sessions",
+            "tasks",
         ]
     );
     assert_eq!(
         raw.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
             .unwrap(),
-        1
+        2
     );
     assert_eq!(
         raw.query_row("SELECT count(*) FROM schema_migrations", [], |r| r
             .get::<_, i64>(0))
             .unwrap(),
-        1
+        2
     );
     drop(statement);
     drop(raw);
@@ -399,7 +402,7 @@ fn migration_newer_schema_is_rejected_without_overwriting() {
     let h = Harness::new();
     h.manager.shutdown().unwrap();
     let raw = Connection::open(&h.dir.db).unwrap();
-    raw.execute_batch("PRAGMA user_version=2").unwrap();
+    raw.execute_batch("PRAGMA user_version=3").unwrap();
     drop(raw);
     let before = fs::read(&h.dir.db).unwrap();
     denied(
@@ -1476,12 +1479,12 @@ fn migration_real_process_interruption_leaves_fresh_database_recoverable() {
         raw.query_row("SELECT count(*) FROM schema_migrations", [], |r| r
             .get::<_, i64>(0))
             .unwrap(),
-        1
+        2
     );
     assert_eq!(
         raw.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
             .unwrap(),
-        1
+        2
     );
     drop(raw);
     manager.shutdown().unwrap();
