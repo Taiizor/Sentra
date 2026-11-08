@@ -66,9 +66,9 @@ pub use policy::{
     DenialReason, OperationAction, PolicyDecision, PolicyEngine,
 };
 pub use service::{
-    CancellationPhase, CancellationReason, CancellationReport, CoreService, CoreServiceConfig,
-    CoreServiceHarness, ReconciledAttempt, ServiceError, ServiceErrorKind, ServicePolicyDecision,
-    SessionResumeReport, TaskExecutionReport, TaskExecutionRequest,
+    AdmitResultRequest, CancellationPhase, CancellationReason, CancellationReport, CoreService,
+    CoreServiceConfig, CoreServiceHarness, ReconciledAttempt, ServiceError, ServiceErrorKind,
+    ServicePolicyDecision, SessionResumeReport, TaskExecutionReport, TaskExecutionRequest,
 };
 pub use session::{
     AssessmentCompleteness, OperatingMode, SessionMetadata, SessionState, SessionStateMachine,

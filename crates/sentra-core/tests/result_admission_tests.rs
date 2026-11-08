@@ -7,10 +7,10 @@ use std::{fs, sync::Arc};
 
 use rusqlite::Connection;
 use sentra_core::{
-    AttemptId, BlobId, BlobStore, Clock, CostUsd, EvidenceEnvelope, EvidenceId, EvidenceMetadata,
-    ExecutionId, FileSystemCasBlobStore, Identifier, MockClock, OperationAction, PolicyEngine,
-    ReservationId, SecurityClassification as Class, SessionId, SessionState, StorageLimits, TaskId,
-    TimestampUtc,
+    AdmitResultRequest, AttemptId, BlobId, BlobStore, Clock, CostUsd, EvidenceEnvelope, EvidenceId,
+    EvidenceMetadata, ExecutionId, FileSystemCasBlobStore, Identifier, MockClock, OperationAction,
+    PolicyEngine, ReservationId, SecurityClassification as Class, ServiceErrorKind, SessionId,
+    SessionState, StorageLimits, TaskId, TimestampUtc,
     persistence::{
         AttemptOutcome, AttemptState, ManifestKind, PersistenceErrorKind as Kind,
         PrepareAttemptRequest, RecordAttemptRequest, TaskState,
@@ -50,7 +50,7 @@ fn advance_session_to_running(h: &Harness) {
         .unwrap();
 }
 
-fn create_running_attempt(
+fn create_prepared_attempt(
     h: &Harness,
     attempt_seq: u64,
     task_seq: u64,
@@ -64,7 +64,13 @@ fn create_running_attempt(
 
     // Create task
     h.repo
-        .create_task(session_id, task_id, 1, "security audit task", &h.clock)
+        .create_task(
+            session_id,
+            task_id,
+            task_seq,
+            "security audit task",
+            &h.clock,
+        )
         .unwrap();
 
     // Create manifest
@@ -119,6 +125,18 @@ fn create_running_attempt(
     };
     h.repo.prepare_attempt(prep_req, &h.clock).unwrap();
 
+    (attempt_id, task_id, reservation_id)
+}
+
+fn create_running_attempt(
+    h: &Harness,
+    attempt_seq: u64,
+    task_seq: u64,
+    cost_micro_usd: u64,
+) -> (AttemptId, TaskId, ReservationId) {
+    let (attempt_id, task_id, reservation_id) =
+        create_prepared_attempt(h, attempt_seq, task_seq, cost_micro_usd);
+
     // Record release and confirm running
     h.repo.record_release(attempt_id, &h.clock).unwrap();
     h.repo.confirm_running(attempt_id, &h.clock).unwrap();
@@ -149,7 +167,7 @@ fn sample_envelope(task_id: TaskId, session_id: SessionId, payload: &[u8]) -> Ev
         producer_role: "scanner".to_string(),
         media_type: "application/json".to_string(),
         payload_length_bytes: payload.len() as u64,
-        declared_sha256: Some(sentra_core::common::crypto::sha256_digest(payload)),
+        declared_sha256: None,
         classification: Class::Internal,
         created_at: TimestampUtc::from_epoch_secs(1_700_000_000),
     };
@@ -441,7 +459,7 @@ fn test_record_result_on_not_started_confirmed_denied_with_conflict() {
     let h = Harness::budget(200_000);
     advance_session_to_running(&h);
 
-    let (attempt_id, _, _) = create_running_attempt(&h, 190, 200, 50_000);
+    let (attempt_id, _, _) = create_prepared_attempt(&h, 190, 200, 50_000);
     h.repo.confirm_not_started(attempt_id, &h.clock).unwrap();
 
     // Direct result recording on NOT_STARTED_CONFIRMED attempt fails closed
@@ -476,15 +494,15 @@ fn test_admit_task_result_core_service_integration_with_blobs() {
     let envelope = sample_envelope(task_id, h.metadata.session_id, payload);
 
     let record = service
-        .admit_task_result(
-            h.metadata.session_id,
+        .admit_task_result(AdmitResultRequest {
+            session_id: h.metadata.session_id,
             attempt_id,
-            AttemptOutcome::Completed,
-            Some(0),
-            None,
-            &[envelope],
-            Some(CostUsd::from_micro_usd(25_000)),
-        )
+            outcome: AttemptOutcome::Completed,
+            exit_code: Some(0),
+            resource_usage: None,
+            evidence_envelopes: &[envelope],
+            actual_cost: Some(CostUsd::from_micro_usd(25_000)),
+        })
         .unwrap();
 
     assert_eq!(record.state, AttemptState::ResultRecorded);
@@ -528,28 +546,28 @@ fn test_admit_task_result_replay_determinism() {
 
     // First call
     let first = service
-        .admit_task_result(
-            h.metadata.session_id,
+        .admit_task_result(AdmitResultRequest {
+            session_id: h.metadata.session_id,
             attempt_id,
-            AttemptOutcome::Completed,
-            Some(0),
-            None,
-            &[],
-            Some(CostUsd::from_micro_usd(15_000)),
-        )
+            outcome: AttemptOutcome::Completed,
+            exit_code: Some(0),
+            resource_usage: None,
+            evidence_envelopes: &[],
+            actual_cost: Some(CostUsd::from_micro_usd(15_000)),
+        })
         .unwrap();
 
     // Replay call with exact same parameters
     let second = service
-        .admit_task_result(
-            h.metadata.session_id,
+        .admit_task_result(AdmitResultRequest {
+            session_id: h.metadata.session_id,
             attempt_id,
-            AttemptOutcome::Completed,
-            Some(0),
-            None,
-            &[],
-            Some(CostUsd::from_micro_usd(15_000)),
-        )
+            outcome: AttemptOutcome::Completed,
+            exit_code: Some(0),
+            resource_usage: None,
+            evidence_envelopes: &[],
+            actual_cost: Some(CostUsd::from_micro_usd(15_000)),
+        })
         .unwrap();
 
     assert_eq!(first.attempt_id, second.attempt_id);
@@ -576,16 +594,16 @@ fn test_admit_task_result_terminal_session_fails_closed() {
         )
         .unwrap();
 
-    let err = service.admit_task_result(
-        h.metadata.session_id,
+    let err = service.admit_task_result(AdmitResultRequest {
+        session_id: h.metadata.session_id,
         attempt_id,
-        AttemptOutcome::Completed,
-        Some(0),
-        None,
-        &[],
-        None,
-    );
+        outcome: AttemptOutcome::Completed,
+        exit_code: Some(0),
+        resource_usage: None,
+        evidence_envelopes: &[],
+        actual_cost: None,
+    });
 
     assert!(err.is_err());
-    assert!(err.unwrap_err().to_string().contains("terminal"));
+    assert_eq!(err.unwrap_err().kind, ServiceErrorKind::InvalidState);
 }
