@@ -1,8 +1,10 @@
 # Progress
 
-Last updated: 2026-11-07.
+Last updated: 2026-11-08.
 
 ## Current status
+
+Repository state reconciliation — Remediation Increment 0.3: [readiness plan](docs/phase1/IMPLEMENTATION_READINESS.md), [gap analysis](docs/phase1/PHASE1_GAP_ANALYSIS.md), [remediation architecture](docs/phase1/REMEDIATION_ARCHITECTURE.md) and this progress record reconcile Phase 1 documentation with the verified commit ancestry `8d36d43 → 4bd8618 → d9cca25 → adc3cf2` and recorded commit/push evidence for `adc3cf2`. Commit `adc3cf2` contains the seven documentation files from Increment 0.2. The commit object records author/committer as Taiizor (2026-11-07 04:26:32 +0300) and the `origin/develop` reflog records an update by push at 04:26:35 +0300. Provenance status: `Unknown — commit and push are observed; initiating process is not established.` Neither policy violation nor policy compliance is claimed. No production remediation, architectural change, dependency modification or Phase 2 work occurred. **Phase 1 remains NOT APPROVED; ADR-0008/0009/0010 remain Proposed; ADR-0002/0007 remain Proposed; SHA-256 remains Blocked; F-611-02 and OQ-25 remain open; untrusted execution remains fail-closed.**
 
 Contract follow-up — Remediation Increment 0.2: [implementation contracts](docs/phase1/IMPLEMENTATION_CONTRACTS.md) and [readiness plan](docs/phase1/IMPLEMENTATION_READINESS.md) define recoverable filesystem profiles, a proposed admission/token/persistent-guard writer fence, the Blocked SHA-256 dependency decision and bounded explicit operator recovery. Optional features, safe APIs, compatibility and adversarial proof remain gates; no proposed fence/recovery runtime test ran here. Only documentation and necessary Proposed references changed. **Phase 1 remains NOT APPROVED; ADR-0008/0009/0010 remain Proposed; F-611-02 and OQ-25 remain open. No production remediation, dependency change, closure attempt, Phase 2 or untrusted execution occurred.**
 
