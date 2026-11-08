@@ -69,6 +69,18 @@ cargo run --package sentra-cli -- recover `
   --workspace E:/MyProject/Repo `
   --database E:/SentraStorage/project.db `
   --json
+
+# Compute pure-Rust source snapshot diffs between two directory trees
+cargo run --package sentra-cli -- diff `
+  --base E:/MyProject/Repo-v1 `
+  --head E:/MyProject/Repo-v2 `
+  --json
+
+# Evaluate the 5 mandatory multi-user enterprise hosting security gates
+cargo run --package sentra-cli -- verify-audit --json
+
+# Run the interactive JSON-RPC 2.0 Model Context Protocol (MCP) stdio server
+cargo run --package sentra-cli -- mcp
 ```
 
 ---
@@ -123,6 +135,6 @@ pwsh -NoProfile -File scripts/docker-test.ps1 -Mode all
 
 ---
 
-## License Status
+## License
 
-Sentra is designed as an open-source platform. In accordance with [ADR-0007](docs/adr/0007-open-source-and-integration-licensing.md), Apache-2.0 is the proposed permissive license candidate. Third-party component notices are documented in [NOTICE](NOTICE).
+Sentra is licensed under the [Apache License, Version 2.0](LICENSE). In accordance with [ADR-0007](docs/adr/0007-open-source-and-integration-licensing.md), Apache-2.0 is the official permissive license. Third-party component attributions and notices are documented in [NOTICE](NOTICE).

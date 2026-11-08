@@ -335,6 +335,17 @@ impl LocalWorkspace {
         }
     }
 
+    /// Exports dependency security advisory audit results to an OASIS SARIF v2.1.0 document (REQ-F07, EXTENSIONS.md).
+    pub fn export_audit_sarif(
+        workspace: &Path,
+        database: &Path,
+        advisory_db: &AdvisoryDatabase,
+    ) -> Result<String, LocalWorkspaceError> {
+        let report = Self::audit_dependencies(workspace, database, advisory_db)?;
+        crate::export::export_audit_to_sarif_json(&report, env!("CARGO_PKG_VERSION"))
+            .map_err(|_| LocalWorkspaceError::new(LocalWorkspaceErrorKind::Service))
+    }
+
     fn run(
         workspace: &Path,
         database: &Path,

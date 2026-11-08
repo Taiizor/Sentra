@@ -4,6 +4,14 @@ Last updated: 2026-11-09.
 
 ## Current status
 
+OASIS SARIF v2.1.0 Export Module & CLI Integration: IMPLEMENTED & VERIFIED (`sentra-core::export`, `sentra export sarif`). Delivered the standard security findings export adapter in pure safe Rust under `#![forbid(unsafe_code)]` complying with the official OASIS SARIF v2.1.0 specification and GitHub Code Scanning / GitLab SAST requirements (`REQ-F05`, `REQ-F07`, `EXTENSIONS.md`):
+- Implemented strongly-typed SARIF models (`SarifLog`, `SarifRun`, `SarifTool`, `SarifDriver`, `SarifRule`, `SarifResult`, `SarifLocation`, `SarifPhysicalLocation`, `SarifArtifactLocation`, `SarifRegion`) in `crates/sentra-core/src/export/sarif.rs`.
+- Implemented `generate_sarif_report` and `generate_sarif_json`, mapping finding severities (`Critical`, `High`, `Medium`, `Low`, `Informational`) to SARIF levels (`error`, `warning`, `note`) and CVSS-equivalent security severity scores (`9.0`, `7.5`, `5.0`, `2.0`, `0.0`) for GitHub Code Scanning visualization.
+- Supported multiple finding provenance types (`CargoLockAdvisory` with automatic `https://rustsec.org/advisories/...` help URIs, `StaticAnalysis`, `DynamicAnalysis`, `Manual`), deduplicating rules by ID.
+- Added `LocalWorkspace::export_audit_sarif` converting dependency advisory audit findings into formatted SARIF JSON.
+- Extended `sentra-cli` with `sentra export sarif --database <file> [--workspace <dir>] [--output <file>] [--json]`, supporting both stdout piping and explicit file writes.
+- Verified across 5/5 tests in `crates/sentra-core/tests/export_tests.rs`, 33/33 tests in `crates/sentra-cli/tests/cli_tests.rs`, and all 24 independent test suites in Linux Docker runner (`scripts/docker-test.ps1 -Mode all`).
+
 CLI Capabilities Expansion: IMPLEMENTED & VERIFIED (`sentra-cli`). Extended the production terminal adapter with three native capabilities while maintaining 100% backward compatibility with existing commands (`init`, `status`, `session show`, `recover`, `audit`):
 - `sentra diff --base <dir> --head <dir> [--json]`: Pure-Rust source snapshot comparison using `capture_source_snapshot` and `compare_snapshots`, providing file deltas (`added`, `modified`, `deleted`, `renamed`, `unchanged`), change summaries, and aggregate digests with zero subprocess execution.
 - `sentra verify-audit [--json]`: Automated evaluation of the 5 mandatory enterprise hosting security gates (`MultiUserSecurityAudit`), verifying tenant isolation, worker egress containment, zero worker reuse, zero secret inheritance, and immutable audit trail compliance.
