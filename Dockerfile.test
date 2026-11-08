@@ -1,0 +1,15 @@
+# Sentra Reproducible Linux Test Environment
+# Toolchain: rustc 1.99.0 (pinned to match Windows host toolchain)
+FROM rust:1.99.0-bookworm
+
+# Avoid interactive prompts during container build
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install rustfmt and clippy matching the 1.99.0 toolchain
+RUN rustup component add rustfmt clippy
+
+# Create mount points and non-root directories if needed
+WORKDIR /workspace
+
+# Default command displays toolchain versions
+CMD ["cargo", "--version"]

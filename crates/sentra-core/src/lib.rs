@@ -38,8 +38,8 @@ pub mod workspace;
 pub use audit::{AuditEvent, AuditEventKind};
 pub use common::{Clock, MockClock, SystemClock};
 pub use domain::{
-    ApprovalId, DomainError, EventId, EvidenceId, ExecutionId, Identifier, SecurityClassification,
-    SessionId, SessionTransitionError, TaskId, TimestampUtc,
+    ApprovalId, AttemptId, DomainError, EventId, EvidenceId, ExecutionId, Identifier, ManifestId,
+    ReservationId, SecurityClassification, SessionId, SessionTransitionError, TaskId, TimestampUtc,
 };
 pub use evidence::{
     EvidenceArtifact, EvidenceEnvelope, EvidenceMetadata, EvidenceVerificationError,
