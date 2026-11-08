@@ -306,3 +306,13 @@ define_typed_id!(
     0x5345_4e54_5241_000a,
     "Unique identifier for a security finding."
 );
+define_typed_id!(
+    CampaignId,
+    0x5345_4e54_5241_000b,
+    "Unique identifier for a deep security research campaign."
+);
+define_typed_id!(
+    HypothesisId,
+    0x5345_4e54_5241_000c,
+    "Unique identifier for a research vulnerability hypothesis."
+);
