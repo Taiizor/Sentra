@@ -199,7 +199,125 @@ flowchart TD
 
 ---
 
-## 8. Preserved Repository Boundaries & Invariants
+## 8. Docker-Based Rust Test Execution Strategy (Antivirus & Target Isolation)
+
+### 8.1 Motivation & Environmental Inspection
+Test execution on the Windows 11 host generates dozens of test executables, debug symbols (`.pdb`), and transient lock probes directly inside `E:\MyProject\Mix\GitHub\Sentra\target`. Real-time antivirus protection (Kaspersky) monitors file creation in user repositories; heuristic analysis of test executables (which deliberately exercise process termination, sharing violations, and crash handling) can lead to false-positive threat classifications, file locking (Win32 Error 5 / Error 32), and compilation aborts.
+
+**Host & Container Inspection:**
+- **Host OS:** Windows 11 Education x64 (Build 10.0.26300).
+- **Docker Engine:** Version 29.9.2, Docker Desktop 4.98.0 with WSL2 backend (`Context: desktop-linux`, `OSType: linux`, Kernel: `6.18.54.1-microsoft-standard-WSL2`).
+- **Host Toolchain:** `rustc 1.99.0 (b940084d7 2026-09-28)`, MSVC target `x86_64-pc-windows-msvc`.
+- **Local Container Image:** `rust:bookworm` is locally available and contains the identical toolchain version: `rustc 1.99.0 (b940084d7 2026-09-28)`.
+- **Fixture Root Cause:** `crates/sentra-core/tests/support/persistence.rs` currently hardcodes `PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/persistence-fixtures")`, forcing test databases directly into the host repository target tree.
+
+---
+
+### 8.2 Test Coverage Boundaries: Linux Containers vs. Windows Host
+
+Empirical testing reveals a strict boundary between platform-independent Core logic and Windows-specific kernel/filesystem behavior:
+
+| Test Suite / Area | Primary Files | Linux Container Support | Windows Host Requirement | Root Cause & Failure Behavior on Non-Windows |
+| :--- | :--- | :---: | :---: | :--- |
+| **Domain Logic** | `domain_tests.rs` | **100% Passed** (9/9) | Optional | Pure types (`SessionId`, `SecurityClassification`, `TimestampUtc`). |
+| **Policy & Budgets** | `policy_tests.rs` | **100% Passed** (9/9) | Optional | In-memory evaluation and micro-USD arithmetic. |
+| **Session Machine** | `session_tests.rs` | **100% Passed** (5/5) | Optional | 9x9 state transition matrix and invariants. |
+| **Evidence Models** | `evidence_tests.rs` | **100% Passed** (9/9) | Optional | Structural envelope checks and redaction formatting. |
+| **Execution Boundary** | `execution_tests.rs` | **100% Passed** (8/8) | Optional | `FailClosedBackend` interception and scope predicates. |
+| **Security & Cryptography** | `security_tests.rs` | **100% Passed** (10/10) | Optional | Action digest canonical sorting and budget thresholds. |
+| **Authorization Engine** | `authorization_tests.rs` | **100% Passed** (27/27) | Optional | Broker lifecycle, single-use grants, and concurrency. |
+| **SQLite Persistence** | `persistence_tests.rs` | **100% Passed** (39/39) | Required for Win32 file locks | Passes on Linux when `target/` volume is overlaid; Windows tests file-lock share modes (`share_mode(3)`). |
+| **Workspace Boundaries** | `workspace_tests.rs` | **Unsupported** (`#![cfg(windows)]`) | **MANDATORY** | Entire test file requires Windows APIs for NTFS reparse points, junctions, volume roots, and alternate data streams (`:stream`). |
+| **Platform Discovery** | `crates/sentra-core/src/workspace/platform.rs` | **Unsupported by Design** | **MANDATORY** | `kind(metadata)` intentionally returns `WorkspaceEntryKind::Unsupported` on `#[cfg(not(windows))]` to fail closed in Phase 1. |
+| **CLI Workspace Facade** | `cli_tests.rs` | **Partial** (9 pass, 8 fail) | **MANDATORY** | CLI tests calling `LocalWorkspace::initialize` fail with exit 4 (`invalid_workspace`) because Linux workspaces are deliberately rejected. |
+| **Filesystem Publication** | `experiments/phase1/filesystem-publication/` | **Unsupported** | **MANDATORY** | Verifies Win32 NTFS hard-link publication (`CreateHardLinkW`), Error 183 collision, and `FILE_SHARE_READ` lockout. |
+
+**Crucial Invariant:** Linux container validation **cannot** replace Windows host validation. It serves exclusively to offload platform-independent checks and compilation without generating Windows `.exe` files.
+
+---
+
+### 8.3 Linux Docker Test Profile Architecture
+
+```mermaid
+flowchart LR
+    subgraph Host["Windows 11 Host Repository"]
+        Source["E:/.../Sentra Source Files<br/>(Mounted Read-Only :ro)"]
+        Reports["E:/.../target/reports<br/>(Logs/JSON Only)"]
+    end
+
+    subgraph Container["Linux Docker Container (rust:1.99.0-bookworm)"]
+        Workdir["/workspace (Read-Only)"]
+        TargetVol["/workspace/target<br/>(Docker Named Volume)"]
+        CacheVol["/cargo-cache<br/>(Docker Named Volume)"]
+        Runner["cargo test / check / clippy"]
+    end
+
+    Source -->|":ro bind mount"| Workdir
+    TargetVol -.->|overlay mount| Workdir
+    CacheVol -->|CARGO_HOME| Runner
+    Runner -->|write binaries/db| TargetVol
+    Runner -->|export summary logs| Reports
+```
+
+#### Profile Specifications:
+1. **Docker Image & Toolchain Pinning:**
+   - Base image: `rust:1.99.0-bookworm` (pinned to match the host toolchain version `1.99.0`).
+   - Standard components: Add `clippy` and `rustfmt` in a lightweight local build stage (`sentra-test-runner:1.99.0`).
+2. **Read-Only Source Mounting:**
+   - The host repository is mounted with read-only protection: `-v "${PWD}:/workspace:ro"`.
+   - The container cannot alter, touch, or corrupt host source files.
+3. **Target Directory Isolation via Named Volume Overlay:**
+   - Docker volume overlay: `-v sentra_cargo_target:/workspace/target`.
+   - Docker allows mounting a read-write volume on top of a subdirectory of a read-only bind mount.
+   - Environment variable: `CARGO_TARGET_DIR=/workspace/target`.
+   - All compiled Linux ELF binaries, test runner executables, intermediate object files, and SQLite test databases remain completely contained inside the Docker named volume in WSL2 storage.
+   - **Host impact:** Zero executables written to `E:\MyProject\Mix\GitHub\Sentra\target`.
+4. **Dependency Caching Strategy:**
+   - Docker named volume: `-v sentra_cargo_cache:/cargo-cache`.
+   - Environment variable: `CARGO_HOME=/cargo-cache`.
+   - Crates are fetched once into the volume and reused across runs.
+   - For strictly offline testing, `--offline` is supplied once the volume is primed.
+5. **Test Result Export:**
+   - Test results and diagnostics are exported to standard output or a dedicated mounted report directory: `-v "${PWD}/target/reports:/reports:rw"`.
+   - Only textual logs, JUnit XML, or JSON summaries are exported. No binary artifacts cross the boundary.
+
+---
+
+### 8.4 Windows-Specific Test Profile & Target Redirection
+
+Because Windows containers are unavailable in the default WSL2 Linux Docker Desktop configuration (and require incompatible Windows Server base images), native Windows tests must execute directly on the Windows host.
+
+To prevent Windows test executables from accumulating in the repository and triggering Kaspersky:
+
+1. **Cargo Target Redirection Outside Repository:**
+   - Set `CARGO_TARGET_DIR` in PowerShell prior to native test execution:
+     ```powershell
+     $env:CARGO_TARGET_DIR = "$env:LOCALAPPDATA\Sentra\target"
+     ```
+   - When `CARGO_TARGET_DIR` points to `%LOCALAPPDATA%\Sentra\target` (e.g. `C:\Users\Taiizor\AppData\Local\Sentra\target`):
+     - All `.exe`, `.pdb`, and compilation units are generated in the user's local app data directory, outside the Git repository.
+     - The repository's local `target/` directory remains completely clean.
+2. **Fixture Path Hardening (Future Increment):**
+   - In subsequent implementation work, test fixture helpers (`crates/sentra-core/tests/support/persistence.rs`, `local_workspace_tests.rs`) will be updated to resolve temporary test roots from `std::env::var_os("CARGO_TARGET_DIR")` with a fallback to `std::env::temp_dir()`, eliminating hardcoded relative paths like `../../target/persistence-fixtures`.
+3. **Antivirus Protection Maintained:**
+   - Kaspersky and Windows Defender remain fully active. No broad exclusions or disabled engines are permitted.
+   - Redirection to `%LOCALAPPDATA%` standardizes build artifact location without interfering with security scanning.
+
+---
+
+### 8.5 Security Boundaries of the Test Strategy
+
+1. **Test Infrastructure != Production Isolation:**
+   - Ordinary Docker containers are used solely to isolate **trusted repository build artifacts** from Windows host antivirus monitors.
+   - Docker containers do **NOT** satisfy ADR-0004 for executing untrusted target code. Phase 2 untrusted target execution remains strictly dependent on dedicated Hyper-V Linux VM isolation.
+2. **No Automatic Network Access:**
+   - Container runners must operate with `--offline` once dependencies are cached, preserving Sentra's offline-first verification policy.
+3. **Deterministic & Reproducible:**
+   - Exact toolchain versions (`rustc 1.99.0`) and lockfiles are preserved across both Linux container and Windows host profiles.
+
+---
+
+## 9. Preserved Repository Boundaries & Invariants
 
 1. **Phase Boundary:** Phase 1 remains **NOT APPROVED**; Phase 2 remains **STRICTLY UNAUTHORIZED**.
 2. **Untrusted Target Execution:** Remains strictly **FAIL-CLOSED** via `FailClosedBackend`. No target workload or scanner execution is enabled.
