@@ -30,6 +30,8 @@ The intervening owner commit relative to the final verification baseline contain
 
 Historical [5.6.2.2 remediation](INCREMENT_5_6_2_2_SECURITY_REMEDIATION.md), [policy hardening](INCREMENT_5_6_2_2_2_POLICY_AND_VALIDATOR_HARDENING.md), their independent reviews, [6.1](INCREMENT_6_1_LOCAL_CLI_FOUNDATION.md), [6.1.1](INCREMENT_6_1_1_INDEPENDENT_REVIEW.md), [6.1.2](INCREMENT_6_1_2_STORAGE_SEMANTICS_DOCUMENTATION.md) and the final assessment are consistent about the restricted profile. No current evidence contradicting their bounded approvals was found. Missing recovery was already disclosed, not newly reclassified as implemented.
 
+*Historical ancestry note (Increment 0.3 reconciliation):* The planning state above was committed in `8d36d43` (`Document Phase 1 acceptance gaps`). The subsequent remediation documentation sequence proceeded as `8d36d43` → `4bd8618` (Increment 0: recovery architecture) → `d9cca25` (Increment 0.1: prerequisite validation) → `adc3cf2` (Increment 0.2: implementation contracts). Where any subsequent inquiry assumed `8d36d43` was the direct parent of `adc3cf2`, the read-only investigation confirmed two intervening commits. Commit `adc3cf2` incorporates the Increment 0.2 documentation with provenance status: "Unknown — commit and push are observed; initiating process is not established." Phase 1 remains NOT APPROVED; Phase 2 remains unauthorized.
+
 ## 3. Acceptance traceability matrix
 
 Classification names are **Implementation Gap**, **Verification Gap**, **Design Gap**, or **Satisfied**. Where a criterion has several clauses, rows split them explicitly; a satisfied clause does not pass its incomplete parent. Existing evidence below was inspected, **not rerun in this planning task**.
