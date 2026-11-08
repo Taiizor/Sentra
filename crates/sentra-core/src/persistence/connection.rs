@@ -270,6 +270,7 @@ fn validated_path(input: &Path) -> Result<(PathBuf, Vec<File>), PersistenceError
     let parent = input.parent().ok_or_else(invalid)?;
     let leaf = input.file_name().ok_or_else(invalid)?;
     let mut walk = PathBuf::new();
+    #[cfg_attr(not(windows), allow(unused_mut))]
     let mut pins = Vec::new();
     for component in parent.components() {
         walk.push(component.as_os_str());

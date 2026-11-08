@@ -4,8 +4,8 @@ mod support;
 
 use rusqlite::{Connection, params};
 use sentra_core::{
-    AttemptId, Clock, CostUsd, ExecutionId, Identifier, ManifestId, MockClock,
-    OperationAction, PolicyEngine, SecurityClassification as Class, SessionState, TaskId,
+    AttemptId, Clock, CostUsd, ExecutionId, Identifier, ManifestId, MockClock, OperationAction,
+    PolicyEngine, SecurityClassification as Class, SessionState, TaskId,
     persistence::{
         AttemptOutcome, AttemptState, ManifestKind, PersistenceError, PersistenceErrorKind as Kind,
         PersistenceRepository, PrepareAttemptRequest, RecordAttemptRequest,
@@ -160,7 +160,9 @@ fn test_schema_v1_to_v2_transactional_migration_preserves_data() {
 
     // 2. Open with SqliteConnectionManager: triggers migration to V2!
     let manager = SqliteConnectionManager::open(&d.db, &c).expect("V1 to V2 migration failed");
-    manager.integrity_check().expect("integrity check failed after migration");
+    manager
+        .integrity_check()
+        .expect("integrity check failed after migration");
 
     // 3. Verify V2 tables and metadata
     let raw = Connection::open(&d.db).unwrap();
@@ -189,7 +191,10 @@ fn test_schema_v1_to_v2_transactional_migration_preserves_data() {
 
     // 4. Verify existing session data is intact
     let (repo, _) = PersistenceRepository::with_authority(manager);
-    let session_record = repo.session(m.session_id).unwrap().expect("session not found");
+    let session_record = repo
+        .session(m.session_id)
+        .unwrap()
+        .expect("session not found");
     assert_eq!(session_record.target_revision, "rev-v1");
     assert_eq!(session_record.context_generation, 1);
     assert_eq!(session_record.state, SessionState::Created);
@@ -265,7 +270,13 @@ fn test_task_lifecycle_and_invariants() {
     // State transition: Pending -> InProgress
     let t1_in_progress = h
         .repo
-        .update_task_state(task_1, TaskState::Pending, TaskState::InProgress, event(), &h.clock)
+        .update_task_state(
+            task_1,
+            TaskState::Pending,
+            TaskState::InProgress,
+            event(),
+            &h.clock,
+        )
         .unwrap();
     assert_eq!(t1_in_progress.state, TaskState::InProgress);
 
@@ -282,7 +293,13 @@ fn test_task_lifecycle_and_invariants() {
     // Valid terminal transition: InProgress -> Completed sets completed_at
     let t1_completed = h
         .repo
-        .update_task_state(task_1, TaskState::InProgress, TaskState::Completed, event(), &h.clock)
+        .update_task_state(
+            task_1,
+            TaskState::InProgress,
+            TaskState::Completed,
+            event(),
+            &h.clock,
+        )
         .unwrap();
     assert_eq!(t1_completed.state, TaskState::Completed);
     assert!(t1_completed.completed_at.is_some());
@@ -725,7 +742,8 @@ fn test_session_resumption_e2e_reconciliation() {
             &h.clock,
         )
         .unwrap();
-    let res2_id = sentra_core::ReservationId::from_bytes(*Identifier::new_deterministic(200, 2).as_bytes());
+    let res2_id =
+        sentra_core::ReservationId::from_bytes(*Identifier::new_deterministic(200, 2).as_bytes());
     let policy_engine = PolicyEngine::new();
     let action2 = OperationAction::InvokeProvider {
         model_id: "m2".into(),
@@ -754,12 +772,8 @@ fn test_session_resumption_e2e_reconciliation() {
             &h.clock,
         )
         .unwrap();
-    h.repo
-        .record_release(att2_id, &h.clock)
-        .unwrap();
-    h.repo
-        .confirm_running(att2_id, &h.clock)
-        .unwrap();
+    h.repo.record_release(att2_id, &h.clock).unwrap();
+    h.repo.confirm_running(att2_id, &h.clock).unwrap();
 
     // Task 3: Prepared attempt
     let att3_id = AttemptId::for_test_sequence(203);
@@ -777,7 +791,8 @@ fn test_session_resumption_e2e_reconciliation() {
             &h.clock,
         )
         .unwrap();
-    let res3_id = sentra_core::ReservationId::from_bytes(*Identifier::new_deterministic(200, 3).as_bytes());
+    let res3_id =
+        sentra_core::ReservationId::from_bytes(*Identifier::new_deterministic(200, 3).as_bytes());
     let action3 = OperationAction::InvokeProvider {
         model_id: "m3".into(),
         estimated_cost: CostUsd::from_micro_usd(50_000),
@@ -825,7 +840,13 @@ fn test_session_resumption_e2e_reconciliation() {
 
     // Pause session to simulate interruption / checkpoint
     h.repo
-        .transition_session(session_id, SessionState::Running, SessionState::Paused, event(), &h.clock)
+        .transition_session(
+            session_id,
+            SessionState::Running,
+            SessionState::Paused,
+            event(),
+            &h.clock,
+        )
         .unwrap();
 
     // Initialize CoreService over the database and perform Session Resumption!
@@ -887,7 +908,13 @@ fn test_terminal_session_cannot_be_resumed() {
     advance_session_to_running(&h);
     let session_id = h.metadata.session_id;
     h.repo
-        .transition_session(session_id, SessionState::Running, SessionState::Completed, event(), &h.clock)
+        .transition_session(
+            session_id,
+            SessionState::Running,
+            SessionState::Completed,
+            event(),
+            &h.clock,
+        )
         .unwrap();
 
     let service = create_test_service(&h);

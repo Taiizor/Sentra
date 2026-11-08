@@ -12,7 +12,7 @@ pub mod time;
 pub use classification::SecurityClassification;
 pub use error::{DomainError, SessionTransitionError};
 pub use id::{
-    ApprovalId, AttemptId, EventId, EvidenceId, ExecutionId, Identifier, ManifestId,
-    ReservationId, SessionId, TaskId,
+    ApprovalId, AttemptId, EventId, EvidenceId, ExecutionId, Identifier, ManifestId, ReservationId,
+    SessionId, TaskId,
 };
 pub use time::TimestampUtc;

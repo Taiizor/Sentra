@@ -552,10 +552,7 @@ impl AttemptState {
     pub fn is_released(&self) -> bool {
         matches!(
             self,
-            Self::ReleaseRecorded
-                | Self::RunningConfirmed
-                | Self::ResultRecorded
-                | Self::Uncertain
+            Self::ReleaseRecorded | Self::RunningConfirmed | Self::ResultRecorded | Self::Uncertain
         )
     }
 
