@@ -286,3 +286,18 @@ define_typed_id!(
     0x5345_4e54_5241_0006,
     "Unique identifier for an execution dispatch request."
 );
+define_typed_id!(
+    AttemptId,
+    0x5345_4e54_5241_0007,
+    "Unique identifier for a durable execution attempt."
+);
+define_typed_id!(
+    ManifestId,
+    0x5345_4e54_5241_0008,
+    "Unique identifier for a canonical manifest."
+);
+define_typed_id!(
+    ReservationId,
+    0x5345_4e54_5241_0009,
+    "Unique identifier for a budget reservation."
+);

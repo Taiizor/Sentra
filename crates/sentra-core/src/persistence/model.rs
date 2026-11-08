@@ -368,8 +368,246 @@ redacted_debug!(
     SessionRecord,
     AuditRecord,
     ConsumptionRecord,
-    BudgetRecord
+    BudgetRecord,
+    TaskRecord,
+    ManifestRecord,
+    AttemptRecord
 );
+
+/// State of a durable logical task in a session plan.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub enum TaskState {
+    /// Task has been created and is awaiting execution.
+    Pending,
+    /// Task execution attempt is in progress.
+    InProgress,
+    /// Task completed successfully.
+    Completed,
+    /// Task execution failed terminally.
+    Failed,
+    /// Task was cancelled by operator or timeout.
+    Cancelled,
+    /// Task is blocked by uncertain dependency or incomplete attempt.
+    Blocked,
+}
+
+impl TaskState {
+    /// Canonical database string.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Pending => "PENDING",
+            Self::InProgress => "IN_PROGRESS",
+            Self::Completed => "COMPLETED",
+            Self::Failed => "FAILED",
+            Self::Cancelled => "CANCELLED",
+            Self::Blocked => "BLOCKED",
+        }
+    }
+}
+
+pub(super) fn parse_task_state(value: &str) -> Result<TaskState, PersistenceError> {
+    match value {
+        "PENDING" => Ok(TaskState::Pending),
+        "IN_PROGRESS" => Ok(TaskState::InProgress),
+        "COMPLETED" => Ok(TaskState::Completed),
+        "FAILED" => Ok(TaskState::Failed),
+        "CANCELLED" => Ok(TaskState::Cancelled),
+        "BLOCKED" => Ok(TaskState::Blocked),
+        _ => Err(invalid()),
+    }
+}
+
+/// A durable task record in a session plan.
+#[derive(Clone, PartialEq, Eq)]
+pub struct TaskRecord {
+    /// Unique task identifier.
+    pub task_id: crate::TaskId,
+    /// Parent session identifier.
+    pub session_id: SessionId,
+    /// Monotonic sequence number within the session plan.
+    pub sequence_number: u64,
+    /// Task descriptive title.
+    pub title: String,
+    /// Current task lifecycle state.
+    pub state: TaskState,
+    /// Timestamp when task was registered.
+    pub created_at: TimestampUtc,
+    /// Timestamp of latest update.
+    pub updated_at: TimestampUtc,
+    /// Timestamp when terminal state was reached, if completed.
+    pub completed_at: Option<TimestampUtc>,
+}
+
+/// Kind of canonical manifest.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub enum ManifestKind {
+    /// Authorized immutable source snapshot manifest.
+    SourceSnapshot,
+    /// Canonical operation execution manifest.
+    Operation,
+    /// Static discovery manifest.
+    Discovery,
+}
+
+impl ManifestKind {
+    /// Canonical database string.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::SourceSnapshot => "SOURCE_SNAPSHOT",
+            Self::Operation => "OPERATION",
+            Self::Discovery => "DISCOVERY",
+        }
+    }
+}
+
+pub(super) fn parse_manifest_kind(value: &str) -> Result<ManifestKind, PersistenceError> {
+    match value {
+        "SOURCE_SNAPSHOT" => Ok(ManifestKind::SourceSnapshot),
+        "OPERATION" => Ok(ManifestKind::Operation),
+        "DISCOVERY" => Ok(ManifestKind::Discovery),
+        _ => Err(invalid()),
+    }
+}
+
+/// A persisted canonical manifest record.
+#[derive(Clone, PartialEq, Eq)]
+pub struct ManifestRecord {
+    /// Unique manifest identifier.
+    pub manifest_id: crate::ManifestId,
+    /// Bound session identifier.
+    pub session_id: SessionId,
+    /// Manifest category.
+    pub manifest_kind: ManifestKind,
+    /// Cryptographic digest of the canonical manifest content.
+    pub content_digest: String,
+    /// Timestamp when manifest was recorded.
+    pub created_at: TimestampUtc,
+    /// Validated canonical JSON payload.
+    pub canonical_json: String,
+}
+
+/// Durable dispatch attempt lifecycle state.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub enum AttemptState {
+    /// Attempt specification durably recorded; no budget or approval yet committed.
+    Recorded,
+    /// Same transaction validated context, reserved budget, and consumed any grant.
+    Prepared,
+    /// Durable release intent committed before invoking external execution backend.
+    ReleaseRecorded,
+    /// Correlated acknowledgement from trusted backend received.
+    RunningConfirmed,
+    /// Admitted terminal outcome committed and settled.
+    ResultRecorded,
+    /// Interrupted post-release; outcome cannot be established. Never auto-retried.
+    Uncertain,
+    /// Verified proof that execution was never released to any worker.
+    NotStartedConfirmed,
+}
+
+impl AttemptState {
+    /// Canonical database string.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Recorded => "RECORDED",
+            Self::Prepared => "PREPARED",
+            Self::ReleaseRecorded => "RELEASE_RECORDED",
+            Self::RunningConfirmed => "RUNNING_CONFIRMED",
+            Self::ResultRecorded => "RESULT_RECORDED",
+            Self::Uncertain => "UNCERTAIN",
+            Self::NotStartedConfirmed => "NOT_STARTED_CONFIRMED",
+        }
+    }
+}
+
+pub(super) fn parse_attempt_state(value: &str) -> Result<AttemptState, PersistenceError> {
+    match value {
+        "RECORDED" => Ok(AttemptState::Recorded),
+        "PREPARED" => Ok(AttemptState::Prepared),
+        "RELEASE_RECORDED" => Ok(AttemptState::ReleaseRecorded),
+        "RUNNING_CONFIRMED" => Ok(AttemptState::RunningConfirmed),
+        "RESULT_RECORDED" => Ok(AttemptState::ResultRecorded),
+        "UNCERTAIN" => Ok(AttemptState::Uncertain),
+        "NOT_STARTED_CONFIRMED" => Ok(AttemptState::NotStartedConfirmed),
+        _ => Err(invalid()),
+    }
+}
+
+/// Terminal outcome category for an execution attempt.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub enum AttemptOutcome {
+    /// Execution completed successfully.
+    Completed,
+    /// Execution failed with error.
+    Failed,
+    /// Execution cancelled.
+    Cancelled,
+    /// Execution timed out.
+    TimedOut,
+}
+
+impl AttemptOutcome {
+    /// Canonical database string.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Completed => "COMPLETED",
+            Self::Failed => "FAILED",
+            Self::Cancelled => "CANCELLED",
+            Self::TimedOut => "TIMED_OUT",
+        }
+    }
+}
+
+pub(super) fn parse_attempt_outcome(value: &str) -> Result<AttemptOutcome, PersistenceError> {
+    match value {
+        "COMPLETED" => Ok(AttemptOutcome::Completed),
+        "FAILED" => Ok(AttemptOutcome::Failed),
+        "CANCELLED" => Ok(AttemptOutcome::Cancelled),
+        "TIMED_OUT" => Ok(AttemptOutcome::TimedOut),
+        _ => Err(invalid()),
+    }
+}
+
+/// A durable execution attempt record in the dispatch outbox.
+#[derive(Clone, PartialEq, Eq)]
+pub struct AttemptRecord {
+    /// Unique attempt identifier.
+    pub attempt_id: crate::AttemptId,
+    /// Parent task identifier.
+    pub task_id: crate::TaskId,
+    /// Parent session identifier.
+    pub session_id: SessionId,
+    /// Monotonic attempt sequence number for this task.
+    pub attempt_number: u64,
+    /// Current attempt lifecycle state.
+    pub state: AttemptState,
+    /// Fencing authorization epoch bound to session context generation.
+    pub fencing_epoch: u64,
+    /// Unique execution dispatch identity.
+    pub execution_id: crate::ExecutionId,
+    /// Action name to be executed.
+    pub action_name: String,
+    /// Canonical action digest.
+    pub action_digest: String,
+    /// Budget reservation reference, if prepared.
+    pub reservation_id: Option<crate::ReservationId>,
+    /// Approval grant reference, if prepared.
+    pub request_id: Option<ApprovalId>,
+    /// Bound manifest reference, if applicable.
+    pub manifest_id: Option<crate::ManifestId>,
+    /// Timestamp when attempt was recorded.
+    pub created_at: TimestampUtc,
+    /// Timestamp when budget and approval were bound.
+    pub prepared_at: Option<TimestampUtc>,
+    /// Timestamp when release intent committed.
+    pub released_at: Option<TimestampUtc>,
+    /// Terminal outcome category, if reached.
+    pub terminal_outcome: Option<AttemptOutcome>,
+    /// Redacted terminal details JSON payload.
+    pub terminal_details_json: Option<String>,
+    /// Timestamp when budget was settled.
+    pub settled_at: Option<TimestampUtc>,
+}
 
 #[cfg(test)]
 mod tests {

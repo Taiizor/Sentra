@@ -45,8 +45,9 @@ pub use connection::{
 };
 pub use error::{PersistenceError, PersistenceErrorKind};
 pub use model::{
-    ApprovalIntent, AuditRecord, BudgetRecord, ConsumptionRecord, PersistentApprovalGrant,
-    SessionRecord, SettlementStatus, TransitionRecord,
+    ApprovalIntent, AttemptOutcome, AttemptRecord, AttemptState, AuditRecord, BudgetRecord,
+    ConsumptionRecord, ManifestKind, ManifestRecord, PersistentApprovalGrant, SessionRecord,
+    SettlementStatus, TaskRecord, TaskState, TransitionRecord,
 };
 pub use repository::{
     ExecutionContext, ExecutionPreview, PersistenceRepository, PersistentApprovalAuthority,
