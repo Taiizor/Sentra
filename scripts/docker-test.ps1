@@ -80,7 +80,7 @@ function Invoke-ContainerCommand([string]$commandStr, [string]$logName) {
         "-e", "CARGO_HOME=/cargo-cache",
         "-e", "CARGO_TARGET_DIR=/workspace/target",
         $imageTag,
-        "sh", "-c", "set -o pipefail; $commandStr 2>&1 | tee /reports/$logName.log"
+        "bash", "-c", "set -o pipefail; $commandStr 2>&1 | tee /reports/$logName.log"
     )
 
     & docker @dockerArgs
