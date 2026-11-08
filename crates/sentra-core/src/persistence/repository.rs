@@ -1,13 +1,15 @@
 use super::{
-    ApprovalIntent, AuditRecord, BudgetRecord, ConsumptionRecord, PersistenceError,
+    ApprovalIntent, AttemptOutcome, AttemptRecord, AttemptState, AuditRecord, BudgetRecord,
+    ConsumptionRecord, ManifestKind, ManifestRecord, PersistenceError,
     PersistenceErrorKind as Kind, PersistentApprovalGrant, SessionRecord, SettlementStatus,
-    SqliteConnectionManager, TransitionRecord,
+    SqliteConnectionManager, TaskRecord, TaskState, TransitionRecord,
     model::{self, MetadataDto, Snapshot, StoredApproval},
     transaction::ManagedTransaction,
 };
 use crate::{
-    ApprovalId, Clock, CostUsd, EventId, Identifier, OperationAction, PolicyEngine,
-    SecurityClassification, SessionId, SessionMetadata, SessionState,
+    ApprovalId, AttemptId, Clock, CostUsd, EventId, ExecutionId, Identifier, ManifestId,
+    OperationAction, PolicyEngine, ReservationId, SecurityClassification, SessionId,
+    SessionMetadata, SessionState, TaskId,
 };
 use rusqlite::params;
 use std::{fmt, sync::Arc};
