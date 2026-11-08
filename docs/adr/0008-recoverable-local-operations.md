@@ -1,6 +1,6 @@
 # ADR-0008: Recoverable Local Operations and Fenced Session Continuation
 
-- Status: **Proposed**
+- Status: **Accepted** (Validated in Phase 1 Increments 2.0, 2.0.1, 2.3)
 - Date: 2026-11-07
 - Decision owners: Core architecture, persistence and security, with project-owner acceptance
 - Extends: ADR-0003 and ADR-0006; does not supersede accepted security boundaries

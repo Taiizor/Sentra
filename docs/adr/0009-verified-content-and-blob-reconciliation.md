@@ -1,6 +1,6 @@
 # ADR-0009: Verified Immutable Content and Blob Reconciliation
 
-- Status: **Proposed**
+- Status: **Accepted** (Validated in Phase 1 Increments 2.1, 2.2, 2.3)
 - Date: 2026-11-07
 - Decision owners: Core evidence, Windows platform, dependency/license and security owners
 - Extends: ADR-0003 and ADR-0006; complements Proposed ADR-0008

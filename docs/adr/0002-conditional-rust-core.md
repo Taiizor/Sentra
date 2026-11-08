@@ -1,6 +1,6 @@
 # ADR-0002: Conditional Rust Core Recommendation
 
-- Status: Proposed
+- Status: Accepted (Validated on Windows x64 MSVC and Linux Docker in Phase 1)
 - Date: 2026-11-05
 - Decision gate: Phase 1 V-01/V-02, after explicit implementation approval
 

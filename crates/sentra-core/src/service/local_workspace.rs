@@ -5,9 +5,7 @@ use std::{fmt, fs, path::Path, sync::Arc};
 use crate::{
     CostUsd, FailClosedBackend, OperatingMode, PolicyEngine, SecurityClassification, SessionId,
     SessionState, SystemClock, TimestampUtc,
-    persistence::{
-        PersistenceError, PersistenceRepository, SessionRecord, SqliteConnectionManager,
-    },
+    persistence::{PersistenceError, PersistenceRepository, SqliteConnectionManager},
     workspace::WorkspaceBoundary,
 };
 
@@ -131,6 +129,7 @@ enum Operation {
     Initialize,
     Status,
     Session(SessionId),
+    Recover,
 }
 
 /// Interface-neutral local lifecycle facade. Paths are explicit, storage is
@@ -162,6 +161,14 @@ impl LocalWorkspace {
         id: SessionId,
     ) -> Result<LocalWorkspaceReport, LocalWorkspaceError> {
         Self::run(workspace, database, Operation::Session(id))
+    }
+    /// Explicitly recovers an interrupted or incomplete foundation store.
+    /// Safely completes incomplete initialization without manual file deletion.
+    pub fn recover(
+        workspace: &Path,
+        database: &Path,
+    ) -> Result<LocalWorkspaceReport, LocalWorkspaceError> {
+        Self::run(workspace, database, Operation::Recover)
     }
 
     fn run(
@@ -208,6 +215,9 @@ impl LocalWorkspace {
                 if matches!(operation, Operation::Session(_)) {
                     return Err(LocalWorkspaceError::new(Kind::SessionNotFound));
                 }
+                if matches!(operation, Operation::Recover) {
+                    return Err(LocalWorkspaceError::new(Kind::Incomplete));
+                }
                 return Ok(LocalWorkspaceReport {
                     initialized: false,
                     created: false,
@@ -251,16 +261,69 @@ impl LocalWorkspace {
                     )
                     .map_err(LocalWorkspaceError::service)?;
             }
-            let record: SessionRecord = service.local_session().map_err(|error| {
-                let mut result = LocalWorkspaceError::service(error);
-                if matches!(result.service_error().and_then(|e| e.primary_error()), Some(super::ServicePrimaryError::Persistence(p)) if p.kind == crate::persistence::PersistenceErrorKind::ContextMismatch) {
-                    result.kind = Kind::Incomplete;
+
+            let session_cnt = service.session_count().unwrap_or(0);
+            let record_opt = match service.local_session() {
+                Ok(rec) => Some(rec),
+                Err(error) => {
+                    let mut result = LocalWorkspaceError::service(error);
+                    if matches!(
+                        result.service_error().and_then(|e| e.primary_error()),
+                        Some(super::ServicePrimaryError::Persistence(p))
+                            if p.kind == crate::persistence::PersistenceErrorKind::ContextMismatch
+                    ) {
+                        result.kind = Kind::Incomplete;
+                    }
+                    if matches!(operation, Operation::Recover) && session_cnt == 0 {
+                        None
+                    } else {
+                        return Err(result);
+                    }
                 }
-                result
-            })?;
+            };
+
+            let was_missing_session = record_opt.is_none();
+            let mut record = match record_opt {
+                Some(rec) => rec,
+                None => {
+                    let root = boundary
+                        .root()
+                        .canonical_path()
+                        .to_str()
+                        .ok_or_else(|| LocalWorkspaceError::new(Kind::Workspace))?;
+                    service
+                        .create_session(
+                            root,
+                            OperatingMode::ContinuousReview,
+                            "local-operator",
+                            SecurityClassification::Internal,
+                            "local:unversioned-metadata-only",
+                            CostUsd::ZERO,
+                        )
+                        .map_err(LocalWorkspaceError::service)?;
+                    service
+                        .local_session()
+                        .map_err(LocalWorkspaceError::service)?
+                }
+            };
+
             if record.state == SessionState::Created {
-                return Err(LocalWorkspaceError::new(Kind::Incomplete));
+                if matches!(operation, Operation::Recover) {
+                    service
+                        .transition_session(
+                            record.metadata.session_id,
+                            SessionState::Scoped,
+                            "operator-recovery-complete-foundation",
+                        )
+                        .map_err(LocalWorkspaceError::service)?;
+                    record = service
+                        .local_session()
+                        .map_err(LocalWorkspaceError::service)?;
+                } else {
+                    return Err(LocalWorkspaceError::new(Kind::Incomplete));
+                }
             }
+
             if Path::new(&record.metadata.workspace_root) != boundary.root().canonical_path() {
                 return Err(LocalWorkspaceError::new(Kind::WorkspaceMismatch));
             }
@@ -274,7 +337,8 @@ impl LocalWorkspace {
                 .map_err(LocalWorkspaceError::service)?;
             Ok(LocalWorkspaceReport {
                 initialized: true,
-                created: !present,
+                created: !present
+                    || (matches!(operation, Operation::Recover) && was_missing_session),
                 session: Some(LocalSessionSummary {
                     session_id: record.metadata.session_id,
                     state: record.state,

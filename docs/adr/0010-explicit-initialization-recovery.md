@@ -1,6 +1,6 @@
 # ADR-0010: Explicit Operator Recovery for Incomplete Initialization
 
-- Status: **Proposed**
+- Status: **Accepted** (Approach B Validated in Phase 1 Increment 2.4)
 - Date: 2026-11-07
 - Decision owners: Project owner, Core lifecycle, Windows platform and security
 - Related: F-611-02, OQ-25, Proposed ADR-0008/0009
