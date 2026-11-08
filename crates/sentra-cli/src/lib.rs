@@ -22,7 +22,7 @@ use sentra_core::{
     },
 };
 
-pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra recover --database <file> [--workspace <directory>] [--json]\n  sentra audit --database <file> [--workspace <directory>] [--json]\n  sentra diff --base <directory> --head <directory> [--json]\n  sentra verify-audit [--json]\n  sentra mcp\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session/audit default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\nAudit analyzes Cargo.lock dependencies against pinned security advisories.\nDiff compares base and head directory snapshots with pure-Rust hashing.\nVerify-audit evaluates the 5 mandatory multi-user hosting security containment gates.\nMcp runs the JSON-RPC 2.0 Model Context Protocol stdio transport server.\n";
+pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra recover --database <file> [--workspace <directory>] [--json]\n  sentra audit --database <file> [--workspace <directory>] [--json]\n  sentra diff --base <directory> --head <directory> [--json]\n  sentra verify-audit [--json]\n  sentra export sarif --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra mcp\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session/audit default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\nAudit analyzes Cargo.lock dependencies against pinned security advisories.\nDiff compares base and head directory snapshots with pure-Rust hashing.\nVerify-audit evaluates the 5 mandatory multi-user hosting security containment gates.\nExport sarif converts dependency advisory findings into an OASIS SARIF v2.1.0 document.\nMcp runs the JSON-RPC 2.0 Model Context Protocol stdio transport server.\n";
 
 /// Typed presentation command. Paths are untrusted until validated by Core.
 pub enum Command {
@@ -52,6 +52,11 @@ pub enum Command {
     Diff {
         base: PathBuf,
         head: PathBuf,
+    },
+    ExportSarif {
+        workspace: Option<PathBuf>,
+        database: PathBuf,
+        output: Option<PathBuf>,
     },
     Mcp,
     VerifyAudit,
@@ -100,13 +105,57 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
     let name = words.remove(0);
     if !matches!(
         name,
-        "init" | "status" | "session" | "recover" | "audit" | "diff" | "mcp" | "verify-audit"
+        "init"
+            | "status"
+            | "session"
+            | "recover"
+            | "audit"
+            | "diff"
+            | "mcp"
+            | "verify-audit"
+            | "export"
     ) {
         return Err(invalid());
     }
     if words == ["--help"] {
         return Ok(Invocation {
             command: Command::Help,
+            json,
+        });
+    }
+    if name == "export" {
+        if words.is_empty() || words.remove(0) != "sarif" {
+            return Err(invalid());
+        }
+        if words == ["--help"] {
+            return Ok(Invocation {
+                command: Command::Help,
+                json,
+            });
+        }
+        let mut workspace = None;
+        let mut database = None;
+        let mut output = None;
+        let mut rest = words.into_iter();
+        while let Some(flag) = rest.next() {
+            let value = rest.next().ok_or_else(invalid)?;
+            if value.is_empty() || value.starts_with('-') {
+                return Err(invalid());
+            }
+            match flag {
+                "--workspace" if workspace.is_none() => workspace = Some(PathBuf::from(value)),
+                "--database" if database.is_none() => database = Some(PathBuf::from(value)),
+                "--output" if output.is_none() => output = Some(PathBuf::from(value)),
+                _ => return Err(invalid()),
+            }
+        }
+        let database = database.ok_or_else(invalid)?;
+        return Ok(Invocation {
+            command: Command::ExportSarif {
+                workspace,
+                database,
+                output,
+            },
             json,
         });
     }
@@ -347,7 +396,7 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
     match invocation.command {
         Command::Help => Response {
             stdout: if json {
-                "{\"schema_version\":1,\"commands\":[\"init\",\"status\",\"session show\",\"recover\",\"audit\",\"diff\",\"verify-audit\",\"mcp\"],\"offline\":true,\"untrusted_execution\":false}\n".into()
+                "{\"schema_version\":1,\"commands\":[\"init\",\"status\",\"session show\",\"recover\",\"audit\",\"diff\",\"verify-audit\",\"export sarif\",\"mcp\"],\"offline\":true,\"untrusted_execution\":false}\n".into()
             } else {
                 HELP.into()
             },
@@ -452,6 +501,50 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
             let _ = fleet.register_worker(worker);
             let report = MultiUserSecurityAudit::run_assessment(&fleet);
             render_verify_audit(&report, json)
+        }
+        Command::ExportSarif {
+            workspace,
+            database,
+            output,
+        } => {
+            let clock = TimestampUtc::now();
+            let advisory_db = AdvisoryDatabase::default_pinned(clock);
+            let ws_path = absolute(workspace.as_deref().unwrap_or(cwd), cwd);
+            let db_path = absolute(&database, cwd);
+            match LocalWorkspace::export_audit_sarif(&ws_path, &db_path, &advisory_db) {
+                Ok(sarif_json) => {
+                    if let Some(out_file) = output {
+                        let out_path = absolute(&out_file, cwd);
+                        match std::fs::write(&out_path, sarif_json.as_bytes()) {
+                            Ok(_) => {
+                                let stdout = if json {
+                                    "{\"schema_version\":1,\"command\":\"export sarif\",\"status\":\"success\",\"written\":true,\"untrusted_execution\":false}\n".to_string()
+                                } else {
+                                    "Sentra SARIF export: successfully written\nUntrusted execution: disabled\n".to_string()
+                                };
+                                Response {
+                                    stdout,
+                                    stderr: String::new(),
+                                    exit_code: 0,
+                                }
+                            }
+                            Err(_) => error("io_error", 5, json),
+                        }
+                    } else {
+                        let stdout = if sarif_json.ends_with('\n') {
+                            sarif_json
+                        } else {
+                            format!("{sarif_json}\n")
+                        };
+                        Response {
+                            stdout,
+                            stderr: String::new(),
+                            exit_code: 0,
+                        }
+                    }
+                }
+                Err(source) => core_error(source, json),
+            }
         }
         Command::Mcp => unreachable!("handled in run_stream"),
     }

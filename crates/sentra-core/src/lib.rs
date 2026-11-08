@@ -30,6 +30,8 @@ pub mod domain;
 pub mod evidence;
 /// Fail-closed execution engine and backend contracts.
 pub mod execution;
+/// Standard vulnerability reporting and format adapters (OASIS SARIF v2.1.0).
+pub mod export;
 /// Remote-worker fleet management, multi-user hosting security audit, and target matrix.
 pub mod fleet;
 /// Continuous hosted integrations, authenticated webhook intake, and delivery deduplication.
@@ -93,6 +95,13 @@ pub use execution::{
     BackendCapabilities, ExecutionBackend, ExecutionEngine, ExecutionError, ExecutionErrorKind,
     ExecutionRequest, ExecutionResult, ExecutionScope, ExecutionStatus, FailClosedBackend,
     ResourceLimits, ResourceUsage, SyntheticFixtureBackend,
+};
+pub use export::{
+    SARIF_SCHEMA_V2_1_0, SARIF_VERSION_2_1_0, SarifArtifactLocation, SarifDriver, SarifLevel,
+    SarifLocation, SarifLog, SarifMessage, SarifPhysicalLocation, SarifRegion,
+    SarifReportingConfiguration, SarifResult, SarifRule, SarifRun, SarifTool,
+    export_audit_to_sarif, export_audit_to_sarif_json, generate_sarif_json, generate_sarif_report,
+    severity_to_sarif_level, severity_to_security_score,
 };
 pub use fleet::{
     AdapterActionCapability, AuditStatus, EvidenceMethod, FleetError, FleetErrorKind, HostPlatform,
