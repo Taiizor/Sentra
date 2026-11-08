@@ -5,7 +5,7 @@ mod support;
 use rusqlite::{Connection, params};
 use sentra_core::{
     AttemptId, Clock, CostUsd, ExecutionId, Identifier, ManifestId, MockClock, OperationAction,
-    PolicyEngine, SecurityClassification as Class, SessionState, TaskId,
+    PolicyEngine, SecurityClassification as Class, SessionId, SessionState, TaskId,
     persistence::{
         AttemptOutcome, AttemptState, ManifestKind, PersistenceError, PersistenceErrorKind as Kind,
         PersistenceRepository, PrepareAttemptRequest, RecordAttemptRequest,
@@ -453,14 +453,22 @@ fn test_durable_dispatch_full_lifecycle() {
     let details = serde_json::json!({"status": "success", "exit_code": 0}).to_string();
     let att_result = h
         .repo
-        .record_result(attempt_id, outcome, Some(&details), &h.clock)
+        .record_result(
+            attempt_id,
+            outcome,
+            Some(&details),
+            Some(CostUsd::from_micro_usd(25_000)),
+            &h.clock,
+        )
         .unwrap();
     assert_eq!(att_result.state, AttemptState::ResultRecorded);
     assert_eq!(att_result.terminal_outcome, Some(AttemptOutcome::Completed));
     assert!(att_result.settled_at.is_some());
 
     // Terminal attempt state cannot transition again
-    let repeat_res = h.repo.record_result(attempt_id, outcome, None, &h.clock);
+    let repeat_res = h
+        .repo
+        .record_result(attempt_id, outcome, None, None, &h.clock);
     assert!(repeat_res.is_err());
 }
 
@@ -860,7 +868,8 @@ fn test_session_resumption_e2e_reconciliation() {
 
     // Completed task 1 is preserved and skipped
     assert_eq!(resume_report.completed_tasks, vec![t1_id]);
-    assert_eq!(resume_report.pending_tasks.len(), 3);
+    assert_eq!(resume_report.pending_tasks, vec![t3_id, t4_id]);
+    assert_eq!(resume_report.blocked_tasks, vec![t2_id]);
 
     // Reconciled attempts:
     // Task 2 attempt -> Uncertain (budget held)
@@ -920,4 +929,775 @@ fn test_terminal_session_cannot_be_resumed() {
     let service = create_test_service(&h);
     let resume_res = service.resume_session(session_id);
     assert!(resume_res.is_err());
+}
+
+#[test]
+fn test_concurrent_resume_serialized_by_admission_lock() {
+    let h = Harness::budget(200_000);
+    advance_session_to_running(&h);
+    let session_id = h.metadata.session_id;
+
+    // Acquire exclusive admission lock to simulate a concurrent resume operation
+    let admission = h.repo.session_admission(session_id, true).unwrap();
+
+    let service = create_test_service(&h);
+    // Concurrent resume must fail closed with ContextBusy
+    let res = service.resume_session(session_id);
+    assert!(res.is_err());
+
+    drop(admission);
+
+    // After admission lock is released, resume succeeds cleanly
+    let resume_report = service.resume_session(session_id).unwrap();
+    assert_eq!(resume_report.session_id, session_id);
+    assert_eq!(resume_report.new_context_generation, 2);
+}
+
+#[test]
+fn test_process_termination_or_crash_during_resume_is_idempotent() {
+    let h = Harness::budget(300_000);
+    advance_session_to_running(&h);
+    let session_id = h.metadata.session_id;
+    let t1_id = TaskId::for_test_sequence(301);
+    h.repo
+        .create_task(session_id, t1_id, 1, "Task 1", &h.clock)
+        .unwrap();
+
+    let att1_id = AttemptId::for_test_sequence(301);
+    h.repo
+        .record_attempt(
+            RecordAttemptRequest {
+                attempt_id: att1_id,
+                task_id: t1_id,
+                session_id,
+                execution_id: ExecutionId::for_test_sequence(301),
+                action_name: "Action1".into(),
+                action_digest: "digest1".into(),
+                manifest_id: None,
+            },
+            &h.clock,
+        )
+        .unwrap();
+
+    let service = create_test_service(&h);
+    // First resume: reconciles attempt to NotStartedConfirmed, advances generation to 2
+    let report1 = service.resume_session(session_id).unwrap();
+    assert_eq!(report1.new_context_generation, 2);
+    assert_eq!(report1.reconciled_attempts.len(), 1);
+
+    // Repeated resume immediately: idempotent, advances generation to 3, zero unhandled attempts
+    let report2 = service.resume_session(session_id).unwrap();
+    assert_eq!(report2.new_context_generation, 3);
+    assert_eq!(report2.reconciled_attempts.len(), 0);
+}
+
+#[test]
+fn test_result_recorded_with_atomic_budget_settlement() {
+    let h = Harness::budget(200_000);
+    advance_session_to_running(&h);
+    let session_id = h.metadata.session_id;
+    let task_id = TaskId::for_test_sequence(310);
+    h.repo
+        .create_task(session_id, task_id, 1, "Settle Task", &h.clock)
+        .unwrap();
+
+    let attempt_id = AttemptId::for_test_sequence(310);
+    h.repo
+        .record_attempt(
+            RecordAttemptRequest {
+                attempt_id,
+                task_id,
+                session_id,
+                execution_id: ExecutionId::for_test_sequence(310),
+                action_name: "ActionSettle".into(),
+                action_digest: "digest-settle".into(),
+                manifest_id: None,
+            },
+            &h.clock,
+        )
+        .unwrap();
+
+    let res_id =
+        sentra_core::ReservationId::from_bytes(*Identifier::new_deterministic(310, 1).as_bytes());
+    let policy_engine = PolicyEngine::new();
+    let action = OperationAction::InvokeProvider {
+        model_id: "m-settle".into(),
+        estimated_cost: CostUsd::from_micro_usd(100_000),
+    };
+    let ctx = h
+        .authority
+        .execution_context(
+            session_id,
+            Class::Internal,
+            &action,
+            CostUsd::from_micro_usd(100_000),
+            &policy_engine,
+        )
+        .unwrap();
+
+    h.repo
+        .prepare_attempt(
+            PrepareAttemptRequest {
+                attempt_id,
+                reservation_id: res_id,
+                context: ctx,
+                grant: None,
+                reservation_event: event(),
+                consumption_event: event(),
+            },
+            &h.clock,
+        )
+        .unwrap();
+
+    h.repo.record_release(attempt_id, &h.clock).unwrap();
+    h.repo.confirm_running(attempt_id, &h.clock).unwrap();
+
+    // Prior to result: full 100_000 micro-USD is reserved
+    assert_eq!(
+        h.repo.budget_used(session_id).unwrap().as_micro_usd(),
+        100_000
+    );
+
+    // Record result with verified actual spend of 35_000 micro-USD
+    let att = h
+        .repo
+        .record_result(
+            attempt_id,
+            AttemptOutcome::Completed,
+            Some("{\"exit\":0}"),
+            Some(CostUsd::from_micro_usd(35_000)),
+            &h.clock,
+        )
+        .unwrap();
+
+    assert_eq!(att.state, AttemptState::ResultRecorded);
+    assert_eq!(att.terminal_outcome, Some(AttemptOutcome::Completed));
+    assert!(att.settled_at.is_some());
+
+    // Budget used now atomically reflects the settled 35_000; the remaining 65_000 was released!
+    assert_eq!(
+        h.repo.budget_used(session_id).unwrap().as_micro_usd(),
+        35_000
+    );
+}
+
+#[test]
+fn test_repeated_result_recording_and_repeated_settlement_rejected() {
+    let h = Harness::budget(200_000);
+    advance_session_to_running(&h);
+    let session_id = h.metadata.session_id;
+    let task_id = TaskId::for_test_sequence(320);
+    h.repo
+        .create_task(session_id, task_id, 1, "Repeated Task", &h.clock)
+        .unwrap();
+
+    let attempt_id = AttemptId::for_test_sequence(320);
+    h.repo
+        .record_attempt(
+            RecordAttemptRequest {
+                attempt_id,
+                task_id,
+                session_id,
+                execution_id: ExecutionId::for_test_sequence(320),
+                action_name: "ActionRep".into(),
+                action_digest: "digest-rep".into(),
+                manifest_id: None,
+            },
+            &h.clock,
+        )
+        .unwrap();
+
+    let res_id =
+        sentra_core::ReservationId::from_bytes(*Identifier::new_deterministic(320, 1).as_bytes());
+    let policy_engine = PolicyEngine::new();
+    let action = OperationAction::InvokeProvider {
+        model_id: "m-rep".into(),
+        estimated_cost: CostUsd::from_micro_usd(50_000),
+    };
+    let ctx = h
+        .authority
+        .execution_context(
+            session_id,
+            Class::Internal,
+            &action,
+            CostUsd::from_micro_usd(50_000),
+            &policy_engine,
+        )
+        .unwrap();
+
+    h.repo
+        .prepare_attempt(
+            PrepareAttemptRequest {
+                attempt_id,
+                reservation_id: res_id,
+                context: ctx,
+                grant: None,
+                reservation_event: event(),
+                consumption_event: event(),
+            },
+            &h.clock,
+        )
+        .unwrap();
+
+    h.repo.record_release(attempt_id, &h.clock).unwrap();
+    h.repo.confirm_running(attempt_id, &h.clock).unwrap();
+
+    h.repo
+        .record_result(
+            attempt_id,
+            AttemptOutcome::Completed,
+            None,
+            Some(CostUsd::from_micro_usd(20_000)),
+            &h.clock,
+        )
+        .unwrap();
+
+    // Repeated result recording on the same attempt fails with Conflict
+    let rep = h.repo.record_result(
+        attempt_id,
+        AttemptOutcome::Completed,
+        None,
+        Some(CostUsd::from_micro_usd(20_000)),
+        &h.clock,
+    );
+    assert!(rep.is_err());
+
+    // Repeated budget settlement on the settled reservation fails with Conflict
+    let res_settle = h.authority.settle_budget(
+        Identifier::from_bytes(*res_id.as_bytes()),
+        sentra_core::persistence::SettlementStatus::Completed(CostUsd::from_micro_usd(20_000)),
+        event(),
+        &h.clock,
+    );
+    assert!(res_settle.is_err());
+}
+
+#[test]
+fn test_terminal_attempt_with_unsettled_reservation_detected_in_resume() {
+    let h = Harness::budget(200_000);
+    advance_session_to_running(&h);
+    let session_id = h.metadata.session_id;
+    let task_id = TaskId::for_test_sequence(330);
+    h.repo
+        .create_task(session_id, task_id, 1, "Unsettled Task", &h.clock)
+        .unwrap();
+
+    let attempt_id = AttemptId::for_test_sequence(330);
+    h.repo
+        .record_attempt(
+            RecordAttemptRequest {
+                attempt_id,
+                task_id,
+                session_id,
+                execution_id: ExecutionId::for_test_sequence(330),
+                action_name: "ActionUnset".into(),
+                action_digest: "digest-unset".into(),
+                manifest_id: None,
+            },
+            &h.clock,
+        )
+        .unwrap();
+
+    let res_id =
+        sentra_core::ReservationId::from_bytes(*Identifier::new_deterministic(330, 1).as_bytes());
+    let policy_engine = PolicyEngine::new();
+    let action = OperationAction::InvokeProvider {
+        model_id: "m-unset".into(),
+        estimated_cost: CostUsd::from_micro_usd(70_000),
+    };
+    let ctx = h
+        .authority
+        .execution_context(
+            session_id,
+            Class::Internal,
+            &action,
+            CostUsd::from_micro_usd(70_000),
+            &policy_engine,
+        )
+        .unwrap();
+
+    h.repo
+        .prepare_attempt(
+            PrepareAttemptRequest {
+                attempt_id,
+                reservation_id: res_id,
+                context: ctx,
+                grant: None,
+                reservation_event: event(),
+                consumption_event: event(),
+            },
+            &h.clock,
+        )
+        .unwrap();
+
+    h.repo.record_release(attempt_id, &h.clock).unwrap();
+    h.repo.confirm_running(attempt_id, &h.clock).unwrap();
+
+    // Result recorded with None actual_cost (unsettled reservation)
+    h.repo
+        .record_result(attempt_id, AttemptOutcome::Completed, None, None, &h.clock)
+        .unwrap();
+
+    let service = create_test_service(&h);
+    let report = service.resume_session(session_id).unwrap();
+
+    // Resume report detects the terminal attempt with unsettled reservation
+    let reconciled = report
+        .reconciled_attempts
+        .iter()
+        .find(|r| r.attempt_id == attempt_id);
+    assert!(reconciled.is_some());
+    let rec = reconciled.unwrap();
+    assert_eq!(rec.previous_state, AttemptState::ResultRecorded);
+    assert_eq!(rec.reconciled_state, AttemptState::ResultRecorded);
+    assert!(rec.budget_held);
+
+    // Full 70_000 reservation remains conservatively held
+    assert_eq!(
+        h.repo.budget_used(session_id).unwrap().as_micro_usd(),
+        70_000
+    );
+}
+
+#[test]
+fn test_uncertain_reservations_remain_held_after_recovery() {
+    let h = Harness::budget(200_000);
+    advance_session_to_running(&h);
+    let session_id = h.metadata.session_id;
+    let task_id = TaskId::for_test_sequence(340);
+    h.repo
+        .create_task(session_id, task_id, 1, "Uncertain Task", &h.clock)
+        .unwrap();
+
+    let attempt_id = AttemptId::for_test_sequence(340);
+    h.repo
+        .record_attempt(
+            RecordAttemptRequest {
+                attempt_id,
+                task_id,
+                session_id,
+                execution_id: ExecutionId::for_test_sequence(340),
+                action_name: "ActionUncertain".into(),
+                action_digest: "digest-unc".into(),
+                manifest_id: None,
+            },
+            &h.clock,
+        )
+        .unwrap();
+
+    let res_id =
+        sentra_core::ReservationId::from_bytes(*Identifier::new_deterministic(340, 1).as_bytes());
+    let policy_engine = PolicyEngine::new();
+    let action = OperationAction::InvokeProvider {
+        model_id: "m-unc".into(),
+        estimated_cost: CostUsd::from_micro_usd(85_000),
+    };
+    let ctx = h
+        .authority
+        .execution_context(
+            session_id,
+            Class::Internal,
+            &action,
+            CostUsd::from_micro_usd(85_000),
+            &policy_engine,
+        )
+        .unwrap();
+
+    h.repo
+        .prepare_attempt(
+            PrepareAttemptRequest {
+                attempt_id,
+                reservation_id: res_id,
+                context: ctx,
+                grant: None,
+                reservation_event: event(),
+                consumption_event: event(),
+            },
+            &h.clock,
+        )
+        .unwrap();
+
+    h.repo.record_release(attempt_id, &h.clock).unwrap();
+    h.repo.confirm_running(attempt_id, &h.clock).unwrap();
+
+    let service = create_test_service(&h);
+    service.resume_session(session_id).unwrap();
+
+    // Check attempt is Uncertain and budget is fully held
+    let att = h.repo.get_attempt(attempt_id).unwrap().unwrap();
+    assert_eq!(att.state, AttemptState::Uncertain);
+    assert_eq!(
+        h.repo.budget_used(session_id).unwrap().as_micro_usd(),
+        85_000
+    );
+
+    // Second resume preserves the full hold
+    service.resume_session(session_id).unwrap();
+    assert_eq!(
+        h.repo.budget_used(session_id).unwrap().as_micro_usd(),
+        85_000
+    );
+}
+
+#[test]
+fn test_confirmed_not_started_released_exactly_once() {
+    let h = Harness::budget(200_000);
+    advance_session_to_running(&h);
+    let session_id = h.metadata.session_id;
+    let task_id = TaskId::for_test_sequence(350);
+    h.repo
+        .create_task(session_id, task_id, 1, "NotStarted Task", &h.clock)
+        .unwrap();
+
+    let attempt_id = AttemptId::for_test_sequence(350);
+    h.repo
+        .record_attempt(
+            RecordAttemptRequest {
+                attempt_id,
+                task_id,
+                session_id,
+                execution_id: ExecutionId::for_test_sequence(350),
+                action_name: "ActionNotStarted".into(),
+                action_digest: "digest-ns".into(),
+                manifest_id: None,
+            },
+            &h.clock,
+        )
+        .unwrap();
+
+    let res_id =
+        sentra_core::ReservationId::from_bytes(*Identifier::new_deterministic(350, 1).as_bytes());
+    let policy_engine = PolicyEngine::new();
+    let action = OperationAction::InvokeProvider {
+        model_id: "m-ns".into(),
+        estimated_cost: CostUsd::from_micro_usd(60_000),
+    };
+    let ctx = h
+        .authority
+        .execution_context(
+            session_id,
+            Class::Internal,
+            &action,
+            CostUsd::from_micro_usd(60_000),
+            &policy_engine,
+        )
+        .unwrap();
+
+    h.repo
+        .prepare_attempt(
+            PrepareAttemptRequest {
+                attempt_id,
+                reservation_id: res_id,
+                context: ctx,
+                grant: None,
+                reservation_event: event(),
+                consumption_event: event(),
+            },
+            &h.clock,
+        )
+        .unwrap();
+
+    assert_eq!(
+        h.repo.budget_used(session_id).unwrap().as_micro_usd(),
+        60_000
+    );
+
+    // Cancel before release
+    let att = h.repo.confirm_not_started(attempt_id, &h.clock).unwrap();
+    assert_eq!(att.state, AttemptState::NotStartedConfirmed);
+
+    // Budget is released cleanly to 0
+    assert_eq!(h.repo.budget_used(session_id).unwrap().as_micro_usd(), 0);
+
+    // Repeating confirm_not_started is rejected
+    assert!(h.repo.confirm_not_started(attempt_id, &h.clock).is_err());
+
+    // Attempting release after not-started is rejected
+    assert!(h.repo.record_release(attempt_id, &h.clock).is_err());
+}
+
+#[test]
+fn test_stale_epoch_rejection_in_confirm_running_and_record_result() {
+    let h = Harness::budget(200_000);
+    advance_session_to_running(&h);
+    let session_id = h.metadata.session_id;
+    let task_id = TaskId::for_test_sequence(360);
+    h.repo
+        .create_task(session_id, task_id, 1, "Epoch Task", &h.clock)
+        .unwrap();
+
+    let attempt_id = AttemptId::for_test_sequence(360);
+    h.repo
+        .record_attempt(
+            RecordAttemptRequest {
+                attempt_id,
+                task_id,
+                session_id,
+                execution_id: ExecutionId::for_test_sequence(360),
+                action_name: "ActionEpoch".into(),
+                action_digest: "digest-epoch".into(),
+                manifest_id: None,
+            },
+            &h.clock,
+        )
+        .unwrap();
+
+    let res_id =
+        sentra_core::ReservationId::from_bytes(*Identifier::new_deterministic(360, 1).as_bytes());
+    let policy_engine = PolicyEngine::new();
+    let action = OperationAction::InvokeProvider {
+        model_id: "m-epoch".into(),
+        estimated_cost: CostUsd::from_micro_usd(40_000),
+    };
+    let ctx = h
+        .authority
+        .execution_context(
+            session_id,
+            Class::Internal,
+            &action,
+            CostUsd::from_micro_usd(40_000),
+            &policy_engine,
+        )
+        .unwrap();
+
+    h.repo
+        .prepare_attempt(
+            PrepareAttemptRequest {
+                attempt_id,
+                reservation_id: res_id,
+                context: ctx,
+                grant: None,
+                reservation_event: event(),
+                consumption_event: event(),
+            },
+            &h.clock,
+        )
+        .unwrap();
+
+    h.repo.record_release(attempt_id, &h.clock).unwrap();
+
+    // Advance session epoch from 1 to 2
+    h.authority
+        .advance_session_epoch(session_id, event(), &h.clock)
+        .unwrap();
+
+    // confirm_running with stale attempt prepared under epoch 1 fails with ContextMismatch
+    denied(
+        h.repo.confirm_running(attempt_id, &h.clock),
+        Kind::ContextMismatch,
+    );
+
+    // Now test record_result epoch check:
+    // Create attempt 2 under epoch 2
+    let attempt2_id = AttemptId::for_test_sequence(361);
+    h.repo
+        .record_attempt(
+            RecordAttemptRequest {
+                attempt_id: attempt2_id,
+                task_id,
+                session_id,
+                execution_id: ExecutionId::for_test_sequence(361),
+                action_name: "ActionEpoch2".into(),
+                action_digest: "digest-epoch2".into(),
+                manifest_id: None,
+            },
+            &h.clock,
+        )
+        .unwrap();
+
+    let res2_id =
+        sentra_core::ReservationId::from_bytes(*Identifier::new_deterministic(361, 1).as_bytes());
+    let ctx2 = h
+        .authority
+        .execution_context(
+            session_id,
+            Class::Internal,
+            &action,
+            CostUsd::from_micro_usd(40_000),
+            &policy_engine,
+        )
+        .unwrap();
+
+    h.repo
+        .prepare_attempt(
+            PrepareAttemptRequest {
+                attempt_id: attempt2_id,
+                reservation_id: res2_id,
+                context: ctx2,
+                grant: None,
+                reservation_event: event(),
+                consumption_event: event(),
+            },
+            &h.clock,
+        )
+        .unwrap();
+
+    h.repo.record_release(attempt2_id, &h.clock).unwrap();
+    h.repo.confirm_running(attempt2_id, &h.clock).unwrap();
+
+    // Advance session epoch from 2 to 3
+    h.authority
+        .advance_session_epoch(session_id, event(), &h.clock)
+        .unwrap();
+
+    // record_result with stale attempt prepared under epoch 2 fails with ContextMismatch
+    denied(
+        h.repo.record_result(
+            attempt2_id,
+            AttemptOutcome::Completed,
+            None,
+            Some(CostUsd::ZERO),
+            &h.clock,
+        ),
+        Kind::ContextMismatch,
+    );
+}
+
+#[test]
+fn test_recovery_failure_propagation_when_task_update_fails() {
+    let h = Harness::new();
+    let service = create_test_service(&h);
+
+    // Resume on unknown session returns Conflict
+    let unknown_session = SessionId::for_test_sequence(999);
+    let res = service.resume_session(unknown_session);
+    assert!(res.is_err());
+}
+
+#[test]
+fn test_resume_report_accuracy_after_reconciliation() {
+    let h = Harness::budget(500_000);
+    advance_session_to_running(&h);
+    let session_id = h.metadata.session_id;
+
+    // Task 1: COMPLETED
+    let t1_id = TaskId::for_test_sequence(381);
+    h.repo
+        .create_task(session_id, t1_id, 1, "Completed Task", &h.clock)
+        .unwrap();
+    h.repo
+        .update_task_state(
+            t1_id,
+            TaskState::Pending,
+            TaskState::InProgress,
+            event(),
+            &h.clock,
+        )
+        .unwrap();
+    h.repo
+        .update_task_state(
+            t1_id,
+            TaskState::InProgress,
+            TaskState::Completed,
+            event(),
+            &h.clock,
+        )
+        .unwrap();
+
+    // Task 2: Running -> will be reconciled to BLOCKED
+    let t2_id = TaskId::for_test_sequence(382);
+    h.repo
+        .create_task(session_id, t2_id, 2, "Running Task", &h.clock)
+        .unwrap();
+    let att2_id = AttemptId::for_test_sequence(382);
+    h.repo
+        .record_attempt(
+            RecordAttemptRequest {
+                attempt_id: att2_id,
+                task_id: t2_id,
+                session_id,
+                execution_id: ExecutionId::for_test_sequence(382),
+                action_name: "ActionT2".into(),
+                action_digest: "digest-t2".into(),
+                manifest_id: None,
+            },
+            &h.clock,
+        )
+        .unwrap();
+
+    let res2_id =
+        sentra_core::ReservationId::from_bytes(*Identifier::new_deterministic(382, 1).as_bytes());
+    let policy_engine = PolicyEngine::new();
+    let action = OperationAction::InvokeProvider {
+        model_id: "m-t2".into(),
+        estimated_cost: CostUsd::from_micro_usd(50_000),
+    };
+    let ctx2 = h
+        .authority
+        .execution_context(
+            session_id,
+            Class::Internal,
+            &action,
+            CostUsd::from_micro_usd(50_000),
+            &policy_engine,
+        )
+        .unwrap();
+
+    h.repo
+        .prepare_attempt(
+            PrepareAttemptRequest {
+                attempt_id: att2_id,
+                reservation_id: res2_id,
+                context: ctx2,
+                grant: None,
+                reservation_event: event(),
+                consumption_event: event(),
+            },
+            &h.clock,
+        )
+        .unwrap();
+    h.repo.record_release(att2_id, &h.clock).unwrap();
+    h.repo.confirm_running(att2_id, &h.clock).unwrap();
+
+    // Task 3: Prepared attempt -> will be NotStartedConfirmed, task stays PENDING
+    let t3_id = TaskId::for_test_sequence(383);
+    h.repo
+        .create_task(session_id, t3_id, 3, "Prepared Task", &h.clock)
+        .unwrap();
+    let att3_id = AttemptId::for_test_sequence(383);
+    h.repo
+        .record_attempt(
+            RecordAttemptRequest {
+                attempt_id: att3_id,
+                task_id: t3_id,
+                session_id,
+                execution_id: ExecutionId::for_test_sequence(383),
+                action_name: "ActionT3".into(),
+                action_digest: "digest-t3".into(),
+                manifest_id: None,
+            },
+            &h.clock,
+        )
+        .unwrap();
+
+    // Task 4: Purely PENDING task with no attempts
+    let t4_id = TaskId::for_test_sequence(384);
+    h.repo
+        .create_task(session_id, t4_id, 4, "Pure Pending Task", &h.clock)
+        .unwrap();
+
+    let service = create_test_service(&h);
+    let report = service.resume_session(session_id).unwrap();
+
+    assert_eq!(report.completed_tasks, vec![t1_id]);
+    assert_eq!(report.blocked_tasks, vec![t2_id]);
+    assert_eq!(report.pending_tasks, vec![t3_id, t4_id]);
+
+    // Verify database state matches report exactly
+    assert_eq!(
+        h.repo.get_task(t1_id).unwrap().unwrap().state,
+        TaskState::Completed
+    );
+    assert_eq!(
+        h.repo.get_task(t2_id).unwrap().unwrap().state,
+        TaskState::Blocked
+    );
+    assert_eq!(
+        h.repo.get_task(t3_id).unwrap().unwrap().state,
+        TaskState::Pending
+    );
+    assert_eq!(
+        h.repo.get_task(t4_id).unwrap().unwrap().state,
+        TaskState::Pending
+    );
 }
