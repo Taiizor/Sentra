@@ -132,7 +132,7 @@ fn test_schema_v1_to_v2_transactional_migration_preserves_data() {
             "revision": "rev-v1",
             "classification_floor": "INTERNAL",
             "budget_limit_micro_usd": 5_000_000,
-            "policy_identity": "policy:default-v1",
+            "policy_identity": "sentra-policy:v1:auto-microusd=1000000",
         });
 
         conn.execute(
