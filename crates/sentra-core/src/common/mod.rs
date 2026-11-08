@@ -6,4 +6,7 @@ pub mod clock;
 pub mod crypto;
 
 pub use clock::{Clock, MockClock, SystemClock};
-pub use crypto::{Sha256Stream, sha256_bytes, sha256_digest, sha256_prefixed};
+pub use crypto::{
+    Sha256Stream, constant_time_eq, hmac_sha256, hmac_sha256_hex, sha256_bytes, sha256_digest,
+    sha256_prefixed,
+};
