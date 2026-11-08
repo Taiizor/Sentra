@@ -9,17 +9,11 @@ use std::{
 fn main() -> ExitCode {
     let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
     let cwd = std::env::current_dir().unwrap_or_default();
-    let response = sentra_cli::run(&arguments, &cwd);
-    if io::stdout()
-        .lock()
-        .write_all(response.stdout.as_bytes())
-        .is_err()
-        || io::stderr()
-            .lock()
-            .write_all(response.stderr.as_bytes())
-            .is_err()
-    {
-        return ExitCode::from(8);
-    }
-    ExitCode::from(response.exit_code)
+    let mut stdin = io::stdin().lock();
+    let mut stdout = io::stdout().lock();
+    let mut stderr = io::stderr().lock();
+    let code = sentra_cli::run_stream(&arguments, &cwd, &mut stdin, &mut stdout, &mut stderr);
+    let _ = stdout.flush();
+    let _ = stderr.flush();
+    ExitCode::from(code)
 }

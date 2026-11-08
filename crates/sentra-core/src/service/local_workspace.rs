@@ -6,6 +6,8 @@ use crate::{
     Clock, CostUsd, EventId, FailClosedBackend, Finding, OperatingMode, PolicyEngine,
     SecurityClassification, SessionId, SessionState, SystemClock, TaskId, TimestampUtc,
     advisory::{AdvisoryAuditResult, AdvisoryDatabase, parse_cargo_lock},
+    diff::{SnapshotDiff, compare_snapshots},
+    manifest::{SnapshotLimits, capture_source_snapshot},
     persistence::{PersistenceError, PersistenceRepository, SqliteConnectionManager, TaskState},
     workspace::WorkspaceBoundary,
 };
@@ -176,6 +178,28 @@ impl LocalWorkspace {
     ) -> Result<LocalWorkspaceReport, LocalWorkspaceError> {
         Self::run(workspace, database, Operation::Session(id))
     }
+    /// Derives differential snapshot analysis between two workspaces (REQ-F01, REQ-F02).
+    /// Pure-Rust directory comparison with lexical boundary containment and zero subprocess spawning.
+    pub fn diff(base: &Path, head: &Path) -> Result<SnapshotDiff, LocalWorkspaceError> {
+        use LocalWorkspaceErrorKind as Kind;
+        let base_boundary =
+            WorkspaceBoundary::establish(base, SessionId::new(), SecurityClassification::Internal)
+                .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
+
+        let head_boundary =
+            WorkspaceBoundary::establish(head, SessionId::new(), SecurityClassification::Internal)
+                .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
+
+        let clock = SystemClock::new();
+        let limits = SnapshotLimits::default();
+        let base_snapshot = capture_source_snapshot(&base_boundary, &limits, &clock)
+            .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
+        let head_snapshot = capture_source_snapshot(&head_boundary, &limits, &clock)
+            .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
+
+        Ok(compare_snapshots(&base_snapshot, &head_snapshot))
+    }
+
     /// Explicitly recovers an interrupted or incomplete foundation store.
     /// Safely completes incomplete initialization without manual file deletion.
     pub fn recover(

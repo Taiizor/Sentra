@@ -10,12 +10,12 @@ ADRs record the rationale and reversal conditions for important choices. **Accep
 | [0004](0004-vm-boundary-for-untrusted-execution.md) | Disposable VM boundary for real untrusted execution | Accepted | Hyper-V/backend selection remains proposed until containment gates |
 | [0005](0005-capability-scoped-process-adapters.md) | Capability-scoped out-of-process adapters and shared client services | Accepted | Schema conformance and MCP/API gates |
 | [0006](0006-evidence-and-independent-verification.md) | Evidence-based findings and independent patch verification | Accepted | Oracle/lifecycle/evaluation corpus in Phase 2 |
-| [0007](0007-open-source-and-integration-licensing.md) | OSI license selection and independent integration license review | Proposed | Owner choice and exact-version review before distribution |
+| [0007](0007-open-source-and-integration-licensing.md) | OSI license selection and independent integration license review | Accepted | Apache-2.0 selected by project owner on 2026-11-09 |
 | [0008](0008-recoverable-local-operations.md) | Fenced session continuation and durable dispatch/result recovery | Accepted | Validated via Schema V2, outbox state machine, and atomic resume (Increments 2.0, 2.0.1, 2.3) |
 | [0009](0009-verified-content-and-blob-reconciliation.md) | Immutable SHA-256 content, canonical manifests and blob reconciliation | Accepted | Validated via pure-Rust sha2, CAS BlobStore, and manifest binding (Increments 2.1, 2.2, 2.3) |
 | [0010](0010-explicit-initialization-recovery.md) | Explicit operator recovery for incomplete initialization (F-611-02) | Accepted | Validated via LocalWorkspace::recover and sentra recover (Increment 2.4) |
 
-The three remediation decisions above (ADR-0008, ADR-0009, ADR-0010) and ADR-0002 have been empirically validated and Accepted through Phase 1 Increments 2.0 through 2.4. Only ADR-0007 remains Proposed pending official open-source license selection before distribution.
+All Architectural Decision Records (ADR-0001 through ADR-0010) are now fully validated and Accepted. The official Apache-2.0 license and third-party notices have been incorporated.
 
 ## Maintenance
 
