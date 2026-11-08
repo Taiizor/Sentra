@@ -20,6 +20,8 @@ pub mod advisory;
 pub mod audit;
 /// Common utilities including clock abstractions.
 pub mod common;
+/// Source snapshot differential analysis, narrow Rust hunk extraction, and revision invalidation.
+pub mod diff;
 /// Core domain models, identifiers, and classifications.
 pub mod domain;
 /// Host-side evidence verification boundary and artifact admission filters.
@@ -48,6 +50,11 @@ pub use advisory::{
 pub use audit::{AuditEvent, AuditEventKind};
 pub use common::{
     Clock, MockClock, Sha256Stream, SystemClock, sha256_bytes, sha256_digest, sha256_prefixed,
+};
+pub use diff::{
+    DiffError, DiffErrorKind, DiffHunk, DiffLine, DiffSummary, FileContentDiff, FileDelta,
+    FileDeltaKind, HunkLimits, RevisionBinding, SnapshotDiff, compare_snapshots, compute_line_diff,
+    reconcile_findings_anti_regression, validate_patch_approval_invalidation,
 };
 pub use domain::{
     ApprovalId, AttemptId, Confidence, DomainError, EventId, EvidenceId, ExecutionId, Finding,
