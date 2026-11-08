@@ -302,6 +302,147 @@ impl CoreService {
             .map_err(ServiceError::persistence)
     }
 
+    /// Returns a reference to the underlying persistent repository.
+    pub fn repository(&self) -> &PersistenceRepository {
+        &self.repository
+    }
+
+    /// Returns a reference to the privileged persistent authority.
+    pub fn authority(&self) -> &PersistentApprovalAuthority {
+        &self.authority
+    }
+
+    /// Resumes an interrupted session, reconciling outstanding attempts, holding uncertain effects,
+    /// and advancing context generation atomically.
+    pub fn resume_session(
+        &self,
+        session_id: SessionId,
+    ) -> Result<SessionResumeReport, ServiceError> {
+        let session = self.get_session(session_id)?;
+        if session.state.is_terminal() {
+            return Err(ServiceError::invalid_state(
+                "Cannot resume a terminal session",
+            ));
+        }
+
+        // 1. Query all tasks for this session
+        let tasks = self
+            .repository
+            .list_tasks(session_id)
+            .map_err(ServiceError::persistence)?;
+        let mut completed_tasks = Vec::new();
+        let mut pending_tasks = Vec::new();
+        for task in &tasks {
+            if task.state == TaskState::Completed {
+                completed_tasks.push(task.task_id);
+            } else {
+                pending_tasks.push(task.task_id);
+            }
+        }
+
+        // 2. Query all attempts for this session and reconcile incomplete ones
+        let attempts = self
+            .repository
+            .list_attempts_for_session(session_id)
+            .map_err(ServiceError::persistence)?;
+
+        let mut reconciled_attempts = Vec::new();
+        for attempt in attempts {
+            match attempt.state {
+                AttemptState::ReleaseRecorded | AttemptState::RunningConfirmed => {
+                    let updated = self
+                        .repository
+                        .mark_attempt_uncertain(attempt.attempt_id, &self.clock)
+                        .map_err(ServiceError::persistence)?;
+
+                    // Mark task Blocked so it cannot be mistakenly auto-dispatched without operator review
+                    if let Ok(Some(task)) = self.repository.get_task(attempt.task_id) {
+                        if task.state == TaskState::InProgress || task.state == TaskState::Pending {
+                            let _ = self.repository.update_task_state(
+                                attempt.task_id,
+                                task.state,
+                                TaskState::Blocked,
+                                EventId::new(),
+                                &self.clock,
+                            );
+                        }
+                    }
+
+                    reconciled_attempts.push(ReconciledAttempt {
+                        attempt_id: attempt.attempt_id,
+                        task_id: attempt.task_id,
+                        previous_state: attempt.state,
+                        reconciled_state: updated.state,
+                        budget_held: true,
+                    });
+                }
+                AttemptState::Prepared => {
+                    let updated = self
+                        .repository
+                        .confirm_not_started(attempt.attempt_id, &self.clock)
+                        .map_err(ServiceError::persistence)?;
+                    reconciled_attempts.push(ReconciledAttempt {
+                        attempt_id: attempt.attempt_id,
+                        task_id: attempt.task_id,
+                        previous_state: attempt.state,
+                        reconciled_state: updated.state,
+                        budget_held: false,
+                    });
+                }
+                AttemptState::Recorded => {
+                    let updated = self
+                        .repository
+                        .confirm_not_started(attempt.attempt_id, &self.clock)
+                        .map_err(ServiceError::persistence)?;
+                    reconciled_attempts.push(ReconciledAttempt {
+                        attempt_id: attempt.attempt_id,
+                        task_id: attempt.task_id,
+                        previous_state: attempt.state,
+                        reconciled_state: updated.state,
+                        budget_held: false,
+                    });
+                }
+                AttemptState::ResultRecorded
+                | AttemptState::Uncertain
+                | AttemptState::NotStartedConfirmed => {
+                    // Terminal attempt states are already reconciled
+                }
+            }
+        }
+
+        // 3. Atomically advance session context generation (fencing epoch)
+        let new_context_generation = self
+            .authority
+            .advance_session_epoch(session_id, EventId::new(), &self.clock)
+            .map_err(ServiceError::persistence)?;
+
+        // 4. Transition session state to Running if Paused
+        let resumed_state = if session.state == SessionState::Paused {
+            self.repository
+                .transition_session(
+                    session_id,
+                    SessionState::Paused,
+                    SessionState::Running,
+                    EventId::new(),
+                    &self.clock,
+                )
+                .map_err(ServiceError::persistence)?;
+            SessionState::Running
+        } else {
+            session.state
+        };
+
+        Ok(SessionResumeReport {
+            session_id,
+            previous_state: session.state,
+            resumed_state,
+            new_context_generation,
+            reconciled_attempts,
+            completed_tasks,
+            pending_tasks,
+        })
+    }
+
     // -------------------------------------------------------------------------
     // Workspace Operations
     // -------------------------------------------------------------------------
