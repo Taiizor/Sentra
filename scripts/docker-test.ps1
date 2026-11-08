@@ -133,7 +133,8 @@ if ($Mode -in @("test", "all")) {
             "authorization_tests",
             "persistence_tests",
             "durable_dispatch_tests",
-            "manifest_tests"
+            "manifest_tests",
+            "storage_tests"
         )
         $testArgs = ($suites | ForEach-Object { "--test $_" }) -join " "
         $cmd = "cargo test --package sentra-core $testArgs $offlineFlag"

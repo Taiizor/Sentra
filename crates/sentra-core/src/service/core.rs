@@ -18,6 +18,7 @@ use crate::{
         error::ServiceError,
         lifecycle::{CancellationReason, CancellationReport, SessionResumeReport},
     },
+    storage::{BlobId, BlobStore},
     workspace::{DiscoveryLimits, DiscoveryResult, WorkspaceBoundary},
 };
 
@@ -129,6 +130,7 @@ pub struct CoreService {
     execution_engine: ExecutionEngine,
     evidence_verifier: EvidenceVerifier,
     clock: Arc<dyn Clock>,
+    blob_store: Option<Arc<dyn BlobStore>>,
 }
 
 impl CoreService {
@@ -158,7 +160,48 @@ impl CoreService {
             execution_engine: ExecutionEngine::new(execution_backend),
             evidence_verifier,
             clock,
+            blob_store: None,
         }
+    }
+
+    /// Attaches a content-addressed `BlobStore` for evidence and artifact persistence.
+    pub fn with_blob_store(mut self, blob_store: Arc<dyn BlobStore>) -> Self {
+        self.blob_store = Some(blob_store);
+        self
+    }
+
+    /// Accessor for the configured `BlobStore`, if any.
+    pub fn blob_store(&self) -> Option<&Arc<dyn BlobStore>> {
+        self.blob_store.as_ref()
+    }
+
+    /// Stores an evidence envelope into the attached content-addressed blob store.
+    ///
+    /// Validates the envelope through the evidence verifier, computes the SHA-256
+    /// content address, and persists it into the CAS repository.
+    pub fn store_evidence(&self, envelope: &EvidenceEnvelope) -> Result<BlobId, ServiceError> {
+        let store = self.blob_store.as_ref().ok_or_else(|| {
+            ServiceError::invalid_state("BlobStore is not configured on this CoreService instance")
+        })?;
+
+        self.evidence_verifier
+            .verify_envelope(envelope)
+            .map_err(ServiceError::evidence)?;
+
+        store
+            .put_evidence_envelope(envelope)
+            .map_err(|e| ServiceError::invalid_state(e.to_string()))
+    }
+
+    /// Retrieves an evidence artifact payload from the attached content-addressed blob store.
+    pub fn get_evidence(&self, blob_id: &BlobId) -> Result<Vec<u8>, ServiceError> {
+        let store = self.blob_store.as_ref().ok_or_else(|| {
+            ServiceError::invalid_state("BlobStore is not configured on this CoreService instance")
+        })?;
+
+        store
+            .get(blob_id)
+            .map_err(|e| ServiceError::invalid_state(e.to_string()))
     }
 
     /// Accessor for service configuration.
