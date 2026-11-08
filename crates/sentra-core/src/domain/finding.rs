@@ -218,6 +218,17 @@ pub enum FindingSource {
         /// Version of the package found in the manifest or lockfile.
         version: String,
     },
+    /// Multi-ecosystem dependency lockfile security advisory matching (npm, yarn, pnpm, bun, deno).
+    DependencyLockAdvisory {
+        /// Identifier of the security advisory (e.g. `GHSA-p6mc-m468-83gw` or `CVE-2021-45720`).
+        advisory_id: String,
+        /// Name of the affected package.
+        package: String,
+        /// Version of the package found in the manifest or lockfile.
+        version: String,
+        /// Relative path of the lockfile (e.g. `package-lock.json`, `bun.lock`).
+        lockfile_path: String,
+    },
     /// Static code analysis engine or scanner.
     StaticAnalysis {
         /// Name of the static analysis engine (e.g. `semgrep`).

@@ -121,16 +121,24 @@ pub fn canonical_tool_definitions() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "sentra_audit_dependencies".to_string(),
-            description: "Audits Cargo.lock dependencies against the pinned RustSec advisory database (REQ-F07).".to_string(),
+            description: "Audits Cargo.lock, package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lock, or deno.lock dependencies against the pinned advisory database (REQ-F07).".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
+                    "lockfile_content": {
+                        "type": "string",
+                        "description": "Content of the lockfile to inspect (Cargo.lock, package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lock, deno.lock)"
+                    },
+                    "lockfile_name": {
+                        "type": "string",
+                        "description": "Optional filename of the lockfile to determine ecosystem (e.g. package-lock.json, bun.lock). Defaults to Cargo.lock."
+                    },
                     "cargo_lock_content": {
                         "type": "string",
-                        "description": "Content of the Cargo.lock file to inspect"
+                        "description": "Legacy alias for lockfile_content (Cargo.lock)"
                     }
                 },
-                "required": ["cargo_lock_content"]
+                "required": []
             }),
         },
         ToolDefinition {

@@ -4,6 +4,21 @@ Last updated: 2026-11-09.
 
 ## Current status
 
+Multi-Ecosystem Lockfile Auditing & Advisory Analysis: IMPLEMENTED & VERIFIED (`sentra-core::advisory`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lock`, `deno.lock`, `Cargo.lock`). Extended Sentra's dependency security audit engine to support polyglot software environments under `#![forbid(unsafe_code)]` with zero runtime subprocess dependencies or node/npm/yarn/pnpm/bun/deno installation requirements:
+- Implemented pure-Rust parsers for:
+  - npm / Node.js: `package-lock.json` (v1, v2, v3 schemas with nested scopes) in `crates/sentra-core/src/advisory/package_lock.rs`.
+  - Yarn: `yarn.lock` (v1 Classic and v2+ Berry with resolution headers) in `crates/sentra-core/src/advisory/yarn_lock.rs`.
+  - pnpm: `pnpm-lock.yaml` (v5, v6, v9 YAML packages map with peer resolution stripping) in `crates/sentra-core/src/advisory/pnpm_lock.rs`.
+  - Bun: `bun.lock` (text and JSON array/object schemas) in `crates/sentra-core/src/advisory/bun_lock.rs`.
+  - Deno: `deno.lock` (v2 and v3 schemas with npm specifier mappings) in `crates/sentra-core/src/advisory/deno_lock.rs`.
+- Added multi-lockfile auto-discovery and dispatch (`discover_workspace_lockfiles`, `parse_lockfile_content`, `LockfileKind`) in `crates/sentra-core/src/advisory/multi_lock.rs`.
+- Enriched pinned advisory database with canonical JS/TS vulnerabilities (`lodash` GHSA-p6mc-m468-83gw Prototype Pollution, `express` GHSA-qw6h-v559-w396 Path Traversal, `minimist` GHSA-vh95-rmgr-6w4m, `axios` GHSA-wf5p-g6vw-rhxx).
+- Updated `LocalWorkspace::audit_dependencies` to automatically discover and audit any combination of lockfiles in workspace root, mapping findings to specific source lockfiles (`TargetLocation.path`).
+- Updated `FindingSource::DependencyLockAdvisory` and SARIF export to output valid OASIS SARIF v2.1.0 reports targeting the discovered lockfile with rule help URIs.
+- Updated MCP `sentra_audit_dependencies` to accept `lockfile_content` and optional `lockfile_name`.
+- Verified across 6/6 tests in `crates/sentra-core/tests/multi_ecosystem_tests.rs`, warning-free Clippy (`cargo clippy --workspace --all-targets --all-features -- -D warnings`), and clean formatting.
+
+
 OASIS SARIF v2.1.0 Export Module & CLI Integration: IMPLEMENTED & VERIFIED (`sentra-core::export`, `sentra export sarif`). Delivered the standard security findings export adapter in pure safe Rust under `#![forbid(unsafe_code)]` complying with the official OASIS SARIF v2.1.0 specification and GitHub Code Scanning / GitLab SAST requirements (`REQ-F05`, `REQ-F07`, `EXTENSIONS.md`):
 - Implemented strongly-typed SARIF models (`SarifLog`, `SarifRun`, `SarifTool`, `SarifDriver`, `SarifRule`, `SarifResult`, `SarifLocation`, `SarifPhysicalLocation`, `SarifArtifactLocation`, `SarifRegion`) in `crates/sentra-core/src/export/sarif.rs`.
 - Implemented `generate_sarif_report` and `generate_sarif_json`, mapping finding severities (`Critical`, `High`, `Medium`, `Low`, `Informational`) to SARIF levels (`error`, `warning`, `note`) and CVSS-equivalent security severity scores (`9.0`, `7.5`, `5.0`, `2.0`, `0.0`) for GitHub Code Scanning visualization.

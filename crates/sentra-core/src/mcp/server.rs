@@ -4,7 +4,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    advisory::{AdvisoryDatabase, parse_cargo_lock},
+    advisory::{AdvisoryDatabase, LockfileKind, parse_lockfile_content},
     common::crypto::sha256_prefixed,
     domain::{TimestampUtc, id::SessionId},
     mcp::{
@@ -168,18 +168,27 @@ impl McpServer {
             })),
             "sentra_audit_dependencies" => {
                 let lock_content = args
-                    .get("cargo_lock_content")
+                    .get("lockfile_content")
+                    .or_else(|| args.get("cargo_lock_content"))
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| {
                         McpErrorObject::invalid_params(
-                            "Missing required 'cargo_lock_content' argument",
+                            "Missing required 'lockfile_content' (or 'cargo_lock_content') argument",
                         )
                     })?;
 
-                let packages = parse_cargo_lock(lock_content).map_err(|e| {
+                let lock_name = args
+                    .get("lockfile_name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Cargo.lock");
+
+                let kind =
+                    LockfileKind::detect_from_filename(lock_name).unwrap_or(LockfileKind::Cargo);
+
+                let packages = parse_lockfile_content(kind, lock_content).map_err(|e| {
                     McpErrorObject::new(
                         McpErrorCode::InvalidParams,
-                        format!("Failed to parse Cargo.lock: {e}"),
+                        format!("Failed to parse {lock_name}: {e}"),
                     )
                 })?;
 
@@ -190,6 +199,7 @@ impl McpServer {
                     .map_err(|e| McpErrorObject::internal_error(format!("Audit failed: {e}")))?;
 
                 Ok(serde_json::json!({
+                    "lockfile_audited": lock_name,
                     "packages_audited": audit_result.packages_audited,
                     "vulnerabilities_found": audit_result.matches.len(),
                     "advisories_matched": audit_result.matches.iter().map(|f| &f.advisory.id).collect::<Vec<_>>()

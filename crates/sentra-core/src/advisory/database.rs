@@ -76,12 +76,13 @@ pub struct AdvisoryAuditResult {
 }
 
 impl AdvisoryAuditResult {
-    /// Converts matched advisories into authoritative candidate findings.
-    pub fn to_candidate_findings(
+    /// Converts matched advisories into authoritative candidate findings for a specific lockfile path.
+    pub fn to_candidate_findings_for_lockfile(
         &self,
         session_id: SessionId,
         task_id: TaskId,
         now: TimestampUtc,
+        lockfile_path: &str,
     ) -> Vec<Finding> {
         self.matches
             .iter()
@@ -100,6 +101,21 @@ impl AdvisoryAuditResult {
                     m.recommended_patch.as_deref().unwrap_or("None available")
                 );
 
+                let source = if lockfile_path == "Cargo.lock" {
+                    FindingSource::CargoLockAdvisory {
+                        advisory_id: m.advisory.id.clone(),
+                        package: m.package.clone(),
+                        version: m.installed_version.clone(),
+                    }
+                } else {
+                    FindingSource::DependencyLockAdvisory {
+                        advisory_id: m.advisory.id.clone(),
+                        package: m.package.clone(),
+                        version: m.installed_version.clone(),
+                        lockfile_path: lockfile_path.to_string(),
+                    }
+                };
+
                 Finding::new_candidate(
                     id,
                     session_id,
@@ -109,13 +125,9 @@ impl AdvisoryAuditResult {
                     m.advisory.severity,
                     Confidence::Confirmed,
                     m.reachability, // Preserves Reachability::PresentOnly per F-07
-                    FindingSource::CargoLockAdvisory {
-                        advisory_id: m.advisory.id.clone(),
-                        package: m.package.clone(),
-                        version: m.installed_version.clone(),
-                    },
+                    source,
                     Some(TargetLocation {
-                        path: "Cargo.lock".to_string(),
+                        path: lockfile_path.to_string(),
                         start_line: None,
                         end_line: None,
                     }),
@@ -124,6 +136,16 @@ impl AdvisoryAuditResult {
                 )
             })
             .collect()
+    }
+
+    /// Converts matched advisories into authoritative candidate findings (defaults to Cargo.lock).
+    pub fn to_candidate_findings(
+        &self,
+        session_id: SessionId,
+        task_id: TaskId,
+        now: TimestampUtc,
+    ) -> Vec<Finding> {
+        self.to_candidate_findings_for_lockfile(session_id, task_id, now, "Cargo.lock")
     }
 }
 
@@ -175,6 +197,50 @@ impl AdvisoryDatabase {
                 patched_versions: vec!["0.2.23".to_string()],
                 published_at: "2020-11-18T00:00:00Z".to_string(),
                 aliases: vec!["CVE-2020-26235".to_string()],
+            },
+            Advisory {
+                id: "GHSA-p6mc-m468-83gw".to_string(),
+                package: "lodash".to_string(),
+                title: "Prototype Pollution in lodash".to_string(),
+                description: "lodash versions prior to 4.17.12 are vulnerable to Prototype Pollution via zipObjectDeep.".to_string(),
+                severity: Severity::Critical,
+                affected_version_reqs: vec!["< 4.17.12".to_string()],
+                patched_versions: vec!["4.17.12".to_string()],
+                published_at: "2019-07-02T00:00:00Z".to_string(),
+                aliases: vec!["CVE-2019-10744".to_string()],
+            },
+            Advisory {
+                id: "GHSA-vh95-rmgr-6w4m".to_string(),
+                package: "minimist".to_string(),
+                title: "Prototype Pollution in minimist".to_string(),
+                description: "minimist before 0.2.1 or 1.2.3 is vulnerable to prototype pollution.".to_string(),
+                severity: Severity::Medium,
+                affected_version_reqs: vec!["< 0.2.1".to_string(), ">= 1.0.0, < 1.2.3".to_string()],
+                patched_versions: vec!["0.2.1".to_string(), "1.2.3".to_string()],
+                published_at: "2020-03-11T00:00:00Z".to_string(),
+                aliases: vec!["CVE-2020-7598".to_string()],
+            },
+            Advisory {
+                id: "GHSA-qw6h-v559-w396".to_string(),
+                package: "express".to_string(),
+                title: "Path traversal in express via malformed response redirects".to_string(),
+                description: "express versions prior to 4.20.0 are vulnerable to open redirect and path traversal.".to_string(),
+                severity: Severity::High,
+                affected_version_reqs: vec!["< 4.20.0".to_string()],
+                patched_versions: vec!["4.20.0".to_string()],
+                published_at: "2024-09-10T00:00:00Z".to_string(),
+                aliases: vec!["CVE-2024-43796".to_string()],
+            },
+            Advisory {
+                id: "GHSA-wf5p-g6vw-rhxx".to_string(),
+                package: "axios".to_string(),
+                title: "Cross-site scripting and credential leakage in axios".to_string(),
+                description: "axios versions prior to 1.6.0 leak confidential auth headers across cross-origin redirects.".to_string(),
+                severity: Severity::High,
+                affected_version_reqs: vec!["< 1.6.0".to_string()],
+                patched_versions: vec!["1.6.0".to_string()],
+                published_at: "2023-11-01T00:00:00Z".to_string(),
+                aliases: vec!["CVE-2023-45857".to_string()],
             },
         ];
         Self {
