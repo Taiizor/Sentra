@@ -34,6 +34,8 @@ pub mod policy;
 pub mod service;
 /// Session lifecycle, state machine, and metadata.
 pub mod session;
+/// Content-addressed storage (CAS), blob publication, and quota management.
+pub mod storage;
 /// Canonical workspace boundaries, indirection quarantine and metadata-only discovery.
 pub mod workspace;
 
@@ -70,4 +72,8 @@ pub use service::{
 };
 pub use session::{
     AssessmentCompleteness, OperatingMode, SessionMetadata, SessionState, SessionStateMachine,
+};
+pub use storage::{
+    BlobId, BlobMetadata, BlobStore, FileSystemCasBlobStore, StorageError, StorageErrorKind,
+    StorageLimits, StorageUsage,
 };
