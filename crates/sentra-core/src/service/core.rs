@@ -9,13 +9,15 @@ use crate::{
     PolicyEngine, ResourceLimits, ResourceUsage, SecurityClassification, SessionId,
     SessionMetadata, SessionState, TaskId, TimestampUtc,
     persistence::{
-        ApprovalIntent, PersistenceRepository, PersistentApprovalAuthority,
-        PersistentApprovalGrant, SessionRecord, SettlementStatus,
+        ApprovalIntent, AttemptState, PersistenceRepository, PersistentApprovalAuthority,
+        PersistentApprovalGrant, SessionRecord, SettlementStatus, TaskState,
     },
     service::{
         config::CoreServiceConfig,
         error::ServiceError,
-        lifecycle::{CancellationReason, CancellationReport},
+        lifecycle::{
+            CancellationReason, CancellationReport, ReconciledAttempt, SessionResumeReport,
+        },
     },
     workspace::{DiscoveryLimits, DiscoveryResult, WorkspaceBoundary},
 };
