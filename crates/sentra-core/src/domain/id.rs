@@ -301,3 +301,8 @@ define_typed_id!(
     0x5345_4e54_5241_0009,
     "Unique identifier for a budget reservation."
 );
+define_typed_id!(
+    FindingId,
+    0x5345_4e54_5241_000a,
+    "Unique identifier for a security finding."
+);

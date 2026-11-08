@@ -9,11 +9,14 @@ use std::{
 };
 
 use sentra_core::{
-    SessionId,
-    service::{LocalWorkspace, LocalWorkspaceError, LocalWorkspaceErrorKind, LocalWorkspaceReport},
+    AdvisoryDatabase, SessionId, TimestampUtc,
+    service::{
+        LocalAuditReport, LocalWorkspace, LocalWorkspaceError, LocalWorkspaceErrorKind,
+        LocalWorkspaceReport,
+    },
 };
 
-pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra recover --database <file> [--workspace <directory>] [--json]\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\n";
+pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra recover --database <file> [--workspace <directory>] [--json]\n  sentra audit --database <file> [--workspace <directory>] [--json]\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session/audit default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\nAudit analyzes Cargo.lock dependencies against pinned security advisories.\n";
 
 /// Typed presentation command. Paths are untrusted until validated by Core.
 pub enum Command {
@@ -33,6 +36,10 @@ pub enum Command {
         database: PathBuf,
     },
     Recover {
+        workspace: Option<PathBuf>,
+        database: PathBuf,
+    },
+    Audit {
         workspace: Option<PathBuf>,
         database: PathBuf,
     },
@@ -79,7 +86,7 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
         });
     }
     let name = words.remove(0);
-    if !matches!(name, "init" | "status" | "session" | "recover") {
+    if !matches!(name, "init" | "status" | "session" | "recover" | "audit") {
         return Err(invalid());
     }
     if words == ["--help"] {
@@ -131,6 +138,10 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
             database,
         },
         "recover" => Command::Recover {
+            workspace,
+            database,
+        },
+        "audit" => Command::Audit {
             workspace,
             database,
         },
@@ -200,7 +211,7 @@ pub fn run(arguments: &[OsString], cwd: &Path) -> Response {
         Command::Help => {
             return Response {
                 stdout: if json {
-                    "{\"schema_version\":1,\"commands\":[\"init\",\"status\",\"session show\",\"recover\"],\"offline\":true,\"untrusted_execution\":false}\n".into()
+                    "{\"schema_version\":1,\"commands\":[\"init\",\"status\",\"session show\",\"recover\",\"audit\"],\"offline\":true,\"untrusted_execution\":false}\n".into()
                 } else {
                     HELP.into()
                 },
@@ -261,10 +272,85 @@ pub fn run(arguments: &[OsString], cwd: &Path) -> Response {
                 &absolute(&database, cwd),
             ),
         ),
+        Command::Audit {
+            workspace,
+            database,
+        } => {
+            let clock = TimestampUtc::now();
+            let advisory_db = AdvisoryDatabase::default_pinned(clock);
+            let ws_path = absolute(workspace.as_deref().unwrap_or(cwd), cwd);
+            let db_path = absolute(&database, cwd);
+            return match LocalWorkspace::audit_dependencies(&ws_path, &db_path, &advisory_db) {
+                Ok(report) => render_audit(report, json),
+                Err(source) => core_error(source, json),
+            };
+        }
     };
     match result {
         Ok(report) => render(operation, report, json),
         Err(source) => core_error(source, json),
+    }
+}
+
+fn render_audit(report: LocalAuditReport, json: bool) -> Response {
+    let stdout = if json {
+        let findings_json = report
+            .candidate_findings
+            .iter()
+            .map(|f| {
+                format!(
+                    "{{\"id\":\"{}\",\"title\":\"{}\",\"severity\":\"{}\",\"reachability\":\"{}\",\"status\":\"{}\"}}",
+                    f.id(),
+                    f.title().replace('"', "\\\""),
+                    f.severity().as_str(),
+                    f.reachability().as_str(),
+                    f.status().as_str(),
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        let unknown_json = report
+            .audit_result
+            .unknown_version_packages
+            .iter()
+            .map(|u| format!("\"{}\"", u.replace('"', "\\\"")))
+            .collect::<Vec<_>>()
+            .join(",");
+        format!(
+            "{{\"schema_version\":1,\"command\":\"audit\",\"session_id\":\"{}\",\"task_id\":\"{}\",\"packages_audited\":{},\"vulnerable_packages\":{},\"is_stale\":{},\"unknown_version_packages\":[{}],\"findings\":[{}],\"untrusted_execution\":false}}\n",
+            report.session_id,
+            report.task_id,
+            report.audit_result.packages_audited,
+            report.audit_result.vulnerable_packages,
+            report.audit_result.is_stale,
+            unknown_json,
+            findings_json,
+        )
+    } else {
+        let mut text = format!(
+            "Sentra dependency audit: completed\nSession: {}\nTask: {}\nPackages audited: {}\nVulnerable packages: {}\nAdvisory database stale: {}\n",
+            report.session_id,
+            report.task_id,
+            report.audit_result.packages_audited,
+            report.audit_result.vulnerable_packages,
+            report.audit_result.is_stale
+        );
+        for f in &report.candidate_findings {
+            text.push_str(&format!(
+                "\n[{}] {}\n  Reachability: {}\n  Status: {}\n",
+                f.severity().as_str(),
+                f.title(),
+                f.reachability().as_str(),
+                f.status().as_str(),
+            ));
+        }
+        text.push_str("Untrusted execution: disabled\n");
+        text
+    };
+    Response {
+        stdout,
+        stderr: String::new(),
+        exit_code: 0,
     }
 }
 

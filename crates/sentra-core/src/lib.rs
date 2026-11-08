@@ -14,6 +14,8 @@
 #![warn(missing_docs)]
 #![deny(clippy::all)]
 
+/// Dependency vulnerability advisories and lockfile auditing.
+pub mod advisory;
 /// Audit trail event models and kinds.
 pub mod audit;
 /// Common utilities including clock abstractions.
@@ -39,13 +41,19 @@ pub mod storage;
 /// Canonical workspace boundaries, indirection quarantine and metadata-only discovery.
 pub mod workspace;
 
+pub use advisory::{
+    Advisory, AdvisoryAuditResult, AdvisoryDatabase, AdvisoryError, AdvisoryErrorKind,
+    AdvisoryMatch, PackageRecord, SemverVersion, VersionReq, parse_cargo_lock,
+};
 pub use audit::{AuditEvent, AuditEventKind};
 pub use common::{
     Clock, MockClock, Sha256Stream, SystemClock, sha256_bytes, sha256_digest, sha256_prefixed,
 };
 pub use domain::{
-    ApprovalId, AttemptId, DomainError, EventId, EvidenceId, ExecutionId, Identifier, ManifestId,
-    ReservationId, SecurityClassification, SessionId, SessionTransitionError, TaskId, TimestampUtc,
+    ApprovalId, AttemptId, Confidence, DomainError, EventId, EvidenceId, ExecutionId, Finding,
+    FindingId, FindingSource, FindingStatus, Identifier, ManifestId, Reachability, ReservationId,
+    SecurityClassification, SessionId, SessionTransitionError, Severity, TargetLocation, TaskId,
+    TimestampUtc,
 };
 pub use evidence::{
     EvidenceArtifact, EvidenceEnvelope, EvidenceMetadata, EvidenceVerificationError,
@@ -67,8 +75,9 @@ pub use policy::{
 };
 pub use service::{
     AdmitResultRequest, CancellationPhase, CancellationReason, CancellationReport, CoreService,
-    CoreServiceConfig, CoreServiceHarness, ReconciledAttempt, ServiceError, ServiceErrorKind,
-    ServicePolicyDecision, SessionResumeReport, TaskExecutionReport, TaskExecutionRequest,
+    CoreServiceConfig, CoreServiceHarness, LocalAuditReport, ReconciledAttempt, ServiceError,
+    ServiceErrorKind, ServicePolicyDecision, SessionResumeReport, TaskExecutionReport,
+    TaskExecutionRequest,
 };
 pub use session::{
     AssessmentCompleteness, OperatingMode, SessionMetadata, SessionState, SessionStateMachine,
