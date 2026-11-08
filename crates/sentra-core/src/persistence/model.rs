@@ -403,6 +403,27 @@ impl TaskState {
             Self::Blocked => "BLOCKED",
         }
     }
+
+    /// Whether this state is terminal.
+    pub fn is_terminal(&self) -> bool {
+        matches!(self, Self::Completed | Self::Failed | Self::Cancelled)
+    }
+
+    /// Whether a state transition from `self` to `target` is valid.
+    pub fn can_transition_to(&self, target: TaskState) -> bool {
+        if self == &target {
+            return true;
+        }
+        match self {
+            Self::Pending => matches!(target, Self::InProgress | Self::Cancelled | Self::Blocked),
+            Self::InProgress => matches!(
+                target,
+                Self::Completed | Self::Failed | Self::Cancelled | Self::Blocked
+            ),
+            Self::Blocked => matches!(target, Self::Pending | Self::Cancelled),
+            Self::Completed | Self::Failed | Self::Cancelled => false,
+        }
+    }
 }
 
 pub(super) fn parse_task_state(value: &str) -> Result<TaskState, PersistenceError> {
@@ -516,6 +537,42 @@ impl AttemptState {
             Self::ResultRecorded => "RESULT_RECORDED",
             Self::Uncertain => "UNCERTAIN",
             Self::NotStartedConfirmed => "NOT_STARTED_CONFIRMED",
+        }
+    }
+
+    /// Whether this state is terminal for an individual attempt.
+    pub fn is_terminal(&self) -> bool {
+        matches!(
+            self,
+            Self::ResultRecorded | Self::Uncertain | Self::NotStartedConfirmed
+        )
+    }
+
+    /// Whether this attempt has committed release to an external worker.
+    pub fn is_released(&self) -> bool {
+        matches!(
+            self,
+            Self::ReleaseRecorded
+                | Self::RunningConfirmed
+                | Self::ResultRecorded
+                | Self::Uncertain
+        )
+    }
+
+    /// Whether a state transition from `self` to `target` is valid.
+    pub fn can_transition_to(&self, target: AttemptState) -> bool {
+        if self == &target {
+            return true;
+        }
+        match self {
+            Self::Recorded => matches!(target, Self::Prepared | Self::NotStartedConfirmed),
+            Self::Prepared => matches!(target, Self::ReleaseRecorded | Self::NotStartedConfirmed),
+            Self::ReleaseRecorded => matches!(
+                target,
+                Self::RunningConfirmed | Self::ResultRecorded | Self::Uncertain
+            ),
+            Self::RunningConfirmed => matches!(target, Self::ResultRecorded | Self::Uncertain),
+            Self::ResultRecorded | Self::Uncertain | Self::NotStartedConfirmed => false,
         }
     }
 }
