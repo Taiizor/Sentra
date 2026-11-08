@@ -32,6 +32,8 @@ pub mod execution;
 pub mod manifest;
 /// Local SQLite connection, migration and durable repository primitives.
 pub mod persistence;
+/// Subprocess plugin SDK, versioned adapter protocols, and capability fencing.
+pub mod plugin;
 /// Security policy engine, decisions, and approval brokers.
 pub mod policy;
 /// Capability-scoped model provider abstraction and privacy-preserving gateway.
@@ -82,6 +84,11 @@ pub use manifest::{
     ManifestError, ManifestErrorKind, OperationManifest, SnapshotLimits, SourceFileRole,
     SourceSnapshot, SourceSnapshotEntry, capture_source_snapshot,
 };
+pub use plugin::{
+    AdapterFamily, HostStatus, PluginCapability, PluginError, PluginErrorKind, PluginHost,
+    PluginManifest, PluginQuotas, PluginRequest, PluginResponse, SampleAdapter, SampleAdapterMode,
+    decode_frame, encode_frame,
+};
 pub use policy::{
     ApprovalAuthority, ApprovalBroker, ApprovalGrant, ApprovalRequest, BudgetPolicyConfig, CostUsd,
     DenialReason, OperationAction, PolicyDecision, PolicyEngine,
@@ -100,11 +107,14 @@ pub use provider::{
     VirtualControl as ProviderVirtualControl, full_model,
 };
 pub use research::{
-    Campaign, CampaignLimits, CampaignStatus, CampaignStopReason, CampaignTask, CoverageLedger,
-    CoverageSummary, CoveredRegion, Hypothesis, HypothesisDeduplicator, HypothesisStatus,
-    ResearchError, ResearchErrorKind, ResearchRole, ResearchTaskStatus, RoleCapability, SkipReason,
-    SkippedRegion, VulnerabilityCategory, assert_patch_verifier_independent,
-    assert_peer_approval_forbidden,
+    ApproachRunMetrics, ApproachSummary, Campaign, CampaignLimits, CampaignStatus,
+    CampaignStopReason, CampaignTask, CoverageLedger, CoverageSummary, CoveredRegion,
+    CrashArtifact, FuzzEngine, FuzzRunConfig, FuzzTarget, Hypothesis, HypothesisDeduplicator,
+    HypothesisStatus, ReferenceCrashTarget, ResearchApproach, ResearchError, ResearchErrorKind,
+    ResearchRole, ResearchTaskStatus, RoleCapability, SanitizerType, SkipReason, SkippedRegion,
+    TriMethodComparisonMatrix, VulnerabilityCategory, assert_patch_verifier_independent,
+    assert_peer_approval_forbidden, generate_reference_tri_method_matrix, minimize_input,
+    reference_root_cause_targets,
 };
 pub use service::{
     AdmitResultRequest, CancellationPhase, CancellationReason, CancellationReport, CoreService,

@@ -3,6 +3,7 @@
 //! Provides zero-third-party semver parsing and range constraint matching
 //! under `#![forbid(unsafe_code)]`.
 
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{fmt, str::FromStr};
 
 use crate::advisory::error::{AdvisoryError, AdvisoryErrorKind};
@@ -146,6 +147,25 @@ impl FromStr for SemverVersion {
             patch,
             pre,
         })
+    }
+}
+
+impl Serialize for SemverVersion {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for SemverVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Self::from_str(&s).map_err(serde::de::Error::custom)
     }
 }
 
