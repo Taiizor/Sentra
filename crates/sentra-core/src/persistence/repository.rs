@@ -1853,37 +1853,6 @@ impl PersistenceRepository {
             )?.ok_or_else(|| error(Kind::Conflict))?;
             let mut attempt = parse_attempt_tuple(raw_attempt)?;
 
-            if attempt.state == AttemptState::ResultRecorded {
-                if attempt.terminal_outcome == Some(outcome) {
-                    let details_match = match (details_json, attempt.terminal_details_json.as_deref()) {
-                        (Some(a), Some(b)) => a == b,
-                        (None, None) => true,
-                        _ => false,
-                    };
-                    if details_match {
-                        if let Some(res_id) = attempt.reservation_id {
-                            let res_cost: Option<Option<i64>> = tx.optional(
-                                "SELECT actual_cost_micro_usd FROM budget_reservations WHERE reservation_id=?1",
-                                [res_id.to_string()],
-                                |r| r.get(0),
-                            )?;
-                            if let Some(existing_opt) = res_cost {
-                                let cost_match = match (actual_cost, existing_opt) {
-                                    (Some(act), Some(exist)) => act.as_micro_usd() as i64 == exist,
-                                    (None, None) => true,
-                                    _ => false,
-                                };
-                                if !cost_match {
-                                    return Err(error(Kind::Conflict));
-                                }
-                            }
-                        }
-                        return Ok(attempt);
-                    }
-                }
-                return Err(error(Kind::Conflict));
-            }
-
             if !matches!(attempt.state, AttemptState::RunningConfirmed | AttemptState::ReleaseRecorded) {
                 return Err(error(Kind::Conflict));
             }
@@ -2121,6 +2090,21 @@ impl PersistenceRepository {
                 |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get(10)?, r.get(11)?, r.get(12)?, r.get(13)?, r.get(14)?, r.get(15)?, r.get(16)?, r.get(17)?)),
             )?;
             row.map(parse_attempt_tuple).transpose()
+        })
+    }
+
+    /// Returns the settled actual cost in micro-USD for a budget reservation, if present.
+    pub fn get_reservation_actual_cost(
+        &self,
+        reservation_id: ReservationId,
+    ) -> Result<Option<Option<i64>>, PersistenceError> {
+        model::parse_id(&reservation_id.to_string())?;
+        self.manager.write(|tx| {
+            tx.optional(
+                "SELECT actual_cost_micro_usd FROM budget_reservations WHERE reservation_id=?1",
+                [reservation_id.to_string()],
+                |r| r.get(0),
+            )
         })
     }
 

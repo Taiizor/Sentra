@@ -550,6 +550,52 @@ impl CoreService {
             .session_admission(req.session_id, false)
             .map_err(ServiceError::persistence)?;
 
+        // Replay Determinism: If attempt is already in ResultRecorded, verify matching parameters.
+        let existing = self
+            .repository
+            .get_attempt(req.attempt_id)
+            .map_err(ServiceError::persistence)?
+            .ok_or_else(|| ServiceError::invalid_state("Attempt not found"))?;
+
+        if existing.state == crate::persistence::AttemptState::ResultRecorded {
+            if existing.terminal_outcome != Some(req.outcome) {
+                return Err(ServiceError::invalid_state("Replay outcome conflict"));
+            }
+
+            if let Some(details_str) = existing.terminal_details_json.as_deref() {
+                let recorded_exit = serde_json::from_str::<serde_json::Value>(details_str)
+                    .ok()
+                    .and_then(|v| {
+                        v.get("exit_code")
+                            .and_then(|x| x.as_i64())
+                            .map(|x| x as i32)
+                    });
+                if recorded_exit != req.exit_code {
+                    return Err(ServiceError::invalid_state("Replay exit code conflict"));
+                }
+            }
+
+            let opt_cost = match existing.reservation_id {
+                Some(res_id) => self
+                    .repository
+                    .get_reservation_actual_cost(res_id)
+                    .map_err(ServiceError::persistence)?,
+                None => None,
+            };
+            if let Some(opt_cost) = opt_cost {
+                let cost_matches = match (req.actual_cost, opt_cost) {
+                    (Some(c), Some(act)) => c.as_micro_usd() as i64 == act,
+                    (None, None) => true,
+                    _ => false,
+                };
+                if !cost_matches {
+                    return Err(ServiceError::invalid_state("Replay actual cost conflict"));
+                }
+            }
+
+            return Ok(existing);
+        }
+
         // Verify and store evidence envelopes
         let mut evidence_digests = Vec::new();
         for envelope in req.evidence_envelopes {
