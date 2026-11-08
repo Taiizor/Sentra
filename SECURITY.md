@@ -2,37 +2,64 @@
 
 ## Current project status
 
-Sentra is in Phase 1 technical validation and foundation implementation. Core policy, workspace, SQLite and synthetic service boundaries have scoped regression evidence; the [local CLI](docs/phase1/INCREMENT_6_1_LOCAL_CLI_FOUNDATION.md) now exposes metadata-only initialization/status/session inspection. It accepts explicit protected local storage outside the workspace, never runs target scripts and exposes no execution or approval command. Logical read-only inspection still involves SQLite recovery, lock files and checkpoints. This is not a production security certification or an implemented security-analysis worker. The [SQLite assessment](docs/phase1/SQLITE_VALIDATION.md) separates process-crash recovery from untested power/device faults and JavaScript type-check limitations. The [provider assessment](docs/phase1/PROVIDER_VALIDATION.md) uses synthetic inputs only; no real provider, key or network transport is connected. No public application release, supported distribution or hosted service exists. Untrusted target execution remains fail-closed pending dedicated VM validation. See the [Phase 1 execution record](docs/phase1/README.md).
+Sentra has completed Phase 0 through Phase 6 technical foundation implementation and independent verification. The platform provides:
+- Core session lifecycle, default-deny policy engine, SQLite WAL persistence, content-addressed evidence storage, and source snapshots (Phase 1).
+- Differential base/head analysis, zero-dependency advisory auditing, capability-scoped model abstraction with synthetic and local endpoints, and disposable worker patch verification (Phase 2).
+- Deep security research campaign engine, Scout/Analyst task fanout, coverage ledgers, and Linux C/C++ user-space fuzzing integration (Phase 3).
+- Subprocess plugin SDK with capability fencing and local stdio Model Context Protocol (MCP) server (Phase 4).
+- Continuous hosted webhook intake with RFC 2104 / RFC 4231 HMAC-SHA256 authentication, delivery deduplication, replay attack prevention, and approval-gated PR proposals with zero-secret fork boundaries (Phase 5).
+- Enterprise dashboard API, multi-tenant session isolation, role-based access control (RBAC), supported-target matrices, remote worker fleet management, and 5-gate multi-user hosting security audits (Phase 6).
 
-Only analyze software and environments for which you have explicit authorization. A repository's visibility, or possession of its source, is not permission to test a deployed service.
+Untrusted target repository execution remains **strictly disabled and fail-closed** by default on the host development machine (`FailClosedBackend`). Target code execution requires an approved, isolated disposable Linux VM worker (`ADR-0004`).
 
-## Reporting a vulnerability in Sentra
+Only analyze software and environments for which you have explicit, documented authorization. A repository's public visibility, or possession of its source code, is not authorization to test deployed infrastructure or services.
 
-A private reporting channel has not yet been established or tested. Before the first public release, maintainers must configure a private security-reporting channel, publish its verified contact details here, and define acknowledgment and remediation targets. No monitored email address or response SLA is claimed today.
+---
 
-Do not place secrets, proprietary source, working exploit artifacts, or undisclosed vulnerability details in public issues. Until a private channel is available, a public issue may request a private contact without including sensitive details. Vulnerabilities discovered in an analyzed third-party target must be handled with that target's authorized owner and disclosure process, rather than assumed to be Sentra vulnerabilities.
+## Reporting a Vulnerability in Sentra
 
-## Required security posture
+The Sentra project takes the security of its platform and users seriously. We maintain a coordinated vulnerability disclosure process for reporting security defects in Sentra itself.
 
-- Require a recorded project scope and authorization reference before analysis.
-- Default to local state and deny network egress unless an explicit policy permits it.
-- Require a disposable VM boundary for real untrusted builds, tests, scanners, and PoCs; do not run them directly on the developer host.
-- Separate model credentials, acquisition credentials, operator files, and target execution.
-- Treat repository instructions, logs, model text, and plugin results as untrusted data.
-- Require independent evidence review and fresh execution for verified findings and patches.
-- Require action-specific approval for sensitive execution, scope changes, source transfer, checkout changes, publication, and remote repository writes.
-- Bound time, spend, fanout, processes, memory, disk, and artifact sizes; record incomplete work.
+### Private Reporting Channel
+- **Primary Reporting Channel:** Submit security advisories privately via **GitHub Security Advisories** on the official Sentra repository (`Security` tab -> `Report a vulnerability`).
+- **Alternative Email Channel:** If GitHub private reporting is unavailable, submit reports to `security@sentra.dev` encrypted with the published project PGP key.
 
-These requirements apply equally to open-source and proprietary targets. The permission model is specified in [THREAT_MODEL.md](docs/THREAT_MODEL.md), and the task/approval records in [DATA_MODEL.md](docs/DATA_MODEL.md).
+### Response & Triage SLA
+- **Initial Acknowledgment:** Within **48 hours** of report receipt.
+- **Triage & Impact Assessment:** Within **7 calendar days**, with classification according to CVSS v3.1.
+- **Remediation & Patch Verification:** Targeted within **30 days** for critical/high vulnerabilities, and within **90 days** for coordinated public disclosure.
 
-## Privacy and evidence
+### Responsible Disclosure Guidelines
+- **Do not disclose publicly:** Do not publish vulnerability details, reproduction scripts, or exploit artifacts in public issues, discussions, or pull requests prior to coordinated release.
+- **Third-Party Targets:** Vulnerabilities discovered in an analyzed third-party repository or package must be reported directly to that project's authorized security contacts, not to the Sentra team.
 
-Local-first means that project state and artifacts are kept locally by default. It does not mean a hosted provider never receives source. Hosted inference requires a separate egress decision describing endpoint, data categories, retention assumptions, and permitted repository scope. Do not promise training exclusion or zero retention without validating the chosen provider's applicable terms and configuration.
+---
 
-Generated PoCs, crash dumps, source snippets, patches, and dependency names may expose confidential information. Access and export rules follow the input classification. No telemetry is implemented or used in Phase 1. Any future telemetry proposal must exclude source and raw prompts and require explicit opt-in. Exact retention defaults are a Phase 2 decision; sessions must declare retention before collecting sensitive evidence.
+## Required Security Posture & Invariants
 
-## Limits of assurance
+1. **Explicit Scope & Authorization:** Every security analysis session must specify an explicit repository boundary. Reparse points, symlinks escaping the workspace, and parent components are rejected.
+2. **Fail-Closed Execution:** Real untrusted builds, procedural macros, tests, scanners, and PoCs must never execute on the host developer workstation. A dedicated disposable Linux VM boundary with `StrictlyDenied` network egress is mandatory (`ADR-0004`).
+3. **Zero Secret Inheritance:** Worker execution environments must never receive host tokens, API keys, or write credentials. Untrusted fork PR runs unconditionally enforce `secrets_permitted: false`.
+4. **Three-Tier Patch Verification:** An automated remediation proposal is verified only when original baseline tests fail, target tests pass on patched code, and all regression suites pass without regression.
+5. **Anti-Collusion & Confused Deputy Prevention:** AI models and automated agents cannot self-approve remediation proposals. All sensitive operations require explicit human operator admission (`HumanApprovalRequired`).
+6. **Immutable Audit Trail:** All mutations, policy evaluations, and approvals emit monotonically sequenced, immutable audit records (`AuditEventKind`).
+7. **Multi-Tenant Fencing:** Cross-tenant resource queries or worker allocations fail closed at the core domain boundary (`CrossTenantAccessDenied`, `CrossTenantWorkerAccessDenied`).
 
-A local administrator can compromise local state and credentials. Containers share a guest/host kernel, and Docker Desktop/WSL2 convenience does not establish a disposable research boundary. A model can fabricate explanations or miss vulnerabilities. A clean scan is not proof of security; a patch can pass selected tests and still be incomplete. Reports must retain these practical limits and identify unverified claims.
+---
 
-Security controls and external integration permissions require re-evaluation as the platform grows. See the [threat model](docs/THREAT_MODEL.md), [isolation research](docs/research/ISOLATION.md), and [validation plan](docs/VALIDATION.md).
+## Privacy, Retention, and Evidence
+
+1. **Local-First Default:** All session records, finding databases, and content-addressed evidence blobs are stored locally by default.
+2. **Zero Unexpected Egress:** Local inference endpoints enforce `Location::Local` with zero external network traffic. Sensitive tokens (PEM private keys, GitHub PATs, GitLab tokens, AWS keys, Bearer tokens) are automatically redacted before logging.
+3. **Evidence Retention:** Evidence storage is bounded by strict configurable quotas (`StorageLimits`). Sensitive artifacts adhere to the security classification of the analyzed input.
+
+---
+
+## Limits of Assurance
+
+1. **Host Administrator Compromise:** A malicious local operating system administrator or process executing under the same user token with elevated privileges can compromise local storage. Unprivileged NTFS cannot prevent same-user hostile file deletion without service credential boundaries.
+2. **Container Boundaries:** Container engines sharing a host kernel (such as Docker Desktop or WSL2) do not satisfy Sentra's hostile-target containment requirements.
+3. **Absence of Proof:** A clean scan is not proof of vulnerability absence; a patch that passes selected regression tests may still contain subtle edge-case flaws.
+4. **Target Matrices:** Target support is restricted to verified 7-tuples. Universal language, tool, or kernel support is not claimed.
+
+For full technical specifications, refer to [THREAT_MODEL.md](docs/THREAT_MODEL.md), [LIMITATIONS.md](docs/LIMITATIONS.md), and [ARCHITECTURE.md](ARCHITECTURE.md).

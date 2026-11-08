@@ -1,0 +1,39 @@
+Sentra Autonomous AI Security Research & Remediation Platform
+Copyright (c) 2026 Sentra Contributors
+
+This product includes software developed by the Sentra Project and its contributors.
+
+===============================================================================
+Third-Party Software Notices & Acknowledgments
+===============================================================================
+
+1. rusqlite
+   License: MIT License
+   Copyright (c) 2014-2024 The rusqlite developers
+   Website: https://github.com/rusqlite/rusqlite
+
+2. SQLite
+   License: Public Domain (SQLite Blessing)
+   Website: https://www.sqlite.org/copyright.html
+   "The author disclaims copyright to this source code. In place of a legal notice,
+   here is a blessing:
+      May you do good and not evil.
+      May you find forgiveness for yourself and forgive others.
+      May you share freely, never taking more than you give."
+
+3. Serde and serde_json
+   License: Apache-2.0 or MIT License
+   Copyright (c) 2014-2024 Serde Developers
+   Website: https://serde.rs/
+
+4. sha2 (RustCrypto)
+   License: Apache-2.0 or MIT License
+   Copyright (c) 2016-2024 RustCrypto Developers
+   Website: https://github.com/RustCrypto/hashes
+
+===============================================================================
+Security Invariant Notice
+===============================================================================
+In accordance with ADR-0004, untrusted target execution remains strictly disabled
+and fail-closed by default on the host development workstation. Target execution
+requires an approved disposable Linux virtual machine boundary.

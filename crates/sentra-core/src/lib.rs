@@ -30,6 +30,8 @@ pub mod domain;
 pub mod evidence;
 /// Fail-closed execution engine and backend contracts.
 pub mod execution;
+/// Remote-worker fleet management, multi-user hosting security audit, and target matrix.
+pub mod fleet;
 /// Continuous hosted integrations, authenticated webhook intake, and delivery deduplication.
 pub mod hosted;
 /// Immutable input manifests, canonical source snapshots, and content hashing.
@@ -91,6 +93,11 @@ pub use execution::{
     BackendCapabilities, ExecutionBackend, ExecutionEngine, ExecutionError, ExecutionErrorKind,
     ExecutionRequest, ExecutionResult, ExecutionScope, ExecutionStatus, FailClosedBackend,
     ResourceLimits, ResourceUsage, SyntheticFixtureBackend,
+};
+pub use fleet::{
+    AdapterActionCapability, AuditStatus, EvidenceMethod, FleetError, FleetErrorKind, HostPlatform,
+    MultiUserAuditReport, MultiUserSecurityAudit, RemoteWorkerId, RemoteWorkerNode, SupportMatrix,
+    SupportedTargetTuple, TargetLanguage, WorkerFleetManager, WorkerState,
 };
 pub use hosted::{
     DEFAULT_MAX_DRIFT_SECS, DEFAULT_MAX_LEDGER_CAPACITY, DeliveryLedger, DeliveryRecord,
