@@ -20,6 +20,8 @@ pub mod advisory;
 pub mod audit;
 /// Common utilities including clock abstractions.
 pub mod common;
+/// Dashboard core services, multi-tenant session isolation, and RBAC authorization.
+pub mod dashboard;
 /// Source snapshot differential analysis, narrow Rust hunk extraction, and revision invalidation.
 pub mod diff;
 /// Core domain models, identifiers, and classifications.
@@ -63,6 +65,11 @@ pub use audit::{AuditEvent, AuditEventKind};
 pub use common::{
     Clock, MockClock, Sha256Stream, SystemClock, constant_time_eq, hmac_sha256, hmac_sha256_hex,
     sha256_bytes, sha256_digest, sha256_prefixed,
+};
+pub use dashboard::{
+    AuditLogView, CampaignLedgerView, DashboardAction, DashboardError, DashboardErrorKind,
+    DashboardOverview, DashboardService, FindingView, IsolationLevel, PatchBundleView,
+    SessionSummaryView, TenantContext, TenantId, UserRole, enforce_rbac,
 };
 pub use diff::{
     DiffError, DiffErrorKind, DiffHunk, DiffLine, DiffSummary, FileContentDiff, FileDelta,
