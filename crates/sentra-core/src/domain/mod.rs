@@ -18,7 +18,7 @@ pub use finding::{
     StatusTransitionEntry, TargetLocation,
 };
 pub use id::{
-    ApprovalId, AttemptId, EventId, EvidenceId, ExecutionId, FindingId, Identifier, ManifestId,
-    ReservationId, SessionId, TaskId,
+    ApprovalId, AttemptId, CampaignId, EventId, EvidenceId, ExecutionId, FindingId, HypothesisId,
+    Identifier, ManifestId, ReservationId, SessionId, TaskId,
 };
 pub use time::TimestampUtc;

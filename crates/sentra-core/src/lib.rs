@@ -36,6 +36,8 @@ pub mod persistence;
 pub mod policy;
 /// Capability-scoped model provider abstraction and privacy-preserving gateway.
 pub mod provider;
+/// Deep security research campaigns, Scout/Analyst task fanout, and coverage ledgers.
+pub mod research;
 /// Integrated Core Service coordination foundation.
 pub mod service;
 /// Session lifecycle, state machine, and metadata.
@@ -61,10 +63,10 @@ pub use diff::{
     reconcile_findings_anti_regression, validate_patch_approval_invalidation,
 };
 pub use domain::{
-    ApprovalId, AttemptId, Confidence, DomainError, EventId, EvidenceId, ExecutionId, Finding,
-    FindingId, FindingSource, FindingStatus, Identifier, ManifestId, Reachability, ReservationId,
-    SecurityClassification, SessionId, SessionTransitionError, Severity, TargetLocation, TaskId,
-    TimestampUtc,
+    ApprovalId, AttemptId, CampaignId, Confidence, DomainError, EventId, EvidenceId, ExecutionId,
+    Finding, FindingId, FindingSource, FindingStatus, HypothesisId, Identifier, ManifestId,
+    Reachability, ReservationId, SecurityClassification, SessionId, SessionTransitionError,
+    Severity, TargetLocation, TaskId, TimestampUtc,
 };
 pub use evidence::{
     EvidenceArtifact, EvidenceEnvelope, EvidenceMetadata, EvidenceVerificationError,
@@ -96,6 +98,13 @@ pub use provider::{
     Script as ProviderScript, SharedTrace, SyntheticMockProvider, Terminal as ProviderTerminal,
     Trace as ProviderTrace, Usage as ProviderUsage, Value as ProviderValue,
     VirtualControl as ProviderVirtualControl, full_model,
+};
+pub use research::{
+    Campaign, CampaignLimits, CampaignStatus, CampaignStopReason, CampaignTask, CoverageLedger,
+    CoverageSummary, CoveredRegion, Hypothesis, HypothesisDeduplicator, HypothesisStatus,
+    ResearchError, ResearchErrorKind, ResearchRole, ResearchTaskStatus, RoleCapability, SkipReason,
+    SkippedRegion, VulnerabilityCategory, assert_patch_verifier_independent,
+    assert_peer_approval_forbidden,
 };
 pub use service::{
     AdmitResultRequest, CancellationPhase, CancellationReason, CancellationReport, CoreService,

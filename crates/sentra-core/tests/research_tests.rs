@@ -1,0 +1,446 @@
+//! Comprehensive integration tests for Deep Security Research campaigns,
+//! Scout/Analyst task fanout, coverage ledgers, and anti-collusion boundaries (REQ-F04, REQ-S06, REQ-S08, Roadmap Phase 3).
+
+use sentra_core::{
+    Campaign, CampaignLimits, CampaignStatus, CampaignStopReason, Confidence, CoverageLedger,
+    Hypothesis, HypothesisStatus, ResearchErrorKind, ResearchRole, RoleCapability, SessionId,
+    SkipReason, TaskId, TimestampUtc, VulnerabilityCategory, assert_patch_verifier_independent,
+    assert_peer_approval_forbidden,
+};
+
+#[test]
+fn test_role_capability_enforcement() {
+    let scout = ResearchRole::Scout;
+    assert!(scout.can_perform(RoleCapability::ReadContext));
+    assert!(scout.can_perform(RoleCapability::ProposeAuditTarget));
+    assert!(scout.can_perform(RoleCapability::ReportCoverageGap));
+    assert!(!scout.can_perform(RoleCapability::ProposePatchOverlay));
+    assert!(!scout.can_perform(RoleCapability::ExecuteVerification));
+    assert!(
+        scout
+            .assert_can_perform(RoleCapability::ReadContext)
+            .is_ok()
+    );
+    assert!(matches!(
+        scout.assert_can_perform(RoleCapability::ExecuteVerification),
+        Err(e) if matches!(e.kind(), ResearchErrorKind::RoleCapabilityViolation { .. })
+    ));
+
+    let analyst = ResearchRole::Analyst;
+    assert!(analyst.can_perform(RoleCapability::ReadContext));
+    assert!(analyst.can_perform(RoleCapability::FormHypothesis));
+    assert!(analyst.can_perform(RoleCapability::RequestReproductionTask));
+    assert!(!analyst.can_perform(RoleCapability::ProposePatchOverlay));
+    assert!(!analyst.can_perform(RoleCapability::ExecuteVerification));
+
+    let patch_author = ResearchRole::PatchAuthor;
+    assert!(patch_author.can_perform(RoleCapability::ProposePatchOverlay));
+    assert!(patch_author.can_perform(RoleCapability::SuggestRegressionCases));
+    assert!(!patch_author.can_perform(RoleCapability::ExecuteVerification));
+
+    let verifier = ResearchRole::IndependentVerifier;
+    assert!(verifier.can_perform(RoleCapability::ExecuteVerification));
+    assert!(verifier.can_perform(RoleCapability::EvaluateOracle));
+    assert!(!verifier.can_perform(RoleCapability::ProposePatchOverlay));
+}
+
+#[test]
+fn test_patch_author_cannot_verify_own_patch() {
+    let task_author = TaskId::new();
+    let task_verifier = TaskId::new();
+
+    // 1. Same task ID fails closed
+    let err = assert_patch_verifier_independent(
+        ResearchRole::PatchAuthor,
+        ResearchRole::IndependentVerifier,
+        task_author,
+        task_author,
+    );
+    assert!(matches!(
+        err,
+        Err(e) if matches!(e.kind(), ResearchErrorKind::PatchAuthorCannotVerifySelf)
+    ));
+
+    // 2. Author cannot be IndependentVerifier
+    let err2 = assert_patch_verifier_independent(
+        ResearchRole::IndependentVerifier,
+        ResearchRole::IndependentVerifier,
+        task_author,
+        task_verifier,
+    );
+    assert!(err2.is_err());
+
+    // 3. Verifier must be IndependentVerifier
+    let err3 = assert_patch_verifier_independent(
+        ResearchRole::PatchAuthor,
+        ResearchRole::Analyst,
+        task_author,
+        task_verifier,
+    );
+    assert!(err3.is_err());
+
+    // 4. Valid independent separation succeeds
+    let ok = assert_patch_verifier_independent(
+        ResearchRole::PatchAuthor,
+        ResearchRole::IndependentVerifier,
+        task_author,
+        task_verifier,
+    );
+    assert!(ok.is_ok());
+}
+
+#[test]
+fn test_anti_collusion_peer_approval_forbidden() {
+    // Scout cannot approve Analyst
+    assert!(matches!(
+        assert_peer_approval_forbidden(ResearchRole::Scout, ResearchRole::Analyst),
+        Err(e) if matches!(e.kind(), ResearchErrorKind::PeerApprovalForbidden { .. })
+    ));
+
+    // Analyst cannot approve Scout
+    assert!(matches!(
+        assert_peer_approval_forbidden(ResearchRole::Analyst, ResearchRole::Scout),
+        Err(e) if matches!(e.kind(), ResearchErrorKind::PeerApprovalForbidden { .. })
+    ));
+
+    // Analyst cannot approve peer Analyst
+    assert!(matches!(
+        assert_peer_approval_forbidden(ResearchRole::Analyst, ResearchRole::Analyst),
+        Err(e) if matches!(e.kind(), ResearchErrorKind::PeerApprovalForbidden { .. })
+    ));
+
+    // Scout cannot approve peer Scout
+    assert!(matches!(
+        assert_peer_approval_forbidden(ResearchRole::Scout, ResearchRole::Scout),
+        Err(e) if matches!(e.kind(), ResearchErrorKind::PeerApprovalForbidden { .. })
+    ));
+}
+
+#[test]
+fn test_hypothesis_deduplication() {
+    let now = TimestampUtc::now();
+    let mut campaign = Campaign::new(SessionId::new(), CampaignLimits::default(), now);
+    campaign.activate();
+
+    let task_id = TaskId::new();
+
+    let h1 = Hypothesis::new(
+        campaign.id,
+        task_id,
+        VulnerabilityCategory::BufferOverflow,
+        "src/parser.c",
+        Some("parse_header".to_string()),
+        Some(142),
+        "Header length field exceeds 1024 bytes",
+        "Stack buffer overflow leading to control flow hijack",
+        "Process crashes with SIGSEGV at 0x41414141",
+        Confidence::High,
+        now,
+    );
+
+    let h2_duplicate = Hypothesis::new(
+        campaign.id,
+        task_id,
+        VulnerabilityCategory::BufferOverflow,
+        "src/parser.c",
+        Some("parse_header".to_string()),
+        Some(142),
+        "Different wording describing the same flaw",
+        "Stack corruption",
+        "SIGSEGV",
+        Confidence::Tentative,
+        now,
+    );
+
+    let h3_distinct = Hypothesis::new(
+        campaign.id,
+        task_id,
+        VulnerabilityCategory::UseAfterFree,
+        "src/parser.c",
+        Some("free_header".to_string()),
+        Some(210),
+        "Header freed in cleanup callback but retained in state",
+        "Use after free memory corruption",
+        "AddressSanitizer heap-use-after-free",
+        Confidence::High,
+        now,
+    );
+
+    assert!(campaign.propose_hypothesis(h1).is_ok());
+
+    // Duplicate hypothesis on same target & category fails closed
+    let err = campaign.propose_hypothesis(h2_duplicate);
+    assert!(matches!(
+        err,
+        Err(e) if matches!(e.kind(), ResearchErrorKind::DuplicateHypothesis { .. })
+    ));
+
+    // Distinct target succeeds
+    assert!(campaign.propose_hypothesis(h3_distinct).is_ok());
+    assert_eq!(campaign.deduplicator.count(), 2);
+}
+
+#[test]
+fn test_coverage_ledger_recording_and_summary() {
+    let now = TimestampUtc::now();
+    let mut ledger = CoverageLedger::new();
+    let task_id = TaskId::new();
+
+    ledger.record_covered(
+        "src/auth.c",
+        Some("verify_token".to_string()),
+        120,
+        ResearchRole::Analyst,
+        task_id,
+        now,
+    );
+    ledger.record_covered(
+        "src/crypto.c",
+        Some("sha256_hash".to_string()),
+        85,
+        ResearchRole::Scout,
+        task_id,
+        now,
+    );
+
+    ledger.record_skipped(
+        "src/gui/win32.c",
+        None,
+        SkipReason::OutOfScope,
+        "GUI components excluded by research policy",
+        now,
+    );
+    ledger.record_skipped(
+        "src/driver/kernel.c",
+        None,
+        SkipReason::LanguageUnsupported,
+        "Kernel modules outside user-space pilot scope",
+        now,
+    );
+    ledger.record_skipped(
+        "src/legacy_fuzz.c",
+        None,
+        SkipReason::UnbuildableTarget,
+        "Missing legacy 32-bit headers",
+        now,
+    );
+
+    let summary = ledger.summary();
+    assert_eq!(summary.total_targets, 5);
+    assert_eq!(summary.covered_count, 2);
+    assert_eq!(summary.skipped_count, 3);
+    assert!((summary.coverage_ratio - 0.40).abs() < f64::EPSILON);
+    assert_eq!(
+        summary.skip_breakdown.get(&SkipReason::OutOfScope),
+        Some(&1)
+    );
+    assert_eq!(
+        summary.skip_breakdown.get(&SkipReason::LanguageUnsupported),
+        Some(&1)
+    );
+    assert_eq!(
+        summary.skip_breakdown.get(&SkipReason::UnbuildableTarget),
+        Some(&1)
+    );
+}
+
+#[test]
+fn test_campaign_task_fanout_limits() {
+    let now = TimestampUtc::now();
+    let limits = CampaignLimits {
+        max_concurrent_tasks: 2,
+        max_depth: 2,
+        max_budget_micro_usd: 10_000_000,
+        max_duration_seconds: 600,
+        max_hypotheses: 10,
+    };
+
+    let mut campaign = Campaign::new(SessionId::new(), limits, now);
+    campaign.activate();
+
+    // 1. Root scout task (depth 0)
+    let scout_1 = campaign
+        .spawn_task(ResearchRole::Scout, None, 1_000_000, now)
+        .expect("spawn root scout");
+    assert_eq!(campaign.active_task_count(), 1);
+
+    // 2. Child analyst task (depth 1)
+    let analyst_1 = campaign
+        .spawn_task(ResearchRole::Analyst, Some(scout_1), 1_000_000, now)
+        .expect("spawn child analyst");
+    assert_eq!(campaign.active_task_count(), 2);
+
+    // 3. Spawning 3rd task exceeds max_concurrent_tasks (2)
+    let err_concurrency = campaign.spawn_task(ResearchRole::Scout, None, 1_000_000, now);
+    assert!(matches!(
+        err_concurrency,
+        Err(e) if matches!(e.kind(), ResearchErrorKind::ConcurrencyLimitExceeded { .. })
+    ));
+
+    // 4. Complete scout_1 to free up a concurrency slot
+    campaign
+        .complete_task(scout_1, 800_000)
+        .expect("complete scout");
+    assert_eq!(campaign.active_task_count(), 1);
+
+    // 5. Child validator task from analyst_1 (depth 2)
+    let validator_1 = campaign
+        .spawn_task(ResearchRole::Validator, Some(analyst_1), 1_000_000, now)
+        .expect("spawn validator at depth 2");
+
+    // Complete analyst_1 to leave an open concurrency slot
+    campaign
+        .complete_task(analyst_1, 500_000)
+        .expect("complete analyst");
+    assert_eq!(campaign.active_task_count(), 1);
+
+    // 6. Child task from validator_1 would be depth 3 -> exceeds max_depth (2)
+    let err_depth = campaign.spawn_task(
+        ResearchRole::IndependentVerifier,
+        Some(validator_1),
+        1_000_000,
+        now,
+    );
+    assert!(matches!(
+        err_depth,
+        Err(e) if matches!(e.kind(), ResearchErrorKind::MaxDepthExceeded { .. })
+    ));
+}
+
+#[test]
+fn test_campaign_budget_accounting_and_exhaustion() {
+    let now = TimestampUtc::now();
+    let limits = CampaignLimits {
+        max_concurrent_tasks: 4,
+        max_depth: 2,
+        max_budget_micro_usd: 5_000_000, // $5.00
+        max_duration_seconds: 600,
+        max_hypotheses: 10,
+    };
+
+    let mut campaign = Campaign::new(SessionId::new(), limits, now);
+    campaign.activate();
+
+    // Reserve $3.00
+    let t1 = campaign
+        .spawn_task(ResearchRole::Scout, None, 3_000_000, now)
+        .expect("spawn task 1");
+    assert_eq!(campaign.budget_reserved_micro_usd, 3_000_000);
+    assert_eq!(campaign.budget_spent_micro_usd, 0);
+
+    // Attempting to reserve $3.00 more ($6.00 > $5.00) fails closed
+    let err = campaign.spawn_task(ResearchRole::Scout, None, 3_000_000, now);
+    assert!(matches!(
+        err,
+        Err(e) if matches!(e.kind(), ResearchErrorKind::BudgetExhausted { .. })
+    ));
+
+    // Complete t1 with actual spend of $2.20
+    campaign
+        .complete_task(t1, 2_200_000)
+        .expect("complete task 1");
+    assert_eq!(campaign.budget_reserved_micro_usd, 0);
+    assert_eq!(campaign.budget_spent_micro_usd, 2_200_000);
+
+    // Now $2.80 is available; reserving $2.50 succeeds
+    let t2 = campaign
+        .spawn_task(ResearchRole::Analyst, None, 2_500_000, now)
+        .expect("spawn task 2");
+    assert_eq!(campaign.budget_reserved_micro_usd, 2_500_000);
+
+    // Fail t2 -> reservation released without adding to spent
+    campaign.fail_task(t2).expect("fail task 2");
+    assert_eq!(campaign.budget_reserved_micro_usd, 0);
+    assert_eq!(campaign.budget_spent_micro_usd, 2_200_000);
+}
+
+#[test]
+fn test_task_secret_isolation_canary_detection() {
+    let now = TimestampUtc::now();
+    let mut campaign = Campaign::new(SessionId::new(), CampaignLimits::default(), now);
+    campaign.activate();
+
+    let task_a = campaign
+        .spawn_task(ResearchRole::Scout, None, 1_000_000, now)
+        .expect("task a");
+    let task_b = campaign
+        .spawn_task(ResearchRole::Analyst, None, 1_000_000, now)
+        .expect("task b");
+
+    let canary_b = campaign
+        .tasks
+        .iter()
+        .find(|t| t.task_id == task_b)
+        .unwrap()
+        .secret_canary
+        .clone();
+
+    // Clean output from Task A (no leaks)
+    let clean_output = "Scout output analyzing source code entrypoints in src/main.c";
+    assert!(
+        campaign
+            .verify_secret_isolation(task_a, clean_output)
+            .is_ok()
+    );
+
+    // Leaked output from Task A containing Task B's private canary token
+    let leaked_output = format!("Scout output leaking secret: {canary_b}");
+    let err = campaign.verify_secret_isolation(task_a, &leaked_output);
+    assert!(matches!(
+        err,
+        Err(e) if matches!(e.kind(), ResearchErrorKind::SecretIsolationBreach { .. })
+    ));
+}
+
+#[test]
+fn test_campaign_stop_and_status() {
+    let now = TimestampUtc::now();
+    let mut campaign = Campaign::new(SessionId::new(), CampaignLimits::default(), now);
+    assert_eq!(campaign.status, CampaignStatus::Planning);
+
+    campaign.activate();
+    assert_eq!(campaign.status, CampaignStatus::Active);
+
+    campaign.stop(CampaignStopReason::OperatorCancelled);
+    assert_eq!(campaign.status, CampaignStatus::Stopped);
+    assert_eq!(
+        campaign.stop_reason,
+        Some(CampaignStopReason::OperatorCancelled)
+    );
+
+    // Spawning after stop is rejected
+    let err = campaign.spawn_task(ResearchRole::Scout, None, 100_000, now);
+    assert!(matches!(
+        err,
+        Err(e) if matches!(e.kind(), ResearchErrorKind::CampaignAlreadyFinished { .. })
+    ));
+}
+
+#[test]
+fn test_research_serde_roundtrip() {
+    let now = TimestampUtc::now();
+    let h = Hypothesis::new(
+        sentra_core::CampaignId::new(),
+        TaskId::new(),
+        VulnerabilityCategory::CommandInjection,
+        "src/util.c",
+        Some("exec_helper".to_string()),
+        Some(55),
+        "Argument contains unsanitized shell metacharacters",
+        "Arbitrary command execution as current user",
+        "Injected command executed creating canary file",
+        Confidence::High,
+        now,
+    );
+
+    let json = serde_json::to_string(&h).expect("serialize hypothesis");
+    let recovered: Hypothesis = serde_json::from_str(&json).expect("deserialize hypothesis");
+
+    assert_eq!(recovered.id, h.id);
+    assert_eq!(recovered.campaign_id, h.campaign_id);
+    assert_eq!(recovered.created_by_task, h.created_by_task);
+    assert_eq!(recovered.category, h.category);
+    assert_eq!(recovered.target_file, h.target_file);
+    assert_eq!(recovered.status, HypothesisStatus::Proposed);
+    assert_eq!(recovered.fingerprint, h.fingerprint);
+}
