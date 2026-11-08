@@ -1,5 +1,7 @@
 //! Domain and resource models for execution requests, results, and capabilities.
 
+use serde::{Deserialize, Serialize};
+
 use crate::{
     ExecutionId, OperationAction, SecurityClassification, SessionId, TaskId, TimestampUtc,
     execution::{
@@ -18,7 +20,7 @@ pub const MAX_OUTPUT_LIMIT_BYTES: u64 = 10 * 1024 * 1024;
 pub const MAX_MEMORY_LIMIT_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 
 /// Resource quotas and bounds enforced during execution dispatch.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResourceLimits {
     /// Execution timeout in milliseconds.
     pub timeout_millis: u64,
@@ -73,7 +75,7 @@ impl ResourceLimits {
 }
 
 /// Measured resource consumption of an execution task.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResourceUsage {
     /// Real elapsed execution time in milliseconds.
     pub duration_millis: u64,
