@@ -4,16 +4,16 @@ mod support;
 
 use rusqlite::{Connection, params};
 use sentra_core::{
-    AttemptId, Clock, CostUsd, ExecutionId, Identifier, ManifestId, OperationAction, PolicyEngine,
-    SecurityClassification as Class, SessionState, TaskId,
+    AttemptId, Clock, CostUsd, ExecutionId, Identifier, ManifestId, MockClock,
+    OperationAction, PolicyEngine, SecurityClassification as Class, SessionState, TaskId,
     persistence::{
         AttemptOutcome, AttemptState, ManifestKind, PersistenceError, PersistenceErrorKind as Kind,
         PersistenceRepository, PrepareAttemptRequest, RecordAttemptRequest,
         SqliteConnectionManager, TaskState,
     },
-    service::CoreServiceHarness,
+    service::{CoreService, CoreServiceConfig},
 };
-use std::fs;
+use std::{fs, sync::Arc};
 use support::*;
 
 fn denied<T>(result: Result<T, PersistenceError>, expected: Kind) {
@@ -21,6 +21,62 @@ fn denied<T>(result: Result<T, PersistenceError>, expected: Kind) {
         Err(error) => assert_eq!(error.kind, expected),
         Ok(_) => panic!("expected {expected:?}"),
     }
+}
+
+fn advance_session_to_running(h: &Harness) {
+    let session_id = h.metadata.session_id;
+    h.repo
+        .transition_session(
+            session_id,
+            SessionState::Created,
+            SessionState::Scoped,
+            event(),
+            &h.clock,
+        )
+        .unwrap();
+    h.repo
+        .transition_session(
+            session_id,
+            SessionState::Scoped,
+            SessionState::Planned,
+            event(),
+            &h.clock,
+        )
+        .unwrap();
+    h.repo
+        .transition_session(
+            session_id,
+            SessionState::Planned,
+            SessionState::Running,
+            event(),
+            &h.clock,
+        )
+        .unwrap();
+}
+
+fn create_test_service(h: &Harness) -> CoreService {
+    let clock = Arc::new(MockClock::new(h.clock.now()));
+    let policy_engine = PolicyEngine::new();
+    let config = CoreServiceConfig::default();
+    let backend = Arc::new(sentra_core::SyntheticFixtureBackend::new());
+    CoreService::new(
+        config,
+        h.repo.clone(),
+        h.authority.clone(),
+        policy_engine,
+        backend,
+        clock,
+    )
+}
+
+fn checksum_v1() -> String {
+    let source = include_str!("../src/persistence/schema_v1.sql").replace("\r\n", "\n");
+    let hash = source
+        .bytes()
+        .fold(0xcbf2_9ce4_8422_2325u64, |value, byte| {
+            (value ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3)
+        });
+    format!("fnv1a64:{hash:016x}")
 }
 
 // -----------------------------------------------------------------------------
@@ -37,7 +93,7 @@ fn test_schema_v1_to_v2_transactional_migration_preserves_data() {
     {
         let conn = Connection::open(&d.db).unwrap();
         conn.execute_batch(
-            "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA user_version=1; BEGIN IMMEDIATE;",
+            "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA user_version=1; PRAGMA application_id=0x53454e54; BEGIN IMMEDIATE;",
         )
         .unwrap();
         conn.execute_batch(include_str!("../src/persistence/schema_v1.sql"))
@@ -45,10 +101,10 @@ fn test_schema_v1_to_v2_transactional_migration_preserves_data() {
 
         // Record Migration 1 entry
         conn.execute(
-            "INSERT INTO schema_migrations(version, applied_at, checksum) VALUES(1, ?1, ?2)",
+            "INSERT INTO schema_migrations(version, description, applied_at, checksum) VALUES(1, 'Initial Sentra persistence schema', ?1, ?2)",
             params![
                 c.now().to_rfc3339(),
-                "f9b7c8f4989635b71ec8e3907ebf059cbce9dd0ce4ebecf7d825c898c8df3747"
+                checksum_v1(),
             ],
         )
         .unwrap();
@@ -306,6 +362,7 @@ fn test_manifest_creation_and_digest_lookup() {
 #[test]
 fn test_durable_dispatch_full_lifecycle() {
     let h = Harness::budget(1_000_000); // $1.00 budget
+    advance_session_to_running(&h);
     let session_id = h.metadata.session_id;
     let task_id = TaskId::for_test_sequence(10);
     h.repo
@@ -393,6 +450,7 @@ fn test_durable_dispatch_full_lifecycle() {
 #[test]
 fn test_fencing_epoch_invalidation_prevents_stale_release() {
     let h = Harness::budget(500_000);
+    advance_session_to_running(&h);
     let session_id = h.metadata.session_id;
     let task_id = TaskId::for_test_sequence(20);
     h.repo
@@ -464,6 +522,7 @@ fn test_fencing_epoch_invalidation_prevents_stale_release() {
 #[test]
 fn test_post_release_interruption_marks_uncertain_and_holds_budget() {
     let h = Harness::budget(1_000_000);
+    advance_session_to_running(&h);
     let session_id = h.metadata.session_id;
     let task_id = TaskId::for_test_sequence(30);
     h.repo
@@ -535,6 +594,7 @@ fn test_post_release_interruption_marks_uncertain_and_holds_budget() {
 #[test]
 fn test_pre_release_cancellation_confirms_not_started_and_releases_budget() {
     let h = Harness::budget(1_000_000);
+    advance_session_to_running(&h);
     let session_id = h.metadata.session_id;
     let task_id = TaskId::for_test_sequence(40);
     h.repo
@@ -606,8 +666,9 @@ fn test_pre_release_cancellation_confirms_not_started_and_releases_budget() {
 
 #[test]
 fn test_session_resumption_e2e_reconciliation() {
-    let harness = CoreServiceHarness::new_synthetic();
-    let session_id = harness.create_standard_session().unwrap();
+    let h = Harness::budget(1_000_000);
+    advance_session_to_running(&h);
+    let session_id = h.metadata.session_id;
 
     // Create 4 tasks
     let t1_id = TaskId::for_test_sequence(101);
@@ -615,56 +676,42 @@ fn test_session_resumption_e2e_reconciliation() {
     let t3_id = TaskId::for_test_sequence(103);
     let t4_id = TaskId::for_test_sequence(104);
 
-    harness
-        .service
-        .repository()
-        .create_task(session_id, t1_id, 1, "Completed Task", harness.clock.as_ref())
+    h.repo
+        .create_task(session_id, t1_id, 1, "Completed Task", &h.clock)
         .unwrap();
-    harness
-        .service
-        .repository()
-        .create_task(session_id, t2_id, 2, "Running Task", harness.clock.as_ref())
+    h.repo
+        .create_task(session_id, t2_id, 2, "Running Task", &h.clock)
         .unwrap();
-    harness
-        .service
-        .repository()
-        .create_task(session_id, t3_id, 3, "Prepared Task", harness.clock.as_ref())
+    h.repo
+        .create_task(session_id, t3_id, 3, "Prepared Task", &h.clock)
         .unwrap();
-    harness
-        .service
-        .repository()
-        .create_task(session_id, t4_id, 4, "Recorded Task", harness.clock.as_ref())
+    h.repo
+        .create_task(session_id, t4_id, 4, "Recorded Task", &h.clock)
         .unwrap();
 
     // Task 1: Completed
-    harness
-        .service
-        .repository()
+    h.repo
         .update_task_state(
             t1_id,
             TaskState::Pending,
             TaskState::InProgress,
             event(),
-            harness.clock.as_ref(),
+            &h.clock,
         )
         .unwrap();
-    harness
-        .service
-        .repository()
+    h.repo
         .update_task_state(
             t1_id,
             TaskState::InProgress,
             TaskState::Completed,
             event(),
-            harness.clock.as_ref(),
+            &h.clock,
         )
         .unwrap();
 
     // Task 2: RunningConfirmed attempt
     let att2_id = AttemptId::for_test_sequence(202);
-    harness
-        .service
-        .repository()
+    h.repo
         .record_attempt(
             RecordAttemptRequest {
                 attempt_id: att2_id,
@@ -675,7 +722,7 @@ fn test_session_resumption_e2e_reconciliation() {
                 action_digest: "digest-2".into(),
                 manifest_id: None,
             },
-            harness.clock.as_ref(),
+            &h.clock,
         )
         .unwrap();
     let res2_id = sentra_core::ReservationId::from_bytes(*Identifier::new_deterministic(200, 2).as_bytes());
@@ -684,9 +731,8 @@ fn test_session_resumption_e2e_reconciliation() {
         model_id: "m2".into(),
         estimated_cost: CostUsd::from_micro_usd(100_000),
     };
-    let ctx2 = harness
-        .service
-        .authority()
+    let ctx2 = h
+        .authority
         .execution_context(
             session_id,
             Class::Internal,
@@ -695,9 +741,7 @@ fn test_session_resumption_e2e_reconciliation() {
             &policy_engine,
         )
         .unwrap();
-    harness
-        .service
-        .repository()
+    h.repo
         .prepare_attempt(
             PrepareAttemptRequest {
                 attempt_id: att2_id,
@@ -707,25 +751,19 @@ fn test_session_resumption_e2e_reconciliation() {
                 reservation_event: event(),
                 consumption_event: event(),
             },
-            harness.clock.as_ref(),
+            &h.clock,
         )
         .unwrap();
-    harness
-        .service
-        .repository()
-        .record_release(att2_id, harness.clock.as_ref())
+    h.repo
+        .record_release(att2_id, &h.clock)
         .unwrap();
-    harness
-        .service
-        .repository()
-        .confirm_running(att2_id, harness.clock.as_ref())
+    h.repo
+        .confirm_running(att2_id, &h.clock)
         .unwrap();
 
     // Task 3: Prepared attempt
     let att3_id = AttemptId::for_test_sequence(203);
-    harness
-        .service
-        .repository()
+    h.repo
         .record_attempt(
             RecordAttemptRequest {
                 attempt_id: att3_id,
@@ -736,7 +774,7 @@ fn test_session_resumption_e2e_reconciliation() {
                 action_digest: "digest-3".into(),
                 manifest_id: None,
             },
-            harness.clock.as_ref(),
+            &h.clock,
         )
         .unwrap();
     let res3_id = sentra_core::ReservationId::from_bytes(*Identifier::new_deterministic(200, 3).as_bytes());
@@ -744,9 +782,8 @@ fn test_session_resumption_e2e_reconciliation() {
         model_id: "m3".into(),
         estimated_cost: CostUsd::from_micro_usd(50_000),
     };
-    let ctx3 = harness
-        .service
-        .authority()
+    let ctx3 = h
+        .authority
         .execution_context(
             session_id,
             Class::Internal,
@@ -755,9 +792,7 @@ fn test_session_resumption_e2e_reconciliation() {
             &policy_engine,
         )
         .unwrap();
-    harness
-        .service
-        .repository()
+    h.repo
         .prepare_attempt(
             PrepareAttemptRequest {
                 attempt_id: att3_id,
@@ -767,15 +802,13 @@ fn test_session_resumption_e2e_reconciliation() {
                 reservation_event: event(),
                 consumption_event: event(),
             },
-            harness.clock.as_ref(),
+            &h.clock,
         )
         .unwrap();
 
     // Task 4: Recorded attempt
     let att4_id = AttemptId::for_test_sequence(204);
-    harness
-        .service
-        .repository()
+    h.repo
         .record_attempt(
             RecordAttemptRequest {
                 attempt_id: att4_id,
@@ -786,22 +819,18 @@ fn test_session_resumption_e2e_reconciliation() {
                 action_digest: "digest-4".into(),
                 manifest_id: None,
             },
-            harness.clock.as_ref(),
+            &h.clock,
         )
         .unwrap();
 
     // Pause session to simulate interruption / checkpoint
-    harness
-        .service
-        .transition_session(session_id, SessionState::Running, "start")
-        .unwrap();
-    harness
-        .service
-        .transition_session(session_id, SessionState::Paused, "interrupted")
+    h.repo
+        .transition_session(session_id, SessionState::Running, SessionState::Paused, event(), &h.clock)
         .unwrap();
 
-    // Perform Session Resumption!
-    let resume_report = harness.service.resume_session(session_id).unwrap();
+    // Initialize CoreService over the database and perform Session Resumption!
+    let service = create_test_service(&h);
+    let resume_report = service.resume_session(session_id).unwrap();
 
     assert_eq!(resume_report.session_id, session_id);
     assert_eq!(resume_report.previous_state, SessionState::Paused);
@@ -824,7 +853,7 @@ fn test_session_resumption_e2e_reconciliation() {
     assert!(r2.budget_held);
 
     // Task 2 is now Blocked to require operator inspection
-    let t2_record = harness.service.repository().get_task(t2_id).unwrap().unwrap();
+    let t2_record = h.repo.get_task(t2_id).unwrap().unwrap();
     assert_eq!(t2_record.state, TaskState::Blocked);
 
     // Task 3 attempt -> NotStartedConfirmed (budget released)
@@ -848,23 +877,20 @@ fn test_session_resumption_e2e_reconciliation() {
     assert!(!r4.budget_held);
 
     // Total budget used retains the $0.10 hold for Task 2, but released the $0.05 for Task 3!
-    let total_used = harness.service.budget_used(session_id).unwrap();
+    let total_used = service.budget_used(session_id).unwrap();
     assert_eq!(total_used.as_micro_usd(), 100_000);
 }
 
 #[test]
 fn test_terminal_session_cannot_be_resumed() {
-    let harness = CoreServiceHarness::new_synthetic();
-    let session_id = harness.create_standard_session().unwrap();
-    harness
-        .service
-        .transition_session(session_id, SessionState::Running, "run")
-        .unwrap();
-    harness
-        .service
-        .transition_session(session_id, SessionState::Completed, "done")
+    let h = Harness::new();
+    advance_session_to_running(&h);
+    let session_id = h.metadata.session_id;
+    h.repo
+        .transition_session(session_id, SessionState::Running, SessionState::Completed, event(), &h.clock)
         .unwrap();
 
-    let resume_res = harness.service.resume_session(session_id);
+    let service = create_test_service(&h);
+    let resume_res = service.resume_session(session_id);
     assert!(resume_res.is_err());
 }
