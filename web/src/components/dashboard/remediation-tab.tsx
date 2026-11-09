@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { applyPatchToWorkspace, rollbackPatch } from '@/lib/api-client'
+import { DiffViewer } from '@/components/dashboard/diff-viewer'
 import type { PatchBundleView, UserRole } from '@/types/sentra'
 
 interface RemediationTabProps {
@@ -249,15 +250,14 @@ export function RemediationTab({ patches, currentRole }: RemediationTabProps) {
                 </div>
               </div>
 
-              {/* Code Diff Display */}
+              {/* High-Fidelity Unified & Split Diff Viewer */}
               <div className="flex flex-col gap-1.5">
-                <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-                  <FileCode className="size-3.5" />
-                  Isolated Unified Patch Diff
-                </span>
-                <pre className="font-mono text-xs bg-muted/60 p-3 rounded-md overflow-x-auto border text-foreground leading-relaxed">
-                  {patch.diff}
-                </pre>
+                <DiffViewer
+                  diff={patch.diff}
+                  filePath={patch.targetLocation}
+                  defaultMode="unified"
+                  maxHeight="max-h-[360px]"
+                />
               </div>
 
               {/* GitHub Draft PR Dispatch Command Box */}
