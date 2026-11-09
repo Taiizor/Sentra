@@ -1,0 +1,64 @@
+# Dependabot configuration for Sentra
+# Configured for Cargo (Rust workspace), GitHub Actions, and Web Frontend (npm/package.json)
+version: 2
+
+updates:
+  # 1. Rust Workspace Dependencies (Cargo.lock & Cargo.toml)
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "05:00"
+      timezone: "UTC"
+    target-branch: "develop"
+    labels:
+      - "scope:core"
+      - "type:chore"
+    commit-message:
+      prefix: "chore(deps)"
+    open-pull-requests-limit: 10
+    groups:
+      rust-dependencies:
+        patterns:
+          - "*"
+
+  # 2. GitHub Actions Workflows
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "05:00"
+      timezone: "UTC"
+    target-branch: "develop"
+    labels:
+      - "scope:ci"
+      - "type:chore"
+    commit-message:
+      prefix: "chore(ci)"
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  # 3. Web Dashboard Dependencies (/web/package.json)
+  - package-ecosystem: "npm"
+    directory: "/web"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "05:00"
+      timezone: "UTC"
+    target-branch: "develop"
+    labels:
+      - "scope:web"
+      - "type:chore"
+    commit-message:
+      prefix: "chore(deps-web)"
+    open-pull-requests-limit: 10
+    groups:
+      web-dependencies:
+        patterns:
+          - "*"
