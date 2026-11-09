@@ -159,6 +159,14 @@ static KNOWN_SANITIZERS: &[SanitizerPattern] = &[
         token: "html.escape(",
         description: "HTML entity encoder",
     },
+    SanitizerPattern {
+        token: "path.basename(",
+        description: "Filesystem basename traversal sanitizer",
+    },
+    SanitizerPattern {
+        token: "filepath.base(",
+        description: "Go filepath basename traversal sanitizer",
+    },
 ];
 
 /// Known sink definition patterns.
