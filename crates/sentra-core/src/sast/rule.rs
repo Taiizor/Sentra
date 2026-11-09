@@ -147,6 +147,42 @@ pub static BUILTIN_RULES: &[SastRule] = &[
         description: "Filesystem path constructed directly from unvalidated request parameters. Attackers can supply `..` components to read or overwrite arbitrary host files.",
         recommendation: "Validate and canonicalize all user-supplied paths against a strict root boundary before performing filesystem operations.",
     },
+    SastRule {
+        id: "SENTRA-TAINT-001",
+        name: "SqlInjectionViaTaintFlow",
+        category: RuleCategory::SqlInjection,
+        severity: Severity::Critical,
+        cwe_id: "CWE-89",
+        description: "Unsanitized user-controlled input traced from source to database execution sink through data-flow tracking.",
+        recommendation: "Use parameterized queries or prepared statements ($1, ?, or ORM methods) and validate/cast inputs before execution.",
+    },
+    SastRule {
+        id: "SENTRA-TAINT-002",
+        name: "CommandInjectionViaTaintFlow",
+        category: RuleCategory::CommandInjection,
+        severity: Severity::Critical,
+        cwe_id: "CWE-78",
+        description: "Unsanitized user or external input traced to OS process/shell execution sink.",
+        recommendation: "Avoid shell invocation; pass arguments as discrete array elements directly to the binary executor.",
+    },
+    SastRule {
+        id: "SENTRA-TAINT-003",
+        name: "DynamicCodeEvalViaTaintFlow",
+        category: RuleCategory::DangerousEval,
+        severity: Severity::Critical,
+        cwe_id: "CWE-95",
+        description: "Untrusted external data flow reached dynamic code evaluation (eval / Function).",
+        recommendation: "Eliminate dynamic code execution in favor of static parser or serialization routines.",
+    },
+    SastRule {
+        id: "SENTRA-TAINT-004",
+        name: "PathTraversalViaTaintFlow",
+        category: RuleCategory::PathTraversal,
+        severity: Severity::High,
+        cwe_id: "CWE-22",
+        description: "Unsanitized user input traced from source to filesystem path read/write operation.",
+        recommendation: "Canonicalize and validate paths against an explicit allowlisted base directory before filesystem access.",
+    },
 ];
 
 /// Finds a rule by its stable ID.

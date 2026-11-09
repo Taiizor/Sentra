@@ -1,11 +1,17 @@
 //! Subprocess plugin SDK, versioned adapter protocols, and capability fencing (REQ-F16, Roadmap Phase 4).
 
+pub mod codeql;
 pub mod error;
 pub mod host;
 pub mod manifest;
 pub mod protocol;
 pub mod sample_adapter;
 
+pub use codeql::{
+    CodeQlAdapter, CodeQlError, CodeQlLanguage, CodeQlProbeReport, CodeQlSarifIngestResult,
+    CodeQlTaintStep, CodeQlTaintTrace, TaintStepKind, ingest_codeql_sarif_payload,
+    probe_codeql_workspace,
+};
 pub use error::{PluginError, PluginErrorKind};
 pub use host::{HostStatus, PluginHost};
 pub use manifest::{AdapterFamily, PluginCapability, PluginManifest, PluginQuotas};

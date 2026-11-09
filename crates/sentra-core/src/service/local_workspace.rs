@@ -554,6 +554,145 @@ impl LocalWorkspace {
         Ok(proposals)
     }
 
+    /// Probes workspace for CodeQL-compatible languages and generates invocation commands.
+    pub fn probe_codeql(
+        workspace: &Path,
+    ) -> Result<crate::plugin::codeql::CodeQlProbeReport, LocalWorkspaceError> {
+        crate::plugin::codeql::probe_codeql_workspace(workspace).map_err(|e| match e {
+            crate::plugin::codeql::CodeQlError::WorkspaceReadError(_) => {
+                LocalWorkspaceError::new(LocalWorkspaceErrorKind::Workspace)
+            }
+            _ => LocalWorkspaceError::new(LocalWorkspaceErrorKind::Service),
+        })
+    }
+
+    /// Ingests a CodeQL SARIF v2.1.0 report, extracting findings and interprocedural taint traces.
+    pub fn ingest_codeql_sarif(
+        workspace: Option<&Path>,
+        database: Option<&Path>,
+        sarif_path: &Path,
+    ) -> Result<crate::plugin::codeql::CodeQlSarifIngestResult, LocalWorkspaceError> {
+        use LocalWorkspaceErrorKind as Kind;
+
+        let content = std::fs::read_to_string(sarif_path)
+            .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
+
+        if let (Some(ws), Some(db)) = (workspace, database) {
+            let boundary = WorkspaceBoundary::establish(
+                ws,
+                SessionId::new(),
+                SecurityClassification::Internal,
+            )
+            .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
+
+            let parent = db
+                .parent()
+                .ok_or_else(|| LocalWorkspaceError::new(Kind::StorageLocation))?;
+            let storage = WorkspaceBoundary::establish(
+                parent,
+                SessionId::new(),
+                SecurityClassification::Internal,
+            )
+            .map_err(|_| LocalWorkspaceError::new(Kind::StorageLocation))?;
+
+            if storage
+                .root()
+                .canonical_path()
+                .starts_with(boundary.root().canonical_path())
+            {
+                return Err(LocalWorkspaceError::new(Kind::StorageLocation));
+            }
+
+            let _admission = SqliteConnectionManager::local_context_admission(db)
+                .map_err(LocalWorkspaceError::persistence)?;
+            if !exists(db)? {
+                return Err(LocalWorkspaceError::new(Kind::Incomplete));
+            }
+
+            let clock = Arc::new(SystemClock::new());
+            let manager = SqliteConnectionManager::open_existing(db, &clock)
+                .map_err(LocalWorkspaceError::persistence)?;
+            let (repository, authority) = PersistenceRepository::with_authority(manager);
+            let service = CoreService::new(
+                CoreServiceConfig::default(),
+                repository.clone(),
+                authority,
+                PolicyEngine::new(),
+                Arc::new(FailClosedBackend::new()),
+                clock.clone(),
+            );
+
+            let record = service
+                .local_session()
+                .map_err(LocalWorkspaceError::service)?;
+
+            if record.state == SessionState::Created {
+                return Err(LocalWorkspaceError::new(Kind::Incomplete));
+            }
+            if Path::new(&record.metadata.workspace_root) != boundary.root().canonical_path() {
+                return Err(LocalWorkspaceError::new(Kind::WorkspaceMismatch));
+            }
+
+            let task_id = TaskId::new();
+            let existing_tasks = repository
+                .list_tasks(record.metadata.session_id)
+                .map_err(LocalWorkspaceError::persistence)?;
+            let sequence_number = (existing_tasks.len() as u64) + 1;
+
+            let task_title = "GitHub CodeQL SARIF Analysis Ingestion".to_string();
+            repository
+                .create_task(
+                    record.metadata.session_id,
+                    task_id,
+                    sequence_number,
+                    &task_title,
+                    &*clock,
+                )
+                .map_err(LocalWorkspaceError::persistence)?;
+
+            repository
+                .update_task_state(
+                    task_id,
+                    TaskState::Pending,
+                    TaskState::InProgress,
+                    EventId::new(),
+                    &*clock,
+                )
+                .map_err(LocalWorkspaceError::persistence)?;
+            repository
+                .update_task_state(
+                    task_id,
+                    TaskState::InProgress,
+                    TaskState::Completed,
+                    EventId::new(),
+                    &*clock,
+                )
+                .map_err(LocalWorkspaceError::persistence)?;
+
+            let now = clock.now();
+            let result = crate::plugin::codeql::ingest_codeql_sarif_payload(
+                &content,
+                &record.metadata.session_id,
+                task_id,
+                now,
+            )
+            .map_err(|_| LocalWorkspaceError::new(Kind::Service))?;
+
+            Ok(result)
+        } else {
+            let session_id = SessionId::new();
+            let task_id = TaskId::new();
+            let clock_now = TimestampUtc::now();
+            crate::plugin::codeql::ingest_codeql_sarif_payload(
+                &content,
+                &session_id,
+                task_id,
+                clock_now,
+            )
+            .map_err(|_| LocalWorkspaceError::new(Kind::Service))
+        }
+    }
+
     fn run(
         workspace: &Path,
         database: &Path,

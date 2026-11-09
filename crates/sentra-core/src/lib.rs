@@ -132,9 +132,11 @@ pub use mcp::{
     verify_transport_allowed,
 };
 pub use plugin::{
-    AdapterFamily, HostStatus, PluginCapability, PluginError, PluginErrorKind, PluginHost,
-    PluginManifest, PluginQuotas, PluginRequest, PluginResponse, SampleAdapter, SampleAdapterMode,
-    decode_frame, encode_frame,
+    AdapterFamily, CodeQlAdapter, CodeQlError, CodeQlLanguage, CodeQlProbeReport,
+    CodeQlSarifIngestResult, CodeQlTaintStep, CodeQlTaintTrace, HostStatus, PluginCapability,
+    PluginError, PluginErrorKind, PluginHost, PluginManifest, PluginQuotas, PluginRequest,
+    PluginResponse, SampleAdapter, SampleAdapterMode, TaintStepKind, decode_frame, encode_frame,
+    ingest_codeql_sarif_payload, probe_codeql_workspace,
 };
 pub use policy::{
     ApprovalAuthority, ApprovalBroker, ApprovalGrant, ApprovalRequest, BudgetPolicyConfig, CostUsd,
@@ -166,7 +168,8 @@ pub use research::{
 };
 pub use sast::{
     BUILTIN_RULES, MAX_SCANNABLE_FILE_BYTES, RuleCategory, SastMatch, SastReport, SastRule,
-    SastScanner, find_rule_by_id,
+    SastScanner, TaintAnalysisEngine, TaintFlowStep, TaintSinkKind, TaintSourceKind, TaintStepRole,
+    TaintVulnerability, find_rule_by_id,
 };
 pub use service::{
     AdmitResultRequest, CancellationPhase, CancellationReason, CancellationReport, CoreService,

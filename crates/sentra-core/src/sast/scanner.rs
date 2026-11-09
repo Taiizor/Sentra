@@ -56,7 +56,7 @@ impl SastReport {
             .map(|m| {
                 let id = FindingId::new();
                 let title = format!("{}: {} in {}", m.rule.id, m.rule.name, m.file_path);
-                let description = format!(
+                let mut description = format!(
                     "Static check '{}' ({}) triggered at {}:{}.\n\nCWE: {}\nDescription: {}\nRecommendation: {}\n\nSnippet:\n    {}",
                     m.rule.name,
                     m.rule.id,
@@ -68,6 +68,16 @@ impl SastReport {
                     m.snippet
                 );
 
+                if !m.rationale.is_empty() {
+                    description.push_str(&format!("\n\n{}", m.rationale));
+                }
+
+                let reachability = if m.rule.id.starts_with("SENTRA-TAINT-") {
+                    Reachability::ReachableCallPath
+                } else {
+                    Reachability::SyntacticallyReferenced
+                };
+
                 Finding::new_candidate(
                     id,
                     session_id,
@@ -76,7 +86,7 @@ impl SastReport {
                     description,
                     m.rule.severity,
                     Confidence::High,
-                    Reachability::SyntacticallyReferenced,
+                    reachability,
                     FindingSource::StaticAnalysis {
                         engine: "sentra-sast".to_string(),
                         rule_id: m.rule.id.to_string(),
@@ -234,6 +244,22 @@ impl SastScanner {
             // 10. Path Traversal Antipattern (SENTRA-SAST-005)
             if let Some(m) = self.check_path_traversal(rel_path, line_num, line) {
                 matches.push(m);
+            }
+        }
+
+        // 11. In-Engine Pure-Rust Semantic Taint Tracking
+        let taint_engine = crate::sast::taint::TaintAnalysisEngine::new();
+        let taint_vulns = taint_engine.analyze_source(rel_path, content);
+        for tv in taint_vulns {
+            if let Some(rule) = find_rule_by_id(tv.rule_id) {
+                let rationale = tv.to_markdown_trace();
+                matches.push(SastMatch {
+                    rule: rule.clone(),
+                    file_path: rel_path.to_string(),
+                    line_number: tv.sink_line as u32,
+                    snippet: tv.sink_expression,
+                    rationale,
+                });
             }
         }
 
