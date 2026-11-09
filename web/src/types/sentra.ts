@@ -62,6 +62,9 @@ export interface PatchBundleView {
   patchedSnippet: string
   branchName: string
   ghPrCommand: string
+  targetLocation?: string
+  backupPath?: string
+  isAppliedToDisk?: boolean
   createdAt: string
 }
 

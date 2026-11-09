@@ -7,6 +7,9 @@ import {
   GitPullRequestDraft,
   ShieldCheck,
   FileCode,
+  HardDrive,
+  RotateCcw,
+  Download,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { copyText } from '@/lib/clipboard'
@@ -14,6 +17,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { applyPatchToWorkspace, rollbackPatch } from '@/lib/api-client'
 import type { PatchBundleView, UserRole } from '@/types/sentra'
 
 interface RemediationTabProps {
@@ -23,6 +27,9 @@ interface RemediationTabProps {
 
 export function RemediationTab({ patches, currentRole }: RemediationTabProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [patchStates, setPatchStates] = useState<
+    Record<string, { applied: boolean; backupPath?: string; loading?: boolean }>
+  >({})
 
   function copyToClipboard(text: string, id: string) {
     copyText(text)
@@ -31,6 +38,71 @@ export function RemediationTab({ patches, currentRole }: RemediationTabProps) {
       description: 'Run in terminal to submit three-tier verified remediation patch.',
     })
     setTimeout(() => setCopiedId(null), 2500)
+  }
+
+  function handleDownloadPatch(patch: PatchBundleView) {
+    const blob = new Blob([patch.diff], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${patch.branchName.replace(/\//g, '-')}.patch`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success('Unified Diff Downloaded', {
+      description: `Saved as ${patch.branchName.replace(/\//g, '-')}.patch`,
+    })
+  }
+
+  async function handleApply(patch: PatchBundleView) {
+    const loc = patch.targetLocation || 'crates/sentra-cli/src/lib.rs'
+    setPatchStates((prev) => ({ ...prev, [patch.bundleId]: { ...prev[patch.bundleId], loading: true, applied: false } }))
+    try {
+      const res = await applyPatchToWorkspace({
+        patchId: patch.bundleId,
+        diff: patch.diff,
+        targetLocation: loc,
+      })
+      setPatchStates((prev) => ({
+        ...prev,
+        [patch.bundleId]: { applied: true, backupPath: res.backupPath, loading: false },
+      }))
+      toast.success(res.alreadyPatched ? 'File Already Remediated' : 'Patch Applied to Workspace on Disk', {
+        description: `Target: ${res.targetLocation}. Backup: ${res.backupPath}`,
+      })
+    } catch (err: any) {
+      setPatchStates((prev) => ({ ...prev, [patch.bundleId]: { applied: false, loading: false } }))
+      toast.error('Failed to Apply Patch', {
+        description: err.message || 'Error modifying source code on disk.',
+      })
+    }
+  }
+
+  async function handleRollback(patch: PatchBundleView) {
+    const state = patchStates[patch.bundleId]
+    const backup = state?.backupPath || patch.backupPath
+    const loc = patch.targetLocation || 'crates/sentra-cli/src/lib.rs'
+    if (!backup) return
+
+    setPatchStates((prev) => ({ ...prev, [patch.bundleId]: { ...prev[patch.bundleId], loading: true } }))
+    try {
+      await rollbackPatch({
+        patchId: patch.bundleId,
+        backupPath: backup,
+        targetLocation: loc,
+      })
+      setPatchStates((prev) => ({
+        ...prev,
+        [patch.bundleId]: { applied: false, backupPath: undefined, loading: false },
+      }))
+      toast.info('Patch Rolled Back', {
+        description: `Restored ${loc} to original state.`,
+      })
+    } catch (err: any) {
+      setPatchStates((prev) => ({ ...prev, [patch.bundleId]: { ...prev[patch.bundleId], loading: false } }))
+      toast.error('Rollback Failed', {
+        description: err.message || 'Error restoring file.',
+      })
+    }
   }
 
   return (
@@ -75,19 +147,54 @@ export function RemediationTab({ patches, currentRole }: RemediationTabProps) {
                   </CardDescription>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Disk Patch Application State */}
+                  {!(patchStates[patch.bundleId]?.applied || patch.isAppliedToDisk) ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={patchStates[patch.bundleId]?.loading || currentRole === 'Viewer'}
+                      onClick={() => handleApply(patch)}
+                      className="h-8 text-xs border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 font-semibold"
+                    >
+                      <HardDrive className="size-3.5 mr-1" />
+                      {patchStates[patch.bundleId]?.loading ? 'Applying...' : 'Apply to Workspace'}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={patchStates[patch.bundleId]?.loading}
+                      onClick={() => handleRollback(patch)}
+                      className="h-8 text-xs border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 font-semibold"
+                    >
+                      <RotateCcw className="size-3.5 mr-1" />
+                      {patchStates[patch.bundleId]?.loading ? 'Rolling back...' : 'Rollback Disk'}
+                    </Button>
+                  )}
+
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 text-xs"
+                    className="h-8 text-xs border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-zinc-300"
+                    onClick={() => handleDownloadPatch(patch)}
+                  >
+                    <Download className="size-3.5 mr-1" />
+                    .patch
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-zinc-300"
                     onClick={() => copyToClipboard(patch.ghPrCommand, patch.bundleId)}
                   >
                     {copiedId === patch.bundleId ? (
-                      <Check data-icon="inline-start" className="text-primary" />
+                      <Check data-icon="inline-start" className="text-primary size-3.5 mr-1" />
                     ) : (
-                      <Copy data-icon="inline-start" />
+                      <Copy data-icon="inline-start" className="size-3.5 mr-1" />
                     )}
-                    {copiedId === patch.bundleId ? 'Copied GH PR CLI' : 'Copy Draft PR Command'}
+                    {copiedId === patch.bundleId ? 'Copied' : 'Draft PR Command'}
                   </Button>
                 </div>
               </div>

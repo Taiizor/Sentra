@@ -210,6 +210,76 @@ export async function generateAiPatch(
   return await res.json()
 }
 
+export async function applyPatchToWorkspace(params: {
+  patchId: string
+  diff: string
+  targetLocation: string
+  workspace?: string
+}): Promise<{
+  success: boolean
+  patchId: string
+  targetLocation: string
+  resolvedPath: string
+  backupPath: string
+  alreadyPatched: boolean
+  message: string
+}> {
+  const res = await fetch(`${API_BASE}/patch/apply`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error || `Patch application failed with HTTP ${res.status}`)
+  }
+  return await res.json()
+}
+
+export async function rollbackPatch(params: {
+  patchId: string
+  backupPath: string
+  targetLocation: string
+  workspace?: string
+}): Promise<{
+  success: boolean
+  patchId: string
+  targetLocation: string
+  restoredFrom: string
+  message: string
+}> {
+  const res = await fetch(`${API_BASE}/patch/rollback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error || `Rollback failed with HTTP ${res.status}`)
+  }
+  return await res.json()
+}
+
+export async function fetchWebhookDeliveries(): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE}/webhook/deliveries`)
+    if (!res.ok) return []
+    const data = await res.json()
+    return data.deliveries || []
+  } catch {
+    return []
+  }
+}
+
+export async function simulateWebhookDispatch(): Promise<any> {
+  const res = await fetch(`${API_BASE}/webhook/test-dispatch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  })
+  if (!res.ok) throw new Error(`Webhook simulation failed with HTTP ${res.status}`)
+  return await res.json()
+}
+
 /**
  * Robust Server-Sent Events (SSE) Stream Reader with chunk buffering
  */
