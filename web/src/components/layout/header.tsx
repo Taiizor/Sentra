@@ -2,7 +2,6 @@ import {
   Download,
   Terminal,
   UserCircle,
-  Search,
   Code2,
   Plus,
   FileText,
@@ -41,7 +40,6 @@ interface HeaderProps {
   onRoleChange: (role: UserRole) => void
   onExportSarif: () => void
   onToggleConsole: () => void
-  onOpenCommandPalette: () => void
   onJumpToStudio: () => void
   onOpenMobileMenu?: () => void
   isConsoleOpen: boolean
@@ -59,7 +57,6 @@ export function Header({
   onRoleChange,
   onExportSarif,
   onToggleConsole,
-  onOpenCommandPalette,
   onJumpToStudio,
   onOpenMobileMenu,
   isConsoleOpen,
@@ -89,23 +86,6 @@ export function Header({
 
         {/* Right Controls & Governance */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          {/* Quick Search Palette Trigger */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onOpenCommandPalette}
-            className="h-8 text-xs text-zinc-400 bg-zinc-900/60 border-zinc-800 hover:text-zinc-100 flex items-center gap-2 px-2.5 sm:px-3 w-auto sm:w-44 md:w-56 justify-between shrink-0"
-            title="Quick search (⌘K)"
-          >
-            <div className="flex items-center gap-1.5 min-w-0">
-              <Search className="size-3.5 shrink-0" />
-              <span className="hidden sm:inline truncate">Quick search...</span>
-            </div>
-            <kbd className="hidden md:inline-flex pointer-events-none h-4 select-none items-center gap-1 rounded border border-zinc-700 bg-zinc-800 px-1 font-mono text-[9px] font-medium text-zinc-400">
-              ⌘K
-            </kbd>
-          </Button>
-
           {/* Tenant Selector */}
           <div className="flex items-center gap-1">
             <span className="text-[11px] font-medium text-zinc-400 hidden xl:inline">Tenant:</span>

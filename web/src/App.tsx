@@ -699,6 +699,7 @@ export function App() {
           auditCount={tenantAuditLogs.length}
           currentRole={currentRole}
           currentTenant={currentTenant}
+          onOpenCommandPalette={() => setIsCommandOpen(true)}
         />
 
         {/* Mobile Slide-Over Sheet Sidebar */}
@@ -712,6 +713,7 @@ export function App() {
           auditCount={tenantAuditLogs.length}
           currentRole={currentRole}
           currentTenant={currentTenant}
+          onOpenCommandPalette={() => setIsCommandOpen(true)}
         />
 
         {/* Main Content Area */}
@@ -728,7 +730,6 @@ export function App() {
             onRoleChange={setCurrentRole}
             onExportSarif={handleExportSarif}
             onToggleConsole={() => setIsConsoleOpen((v) => !v)}
-            onOpenCommandPalette={() => setIsCommandOpen(true)}
             onJumpToStudio={() => setActiveTab('studio')}
             onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
             isConsoleOpen={isConsoleOpen}
