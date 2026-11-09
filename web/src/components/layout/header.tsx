@@ -79,7 +79,7 @@ export function Header({
                 if (val) onTenantChange(val as TenantId)
               }}
             >
-              <SelectTrigger className="w-[180px] h-8 text-xs bg-zinc-900/80 border-zinc-800">
+              <SelectTrigger className="w-[195px] sm:w-[210px] h-8 text-xs bg-zinc-900/80 border-zinc-800">
                 <SelectValue placeholder="Select Workspace" />
               </SelectTrigger>
               <SelectContent>
