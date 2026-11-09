@@ -872,20 +872,27 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
             if (providerCfg.provider === "openai" || providerCfg.provider === "local") {
               const ep = providerCfg.endpoint || (providerCfg.provider === "local" ? "http://localhost:11434/v1/chat/completions" : "https://api.openai.com/v1/chat/completions");
               const modelName = providerCfg.model || (providerCfg.provider === "local" ? "qwen2.5-coder:32b" : "gpt-4o");
+              const isLocalOllama = providerCfg.provider === "local" || (providerCfg.endpoint && providerCfg.endpoint.includes("11434"));
+              const payload: any = {
+                model: modelName,
+                messages: [
+                  { role: "system", content: systemPrompt },
+                  { role: "user", content: `Generate verified patch for: ${JSON.stringify(finding)}` },
+                ],
+                temperature: 0.1,
+                response_format: { type: "json_object" },
+              };
+              if (isLocalOllama) {
+                payload.format = "json";
+              }
+
               const resp = await fetch(ep, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
                   ...(providerCfg.apiKey ? { Authorization: `Bearer ${providerCfg.apiKey}` } : {}),
                 },
-                body: JSON.stringify({
-                  model: modelName,
-                  messages: [
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: `Generate verified patch for: ${JSON.stringify(finding)}` },
-                  ],
-                  temperature: 0.1,
-                }),
+                body: JSON.stringify(payload),
               });
 
               if (resp.ok) {
