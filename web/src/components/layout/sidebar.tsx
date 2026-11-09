@@ -14,6 +14,7 @@ import {
   Webhook,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { SentraLogo } from '@/components/ui/sentra-logo'
 import { cn } from 'cn'
 import type { TenantId, UserRole } from '@/types/sentra'
 
@@ -97,21 +98,8 @@ export function Sidebar({
     <aside className="w-64 border-r bg-zinc-950/80 backdrop-blur flex flex-col justify-between shrink-0 h-screen sticky top-0 border-zinc-800/80">
       {/* Brand & Platform Identity */}
       <div className="flex flex-col">
-        <div className="p-4 border-b border-zinc-800/80 flex items-center gap-3">
-          <div className="size-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold shadow-lg shadow-primary/20">
-            <ShieldAlert className="size-5" />
-          </div>
-          <div className="flex flex-col">
-            <div className="flex items-center gap-1.5">
-              <span className="font-extrabold text-base tracking-tight text-white">Sentra</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
-                v0.1.0
-              </span>
-            </div>
-            <span className="text-[11px] text-zinc-400 truncate">
-              Autonomous AI Security Core
-            </span>
-          </div>
+        <div className="p-4 border-b border-zinc-800/80">
+          <SentraLogo size={36} showBadge={true} glow={true} />
         </div>
 
         {/* Navigation Menu */}
