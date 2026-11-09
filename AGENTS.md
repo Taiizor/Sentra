@@ -8,11 +8,9 @@
 
 ## Current phase boundary
 
-- Phase 0 is complete. The project owner explicitly authorized Phase 1 technical validation and foundation work on 2026-11-05. Phase 2 is not authorized.
-- During Phase 1, validate assumptions with small isolated experiments before dependent implementation. Keep prototypes separate from the production core/CLI and report incomplete or blocked gates explicitly.
-- Do not create application code, executable prototypes, package manifests, lockfiles, or CI automation during Phase 0.
-- Do not install dependencies during Phase 0. Agent Git operations follow the permanent policy below.
-- The Phase 1 approval is recorded in `docs/phase1/README.md`; it does not authorize Phase 2, host configuration changes, external source transfer, or Git mutations.
+- Phase 0 and Phase 1 are complete. The project owner explicitly authorized Phase 2 continuous security review pilot and cross-platform validation on 2026-11-10. Phase 3 is not authorized.
+- The Phase 1 approval is recorded in `docs/phase1/README.md`; the Phase 2 approval and cross-platform validation are recorded in `docs/phase2/README.md`. It does not authorize Phase 3, host configuration changes, external source transfer, or Git mutations.
+- Keep prototypes separate from the production core/CLI and report incomplete or blocked gates explicitly.
 - Do not turn a proposed ADR into a validated technology claim without recording its required experiments.
 
 ## Permanent Git policy

@@ -12,10 +12,10 @@ use sentra_core::{
     workspace::WorkspaceBoundary,
 };
 
-#[cfg(windows)]
+#[cfg(any(windows, unix))]
 use std::sync::Arc;
 
-#[cfg(windows)]
+#[cfg(any(windows, unix))]
 use sentra_core::{
     CostUsd, MockClock, OperatingMode, OperationAction, PolicyEngine, TaskId, TimestampUtc,
     manifest::{ManifestErrorKind, SnapshotLimits, capture_source_snapshot},
@@ -78,7 +78,7 @@ impl WorkspaceFixture {
         &self.root
     }
 
-    #[cfg(windows)]
+    #[cfg(any(windows, unix))]
     pub fn db_path(&self) -> PathBuf {
         self.db_dir.join("sentra-manifest-test.db")
     }
@@ -98,7 +98,7 @@ impl Default for WorkspaceFixture {
     }
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, unix))]
 fn create_test_service(
     ws: &WorkspaceFixture,
 ) -> (
@@ -238,7 +238,16 @@ fn test_operation_manifest_canonical_json_roundtrip() {
     assert_eq!(roundtrip.classification, manifest.classification);
 }
 
-#[cfg(not(windows))]
+#[cfg(unix)]
+#[test]
+fn test_workspace_boundary_succeeds_on_unix_platform() {
+    let ws = WorkspaceFixture::new();
+    let session_id = SessionId::for_test_sequence(1);
+    let boundary = WorkspaceBoundary::establish(ws.path(), session_id, Class::Internal).unwrap();
+    assert_eq!(boundary.root().session_id(), session_id);
+}
+
+#[cfg(not(any(windows, unix)))]
 #[test]
 fn test_workspace_boundary_fails_closed_on_unsupported_platform() {
     let ws = WorkspaceFixture::new();
@@ -252,10 +261,10 @@ fn test_workspace_boundary_fails_closed_on_unsupported_platform() {
 }
 
 // =========================================================================
-// Windows-Specific Workspace Integration and Persistence Tests
+// Workspace Integration and Persistence Tests
 // =========================================================================
 
-#[cfg(windows)]
+#[cfg(any(windows, unix))]
 #[test]
 fn test_capture_source_snapshot_determinism() {
     let ws = WorkspaceFixture::new();
@@ -276,7 +285,7 @@ fn test_capture_source_snapshot_determinism() {
     assert!(snap1.aggregate_digest.starts_with("sha256:"));
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, unix))]
 #[test]
 fn test_source_snapshot_sensitivity_to_content_change() {
     let ws = WorkspaceFixture::new();
@@ -326,7 +335,7 @@ fn test_source_snapshot_sensitivity_to_content_change() {
     assert_eq!(main_before.content_sha256, main_after.content_sha256);
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, unix))]
 #[test]
 fn test_source_snapshot_sensitivity_to_file_addition_and_deletion() {
     let ws = WorkspaceFixture::new();
@@ -355,7 +364,7 @@ fn test_source_snapshot_sensitivity_to_file_addition_and_deletion() {
     );
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, unix))]
 #[test]
 fn test_source_snapshot_role_detection() {
     let ws = WorkspaceFixture::new();
@@ -382,7 +391,7 @@ fn test_source_snapshot_role_detection() {
     assert_eq!(find_role("config.json"), SourceFileRole::Configuration);
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, unix))]
 #[test]
 fn test_path_normalization_uses_forward_slashes_consistently() {
     let ws = WorkspaceFixture::new();
@@ -401,7 +410,7 @@ fn test_path_normalization_uses_forward_slashes_consistently() {
     }
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, unix))]
 #[test]
 fn test_git_directory_excluded_from_snapshot() {
     let ws = WorkspaceFixture::new();
@@ -430,7 +439,7 @@ fn test_git_directory_excluded_from_snapshot() {
     }
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, unix))]
 #[test]
 fn test_source_snapshot_file_size_limit_fails_closed() {
     let ws = WorkspaceFixture::new();
@@ -451,7 +460,7 @@ fn test_source_snapshot_file_size_limit_fails_closed() {
     assert_eq!(err.kind(), ManifestErrorKind::FileTooLarge);
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, unix))]
 #[test]
 fn test_source_snapshot_total_bytes_limit_fails_closed() {
     let ws = WorkspaceFixture::new();
@@ -469,7 +478,7 @@ fn test_source_snapshot_total_bytes_limit_fails_closed() {
     assert_eq!(err.kind(), ManifestErrorKind::TotalBytesExceeded);
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, unix))]
 #[test]
 fn test_source_snapshot_file_count_limit_fails_closed() {
     let ws = WorkspaceFixture::new();
@@ -487,7 +496,7 @@ fn test_source_snapshot_file_count_limit_fails_closed() {
     assert_eq!(err.kind(), ManifestErrorKind::FileCountExceeded);
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, unix))]
 #[test]
 fn test_core_service_capture_and_persist_source_snapshot() {
     let ws = WorkspaceFixture::new();
@@ -512,7 +521,7 @@ fn test_core_service_capture_and_persist_source_snapshot() {
     assert_eq!(roundtripped.entries, snapshot.entries);
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, unix))]
 #[test]
 fn test_operation_manifest_creation_and_persistence() {
     let ws = WorkspaceFixture::new();

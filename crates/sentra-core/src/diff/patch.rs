@@ -186,8 +186,7 @@ pub fn apply_patch_file(
 
     // Create backup file if backup directory is provided
     let backup_path = if let Some(b_dir) = backup_dir {
-        fs::create_dir_all(b_dir)
-            .map_err(|e| DiffError::new(DiffErrorKind::Io(e.to_string())))?;
+        fs::create_dir_all(b_dir).map_err(|e| DiffError::new(DiffErrorKind::Io(e.to_string())))?;
         let file_stem = canonical_target
             .file_name()
             .and_then(|n| n.to_str())
@@ -270,7 +269,8 @@ mod tests {
     #[test]
     fn test_apply_hunk_exact() {
         let original = "fn main() {\n    let old = 1;\n    println!(\"{}\", old);\n}\n";
-        let diff = "--- a/main.rs\n+++ b/main.rs\n@@ -2,1 +2,1 @@\n-    let old = 1;\n+    let new = 2;\n";
+        let diff =
+            "--- a/main.rs\n+++ b/main.rs\n@@ -2,1 +2,1 @@\n-    let old = 1;\n+    let new = 2;\n";
         let res = apply_hunk_to_content(original, diff).expect("patch should apply");
         assert!(!res.already_patched);
         assert!(res.patched_content.contains("let new = 2;"));
@@ -280,8 +280,10 @@ mod tests {
     #[test]
     fn test_apply_hunk_already_patched() {
         let original = "fn main() {\n    let new = 2;\n    println!(\"{}\", new);\n}\n";
-        let diff = "--- a/main.rs\n+++ b/main.rs\n@@ -2,1 +2,1 @@\n-    let old = 1;\n+    let new = 2;\n";
-        let res = apply_hunk_to_content(original, diff).expect("patch should detect already patched");
+        let diff =
+            "--- a/main.rs\n+++ b/main.rs\n@@ -2,1 +2,1 @@\n-    let old = 1;\n+    let new = 2;\n";
+        let res =
+            apply_hunk_to_content(original, diff).expect("patch should detect already patched");
         assert!(res.already_patched);
         assert_eq!(res.patched_content, original);
     }
@@ -290,7 +292,11 @@ mod tests {
     fn test_apply_hunk_fuzzy_whitespace() {
         let original = "class Service {\n        let secret = \"hardcoded\";\n}";
         let diff = "- let secret = \"hardcoded\";\n+ let secret = process.env.SECRET;\n";
-        let res = apply_hunk_to_content(original, diff).expect("patch should apply with fuzzy whitespace");
-        assert!(res.patched_content.contains("let secret = process.env.SECRET;"));
+        let res = apply_hunk_to_content(original, diff)
+            .expect("patch should apply with fuzzy whitespace");
+        assert!(
+            res.patched_content
+                .contains("let secret = process.env.SECRET;")
+        );
     }
 }

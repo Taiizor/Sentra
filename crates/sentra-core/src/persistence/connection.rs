@@ -294,6 +294,15 @@ fn validated_path(input: &Path) -> Result<(PathBuf, Vec<File>), PersistenceError
             }
             pins.push(handle);
         }
+        #[cfg(unix)]
+        {
+            let handle = std::fs::File::open(&walk).map_err(|_| invalid())?;
+            let metadata = handle.metadata().map_err(|_| invalid())?;
+            if !metadata.is_dir() {
+                return Err(invalid());
+            }
+            pins.push(handle);
+        }
     }
     let canonical_parent = fs::canonicalize(parent).map_err(|_| invalid())?;
     // A caller's drive spelling can resolve to a UNC provider. Recheck the

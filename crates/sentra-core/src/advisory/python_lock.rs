@@ -39,11 +39,18 @@ pub fn parse_requirements_txt(content: &str) -> Result<Vec<PackageRecord>, Advis
         if let Some((name, version_part)) = clean_line.split_once("==") {
             let pkg_name = name.trim().to_lowercase();
             // Handle environment markers (e.g. `package==1.0.0; python_version >= '3.8'`)
-            let ver = version_part.split(';').next().unwrap_or(version_part).trim();
+            let ver = version_part
+                .split(';')
+                .next()
+                .unwrap_or(version_part)
+                .trim();
             // Strip any leading '=' from `===`
             let clean_ver = ver.trim_start_matches('=').trim();
 
-            if !pkg_name.is_empty() && !clean_ver.is_empty() && seen.insert((pkg_name.clone(), clean_ver.to_string())) {
+            if !pkg_name.is_empty()
+                && !clean_ver.is_empty()
+                && seen.insert((pkg_name.clone(), clean_ver.to_string()))
+            {
                 packages.push(PackageRecord::new(pkg_name, clean_ver));
             }
         }
@@ -101,7 +108,11 @@ pub fn parse_pipfile_lock(content: &str) -> Result<Vec<PackageRecord>, AdvisoryE
         if let Some(map) = root.get(section).and_then(|v| v.as_object()) {
             for (pkg_name, details) in map {
                 if let Some(version_str) = details.get("version").and_then(|v| v.as_str()) {
-                    let clean_ver = version_str.trim().trim_start_matches("==").trim_start_matches('=').trim();
+                    let clean_ver = version_str
+                        .trim()
+                        .trim_start_matches("==")
+                        .trim_start_matches('=')
+                        .trim();
                     if !clean_ver.is_empty() {
                         packages.push(PackageRecord::new(pkg_name.to_lowercase(), clean_ver));
                     }

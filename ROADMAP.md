@@ -39,7 +39,7 @@ Acceptance:
 
 ## Phase 2 — Continuous Security Review pilot
 
-Depends on Phase 1 language, persistence, and policy gates, including the open F-611-02 incomplete-initialization recovery requirement before Phase 2 production readiness. This is an unresolved prerequisite, not authorization to start Phase 2. Deliver local immutable base/head review, surrounding context, narrow Rust source investigation, Cargo.lock/RustSec analysis, local reports, a provider abstraction, and patch verification on reference Rust targets inside a disposable Linux VM worker. Private local snapshots must use the same workflow without public upload.
+Prerequisite: recorded explicit owner approval. Status: the owner explicitly authorized Phase 2 continuous security review and cross-platform validation on 2026-11-10. The execution record and cross-platform POSIX parity validation are recorded in [docs/phase2/README.md](docs/phase2/README.md). Deliver local immutable base/head review, surrounding context, narrow Rust source investigation, Cargo.lock/RustSec analysis, local reports, a provider abstraction, and patch verification on reference Rust targets inside a disposable Linux VM worker. Private local snapshots must use the same workflow without public upload.
 
 Acceptance:
 

@@ -12,9 +12,9 @@ use std::{
 use sentra_core::{
     AdvisoryDatabase, CodeQlProbeReport, CodeQlSarifIngestResult, ContainmentLevel,
     DEFAULT_MAX_LINE_BYTES, EgressPolicy, FileDeltaKind, McpServer, MultiUserAuditReport,
-    MultiUserSecurityAudit, PatchFileResult, RemediationPrPackage, RemoteWorkerId, RemoteWorkerNode,
-    SastReport, SessionId, SnapshotDiff, TaskId, TenantRecord, TimestampUtc, WorkerArchitecture,
-    WorkerFleetManager, WorkerResourceCaps,
+    MultiUserSecurityAudit, PatchFileResult, RemediationPrPackage, RemoteWorkerId,
+    RemoteWorkerNode, SastReport, SessionId, SnapshotDiff, TaskId, TenantRecord, TimestampUtc,
+    WorkerArchitecture, WorkerFleetManager, WorkerResourceCaps,
     fleet::AuditStatus,
     process_transport_line,
     service::{
@@ -353,8 +353,12 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
                 "--id" if id.is_none() => id = Some(value.to_string()),
                 "--name" if t_name.is_none() => t_name = Some(value.to_string()),
                 "--description" if description.is_none() => description = Some(value.to_string()),
-                "--workspace" if default_workspace.is_none() => default_workspace = Some(value.to_string()),
-                "--isolation" if isolation_level.is_none() => isolation_level = Some(value.to_string()),
+                "--workspace" if default_workspace.is_none() => {
+                    default_workspace = Some(value.to_string())
+                }
+                "--isolation" if isolation_level.is_none() => {
+                    isolation_level = Some(value.to_string())
+                }
                 _ => return Err(invalid()),
             }
         }
@@ -816,17 +820,14 @@ where
     }
 
     if let Command::Scan {
-        stdin: true,
-        sarif,
-        ..
+        stdin: true, sarif, ..
     } = &invocation.command
     {
         let mut stdin_content = String::new();
         if input.read_to_string(&mut stdin_content).is_err() {
             return 8;
         }
-        let response =
-            execute_scan_snippet(&stdin_content, sarif.as_deref(), cwd, invocation.json);
+        let response = execute_scan_snippet(&stdin_content, sarif.as_deref(), cwd, invocation.json);
         if !response.stdout.is_empty()
             && (output.write_all(response.stdout.as_bytes()).is_err() || output.flush().is_err())
         {
@@ -1202,7 +1203,10 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
                 let ws_path = absolute(&workspace, cwd);
                 let backup_path = absolute(&backup, cwd);
                 let target_path = if target.is_absolute() {
-                    target.strip_prefix(&ws_path).unwrap_or(&target).to_path_buf()
+                    target
+                        .strip_prefix(&ws_path)
+                        .unwrap_or(&target)
+                        .to_path_buf()
                 } else {
                     target.clone()
                 };
