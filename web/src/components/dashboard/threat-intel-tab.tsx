@@ -98,8 +98,8 @@ export function ThreatIntelTab({ advisories, currentRole, onSyncAdvisories }: Th
       </div>
 
       {/* Quick Ecosystem Pills */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-zinc-400 mr-2 flex items-center gap-1.5">
+      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 max-w-full">
+        <span className="text-xs font-medium text-zinc-400 mr-2 flex items-center gap-1.5 shrink-0">
           <Sparkles className="size-3.5 text-primary" />
           Filter by Ecosystem:
         </span>
@@ -110,7 +110,7 @@ export function ThreatIntelTab({ advisories, currentRole, onSyncAdvisories }: Th
               key={eco}
               variant={isActive ? 'default' : 'outline'}
               size="sm"
-              className={`h-7 text-xs rounded-full px-3 transition-all ${
+              className={`h-7 text-xs rounded-full px-3 transition-all shrink-0 ${
                 isActive
                   ? 'font-semibold shadow-sm'
                   : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-300'
@@ -181,65 +181,67 @@ export function ThreatIntelTab({ advisories, currentRole, onSyncAdvisories }: Th
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs">Advisory ID</TableHead>
-                <TableHead className="text-xs">Package</TableHead>
-                <TableHead className="text-xs">Ecosystem</TableHead>
-                <TableHead className="text-xs">Vulnerability Summary</TableHead>
-                <TableHead className="text-xs">Affected Range</TableHead>
-                <TableHead className="text-xs">Fixed Version</TableHead>
-                <TableHead className="text-xs">Severity</TableHead>
-                <TableHead className="text-xs text-right">Upstream Link</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell className="font-mono text-xs font-bold text-foreground">
-                    {item.id}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs font-semibold">
-                    {item.package}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="text-xs">
-                      {item.ecosystem}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-xs max-w-[300px] truncate">
-                    {item.vulnerability}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs text-rose-400">
-                    {item.affectedRange}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs text-emerald-400 font-bold">
-                    {item.fixedVersion}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={item.severity === 'Critical' || item.severity === 'High' ? 'destructive' : 'outline'}
-                      className="text-xs"
-                    >
-                      {item.severity}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <a
-                      href={`https://github.com/advisories/${item.id}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                    >
-                      View
-                      <ExternalLink className="size-3" />
-                    </a>
-                  </TableCell>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">Advisory ID</TableHead>
+                  <TableHead className="text-xs">Package</TableHead>
+                  <TableHead className="text-xs">Ecosystem</TableHead>
+                  <TableHead className="text-xs">Vulnerability Summary</TableHead>
+                  <TableHead className="text-xs">Affected Range</TableHead>
+                  <TableHead className="text-xs">Fixed Version</TableHead>
+                  <TableHead className="text-xs">Severity</TableHead>
+                  <TableHead className="text-xs text-right">Upstream Link</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-mono text-xs font-bold text-foreground">
+                      {item.id}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs font-semibold">
+                      {item.package}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-xs">
+                        {item.ecosystem}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs max-w-[300px] truncate">
+                      {item.vulnerability}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-rose-400">
+                      {item.affectedRange}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-emerald-400 font-bold">
+                      {item.fixedVersion}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={item.severity === 'Critical' || item.severity === 'High' ? 'destructive' : 'outline'}
+                        className="text-xs"
+                      >
+                        {item.severity}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <a
+                        href={`https://github.com/advisories/${item.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                      >
+                        View
+                        <ExternalLink className="size-3" />
+                      </a>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -249,9 +249,9 @@ export function SettingsDialog({
 
           {/* AI Providers Tab */}
           <TabsContent value="providers" className="flex flex-col gap-4 py-3">
-            <div className="flex items-center justify-between bg-zinc-900/60 border border-zinc-800/80 p-3 rounded-lg text-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-900/60 border border-zinc-800/80 p-3 rounded-lg text-xs">
               <div className="flex items-center gap-2">
-                <Cpu className="size-4 text-primary" />
+                <Cpu className="size-4 text-primary shrink-0" />
                 <div>
                   <span className="font-semibold text-zinc-200">Default Remediation Model:</span>
                   <p className="text-[11px] text-zinc-400">Used for autonomous three-tier verified patch synthesis</p>
@@ -266,7 +266,7 @@ export function SettingsDialog({
                   setDefaultModel(m)
                 }}
                 disabled={isViewer}
-                className="bg-zinc-950 border border-zinc-800 text-zinc-100 text-xs rounded-md px-2.5 py-1.5 focus:border-primary outline-none"
+                className="bg-zinc-950 border border-zinc-800 text-zinc-100 text-xs rounded-md px-2.5 py-1.5 focus:border-primary outline-none w-full sm:w-auto"
               >
                 <option value="anthropic:claude-3-7-sonnet-20250219">Anthropic — Claude 3.7 Sonnet</option>
                 <option value="openai:o3-mini">OpenAI — o3-mini (High Reasoning)</option>

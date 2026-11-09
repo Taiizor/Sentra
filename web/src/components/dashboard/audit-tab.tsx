@@ -45,44 +45,46 @@ export function AuditTab({ auditLogs }: AuditTabProps) {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs w-[80px]">Seq #</TableHead>
-                <TableHead className="text-xs">Event ID</TableHead>
-                <TableHead className="text-xs">Actor</TableHead>
-                <TableHead className="text-xs">Action</TableHead>
-                <TableHead className="text-xs">Structured Details</TableHead>
-                <TableHead className="text-xs text-right">Timestamp (UTC)</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {auditLogs.map((log) => (
-                <TableRow key={log.eventId}>
-                  <TableCell className="font-mono text-xs font-bold">
-                    #{log.sequenceNumber}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">
-                    {log.eventId}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs font-medium">
-                    {log.actor}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="font-mono text-xs">
-                      {log.action}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-xs max-w-[340px] truncate">
-                    {log.details}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground text-right">
-                    {new Date(log.timestamp).toLocaleString()}
-                  </TableCell>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs w-[80px]">Seq #</TableHead>
+                  <TableHead className="text-xs">Event ID</TableHead>
+                  <TableHead className="text-xs">Actor</TableHead>
+                  <TableHead className="text-xs">Action</TableHead>
+                  <TableHead className="text-xs">Structured Details</TableHead>
+                  <TableHead className="text-xs text-right">Timestamp (UTC)</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {auditLogs.map((log) => (
+                  <TableRow key={log.eventId}>
+                    <TableCell className="font-mono text-xs font-bold">
+                      #{log.sequenceNumber}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {log.eventId}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs font-medium">
+                      {log.actor}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="font-mono text-xs">
+                        {log.action}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs max-w-[340px] truncate">
+                      {log.details}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground text-right">
+                      {new Date(log.timestamp).toLocaleString()}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -408,36 +408,38 @@ export function ResearchTab({ campaigns, currentRole }: ResearchTabProps) {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader className="bg-zinc-900/60 text-xs">
-                  <TableRow className="border-zinc-800 hover:bg-transparent">
-                    <TableHead className="text-zinc-400">Type</TableHead>
-                    <TableHead className="text-zinc-400">Surface</TableHead>
-                    <TableHead className="text-zinc-400">Location</TableHead>
-                    <TableHead className="text-zinc-400">Handler Scope</TableHead>
-                    <TableHead className="text-zinc-400 text-right">Auth Required</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody className="text-xs font-mono">
-                  {topologyReport?.entrypoints.map((ep, i) => (
-                    <TableRow key={i} className="hover:bg-zinc-900/40 border-zinc-800/60">
-                      <TableCell>
-                        <Badge variant="outline" className="text-[10px] font-mono">
-                          {ep.type}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-zinc-300">{ep.surface}</TableCell>
-                      <TableCell className="text-zinc-400">{ep.path}:{ep.line}</TableCell>
-                      <TableCell className="text-primary truncate max-w-[280px]">{ep.handler}</TableCell>
-                      <TableCell className="text-right">
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${ep.authRequired ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
-                          {ep.authRequired ? 'ENFORCED' : 'UNAUTHENTICATED'}
-                        </span>
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader className="bg-zinc-900/60 text-xs">
+                    <TableRow className="border-zinc-800 hover:bg-transparent">
+                      <TableHead className="text-zinc-400">Type</TableHead>
+                      <TableHead className="text-zinc-400">Surface</TableHead>
+                      <TableHead className="text-zinc-400">Location</TableHead>
+                      <TableHead className="text-zinc-400">Handler Scope</TableHead>
+                      <TableHead className="text-zinc-400 text-right">Auth Required</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody className="text-xs font-mono">
+                    {topologyReport?.entrypoints.map((ep, i) => (
+                      <TableRow key={i} className="hover:bg-zinc-900/40 border-zinc-800/60">
+                        <TableCell>
+                          <Badge variant="outline" className="text-[10px] font-mono">
+                            {ep.type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-zinc-300">{ep.surface}</TableCell>
+                        <TableCell className="text-zinc-400">{ep.path}:{ep.line}</TableCell>
+                        <TableCell className="text-primary truncate max-w-[280px]">{ep.handler}</TableCell>
+                        <TableCell className="text-right">
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${ep.authRequired ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
+                            {ep.authRequired ? 'ENFORCED' : 'UNAUTHENTICATED'}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
 

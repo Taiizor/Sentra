@@ -234,14 +234,14 @@ export function LiveStreamModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden bg-zinc-950 border-zinc-800 text-zinc-100 shadow-2xl">
         {/* Sticky Header */}
-        <DialogHeader className="px-6 py-4 border-b border-zinc-800 bg-zinc-900/50 flex flex-row items-center justify-between">
-          <div className="flex flex-col gap-0.5">
-            <div className="flex items-center gap-2">
-              <Terminal className="size-5 text-primary" />
+        <DialogHeader className="px-4 sm:px-6 py-4 border-b border-zinc-800 bg-zinc-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pr-10">
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Terminal className="size-5 text-primary shrink-0" />
               <DialogTitle className="text-base font-bold tracking-tight text-zinc-100">
                 Live Security Scan Console (Server-Sent Events)
               </DialogTitle>
-              <Badge variant="outline" className="text-[10px] font-mono border-primary/30 text-primary">
+              <Badge variant="outline" className="text-[10px] font-mono border-primary/30 text-primary shrink-0">
                 sentra.exe core
               </Badge>
             </div>
@@ -250,7 +250,7 @@ export function LiveStreamModal({
             </DialogDescription>
           </div>
 
-          <div className="flex items-center gap-2 pr-8">
+          <div className="flex items-center gap-2 shrink-0">
             {status === 'running' && (
               <Badge variant="secondary" className="text-xs font-mono flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
                 <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -267,21 +267,21 @@ export function LiveStreamModal({
 
         {/* Configuration Section (Visible when idle) */}
         {status === 'idle' && (
-          <div className="p-6 flex flex-col gap-5 bg-zinc-900/30 border-b border-zinc-800">
+          <div className="p-4 sm:p-6 flex flex-col gap-5 bg-zinc-900/30 border-b border-zinc-800">
             {/* Target Path Selector */}
             <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-zinc-200 flex items-center gap-1.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <label className="text-xs font-semibold text-zinc-200 flex items-center gap-1.5 shrink-0">
                   <FolderGit2 className="size-3.5 text-primary" /> Target Workspace Directory:
                 </label>
-                <div className="flex items-center gap-1">
-                  <span className="text-[11px] text-zinc-400 mr-1">Quick Presets:</span>
+                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 max-w-full">
+                  <span className="text-[11px] text-zinc-400 mr-1 shrink-0">Quick Presets:</span>
                   {PRESETS.map((p) => (
                     <Button
                       key={p.label}
                       variant="outline"
                       size="sm"
-                      className="h-6 text-[10px] px-2 bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-300"
+                      className="h-6 text-[10px] px-2 bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-300 shrink-0"
                       onClick={() => setWorkspace(p.path)}
                     >
                       {p.label}
