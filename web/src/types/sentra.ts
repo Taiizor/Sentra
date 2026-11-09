@@ -255,6 +255,7 @@ export interface OsvAdvisoryView {
   fixedVersion: string
   severity: Severity
   publishedAt: string
+  url?: string
 }
 
 export interface SecurityTrendPoint {
