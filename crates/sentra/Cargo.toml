@@ -1,0 +1,17 @@
+[package]
+name = "sentra"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/sentra"
+readme = "README.md"
+description = "Autonomous security research, taint analysis, and independently verified remediation platform"
+keywords = ["security", "sast", "taint-analysis", "vulnerability-scanner", "mcp"]
+categories = ["development-tools"]
+
+[dependencies]
+sentra-core = { path = "../sentra-core", version = "0.1.0" }
+sentra-cli = { path = "../sentra-cli", version = "0.1.0" }
