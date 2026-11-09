@@ -1,0 +1,60 @@
+# Configuration for actions/labeler@v5
+# Maps file path changes to PR scope labels automatically
+
+scope:core:
+  - changed-files:
+      - any-glob-to-any-file: 'crates/sentra-core/**'
+
+scope:cli:
+  - changed-files:
+      - any-glob-to-any-file: 'crates/sentra-cli/**'
+
+scope:web:
+  - changed-files:
+      - any-glob-to-any-file: 'web/**'
+
+scope:ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.github/**'
+          - 'scripts/**'
+          - 'Dockerfile.test'
+
+scope:docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'docs/**'
+          - '*.md'
+
+scope:sast:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'crates/sentra-core/src/sast/**'
+          - 'crates/sentra-core/tests/sast_tests.rs'
+          - 'crates/sentra-core/tests/taint_tests.rs'
+
+scope:advisory:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'crates/sentra-core/src/advisory/**'
+          - 'crates/sentra-core/tests/advisory_tests.rs'
+          - 'crates/sentra-core/tests/multi_ecosystem_tests.rs'
+
+scope:remediation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'crates/sentra-core/src/remediation/**'
+          - 'crates/sentra-core/src/diff/patch.rs'
+          - 'crates/sentra-core/tests/remediation_tests.rs'
+
+scope:mcp:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'crates/sentra-core/src/mcp/**'
+          - 'crates/sentra-core/tests/mcp_tests.rs'
+
+scope:fleet:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'crates/sentra-core/src/fleet/**'
+          - 'crates/sentra-core/tests/fleet_tests.rs'

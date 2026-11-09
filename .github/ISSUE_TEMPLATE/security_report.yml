@@ -1,0 +1,42 @@
+name: Security Vulnerability Report
+description: Report a security flaw, sandbox breakout, memory safety issue, or secret leakage.
+title: "[SEC-REPORT]: "
+labels: ["type:security"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### Responsible Disclosure Notice
+        If this vulnerability poses an active security risk or zero-day threat, please **DO NOT** submit public repository issues.
+        Use [GitHub Private Vulnerability Reporting](https://github.com/Taiizor/Sentra/security/advisories/new) or contact the maintainers directly.
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Estimated Severity
+      description: What is the estimated impact of this vulnerability?
+      options:
+        - "Critical (RCE, Sandbox escape, Host filesystem compromise)"
+        - "High (Arbitrary file read/write, Privilege escalation, Secret exposure)"
+        - "Medium (Denial of Service, TOCTOU bypass, Incorrect policy evaluation)"
+        - "Low (Informational, Minor telemetry leak)"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Vulnerability Summary
+      description: Clear summary of the security issue.
+    validations:
+      required: true
+  - type: textarea
+    id: poc
+    attributes:
+      label: Proof of Concept / Minimal Reproduction
+      description: Steps or fixture demonstrating the flaw. Ensure all real secrets are redacted.
+    validations:
+      required: true
+  - type: textarea
+    id: mitigation
+    attributes:
+      label: Suggested Remediation / Defense
+      description: Recommended patch or policy guard.
