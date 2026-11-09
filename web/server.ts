@@ -904,6 +904,69 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
                 modelUsed = `${providerCfg.provider}:${modelName}`;
                 externalSuccess = true;
               }
+            } else if (providerCfg.provider === "gemini") {
+              const modelName = providerCfg.model || "gemini-2.5-pro";
+              const ep = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${providerCfg.apiKey}`;
+              const resp = await fetch(ep, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  system_instruction: { parts: [{ text: systemPrompt }] },
+                  contents: [{ role: "user", parts: [{ text: `Generate verified patch for: ${JSON.stringify(finding)}` }] }],
+                  generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
+                }),
+              });
+
+              if (resp.ok) {
+                const jsonResp: any = await resp.json();
+                const contentText = jsonResp.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+                const cleanJson = contentText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+                const parsed = JSON.parse(cleanJson);
+                rootCauseAnalysis = parsed.rootCauseAnalysis;
+                reproductionTestCode = parsed.reproductionTestCode;
+                originalSnippet = parsed.originalSnippet;
+                patchedSnippet = parsed.patchedSnippet;
+                diff = parsed.diff;
+                regressionOracleProof = parsed.regressionOracleProof;
+                branchName = parsed.branchName;
+                commitMessage = parsed.commitMessage;
+                modelUsed = `gemini:${modelName}`;
+                externalSuccess = true;
+              }
+            } else if (providerCfg.provider === "anthropic") {
+              const modelName = providerCfg.model || "claude-3-7-sonnet-20250219";
+              const resp = await fetch("https://api.anthropic.com/v1/messages", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-api-key": providerCfg.apiKey || "",
+                  "anthropic-version": "2023-06-01",
+                },
+                body: JSON.stringify({
+                  model: modelName,
+                  max_tokens: 4096,
+                  system: systemPrompt,
+                  messages: [{ role: "user", content: `Generate verified patch for: ${JSON.stringify(finding)}` }],
+                  temperature: 0.1,
+                }),
+              });
+
+              if (resp.ok) {
+                const jsonResp: any = await resp.json();
+                const contentText = jsonResp.content?.[0]?.text?.trim() || "";
+                const cleanJson = contentText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+                const parsed = JSON.parse(cleanJson);
+                rootCauseAnalysis = parsed.rootCauseAnalysis;
+                reproductionTestCode = parsed.reproductionTestCode;
+                originalSnippet = parsed.originalSnippet;
+                patchedSnippet = parsed.patchedSnippet;
+                diff = parsed.diff;
+                regressionOracleProof = parsed.regressionOracleProof;
+                branchName = parsed.branchName;
+                commitMessage = parsed.commitMessage;
+                modelUsed = `anthropic:${modelName}`;
+                externalSuccess = true;
+              }
             }
           } catch (llmErr) {
             console.log("[LLM Provider] External call failed, falling back to built-in semantic synthesizer:", llmErr);
