@@ -933,6 +933,12 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
   }
 
   async function handleAnalyze() {
+    if (currentRole === 'Viewer') {
+      toast.error('Action Denied: Viewer Role', {
+        description: 'Viewer role has read-only access. Switch to Operator or Admin to analyze custom code snippets.',
+      })
+      return
+    }
     setIsScanning(true)
     setHasScanned(false)
     const startTime = performance.now()
@@ -1079,6 +1085,11 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
         </div>
 
         <div className="flex items-center gap-2">
+          {currentRole === 'Viewer' && (
+            <span className="text-[11px] text-amber-400 font-medium mr-1 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+              Viewer mode: Analysis disabled
+            </span>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -1090,9 +1101,10 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
           </Button>
           <Button
             size="sm"
-            disabled={isScanning || !sourceCode.trim()}
+            disabled={isScanning || !sourceCode.trim() || currentRole === 'Viewer'}
             onClick={handleAnalyze}
-            className="h-8 text-xs font-semibold bg-primary text-primary-foreground shadow-md hover:bg-primary/90"
+            className="h-8 text-xs font-semibold bg-primary text-primary-foreground shadow-md hover:bg-primary/90 disabled:opacity-40"
+            title={currentRole === 'Viewer' ? "Viewer role is read-only. Switch to Operator or Admin to execute scans." : undefined}
           >
             <Play className="size-3.5 mr-1.5 fill-current" />
             {isScanning ? 'Executing sentra.exe...' : 'Run Engine Scan (Live sentra.exe)'}

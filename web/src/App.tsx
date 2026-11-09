@@ -218,6 +218,12 @@ export function App() {
 
   // Real scan action triggered against sentra.exe
   async function handleRealScan() {
+    if (currentRole === 'Viewer') {
+      toast.error('Action Denied: Viewer Role', {
+        description: 'Viewer role has read-only access. Switch to Operator or Admin in the top bar to execute scans.',
+      })
+      return
+    }
     setIsScanning(true)
     const startMs = performance.now()
     try {
@@ -284,6 +290,12 @@ export function App() {
 
   // Real audit action against sentra.exe
   async function handleRealAudit() {
+    if (currentRole === 'Viewer') {
+      toast.error('Action Denied: Viewer Role', {
+        description: 'Viewer role has read-only access. Switch to Operator or Admin to execute dependency audits.',
+      })
+      return
+    }
     setIsAuditing(true)
     const startMs = performance.now()
     try {
@@ -321,6 +333,12 @@ export function App() {
 
   // Real CodeQL probe action against sentra.exe
   async function handleRealCodeQl() {
+    if (currentRole === 'Viewer') {
+      toast.error('Action Denied: Viewer Role', {
+        description: 'Viewer role has read-only access. Switch to Operator or Admin to execute CodeQL probes.',
+      })
+      return
+    }
     setIsCodeQlProbing(true)
     const startMs = performance.now()
     try {
@@ -577,12 +595,21 @@ export function App() {
           <main className="flex-1 p-6 flex flex-col gap-6 max-w-[1600px] w-full mx-auto">
             {/* Live Workspace Target Bar (Selects real folder on disk & triggers real sentra.exe) */}
             <WorkspaceTargetBar
+              currentRole={currentRole}
               currentWorkspace={currentWorkspace}
               onWorkspaceChange={setCurrentWorkspace}
               onRunScan={handleRealScan}
               onRunAudit={handleRealAudit}
               onRunCodeQl={handleRealCodeQl}
-              onOpenLiveStream={() => setIsStreamModalOpen(true)}
+              onOpenLiveStream={() => {
+                if (currentRole === 'Viewer') {
+                  toast.error('Action Denied: Viewer Role', {
+                    description: 'Viewer role has read-only access. Switch to Operator or Admin to execute live stream scans.',
+                  })
+                  return
+                }
+                setIsStreamModalOpen(true)
+              }}
               isScanning={isScanning}
               isAuditing={isAuditing}
               isCodeQlProbing={isCodeQlProbing}
@@ -637,7 +664,7 @@ export function App() {
               />
             )}
 
-            {activeTab === 'research' && <ResearchTab campaigns={campaigns} />}
+            {activeTab === 'research' && <ResearchTab campaigns={campaigns} currentRole={currentRole} />}
 
             {activeTab === 'fleet' && <WorkerFleetTab workers={workers} />}
 
@@ -728,6 +755,7 @@ export function App() {
           open={isStreamModalOpen}
           onOpenChange={setIsStreamModalOpen}
           initialWorkspace={currentWorkspace}
+          currentRole={currentRole}
           onScanComplete={handleStreamScanComplete}
           onNavigateToFindings={() => setActiveTab('findings')}
         />
