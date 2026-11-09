@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   FileDown,
   Shield,
@@ -183,22 +183,74 @@ export function App() {
     }
   }
 
-  function handleTenantChange(newTenant: TenantId) {
-    setCurrentTenant(newTenant)
-    setOverview((prev) => ({
-      ...prev,
-      tenantId: newTenant,
+  // Strict Tenant Data Isolation & Scoped Workspaces (REQ-F19, ADR-0001)
+  const tenantFindings = useMemo(
+    () => findings.filter((f) => f.tenantId === currentTenant),
+    [findings, currentTenant]
+  )
+  const tenantPatches = useMemo(
+    () => patches.filter((p) => p.tenantId === currentTenant),
+    [patches, currentTenant]
+  )
+  const tenantSessions = useMemo(
+    () => sessions.filter((s) => s.tenantId === currentTenant),
+    [sessions, currentTenant]
+  )
+  const tenantAuditLogs = useMemo(
+    () => auditLogs.filter((l) => l.tenantId === currentTenant),
+    [auditLogs, currentTenant]
+  )
+
+  // Real-time calculated tenant overview metrics
+  const tenantOverview = useMemo(() => {
+    const criticalCount = tenantFindings.filter((f) => f.severity === 'Critical').length
+    const highCount = tenantFindings.filter((f) => f.severity === 'High').length
+    const mediumCount = tenantFindings.filter((f) => f.severity === 'Medium').length
+    const lowCount = tenantFindings.filter((f) => f.severity === 'Low').length
+    const infoCount = tenantFindings.filter((f) => f.severity === 'Informational').length
+    const total = tenantFindings.length
+
+    const baseScore = Math.max(35, 100 - criticalCount * 12 - highCount * 6 - mediumCount * 2)
+
+    return {
+      tenantId: currentTenant,
       workspaceName:
-        newTenant === 'sentra-internal'
+        currentTenant === 'sentra-internal'
           ? 'Sentra Security Core'
-          : newTenant === 'tenant-alpha'
+          : currentTenant === 'tenant-alpha'
             ? 'Tenant Alpha (Isolated)'
             : 'Acme Corp Enterprise',
-    }))
+      totalSessions: tenantSessions.length,
+      activeSessions: tenantSessions.filter((s) => s.state === 'SCOPED').length || 1,
+      criticalFindings: criticalCount,
+      highFindings: highCount,
+      mediumFindings: mediumCount,
+      lowFindings: lowCount,
+      infoFindings: infoCount,
+      verifiedPatches: tenantPatches.filter((p) => p.isVerified).length,
+      totalPatches: tenantPatches.length,
+      auditEventCount: tenantAuditLogs.length,
+      totalSpentMicroUsd: 0,
+      lastActivityTimestamp: new Date().toISOString(),
+      securityScore: total === 0 ? 100 : baseScore,
+    }
+  }, [currentTenant, tenantFindings, tenantPatches, tenantSessions, tenantAuditLogs])
+
+  function handleTenantChange(newTenant: TenantId) {
+    setCurrentTenant(newTenant)
+    const label =
+      newTenant === 'sentra-internal'
+        ? 'Sentra Core (Internal)'
+        : newTenant === 'tenant-alpha'
+          ? 'Tenant Alpha (Isolated)'
+          : 'Acme Corp (Enterprise)'
+    toast.info(`Switched Workspace to ${label}`, {
+      description: 'Strict tenant data isolation applied. Displaying workspace-scoped findings and audit trail.',
+    })
   }
 
   function handleExportSarif() {
-    const json = generateSarifJson(findings)
+    const json = generateSarifJson(tenantFindings)
     setSarifModalContent(json)
   }
 
@@ -568,9 +620,9 @@ export function App() {
         <Sidebar
           activeTab={activeTab}
           onSelectTab={setActiveTab}
-          findingCount={findings.length}
-          patchCount={patches.length}
-          auditCount={auditLogs.length}
+          findingCount={tenantFindings.length}
+          patchCount={tenantPatches.length}
+          auditCount={tenantAuditLogs.length}
           currentRole={currentRole}
           currentTenant={currentTenant}
         />
@@ -628,8 +680,8 @@ export function App() {
             {/* Active View Content */}
             {activeTab === 'overview' && (
               <OverviewTab
-                overview={overview}
-                sessions={sessions}
+                overview={tenantOverview}
+                sessions={tenantSessions}
                 trends={trends}
                 onSelectTab={setActiveTab}
                 onOpenLiveStream={() => setIsStreamModalOpen(true)}
@@ -645,7 +697,7 @@ export function App() {
 
             {activeTab === 'findings' && (
               <FindingsTab
-                findings={findings}
+                findings={tenantFindings}
                 currentRole={currentRole}
                 onProposePatch={handleProposePatch}
                 onOpenAiPatchModal={(finding) => setSelectedPatchFinding(finding)}
@@ -653,7 +705,7 @@ export function App() {
             )}
 
             {activeTab === 'remediation' && (
-              <RemediationTab patches={patches} currentRole={currentRole} />
+              <RemediationTab patches={tenantPatches} currentRole={currentRole} />
             )}
 
             {activeTab === 'intel' && (
@@ -670,7 +722,7 @@ export function App() {
 
             {activeTab === 'webhooks' && <WebhookTab currentRole={currentRole} />}
 
-            {activeTab === 'audit' && <AuditTab auditLogs={auditLogs} />}
+            {activeTab === 'audit' && <AuditTab auditLogs={tenantAuditLogs} />}
           </main>
 
           {/* Footer */}
@@ -696,7 +748,7 @@ export function App() {
           onSelectTab={setActiveTab}
           onExportSarif={handleExportSarif}
           onToggleConsole={() => setIsConsoleOpen((v) => !v)}
-          findings={findings}
+          findings={tenantFindings}
         />
 
         {/* SARIF Export Dialog */}
