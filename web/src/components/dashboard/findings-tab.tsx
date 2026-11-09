@@ -470,7 +470,7 @@ export function FindingsTab({
                 setCurrentPage(1)
               }}
             >
-              <SelectTrigger className="w-[160px] h-9 text-xs bg-zinc-950/70 border-zinc-800">
+              <SelectTrigger className="w-full sm:w-[150px] h-9 text-xs bg-zinc-950/70 border-zinc-800">
                 <SelectValue placeholder="Verdict">
                   {(val: string | null) => {
                     if (val === 'ALL' || !val) return 'All Verdicts'
@@ -499,7 +499,7 @@ export function FindingsTab({
                 setCurrentPage(1)
               }}
             >
-              <SelectTrigger className="w-[140px] h-9 text-xs bg-zinc-950/70 border-zinc-800">
+              <SelectTrigger className="w-full sm:w-[130px] h-9 text-xs bg-zinc-950/70 border-zinc-800">
                 <SelectValue placeholder="Severity">
                   {(val: string | null) => (val === 'ALL' || !val ? 'All Severities' : val)}
                 </SelectValue>
@@ -523,7 +523,7 @@ export function FindingsTab({
                 setCurrentPage(1)
               }}
             >
-              <SelectTrigger className="w-[170px] h-9 text-xs bg-zinc-950/70 border-zinc-800">
+              <SelectTrigger className="w-full sm:w-[160px] h-9 text-xs bg-zinc-950/70 border-zinc-800">
                 <SelectValue placeholder="Reachability">
                   {(val: string | null) => {
                     if (val === 'ALL' || !val) return 'All Reachability'
@@ -545,7 +545,7 @@ export function FindingsTab({
             </Select>
 
             {/* Export & Invariant Actions */}
-            <div className="flex items-center gap-1.5 ml-auto">
+            <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto sm:ml-auto">
               <Button
                 variant="outline"
                 size="sm"
@@ -833,7 +833,7 @@ export function FindingsTab({
           {selectedFinding && (
             <div className="flex flex-col h-full min-h-0">
               {/* Sticky Top Header with Safe Close Button Margin */}
-              <SheetHeader className="px-6 py-5 border-b border-zinc-800/80 bg-zinc-950/95 sticky top-0 z-20 backdrop-blur pr-14 text-left">
+              <SheetHeader className="px-4 sm:px-6 py-4 sm:py-5 border-b border-zinc-800/80 bg-zinc-950/95 sticky top-0 z-20 backdrop-blur pr-14 text-left">
                 <div className="flex flex-wrap items-center gap-2">
                   {getVerdictBadge(selectedFinding.verdict, selectedFinding.status)}
                   <Badge variant={getSeverityBadgeVariant(selectedFinding.severity)} className="text-xs font-bold uppercase">
@@ -852,17 +852,19 @@ export function FindingsTab({
                     </Badge>
                   )}
                 </div>
-                <SheetTitle className="text-lg font-bold mt-2 text-zinc-100 leading-snug">
+                <SheetTitle className="text-base sm:text-lg font-bold mt-2 text-zinc-100 leading-snug">
                   {selectedFinding.title}
                 </SheetTitle>
                 <SheetDescription className="flex flex-wrap items-center gap-2 mt-1 text-xs text-zinc-400 font-mono">
-                  <span>File: {selectedFinding.targetLocation}</span>
+                  <span className="truncate max-w-[260px] sm:max-w-none" title={selectedFinding.targetLocation}>
+                    File: {selectedFinding.targetLocation}
+                  </span>
                   <span>•</span>
                   <span>Lines: {selectedFinding.startLine}-{selectedFinding.endLine}</span>
                   {selectedFinding.fingerprint && (
                     <>
                       <span>•</span>
-                      <span className="text-[11px] text-zinc-500 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded">
+                      <span className="text-[11px] text-zinc-500 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded truncate max-w-[120px] sm:max-w-none">
                         FP: {selectedFinding.fingerprint}
                       </span>
                     </>
@@ -871,7 +873,7 @@ export function FindingsTab({
               </SheetHeader>
 
               {/* Scrollable Inspector Body with Generous Padding */}
-              <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-6">
+              <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-6 flex flex-col gap-6">
                 {/* Cloudflare Three-Verdict: Needs Validation Banner & Blockers */}
                 {selectedFinding.verdict === 'needs_validation' && (
                   <div className="p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 flex flex-col gap-3">
@@ -1099,8 +1101,8 @@ export function FindingsTab({
                           key={step.step}
                           className="flex flex-col gap-2 p-3.5 rounded-lg border border-zinc-800/80 bg-zinc-950/80 relative shadow-sm"
                         >
-                          <div className="flex items-center justify-between text-xs">
-                            <div className="flex items-center gap-2.5">
+                          <div className="flex flex-wrap items-center justify-between gap-1.5 text-xs">
+                            <div className="flex items-center gap-2.5 flex-wrap">
                               <span className="font-mono font-bold size-6 rounded-full bg-primary/20 text-primary border border-primary/30 flex items-center justify-center text-xs">
                                 {step.step}
                               </span>

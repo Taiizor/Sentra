@@ -550,12 +550,12 @@ export function LiveStreamModal({
         )}
 
         {/* Footer Actions */}
-        <div className="px-6 py-3.5 border-t border-zinc-800 bg-zinc-900/60 flex items-center justify-between">
+        <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-t border-zinc-800 bg-zinc-900/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="text-xs text-zinc-400 font-mono">
             {status === 'running' ? 'Scanning active... Fail-closed boundary intact' : 'Zero untrusted execution'}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
             {status === 'running' && (
               <Button
                 variant="destructive"

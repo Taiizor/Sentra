@@ -210,8 +210,8 @@ export function WebhookTab({ currentRole }: WebhookTabProps) {
 
       {/* Deliveries History Card */}
       <Card className="border-border/80">
-        <CardHeader className="py-4 px-6 border-b border-border/60">
-          <div className="flex items-center justify-between">
+        <CardHeader className="py-4 px-4 sm:px-6 border-b border-border/60">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex flex-col">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <span>Webhook Intake Deliveries Ledger</span>
@@ -328,23 +328,25 @@ export function WebhookTab({ currentRole }: WebhookTabProps) {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="github" className="w-full">
-            <TabsList className="bg-zinc-900 border border-zinc-800 p-1 rounded-lg">
-              <TabsTrigger value="github" className="text-xs">
-                GitHub Actions (.github/workflows/sentra.yml)
+            <TabsList className="bg-zinc-900 border border-zinc-800 p-1 rounded-lg w-full flex overflow-x-auto no-scrollbar">
+              <TabsTrigger value="github" className="text-xs shrink-0 flex-1 sm:flex-initial">
+                <span className="hidden sm:inline">GitHub Actions (.github/workflows/sentra.yml)</span>
+                <span className="inline sm:hidden">GitHub Actions</span>
               </TabsTrigger>
-              <TabsTrigger value="gitlab" className="text-xs">
-                GitLab CI (.gitlab-ci.yml)
+              <TabsTrigger value="gitlab" className="text-xs shrink-0 flex-1 sm:flex-initial">
+                <span className="hidden sm:inline">GitLab CI (.gitlab-ci.yml)</span>
+                <span className="inline sm:hidden">GitLab CI</span>
               </TabsTrigger>
             </TabsList>
 
             <TabsContent value="github" className="pt-3 flex flex-col gap-2">
-              <div className="flex items-center justify-between text-xs text-zinc-400">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-zinc-400">
                 <span>Triggers pure-Rust scan and uploads OASIS SARIF v2.1.0 to GitHub Code Scanning:</span>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => handleCopy(GITHUB_WORKFLOW_YAML, 'gh-yaml', 'GitHub YAML')}
-                  className="h-7 text-xs text-zinc-400 hover:text-zinc-100"
+                  className="h-7 text-xs text-zinc-400 hover:text-zinc-100 self-start sm:self-auto shrink-0"
                 >
                   {copiedKey === 'gh-yaml' ? <Check className="size-3 mr-1 text-emerald-400" /> : <Copy className="size-3 mr-1" />}
                   Copy Workflow YAML
@@ -356,13 +358,13 @@ export function WebhookTab({ currentRole }: WebhookTabProps) {
             </TabsContent>
 
             <TabsContent value="gitlab" className="pt-3 flex flex-col gap-2">
-              <div className="flex items-center justify-between text-xs text-zinc-400">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-zinc-400">
                 <span>Executes merge-request checks and produces GitLab SAST reports:</span>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => handleCopy(GITLAB_CI_YAML, 'gl-yaml', 'GitLab YAML')}
-                  className="h-7 text-xs text-zinc-400 hover:text-zinc-100"
+                  className="h-7 text-xs text-zinc-400 hover:text-zinc-100 self-start sm:self-auto shrink-0"
                 >
                   {copiedKey === 'gl-yaml' ? <Check className="size-3 mr-1 text-emerald-400" /> : <Copy className="size-3 mr-1" />}
                   Copy GitLab YAML

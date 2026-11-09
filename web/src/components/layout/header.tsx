@@ -24,7 +24,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -83,7 +82,7 @@ export function Header({
             <span className="sr-only">Toggle navigation</span>
           </Button>
 
-          <span className="font-bold text-xs sm:text-sm text-zinc-100 truncate max-w-[150px] sm:max-w-none">
+          <span className="font-bold text-xs sm:text-sm text-zinc-100 truncate max-w-[120px] xs:max-w-[160px] sm:max-w-none">
             {activeTabTitle}
           </span>
         </div>
@@ -120,7 +119,7 @@ export function Header({
                 if (val) onTenantChange(val as TenantId)
               }}
             >
-              <SelectTrigger className="w-[110px] sm:w-[150px] md:w-[190px] h-8 text-xs bg-zinc-900/80 border-zinc-800 px-2">
+              <SelectTrigger className="w-[95px] sm:w-[150px] md:w-[190px] h-8 text-xs bg-zinc-900/80 border-zinc-800 px-2">
                 <SelectValue placeholder="Tenant">
                   {(val: string | null) => {
                     const match = tenants?.find((t) => t.tenantId === val)
@@ -214,13 +213,13 @@ export function Header({
             <span>SARIF</span>
           </Button>
 
-          {/* Scanner CLI Drawer Toggle (visible across all viewports) */}
+          {/* Scanner CLI Drawer Toggle (visible on tablet and desktop) */}
           <Button
             variant={isConsoleOpen ? 'secondary' : 'outline'}
             size="sm"
             onClick={onToggleConsole}
             title="Toggle Scanner CLI Terminal"
-            className="h-8 text-xs border-zinc-800 px-2 sm:px-2.5 shrink-0"
+            className="hidden sm:flex h-8 text-xs border-zinc-800 px-2 sm:px-2.5 shrink-0"
           >
             <Terminal data-icon="inline-start" className="size-3.5" />
             <span className="hidden sm:inline">CLI</span>
@@ -257,10 +256,17 @@ export function Header({
                 </div>
                 <DropdownMenuSeparator className="my-1.5 border-zinc-800" />
                 <DropdownMenuItem
+                  onClick={onToggleConsole}
+                  className="cursor-pointer text-xs flex items-center gap-2 py-1.5 px-2 hover:bg-zinc-900 rounded"
+                >
+                  <Terminal className="size-3.5 text-primary" />
+                  {isConsoleOpen ? 'Close CLI Terminal' : 'Open CLI Terminal'}
+                </DropdownMenuItem>
+                <DropdownMenuItem
                   onClick={onJumpToStudio}
                   className="cursor-pointer text-xs flex items-center gap-2 py-1.5 px-2 hover:bg-zinc-900 rounded"
                 >
-                  <Code2 className="size-3.5 text-primary" />
+                  <Code2 className="size-3.5 text-zinc-400" />
                   Live SAST & Taint Studio
                 </DropdownMenuItem>
                 <DropdownMenuItem

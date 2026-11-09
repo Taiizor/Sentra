@@ -241,14 +241,14 @@ export function AiPatchModal({
         {/* Provider Settings Drawer (Optional) */}
         {showSettings && (
           <div className="p-4 border-b border-zinc-800 bg-zinc-900/80 flex flex-col gap-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
               <span className="text-xs font-bold text-zinc-200">LLM Provider Configuration:</span>
               <span className="text-[11px] text-zinc-400">
                 Select your inference backend or keep the zero-latency built-in engine.
               </span>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
               {[
                 { id: 'builtin', label: 'Built-in Synthesizer', desc: 'Zero-latency offline AST' },
                 { id: 'opencode', label: 'OpenCode Zen', desc: 'opencode.ai/zen/v1' },
@@ -513,12 +513,12 @@ export function AiPatchModal({
         </div>
 
         {/* Footer Actions */}
-        <div className="px-6 py-4 border-t border-zinc-800 bg-zinc-900/60 flex items-center justify-between">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-zinc-800 bg-zinc-900/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="text-xs text-zinc-400 font-mono">
             {patchResult ? `Branch: ${patchResult.branchName}` : 'Fail-closed invariant active'}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
             <Button
               variant="outline"
               size="sm"

@@ -221,7 +221,7 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab, onOpenLiv
         {/* Recharts Area Chart: 14-Day Vulnerability Trend */}
         <Card className="lg:col-span-8 border-border/80">
           <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex flex-col">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <TrendingUp className="size-4 text-primary" />
@@ -363,7 +363,7 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab, onOpenLiv
       {/* Active Workspace Sessions */}
       <Card className="border-border/80">
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex flex-col">
               <CardTitle className="text-sm font-semibold">
                 Bounded Workspace Sessions (SQLite WAL Storage)
@@ -372,7 +372,7 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab, onOpenLiv
                 Deterministic session manifests bound to canonical source snapshots with CAS blob storage
               </CardDescription>
             </div>
-            <Badge variant="outline" className="text-xs font-mono">
+            <Badge variant="outline" className="text-xs font-mono shrink-0 self-start sm:self-auto">
               rusqlite 0.32.1
             </Badge>
           </div>
@@ -393,7 +393,7 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab, onOpenLiv
               <TableBody>
                 {sessions.map((session) => (
                   <TableRow key={session.sessionId}>
-                    <TableCell className="font-mono text-xs font-semibold">
+                    <TableCell className="font-mono text-xs font-semibold whitespace-nowrap">
                       {session.sessionId}
                     </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground truncate max-w-[320px]">
