@@ -30,7 +30,7 @@ fn denied<T>(result: Result<T, PersistenceError>, expected: Kind) {
 fn connection_fresh_pragmas_schema_integrity_and_clean_shutdown() {
     let h = Harness::new();
     let settings = h.manager.settings().unwrap();
-    assert_eq!(settings.sqlite_version, "3.46.0");
+    assert_eq!(settings.sqlite_version, rusqlite::version());
     assert!(settings.foreign_keys);
     assert_eq!(settings.journal_mode, "wal");
     assert_eq!(settings.synchronous, 2);
