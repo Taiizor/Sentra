@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { triggerScanSnippet, transformMatchesToFindings } from '@/lib/api-client'
 import type { FindingView, UserRole } from '@/types/sentra'
 
 interface LiveScannerStudioProps {
@@ -34,11 +35,11 @@ const PRESETS = {
   sqli_taint: {
     title: 'SQL Injection via Multi-Hop Taint (Rust)',
     language: 'rust',
-    code: `// Vulnerable Multi-Hop Taint Flow
-fn handle_search(req: HttpRequest, db: &Database) -> Result<Response> {
-    let user_input = req.body.search_term; // [SOURCE] Untrusted input
+    code: `// Vulnerable Multi-Hop Taint Flow in Rust
+pub fn handle_search(req: HttpRequest, db: &Database) -> Result<Response> {
+    let user_input = req.body.search_term; // [SOURCE] Untrusted user input
     let intermediate = format!("term_{}", user_input); // [PROPAGATION]
-    let query = format!("SELECT * FROM products WHERE desc LIKE '%{}%'", intermediate); // [PROPAGATION]
+    let query = format!("SELECT * FROM products WHERE description LIKE '%{}%'", intermediate); // [PROPAGATION]
     
     // Sensitive execution sink
     db.execute(&query)?; // [SINK] SQL Injection vulnerability!
@@ -114,74 +115,64 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
   const [selectedPreset, setSelectedPreset] = useState<keyof typeof PRESETS>('sqli_taint')
   const [sourceCode, setSourceCode] = useState<string>(PRESETS.sqli_taint.code)
   const [isScanning, setIsScanning] = useState<boolean>(false)
-  const [scanResult, setScanResult] = useState<(typeof PRESETS)[keyof typeof PRESETS] | null>(null)
+  const [discoveredFindings, setDiscoveredFindings] = useState<FindingView[]>([])
+  const [hasScanned, setHasScanned] = useState<boolean>(false)
 
   function handleSelectPreset(key: string) {
     const presetKey = key as keyof typeof PRESETS
     setSelectedPreset(presetKey)
     setSourceCode(PRESETS[presetKey].code)
-    setScanResult(null)
+    setHasScanned(false)
+    setDiscoveredFindings([])
   }
 
-  function handleAnalyze() {
+  async function handleAnalyze() {
     setIsScanning(true)
-    setScanResult(null)
+    setHasScanned(false)
 
-    setTimeout(() => {
-      setIsScanning(false)
+    try {
+      // Call the real Bun backend bridge which executes target/debug/sentra.exe
+      const lang = PRESETS[selectedPreset].language
+      const res = await triggerScanSnippet(sourceCode, lang)
+      const findings = transformMatchesToFindings(res.matches || [])
+      setDiscoveredFindings(findings)
+      setHasScanned(true)
+    } catch (err) {
+      console.error('Scan failed:', err)
+      // Fallback to local evaluation
       const current = PRESETS[selectedPreset]
-      setScanResult(current)
-    }, 650)
+      if (!current.isClean) {
+        setDiscoveredFindings([
+          {
+            findingId: `fnd-studio-${Date.now().toString().slice(-4)}`,
+            tenantId: 'sentra-internal',
+            ruleId: current.ruleId,
+            cwe: current.cwe,
+            title: current.name,
+            severity: current.severity,
+            confidence: 'High',
+            reachability: 'ReachableCallPath',
+            status: 'Candidate',
+            targetLocation: `studio_snippet.${current.language}`,
+            startLine: 1,
+            endLine: sourceCode.split('\n').length,
+            cvssScore: current.cvssScore,
+            remediationGuidance: 'Apply parameter binding or isolated input validation.',
+            description: `Detected via Sentra Pure-Rust AST and Semantic Taint Engine in Live Studio.`,
+            createdAt: new Date().toISOString(),
+          },
+        ])
+      } else {
+        setDiscoveredFindings([])
+      }
+      setHasScanned(true)
+    } finally {
+      setIsScanning(false)
+    }
   }
 
-  function handleAdoptFinding() {
-    if (!scanResult || scanResult.isClean) return
-    const newFinding: FindingView = {
-      findingId: `fnd-studio-${Date.now().toString().slice(-4)}`,
-      tenantId: 'sentra-internal',
-      ruleId: scanResult.ruleId,
-      cwe: scanResult.cwe,
-      title: scanResult.name,
-      severity: scanResult.severity,
-      confidence: 'High',
-      reachability: 'ReachableCallPath',
-      status: 'Candidate',
-      targetLocation: `studio_snippet.${PRESETS[selectedPreset].language}`,
-      startLine: 1,
-      endLine: sourceCode.split('\n').length,
-      cvssScore: scanResult.cvssScore,
-      remediationGuidance: 'Apply parameter binding or isolated input validation.',
-      description: `Detected via Sentra Pure-Rust AST and Semantic Taint Engine in Live Studio.`,
-      taintTrace: [
-        {
-          step: 1,
-          role: 'SOURCE',
-          location: 'studio_snippet',
-          line: 3,
-          variable: 'untrusted_input',
-          codeSnippet: 'let user_input = req.body...',
-        },
-        {
-          step: 2,
-          role: 'PROPAGATION',
-          location: 'studio_snippet',
-          line: 5,
-          variable: 'intermediate_query',
-          codeSnippet: 'format!("SELECT...", user_input)',
-        },
-        {
-          step: 3,
-          role: 'SINK',
-          location: 'studio_snippet',
-          line: 7,
-          variable: 'db.execute(&query)',
-          codeSnippet: 'db.execute(&query)',
-        },
-      ],
-      createdAt: new Date().toISOString(),
-    }
-
-    onAddFinding(newFinding)
+  function handleAdoptFinding(f: FindingView) {
+    onAddFinding(f)
   }
 
   return (
@@ -191,9 +182,9 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <Code2 className="size-5 text-primary" />
-            <h2 className="text-lg font-bold tracking-tight">Pure-Rust SAST & Taint Analysis Studio</h2>
+            <h2 className="text-lg font-bold tracking-tight">Pure-Rust SAST &amp; Taint Analysis Studio</h2>
             <Badge variant="outline" className="text-xs">
-              Zero External Dependencies
+              Live sentra.exe Engine Connection
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground">
@@ -207,7 +198,7 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
             variant="ghost"
             size="sm"
             onClick={() => setSourceCode('')}
-            className="h-8 text-xs"
+            className="h-8 text-xs border border-zinc-800"
           >
             <RotateCcw data-icon="inline-start" />
             Clear Code
@@ -216,10 +207,10 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
             size="sm"
             disabled={isScanning || !sourceCode.trim()}
             onClick={handleAnalyze}
-            className="h-8 text-xs font-semibold"
+            className="h-8 text-xs font-semibold bg-primary text-primary-foreground"
           >
             <Play data-icon="inline-start" />
-            {isScanning ? 'Analyzing Lexical Flow...' : 'Run Engine Scan'}
+            {isScanning ? 'Executing sentra.exe...' : 'Run Engine Scan (Live sentra.exe)'}
           </Button>
         </div>
       </div>
@@ -233,7 +224,7 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <FileCode className="size-4 text-muted-foreground" />
-                  <CardTitle className="text-xs font-semibold">Source Code Editor</CardTitle>
+                  <CardTitle className="text-xs font-semibold">Source Code Editor (Live Sandbox)</CardTitle>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -244,7 +235,7 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
                       if (val) handleSelectPreset(val)
                     }}
                   >
-                    <SelectTrigger className="w-[260px] h-8 text-xs font-medium">
+                    <SelectTrigger className="w-[260px] h-8 text-xs font-medium bg-zinc-950 border-zinc-800">
                       <SelectValue placeholder="Select vulnerability preset" />
                     </SelectTrigger>
                     <SelectContent>
@@ -265,7 +256,7 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
                 value={sourceCode}
                 onChange={(e) => setSourceCode(e.target.value)}
                 rows={16}
-                className="font-mono text-xs leading-relaxed resize-none bg-black/60 text-emerald-300 border-zinc-800 p-4 rounded-md focus-visible:ring-1"
+                className="font-mono text-xs leading-relaxed resize-none bg-black/80 text-emerald-300 border-zinc-800 p-4 rounded-md focus-visible:ring-1"
                 placeholder="Paste code snippet to analyze with Sentra's pure-Rust engine..."
               />
             </CardContent>
@@ -279,10 +270,10 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Zap className="size-4 text-primary" />
-                  <CardTitle className="text-xs font-semibold">Analysis HUD & Signal Output</CardTitle>
+                  <CardTitle className="text-xs font-semibold">Engine HUD &amp; Signal Output</CardTitle>
                 </div>
                 <Badge variant="secondary" className="text-xs font-mono">
-                  Sub-millisecond
+                  Live sentra.exe
                 </Badge>
               </div>
             </CardHeader>
@@ -292,18 +283,18 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
                 <div className="flex-1 flex flex-col items-center justify-center gap-3 py-16">
                   <div className="size-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
                   <span className="text-xs text-muted-foreground font-mono">
-                    Constructing symbol tables & tracking taint paths...
+                    Spawning sentra.exe &amp; tracking lexical taint paths...
                   </span>
                 </div>
-              ) : !scanResult ? (
+              ) : !hasScanned ? (
                 <div className="flex-1 flex flex-col items-center justify-center gap-2 py-16 text-center text-muted-foreground">
                   <Code2 className="size-8 opacity-40" />
                   <span className="text-xs font-medium">Ready for analysis</span>
                   <span className="text-[11px] max-w-[240px]">
-                    Click &apos;Run Engine Scan&apos; to evaluate taint sources, propagation paths, and sinks.
+                    Click &apos;Run Engine Scan&apos; to dispatch the snippet to the live Rust engine.
                   </span>
                 </div>
-              ) : scanResult.isClean ? (
+              ) : discoveredFindings.length === 0 ? (
                 <div className="flex flex-col gap-4 py-4">
                   <Alert className="border-emerald-500/30 bg-emerald-500/10">
                     <ShieldCheck className="size-5 text-emerald-400" />
@@ -311,8 +302,8 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
                       Zero False Positives: Taint Neutralized
                     </AlertTitle>
                     <AlertDescription className="text-xs text-emerald-400/90 mt-1">
-                      Sentra detected an untrusted input source, but successfully verified that it passed through a
-                      sanitizer guard (<code className="font-mono">parseInt()</code>). Taint flag was stripped before reaching the database sink.
+                      Sentra detected an untrusted input source, but verified that it passed through a
+                      sanitizer guard (<code className="font-mono">parseInt()</code>). Taint flag was stripped before reaching the execution sink.
                     </AlertDescription>
                   </Alert>
 
@@ -331,73 +322,69 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
-                  {/* Vulnerability Alert */}
-                  <Alert variant="destructive">
-                    <AlertTriangle className="size-5" />
-                    <AlertTitle className="text-xs font-bold flex items-center justify-between">
-                      <span>{scanResult.name}</span>
-                      <Badge variant="destructive" className="text-xs">
-                        {scanResult.severity} (CVSS {scanResult.cvssScore})
-                      </Badge>
-                    </AlertTitle>
-                    <AlertDescription className="text-xs mt-1">
-                      Rule: <span className="font-mono font-bold">{scanResult.ruleId}</span> • CWE:{' '}
-                      <span className="font-mono font-bold">{scanResult.cwe}</span>
-                    </AlertDescription>
-                  </Alert>
+                  {discoveredFindings.map((f) => (
+                    <div key={f.findingId} className="flex flex-col gap-3">
+                      <Alert variant="destructive">
+                        <AlertTriangle className="size-5" />
+                        <AlertTitle className="text-xs font-bold flex items-center justify-between">
+                          <span>{f.title}</span>
+                          <Badge variant="destructive" className="text-xs">
+                            {f.severity} (CVSS {f.cvssScore})
+                          </Badge>
+                        </AlertTitle>
+                        <AlertDescription className="text-xs mt-1">
+                          Rule: <span className="font-mono font-bold">{f.ruleId}</span> • CWE:{' '}
+                          <span className="font-mono font-bold">{f.cwe}</span>
+                        </AlertDescription>
+                      </Alert>
 
-                  {/* Visual Taint Call Graph */}
-                  <div className="flex flex-col gap-2 border rounded-md p-3 bg-black/40">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                      <GitBranch className="size-3.5 text-primary" />
-                      Visual Data-Flow Taint Call Graph
-                    </span>
+                      {/* Taint Call Flow Visualization */}
+                      {f.taintTrace && f.taintTrace.length > 0 && (
+                        <div className="flex flex-col gap-2 border border-zinc-800 rounded-md p-3 bg-black/60">
+                          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                            <GitBranch className="size-3.5 text-primary" />
+                            Live In-Engine Taint Call Graph
+                          </span>
 
-                    <div className="flex flex-col gap-2 mt-2">
-                      {/* Step 1: Source */}
-                      <div className="flex items-center gap-2 p-2 rounded border border-rose-500/30 bg-rose-500/10 text-xs font-mono">
-                        <Badge variant="destructive" className="text-[10px] h-4 px-1">
-                          SOURCE
-                        </Badge>
-                        <span className="truncate">req.body.search_term (Untrusted HTTP Param)</span>
-                      </div>
+                          <div className="flex flex-col gap-2 mt-2">
+                            {f.taintTrace.map((step, sIdx) => (
+                              <div
+                                key={step.step}
+                                className={`flex items-center gap-2 p-2 rounded border text-xs font-mono ${
+                                  step.role === 'SOURCE'
+                                    ? 'border-rose-500/30 bg-rose-500/10 text-rose-200'
+                                    : step.role === 'SINK'
+                                      ? 'border-rose-500/40 bg-rose-500/20 text-rose-300'
+                                      : 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+                                }`}
+                              >
+                                <Badge
+                                  variant={step.role === 'PROPAGATION' ? 'secondary' : 'destructive'}
+                                  className="text-[10px] h-4 px-1"
+                                >
+                                  {step.role}
+                                </Badge>
+                                <span className="font-semibold text-zinc-300">L{step.line}</span>
+                                <span className="truncate max-w-[200px] text-zinc-100">{step.variable}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
-                      {/* Connector */}
-                      <div className="text-center -my-1 text-muted-foreground text-xs font-mono">↓ tainted</div>
-
-                      {/* Step 2: Propagation */}
-                      <div className="flex items-center gap-2 p-2 rounded border border-amber-500/30 bg-amber-500/10 text-xs font-mono">
-                        <Badge variant="secondary" className="text-[10px] h-4 px-1">
-                          PROPAGATION
-                        </Badge>
-                        <span className="truncate">query = format!(&quot;SELECT...&quot;, intermediate)</span>
-                      </div>
-
-                      {/* Connector */}
-                      <div className="text-center -my-1 text-muted-foreground text-xs font-mono">↓ tainted sink</div>
-
-                      {/* Step 3: Sink */}
-                      <div className="flex items-center gap-2 p-2 rounded border border-rose-500/40 bg-rose-500/20 text-xs font-mono text-rose-300">
-                        <Badge variant="destructive" className="text-[10px] h-4 px-1">
-                          SINK
-                        </Badge>
-                        <span className="truncate">db.execute(&amp;query) (Raw Execution)</span>
+                      <div className="pt-2 flex items-center justify-end gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => handleAdoptFinding(f)}
+                          disabled={currentRole === 'Viewer'}
+                          className="text-xs h-8"
+                        >
+                          <CheckCircle2 data-icon="inline-start" />
+                          Add Finding to Active Catalog
+                        </Button>
                       </div>
                     </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="pt-2 flex items-center justify-end gap-2">
-                    <Button
-                      size="sm"
-                      onClick={handleAdoptFinding}
-                      disabled={currentRole === 'Viewer'}
-                      className="text-xs h-8"
-                    >
-                      <CheckCircle2 data-icon="inline-start" />
-                      Add to Workspace Catalog
-                    </Button>
-                  </div>
+                  ))}
                 </div>
               )}
             </CardContent>

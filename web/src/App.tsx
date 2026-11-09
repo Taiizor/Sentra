@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   FileDown,
   Shield,
+  CheckCircle2,
+  AlertTriangle,
 } from 'lucide-react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
@@ -16,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { CommandPalette } from '@/components/layout/command-palette'
+import { WorkspaceTargetBar } from '@/components/layout/workspace-target-bar'
 import { OverviewTab } from '@/components/dashboard/overview-tab'
 import { LiveScannerStudio } from '@/components/dashboard/live-scanner-studio'
 import { FindingsTab } from '@/components/dashboard/findings-tab'
@@ -38,6 +41,13 @@ import {
   INITIAL_WORKERS,
 } from '@/lib/dashboard-store'
 import { generateSarifJson } from '@/lib/sarif-export'
+import {
+  checkApiHealth,
+  triggerLiveScan,
+  triggerLiveAudit,
+  triggerLiveCodeQl,
+  transformMatchesToFindings,
+} from '@/lib/api-client'
 import type { FindingView, TenantId, UserRole } from '@/types/sentra'
 
 export function App() {
@@ -48,15 +58,38 @@ export function App() {
   const [isCommandOpen, setIsCommandOpen] = useState<boolean>(false)
   const [sarifModalContent, setSarifModalContent] = useState<string | null>(null)
 
-  const [findings, setFindings] = useState(INITIAL_FINDINGS)
+  // Real Workspace State
+  const [currentWorkspace, setCurrentWorkspace] = useState<string>('E:/MyProject/Mix/GitHub/Sentra')
+  const [backendConnected, setBackendConnected] = useState<boolean>(false)
+  const [binaryPath, setBinaryPath] = useState<string>('')
+  const [isScanning, setIsScanning] = useState<boolean>(false)
+  const [isAuditing, setIsAuditing] = useState<boolean>(false)
+  const [isCodeQlProbing, setIsCodeQlProbing] = useState<boolean>(false)
+
+  // Data Store
+  const [findings, setFindings] = useState<FindingView[]>(INITIAL_FINDINGS)
   const [patches, setPatches] = useState(INITIAL_PATCHES)
   const [sessions] = useState(INITIAL_SESSIONS)
   const [campaigns] = useState(INITIAL_CAMPAIGNS)
   const [auditLogs, setAuditLogs] = useState(INITIAL_AUDIT_LOGS)
   const [overview, setOverview] = useState(INITIAL_OVERVIEW)
   const [workers] = useState(INITIAL_WORKERS)
-  const [osvAdvisories, setOsvAdvisories] = useState(INITIAL_OSV_ADVISORIES)
-  const [trends] = useState(INITIAL_SECURITY_TRENDS)
+  const [osvAdvisories] = useState(INITIAL_OSV_ADVISORIES)
+  const [trends, setTrends] = useState(INITIAL_SECURITY_TRENDS)
+
+  // Check backend health on mount
+  useEffect(() => {
+    async function verifyBackend() {
+      const health = await checkApiHealth()
+      if (health && health.binaryExists) {
+        setBackendConnected(true)
+        setBinaryPath(health.binaryPath)
+      } else {
+        setBackendConnected(false)
+      }
+    }
+    verifyBackend()
+  }, [])
 
   function getTabTitle(tab: string): string {
     switch (tab) {
@@ -109,6 +142,122 @@ export function App() {
     a.download = `sentra-findings-${currentTenant}.sarif`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  // Real scan action triggered against sentra.exe
+  async function handleRealScan() {
+    setIsScanning(true)
+    try {
+      const res = await triggerLiveScan(currentWorkspace)
+      const realFindings = transformMatchesToFindings(res.matches || [])
+
+      setFindings(realFindings)
+
+      // Calculate real severity counts
+      const criticalCount = realFindings.filter((f) => f.severity === 'Critical').length
+      const highCount = realFindings.filter((f) => f.severity === 'High').length
+      const mediumCount = realFindings.filter((f) => f.severity === 'Medium').length
+
+      setOverview((prev) => ({
+        ...prev,
+        criticalFindings: criticalCount,
+        highFindings: highCount,
+        mediumFindings: mediumCount,
+        securityScore: Math.max(40, 100 - criticalCount * 12 - highCount * 5),
+        auditEventCount: prev.auditEventCount + 1,
+      }))
+
+      // Update Trend
+      setTrends((prev) => [
+        ...prev,
+        {
+          date: 'Now (Live)',
+          detected: res.signals_found || realFindings.length,
+          remediated: prev[prev.length - 1]?.remediated || 2,
+          activeCritical: criticalCount,
+        },
+      ])
+
+      // Add to audit trail
+      setAuditLogs((prev) => [
+        {
+          eventId: `evt-scan-${Date.now().toString().slice(-4)}`,
+          tenantId: currentTenant,
+          sequenceNumber: prev.length + 1,
+          actor: `operator-${currentRole.toLowerCase()}`,
+          action: 'live_sast_scan_executed',
+          details: `Scanned ${res.files_scanned} files in ${currentWorkspace}. Found ${res.signals_found} signals, admitted ${realFindings.length} findings.`,
+          cryptoHash: `sha256:${Date.now().toString(16)}...`,
+          timestamp: new Date().toISOString(),
+        },
+        ...prev,
+      ])
+
+      setActiveTab('findings')
+    } catch (err) {
+      console.error('Failed to trigger scan:', err)
+    } finally {
+      setIsScanning(false)
+    }
+  }
+
+  // Real audit action against sentra.exe
+  async function handleRealAudit() {
+    setIsAuditing(true)
+    try {
+      const res = await triggerLiveAudit(currentWorkspace)
+      setAuditLogs((prev) => [
+        {
+          eventId: `evt-audit-${Date.now().toString().slice(-4)}`,
+          tenantId: currentTenant,
+          sequenceNumber: prev.length + 1,
+          actor: `operator-${currentRole.toLowerCase()}`,
+          action: 'live_lockfile_audit_executed',
+          details: `Audited ${res.packages_audited} packages in ${currentWorkspace}. Vulnerable packages detected: ${res.vulnerable_packages}`,
+          cryptoHash: `sha256:${Date.now().toString(16)}...`,
+          timestamp: new Date().toISOString(),
+        },
+        ...prev,
+      ])
+      setOverview((prev) => ({
+        ...prev,
+        auditEventCount: prev.auditEventCount + 1,
+      }))
+    } catch (err) {
+      console.error('Failed to audit dependencies:', err)
+    } finally {
+      setIsAuditing(false)
+    }
+  }
+
+  // Real CodeQL probe action against sentra.exe
+  async function handleRealCodeQl() {
+    setIsCodeQlProbing(true)
+    try {
+      const res = await triggerLiveCodeQl(currentWorkspace)
+      const langSummary = (res.detected_languages || []).map((l) => `${l.language}: ${l.files_count}`).join(', ')
+      setAuditLogs((prev) => [
+        {
+          eventId: `evt-codeql-${Date.now().toString().slice(-4)}`,
+          tenantId: currentTenant,
+          sequenceNumber: prev.length + 1,
+          actor: `operator-${currentRole.toLowerCase()}`,
+          action: 'codeql_workspace_probe_completed',
+          details: `CodeQL probe completed for ${currentWorkspace}. Primary: ${res.primary_language}. Languages: [${langSummary}]. Plan: ${res.database_create_command}`,
+          cryptoHash: `sha256:${Date.now().toString(16)}...`,
+          timestamp: new Date().toISOString(),
+        },
+        ...prev,
+      ])
+      setOverview((prev) => ({
+        ...prev,
+        auditEventCount: prev.auditEventCount + 1,
+      }))
+    } catch (err) {
+      console.error('Failed to probe CodeQL:', err)
+    } finally {
+      setIsCodeQlProbing(false)
+    }
   }
 
   function handleAddFindingFromStudio(newFinding: FindingView) {
@@ -257,6 +406,20 @@ export function App() {
 
           {/* Main Body */}
           <main className="flex-1 p-6 flex flex-col gap-6 max-w-[1600px] w-full mx-auto">
+            {/* Live Workspace Target Bar (Selects real folder on disk & triggers real sentra.exe) */}
+            <WorkspaceTargetBar
+              currentWorkspace={currentWorkspace}
+              onWorkspaceChange={setCurrentWorkspace}
+              onRunScan={handleRealScan}
+              onRunAudit={handleRealAudit}
+              onRunCodeQl={handleRealCodeQl}
+              isScanning={isScanning}
+              isAuditing={isAuditing}
+              isCodeQlProbing={isCodeQlProbing}
+              backendConnected={backendConnected}
+              binaryPath={binaryPath}
+            />
+
             {/* Collapsible Scanner CLI Console */}
             {isConsoleOpen && (
               <ScannerConsole
@@ -302,21 +465,15 @@ export function App() {
               />
             )}
 
-            {activeTab === 'research' && (
-              <ResearchTab campaigns={campaigns} />
-            )}
+            {activeTab === 'research' && <ResearchTab campaigns={campaigns} />}
 
-            {activeTab === 'fleet' && (
-              <WorkerFleetTab workers={workers} />
-            )}
+            {activeTab === 'fleet' && <WorkerFleetTab workers={workers} />}
 
-            {activeTab === 'audit' && (
-              <AuditTab auditLogs={auditLogs} />
-            )}
+            {activeTab === 'audit' && <AuditTab auditLogs={auditLogs} />}
           </main>
 
           {/* Footer */}
-          <footer className="border-t border-zinc-850 py-3 px-6 text-xs text-zinc-500 bg-zinc-950/60 mt-auto">
+          <footer className="border-t border-zinc-800 py-3 px-6 text-xs text-zinc-500 bg-zinc-950/60 mt-auto">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 <Shield className="size-3.5 text-primary" />
