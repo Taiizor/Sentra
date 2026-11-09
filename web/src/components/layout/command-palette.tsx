@@ -159,8 +159,8 @@ export function CommandPalette({
         <CommandSeparator />
 
         {/* Jump to Findings */}
-        <CommandGroup heading="Active Security Findings">
-          {findings.map((finding) => (
+        <CommandGroup heading={`Active Security Findings (Showing top ${Math.min(15, findings.length)} of ${findings.length})`}>
+          {findings.slice(0, 15).map((finding) => (
             <CommandItem
               key={finding.findingId}
               onSelect={() => {
@@ -168,8 +168,8 @@ export function CommandPalette({
                 onOpenChange(false)
               }}
             >
-              <AlertTriangle data-icon="inline-start" className="text-rose-400" />
-              <span>
+              <AlertTriangle data-icon="inline-start" className="text-rose-400 size-3.5" />
+              <span className="truncate">
                 [{finding.ruleId}] {finding.title} ({finding.cwe})
               </span>
             </CommandItem>

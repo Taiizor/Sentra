@@ -50,6 +50,23 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab }: Overvie
   const highPercent = totalFindings ? Math.round((overview.highFindings / totalFindings) * 100) : 0
   const mediumPercent = totalFindings ? Math.round((overview.mediumFindings / totalFindings) * 100) : 0
 
+  const score = overview.securityScore
+  const grade =
+    score >= 95 ? 'GRADE A+' :
+    score >= 85 ? 'GRADE A' :
+    score >= 75 ? 'GRADE B' :
+    score >= 60 ? 'GRADE C' :
+    score >= 45 ? 'GRADE D' : 'GRADE F'
+
+  const scoreColor =
+    score >= 80 ? 'text-emerald-400' :
+    score >= 65 ? 'text-teal-400' :
+    score >= 50 ? 'text-amber-400' : 'text-rose-400'
+
+  const gradeBadgeVariant =
+    score >= 80 ? ('secondary' as const) :
+    score >= 50 ? ('outline' as const) : ('destructive' as const)
+
   return (
     <div className="flex flex-col gap-6">
       {/* Fail-Closed Platform Security Banner */}
@@ -70,22 +87,25 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab }: Overvie
       {/* Primary Threat Posture Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Security Posture Score */}
-        <Card className="border-border/80">
+        <Card
+          className="border-border/80 hover:border-primary/50 transition-colors cursor-pointer"
+          onClick={() => onSelectTab('findings')}
+        >
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground">
               Security Score
             </CardTitle>
-            <Activity className="size-4 text-emerald-400" />
+            <Activity className={`size-4 ${scoreColor}`} />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-emerald-400">
+            <div className={`text-2xl font-bold ${scoreColor}`}>
               {overview.securityScore} <span className="text-xs text-muted-foreground font-normal">/ 100</span>
             </div>
-            <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
-              <Badge variant="secondary" className="text-[10px] h-4 px-1">
-                GRADE A-
+            <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1.5">
+              <Badge variant={gradeBadgeVariant} className="text-[10px] h-4 px-1.5 font-bold">
+                {grade}
               </Badge>
-              3-tier verification active
+              <span>{overview.securityScore >= 75 ? '3-tier verification active' : 'Critical signals require action'}</span>
             </p>
           </CardContent>
         </Card>
@@ -93,7 +113,7 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab }: Overvie
         {/* Total Sessions */}
         <Card
           className="border-border/80 hover:border-primary/50 transition-colors cursor-pointer"
-          onClick={() => onSelectTab('overview')}
+          onClick={() => onSelectTab('fleet')}
         >
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground">
@@ -157,20 +177,23 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab }: Overvie
         </Card>
 
         {/* Budget Spend */}
-        <Card className="border-border/80">
+        <Card
+          className="border-border/80 hover:border-primary/50 transition-colors cursor-pointer"
+          onClick={() => onSelectTab('research')}
+        >
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground">
               Research Tokens Spent
             </CardTitle>
-            <Coins className="size-4 text-muted-foreground" />
+            <Coins className="size-4 text-amber-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold font-mono">
+            <div className="text-2xl font-bold text-zinc-100 font-mono">
               ${(overview.totalSpentMicroUsd / 1_000_000).toFixed(2)}
             </div>
             <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
               <History className="size-3" />
-              {overview.auditEventCount} immutable audit logs
+              <span>{overview.auditEventCount} immutable audit logs</span>
             </p>
           </CardContent>
         </Card>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   FolderGit2,
   Play,
@@ -8,6 +8,8 @@ import {
   CheckCircle2,
   Terminal,
   Cpu,
+  Layers,
+  Sparkles,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -34,6 +36,13 @@ interface WorkspaceTargetBarProps {
   binaryPath: string
 }
 
+const PRESETS = [
+  { id: 'root', label: 'Root (Sentra)', path: 'E:/MyProject/Mix/GitHub/Sentra' },
+  { id: 'tests', label: 'Core Tests', path: 'E:/MyProject/Mix/GitHub/Sentra/crates/sentra-core/tests' },
+  { id: 'crates', label: 'Crates Workspace', path: 'E:/MyProject/Mix/GitHub/Sentra/crates' },
+  { id: 'web', label: 'Web UI', path: 'E:/MyProject/Mix/GitHub/Sentra/web' },
+]
+
 export function WorkspaceTargetBar({
   currentWorkspace,
   onWorkspaceChange,
@@ -48,18 +57,19 @@ export function WorkspaceTargetBar({
 }: WorkspaceTargetBarProps) {
   const [inputVal, setInputVal] = useState(currentWorkspace)
 
-  function handlePreset(val: string | null) {
-    if (!val) return
-    let newPath = val
-    if (val === 'root') newPath = 'E:/MyProject/Mix/GitHub/Sentra'
-    else if (val === 'tests') newPath = 'E:/MyProject/Mix/GitHub/Sentra/crates/sentra-core/tests'
-    else if (val === 'crates') newPath = 'E:/MyProject/Mix/GitHub/Sentra/crates'
-    setInputVal(newPath)
-    onWorkspaceChange(newPath)
+  useEffect(() => {
+    setInputVal(currentWorkspace)
+  }, [currentWorkspace])
+
+  function handleSelectPreset(path: string) {
+    setInputVal(path)
+    onWorkspaceChange(path)
   }
 
   function handleCommit() {
-    onWorkspaceChange(inputVal.trim())
+    if (inputVal.trim() && inputVal.trim() !== currentWorkspace) {
+      onWorkspaceChange(inputVal.trim())
+    }
   }
 
   return (
@@ -75,7 +85,7 @@ export function WorkspaceTargetBar({
               <span className="text-xs font-bold text-zinc-100">Target Workspace on Disk:</span>
               <Badge
                 variant={backendConnected ? 'secondary' : 'destructive'}
-                className="text-[10px] h-4 font-mono flex items-center gap-1"
+                className="text-[10px] h-4 font-mono flex items-center gap-1 font-semibold"
               >
                 <span
                   className={`size-1.5 rounded-full ${backendConnected ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`}
@@ -89,26 +99,32 @@ export function WorkspaceTargetBar({
           </div>
         </div>
 
-        {/* Right: Quick Target Presets */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-zinc-400 font-medium">Quick Path Preset:</span>
-          <Select onValueChange={handlePreset} defaultValue="root">
-            <SelectTrigger className="w-[210px] h-8 text-xs bg-zinc-950/80 border-zinc-800">
-              <SelectValue placeholder="Select target preset" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem value="root">Sentra Monorepo Root</SelectItem>
-                <SelectItem value="tests">Core Tests (Taint &amp; Signals)</SelectItem>
-                <SelectItem value="crates">Rust Crates Workspace</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+        {/* Right: Quick Target Presets Pills */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs text-zinc-400 font-medium mr-1">Target Presets:</span>
+          {PRESETS.map((p) => {
+            const isSelected = currentWorkspace === p.path
+            return (
+              <Button
+                key={p.id}
+                variant={isSelected ? 'default' : 'outline'}
+                size="sm"
+                className={`h-7 text-xs rounded-lg px-2.5 ${
+                  isSelected
+                    ? 'font-bold shadow-sm'
+                    : 'bg-zinc-950/70 border-zinc-800 hover:border-zinc-700 text-zinc-300'
+                }`}
+                onClick={() => handleSelectPreset(p.path)}
+              >
+                {p.label}
+              </Button>
+            )
+          })}
         </div>
       </div>
 
       {/* Target Directory Path Input Bar & Actions */}
-      <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-zinc-800/60">
+      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-800/60">
         <div className="flex-1 min-w-[280px] flex items-center gap-2">
           <Input
             value={inputVal}
@@ -130,7 +146,7 @@ export function WorkspaceTargetBar({
             onClick={onRunScan}
             className="h-8 text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
           >
-            <Play data-icon="inline-start" className={isScanning ? 'animate-spin' : ''} />
+            <Play className={`size-3.5 mr-1.5 fill-current ${isScanning ? 'animate-spin' : ''}`} />
             {isScanning ? 'Scanning Disk...' : 'Run Pure-Rust SAST & Taint'}
           </Button>
 
@@ -141,7 +157,7 @@ export function WorkspaceTargetBar({
             onClick={onRunAudit}
             className="h-8 text-xs font-medium border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-200"
           >
-            <ShieldCheck data-icon="inline-start" className={isAuditing ? 'animate-spin' : ''} />
+            <ShieldCheck className={`size-3.5 mr-1.5 ${isAuditing ? 'animate-spin text-primary' : ''}`} />
             {isAuditing ? 'Auditing...' : 'Audit Lockfiles'}
           </Button>
 
@@ -152,7 +168,7 @@ export function WorkspaceTargetBar({
             onClick={onRunCodeQl}
             className="h-8 text-xs font-medium border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-200"
           >
-            <SearchCode data-icon="inline-start" className={isCodeQlProbing ? 'animate-spin' : ''} />
+            <SearchCode className={`size-3.5 mr-1.5 ${isCodeQlProbing ? 'animate-spin text-primary' : ''}`} />
             {isCodeQlProbing ? 'Probing...' : 'Probe CodeQL'}
           </Button>
         </div>
