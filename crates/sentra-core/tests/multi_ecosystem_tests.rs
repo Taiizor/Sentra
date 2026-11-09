@@ -216,7 +216,7 @@ fn test_deno_lock_audit() {
     assert_eq!(result.matches[0].package, "lodash");
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, unix))]
 #[test]
 fn test_local_workspace_discovers_npm_and_bun_lockfiles() {
     let temp_root = std::env::temp_dir().join(format!("sentra_multi_test_{}", std::process::id()));

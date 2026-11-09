@@ -140,6 +140,18 @@ pub(super) fn classify_attributes(
     }
 }
 
+#[cfg(unix)]
+pub(super) fn classify_unix_mode(mode: u32, is_symlink: bool) -> WorkspaceEntryKind {
+    if is_symlink || (mode & 0o170000 == 0o120000) {
+        return WorkspaceEntryKind::SymbolicLink;
+    }
+    match mode & 0o170000 {
+        0o100000 => WorkspaceEntryKind::File,      // S_IFREG
+        0o040000 => WorkspaceEntryKind::Directory, // S_IFDIR
+        _ => WorkspaceEntryKind::Unsupported,      // Char, Block, FIFO, Socket
+    }
+}
+
 pub(super) fn kind(metadata: &Metadata) -> WorkspaceEntryKind {
     #[cfg(windows)]
     {
@@ -150,7 +162,12 @@ pub(super) fn kind(metadata: &Metadata) -> WorkspaceEntryKind {
             metadata.is_dir(),
         )
     }
-    #[cfg(not(windows))]
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        classify_unix_mode(metadata.mode(), metadata.file_type().is_symlink())
+    }
+    #[cfg(not(any(windows, unix)))]
     {
         let _ = metadata;
         WorkspaceEntryKind::Unsupported
@@ -167,7 +184,18 @@ pub(super) fn same_observation(left: &Metadata, right: &Metadata) -> bool {
             && left.len() == right.len()
             && kind(left) == kind(right)
     }
-    #[cfg(not(windows))]
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        left.dev() == right.dev()
+            && left.ino() == right.ino()
+            && left.mode() == right.mode()
+            && left.mtime() == right.mtime()
+            && left.mtime_nsec() == right.mtime_nsec()
+            && left.len() == right.len()
+            && kind(left) == kind(right)
+    }
+    #[cfg(not(any(windows, unix)))]
     {
         let _ = (left, right);
         false
@@ -187,6 +215,17 @@ fn same_admission(left: &Metadata, right: &Metadata) -> bool {
                 && left.creation_time() == right.creation_time();
         }
     }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if kind(left) == WorkspaceEntryKind::Directory
+            && kind(right) == WorkspaceEntryKind::Directory
+        {
+            return left.dev() == right.dev()
+                && left.ino() == right.ino()
+                && left.mode() == right.mode();
+        }
+    }
     same_observation(left, right)
 }
 
@@ -195,7 +234,11 @@ pub(super) fn pin(path: &Path, operation: WorkspaceOperation) -> Result<Pin, Wor
     {
         pin_checked(path, operation, || {})
     }
-    #[cfg(not(windows))]
+    #[cfg(unix)]
+    {
+        pin_checked(path, operation, || {})
+    }
+    #[cfg(not(any(windows, unix)))]
     {
         let _ = path;
         Err(WorkspaceError::new(
@@ -203,6 +246,38 @@ pub(super) fn pin(path: &Path, operation: WorkspaceOperation) -> Result<Pin, Wor
             operation,
         ))
     }
+}
+
+#[cfg(unix)]
+fn pin_checked(
+    path: &Path,
+    operation: WorkspaceOperation,
+    before_open: impl FnOnce(),
+) -> Result<Pin, WorkspaceError> {
+    let before = fs::symlink_metadata(path).map_err(|e| WorkspaceError::io(e, operation))?;
+    let observed_kind = kind(&before);
+    if !matches!(
+        observed_kind,
+        WorkspaceEntryKind::File | WorkspaceEntryKind::Directory
+    ) {
+        return Err(WorkspaceError::new(
+            WorkspaceErrorKind::Quarantined(observed_kind),
+            operation,
+        ));
+    }
+    before_open();
+    let file = fs::File::open(path).map_err(|e| WorkspaceError::io(e, operation))?;
+    let observed = file
+        .metadata()
+        .map_err(|e| WorkspaceError::io(e, operation))?;
+    let after = fs::symlink_metadata(path).map_err(|e| WorkspaceError::io(e, operation))?;
+    if !same_admission(&before, &observed) || !same_admission(&observed, &after) {
+        return Err(WorkspaceError::new(
+            WorkspaceErrorKind::PathChanged,
+            operation,
+        ));
+    }
+    Ok(Pin { file, observed })
 }
 
 #[cfg(windows)]

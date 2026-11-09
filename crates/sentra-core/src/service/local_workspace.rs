@@ -739,7 +739,10 @@ impl LocalWorkspace {
             let mut found = None;
             for line in diff_text.lines() {
                 if let Some(rest) = line.strip_prefix("+++ ") {
-                    let clean = rest.trim().trim_start_matches("b/").trim_start_matches("a/");
+                    let clean = rest
+                        .trim()
+                        .trim_start_matches("b/")
+                        .trim_start_matches("a/");
                     found = Some(std::path::PathBuf::from(clean));
                     break;
                 }
@@ -747,25 +750,26 @@ impl LocalWorkspace {
             found.ok_or_else(|| LocalWorkspaceError::new(Kind::Workspace))?
         };
 
-        let result = crate::diff::apply_patch_file(workspace, &resolved_rel, &diff_text, backup_dir)
-            .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
+        let result =
+            crate::diff::apply_patch_file(workspace, &resolved_rel, &diff_text, backup_dir)
+                .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
 
-        if let Some(db_path) = database {
-            if let Ok(conn) = rusqlite::Connection::open(db_path) {
-                let event_id = EventId::new().to_string();
-                let now = TimestampUtc::now().to_string();
-                let payload = serde_json::json!({
-                    "patch_path": patch_file.to_string_lossy(),
-                    "target_path": result.target_path,
-                    "backup_path": result.backup_path,
-                    "already_patched": result.already_patched,
-                })
-                .to_string();
-                let _ = conn.execute(
-                    "INSERT INTO audit_events (event_id, event_type, details_json, created_at) VALUES (?1, ?2, ?3, ?4)",
-                    rusqlite::params![event_id, "patch_applied_to_workspace", payload, now],
-                );
-            }
+        if let Some(db_path) = database
+            && let Ok(conn) = rusqlite::Connection::open(db_path)
+        {
+            let event_id = EventId::new().to_string();
+            let now = TimestampUtc::now().to_string();
+            let payload = serde_json::json!({
+                "patch_path": patch_file.to_string_lossy(),
+                "target_path": result.target_path,
+                "backup_path": result.backup_path,
+                "already_patched": result.already_patched,
+            })
+            .to_string();
+            let _ = conn.execute(
+                "INSERT INTO audit_events (event_id, event_type, details_json, created_at) VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![event_id, "patch_applied_to_workspace", payload, now],
+            );
         }
 
         Ok(result)
@@ -782,20 +786,20 @@ impl LocalWorkspace {
         crate::diff::rollback_patch_file(workspace, target_rel, backup_file)
             .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
 
-        if let Some(db_path) = database {
-            if let Ok(conn) = rusqlite::Connection::open(db_path) {
-                let event_id = EventId::new().to_string();
-                let now = TimestampUtc::now().to_string();
-                let payload = serde_json::json!({
-                    "backup_path": backup_file.to_string_lossy(),
-                    "target_path": target_rel.to_string_lossy(),
-                })
-                .to_string();
-                let _ = conn.execute(
-                    "INSERT INTO audit_events (event_id, event_type, details_json, created_at) VALUES (?1, ?2, ?3, ?4)",
-                    rusqlite::params![event_id, "patch_rolled_back", payload, now],
-                );
-            }
+        if let Some(db_path) = database
+            && let Ok(conn) = rusqlite::Connection::open(db_path)
+        {
+            let event_id = EventId::new().to_string();
+            let now = TimestampUtc::now().to_string();
+            let payload = serde_json::json!({
+                "backup_path": backup_file.to_string_lossy(),
+                "target_path": target_rel.to_string_lossy(),
+            })
+            .to_string();
+            let _ = conn.execute(
+                "INSERT INTO audit_events (event_id, event_type, details_json, created_at) VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![event_id, "patch_rolled_back", payload, now],
+            );
         }
 
         Ok(())
@@ -859,10 +863,8 @@ impl LocalWorkspace {
             .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?;
 
         let mut tenants = Vec::new();
-        for r in rows {
-            if let Ok(t) = r {
-                tenants.push(t);
-            }
+        for t in rows.flatten() {
+            tenants.push(t);
         }
         Ok(tenants)
     }
@@ -994,11 +996,7 @@ impl LocalWorkspace {
     }
 
     /// Sets or updates a system configuration key-value pair in the database.
-    pub fn set_config(
-        database: &Path,
-        key: &str,
-        value: &str,
-    ) -> Result<(), LocalWorkspaceError> {
+    pub fn set_config(database: &Path, key: &str, value: &str) -> Result<(), LocalWorkspaceError> {
         use LocalWorkspaceErrorKind as Kind;
         if key.trim().is_empty() {
             return Err(LocalWorkspaceError::new(Kind::Workspace));

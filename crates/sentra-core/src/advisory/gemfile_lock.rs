@@ -43,17 +43,17 @@ pub fn parse_gemfile_lock(content: &str) -> Result<Vec<PackageRecord>, AdvisoryE
             // e.g. `    actionpack (7.1.3.4)`
             // Sub-dependencies have 6 spaces: `      actionview (= 7.1.3.4)`
             let leading_spaces = line.chars().take_while(|c| *c == ' ').count();
-            if leading_spaces == 4 {
-                if let Some((name_part, rest)) = trimmed.split_once('(') {
-                    let gem_name = name_part.trim();
-                    let gem_ver = rest.trim().trim_end_matches(')').trim();
+            if leading_spaces == 4
+                && let Some((name_part, rest)) = trimmed.split_once('(')
+            {
+                let gem_name = name_part.trim();
+                let gem_ver = rest.trim().trim_end_matches(')').trim();
 
-                    if !gem_name.is_empty()
-                        && !gem_ver.is_empty()
-                        && seen.insert((gem_name.to_string(), gem_ver.to_string()))
-                    {
-                        packages.push(PackageRecord::new(gem_name, gem_ver));
-                    }
+                if !gem_name.is_empty()
+                    && !gem_ver.is_empty()
+                    && seen.insert((gem_name.to_string(), gem_ver.to_string()))
+                {
+                    packages.push(PackageRecord::new(gem_name, gem_ver));
                 }
             }
         }

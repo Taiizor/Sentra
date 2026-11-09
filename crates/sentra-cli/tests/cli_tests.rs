@@ -1282,7 +1282,13 @@ fn binary_tenant_commands() {
     assert!(init_out.status.success());
 
     let list_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args(["tenant", "list", "--database", f.db.to_str().unwrap(), "--json"])
+        .args([
+            "tenant",
+            "list",
+            "--database",
+            f.db.to_str().unwrap(),
+            "--json",
+        ])
         .output()
         .unwrap();
     assert!(list_out.status.success());
@@ -1310,7 +1316,13 @@ fn binary_tenant_commands() {
     assert!(add_str.contains("custom-corp"));
 
     let list_after = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args(["tenant", "list", "--database", f.db.to_str().unwrap(), "--json"])
+        .args([
+            "tenant",
+            "list",
+            "--database",
+            f.db.to_str().unwrap(),
+            "--json",
+        ])
         .output()
         .unwrap();
     let list_after_str = String::from_utf8(list_after.stdout).unwrap();
