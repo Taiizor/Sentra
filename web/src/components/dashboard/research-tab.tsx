@@ -241,7 +241,7 @@ export function ResearchTab({ campaigns, currentRole }: ResearchTabProps) {
       {/* Cloudflare Audit Specification Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-5">
         <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="size-8 rounded-lg bg-primary/10 border border-primary/20 text-primary flex items-center justify-center font-bold">
               <Brain className="size-4" />
             </div>
@@ -340,7 +340,7 @@ export function ResearchTab({ campaigns, currentRole }: ResearchTabProps) {
       {/* ================================================================= */}
       {activeView === 'topology' && (
         <div className="flex flex-col gap-5">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
                 <FileCheck2 className="size-4 text-sky-400" />
@@ -367,7 +367,7 @@ export function ResearchTab({ campaigns, currentRole }: ResearchTabProps) {
             {topologyReport?.subsystems.map((sub) => (
               <Card key={sub.name} className="border-zinc-800 bg-zinc-950/70 shadow-sm">
                 <CardHeader className="pb-2 pt-3 px-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <Badge variant="outline" className="text-[10px] font-mono">
                       {sub.language}
                     </Badge>
@@ -534,7 +534,7 @@ export function ResearchTab({ campaigns, currentRole }: ResearchTabProps) {
               },
             ]).map((agent) => (
               <div key={agent.agentId} className="p-4 rounded-xl border border-zinc-800 bg-zinc-950/80 shadow-sm flex flex-col gap-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
                     <Brain className="size-3.5 text-amber-400" />
                     {agent.agentName}
@@ -759,7 +759,7 @@ export function ResearchTab({ campaigns, currentRole }: ResearchTabProps) {
                     >
                       {/* Canonical Coverage ID */}
                       <TableCell className="font-bold text-zinc-200 pl-6">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="text-primary">•</span>
                           <span className="truncate max-w-[280px]">{unit.coverageId}</span>
                         </div>

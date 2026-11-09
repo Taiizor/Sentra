@@ -71,7 +71,7 @@ export function ThreatIntelTab({ advisories, currentRole, onSyncAdvisories }: Th
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Globe className="size-5 text-primary" />
             <h2 className="text-lg font-bold tracking-tight">
               Universal OSV Threat Intelligence & Feed Sync
@@ -90,10 +90,11 @@ export function ThreatIntelTab({ advisories, currentRole, onSyncAdvisories }: Th
           size="sm"
           disabled={isSyncing || currentRole === 'Viewer'}
           onClick={handleSync}
-          className="h-8 text-xs"
+          className="h-8 text-xs w-full sm:w-auto"
         >
           <RefreshCw data-icon="inline-start" className={isSyncing ? 'animate-spin' : ''} />
-          {isSyncing ? 'Syncing OSV Mirror...' : 'Sync Advisories (sentra sync-advisories)'}
+          <span className="hidden sm:inline">{isSyncing ? 'Syncing OSV Mirror...' : 'Sync Advisories (sentra sync-advisories)'}</span>
+          <span className="inline sm:hidden">{isSyncing ? 'Syncing...' : 'Sync Advisories'}</span>
         </Button>
       </div>
 
@@ -138,7 +139,7 @@ export function ThreatIntelTab({ advisories, currentRole, onSyncAdvisories }: Th
             </div>
 
             <Select value={ecosystem} onValueChange={(val) => setEcosystem(val ?? 'ALL')}>
-              <SelectTrigger className="w-[160px] h-9 text-xs">
+              <SelectTrigger className="w-full sm:w-[160px] h-9 text-xs">
                 <SelectValue placeholder="Ecosystem">
                   {(val: string | null) => {
                     if (val === 'ALL' || !val) return 'All Ecosystems'

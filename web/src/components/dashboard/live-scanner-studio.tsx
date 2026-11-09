@@ -1069,7 +1069,7 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
       {/* Studio Header Card */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Code2 className="size-5 text-primary" />
             <h2 className="text-lg font-bold tracking-tight text-zinc-100">
               Pure-Rust SAST &amp; Semantic Taint Analysis Studio
@@ -1084,7 +1084,7 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {currentRole === 'Viewer' && (
             <span className="text-[11px] text-amber-400 font-medium mr-1 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
               Viewer mode: Analysis disabled
@@ -1182,7 +1182,7 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
           <Card className="border-zinc-800 bg-zinc-900/60 shadow-md">
             <CardHeader className="py-2.5 px-4 border-b border-zinc-800/80 bg-zinc-950/50">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <FileCode className="size-4 text-zinc-400" />
                   <CardTitle className="text-xs font-semibold text-zinc-200">
                     Source Code Editor (Live Sandbox)
@@ -1195,7 +1195,7 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
                   </Badge>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1226,13 +1226,13 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
           <Card className="h-full flex flex-col justify-between border-zinc-800 bg-zinc-900/60 shadow-md">
             <CardHeader className="py-2.5 px-4 border-b border-zinc-800/80 bg-zinc-950/50">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Zap className="size-4 text-primary" />
                   <CardTitle className="text-xs font-semibold text-zinc-200">
                     Engine HUD &amp; Signal Output
                   </CardTitle>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {scanDuration !== null && (
                     <Badge variant="secondary" className="text-[10px] font-mono bg-zinc-800 text-zinc-300">
                       {scanDuration}ms
