@@ -16,7 +16,6 @@ import {
   CheckCircle2,
   HelpCircle,
   XCircle,
-  Layers,
   Code2,
   FileCode2,
   Sparkles,
@@ -797,42 +796,42 @@ export function FindingsTab({
 
       {/* Finding Inspector Sheet / Drawer */}
       <Sheet open={!!selectedFinding} onOpenChange={(open) => !open && handleSelectFinding(null)}>
-        <SheetContent className="w-full sm:max-w-[640px] md:max-w-[720px] lg:max-w-[780px] p-0 bg-zinc-950 border-zinc-800 shadow-2xl flex flex-col h-full">
+        <SheetContent className="w-full sm:max-w-[620px] md:max-w-[680px] lg:max-w-[740px] p-0 bg-background/95 border-l border-border/80 shadow-2xl flex flex-col h-full backdrop-blur-md">
           {selectedFinding && (
             <div className="flex flex-col h-full min-h-0">
-              {/* Sticky Top Header with Safe Close Button Margin */}
-              <SheetHeader className="px-4 sm:px-6 py-4 sm:py-5 border-b border-zinc-800/80 bg-zinc-950/95 sticky top-0 z-20 backdrop-blur pr-14 text-left">
-                <div className="flex flex-wrap items-center gap-2">
+              {/* Sticky Top Header */}
+              <SheetHeader className="px-5 py-4 border-b border-border/60 bg-card/60 sticky top-0 z-20 backdrop-blur pr-12 text-left">
+                <div className="flex flex-wrap items-center gap-1.5">
                   {getVerdictBadge(selectedFinding.verdict, selectedFinding.status)}
-                  <Badge variant={getSeverityBadgeVariant(selectedFinding.severity)} className="text-xs font-bold uppercase">
+                  <Badge variant={getSeverityBadgeVariant(selectedFinding.severity)} className="text-[10px] font-bold uppercase px-1.5 py-0">
                     {selectedFinding.severity}
                   </Badge>
-                  <Badge variant="outline" className="font-mono text-xs text-zinc-300 border-zinc-750">
+                  <Badge variant="outline" className="font-mono text-[10px] px-1.5 py-0">
                     {selectedFinding.ruleId}
                   </Badge>
-                  <Badge variant="secondary" className="font-mono text-xs text-zinc-300">
+                  <Badge variant="secondary" className="font-mono text-[10px] px-1.5 py-0">
                     {selectedFinding.cwe}
                   </Badge>
                   {selectedFinding.reachability === 'ReachableCallPath' && (
-                    <Badge variant="destructive" className="text-xs font-mono flex items-center gap-1 font-bold">
-                      <GitBranch className="size-3" />
-                      Verified Reachable Flow
-                    </Badge>
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                      <GitBranch className="size-2.5" />
+                      Reachable Flow
+                    </span>
                   )}
                 </div>
-                <SheetTitle className="text-base sm:text-lg font-bold mt-2 text-zinc-100 leading-snug">
+                <SheetTitle className="text-base font-semibold mt-1.5 text-foreground leading-snug">
                   {selectedFinding.title}
                 </SheetTitle>
-                <SheetDescription className="flex flex-wrap items-center gap-2 mt-1 text-xs text-zinc-400 font-mono">
-                  <span className="truncate max-w-[260px] sm:max-w-none" title={selectedFinding.targetLocation}>
-                    File: {selectedFinding.targetLocation}
+                <SheetDescription className="flex flex-wrap items-center gap-2 mt-0.5 text-xs text-muted-foreground font-mono">
+                  <span className="truncate max-w-[280px]" title={selectedFinding.targetLocation}>
+                    {selectedFinding.targetLocation}
                   </span>
-                  <span>•</span>
-                  <span>Lines: {selectedFinding.startLine}-{selectedFinding.endLine}</span>
+                  <span>:</span>
+                  <span>L{selectedFinding.startLine}-{selectedFinding.endLine}</span>
                   {selectedFinding.fingerprint && (
                     <>
                       <span>•</span>
-                      <span className="text-[11px] text-zinc-500 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded truncate max-w-[120px] sm:max-w-none">
+                      <span className="text-[10px] text-muted-foreground bg-muted/50 px-1 py-0.2 rounded">
                         FP: {selectedFinding.fingerprint}
                       </span>
                     </>
@@ -840,66 +839,42 @@ export function FindingsTab({
                 </SheetDescription>
               </SheetHeader>
 
-              {/* Scrollable Inspector Body with Generous Padding */}
-              <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-6 flex flex-col gap-6">
-                {/* Cloudflare Three-Verdict: Needs Validation Banner & Blockers */}
+              {/* Scrollable Inspector Body */}
+              <div className="flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-5">
+                {/* Needs Validation Banner */}
                 {selectedFinding.verdict === 'needs_validation' && (
-                  <div className="p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 flex flex-col gap-3">
-                    <div className="flex items-center gap-2 text-amber-400 font-semibold text-xs tracking-wider uppercase">
-                      <HelpCircle className="size-4 shrink-0" />
-                      <span>Decisive Validation Blocked (Phase 4 Incomplete)</span>
+                  <div className="p-3.5 rounded-lg border border-amber-500/30 bg-amber-500/5 flex flex-col gap-2.5 text-xs">
+                    <div className="flex items-center gap-1.5 text-amber-400 font-semibold tracking-wider uppercase text-[11px]">
+                      <HelpCircle className="size-3.5 shrink-0" />
+                      <span>Decisive Validation Blocked (Phase 4 Candidate)</span>
                     </div>
-                    <p className="text-xs text-amber-200/90 leading-relaxed">
-                      This finding is a source-grounded candidate whose confirmation requires live environment access or operational telemetry. Under Cloudflare audit rules, unverified candidates do not receive an arbitrary severity score.
+                    <p className="text-muted-foreground leading-relaxed">
+                      This finding is a source-grounded candidate whose confirmation requires live environment access or operational telemetry.
                     </p>
                     {selectedFinding.blockers && selectedFinding.blockers.length > 0 && (
-                      <div className="flex flex-col gap-1.5 mt-1 bg-zinc-950/60 p-3 rounded-lg border border-amber-500/20">
-                        <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider">
+                      <div className="flex flex-col gap-1 bg-background/60 p-2.5 rounded border border-border/50">
+                        <span className="text-[10px] font-semibold text-amber-300 uppercase">
                           Unresolved Blockers:
                         </span>
-                        <ul className="list-disc list-inside text-xs text-zinc-300 space-y-1">
+                        <ul className="list-disc list-inside text-[11px] text-muted-foreground space-y-0.5">
                           {selectedFinding.blockers.map((b, i) => (
-                            <li key={i} className="leading-snug">{b}</li>
+                            <li key={i}>{b}</li>
                           ))}
                         </ul>
-                      </div>
-                    )}
-                    {selectedFinding.validationPlan && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                        {selectedFinding.validationPlan.local && (
-                          <div className="p-2.5 rounded-lg bg-zinc-950/80 border border-zinc-800">
-                            <span className="font-bold text-zinc-300 block mb-1">Local Test Plan:</span>
-                            <span className="text-zinc-400 text-[11px] leading-relaxed">
-                              <InlineFormattedText text={selectedFinding.validationPlan.local} />
-                            </span>
-                          </div>
-                        )}
-                        {selectedFinding.validationPlan.deployment && (
-                          <div className="p-2.5 rounded-lg bg-zinc-950/80 border border-zinc-800">
-                            <span className="font-bold text-zinc-300 block mb-1">Deployment Telemetry Plan:</span>
-                            <span className="text-zinc-400 text-[11px] leading-relaxed">
-                              <InlineFormattedText text={selectedFinding.validationPlan.deployment} />
-                            </span>
-                          </div>
-                        )}
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* Cloudflare Three-Verdict: Rejected / Refuted Hypothesis Banner */}
+                {/* Rejected / Refuted Hypothesis Banner */}
                 {selectedFinding.verdict === 'rejected' && (
-                  <div className="p-4 rounded-xl border border-zinc-700 bg-zinc-900/60 flex flex-col gap-2.5">
-                    <div className="flex items-center gap-2 text-zinc-300 font-semibold text-xs tracking-wider uppercase">
-                      <XCircle className="size-4 shrink-0 text-zinc-400" />
+                  <div className="p-3.5 rounded-lg border border-border/60 bg-muted/20 flex flex-col gap-2 text-xs">
+                    <div className="flex items-center gap-1.5 text-muted-foreground font-semibold tracking-wider uppercase text-[11px]">
+                      <XCircle className="size-3.5 shrink-0" />
                       <span>Refuted Candidate / Disproven Hypothesis</span>
                     </div>
-                    <p className="text-xs text-zinc-400 leading-relaxed">
-                      This hypothesis was investigated during Phase 3 hunting and decisively disproven by code analysis or local tests. Retained in the audit ledger to eliminate duplicate audit cycles.
-                    </p>
                     {selectedFinding.rejectionReason && (
-                      <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-300 leading-relaxed">
-                        <span className="font-bold text-primary block mb-1 font-sans">Disproven Rationale:</span>
+                      <div className="p-2.5 rounded bg-background/60 border border-border/50 text-[11px] text-foreground/90">
                         <InlineFormattedText text={selectedFinding.rejectionReason} />
                       </div>
                     )}
@@ -909,11 +884,11 @@ export function FindingsTab({
                 {/* Live Host Source Code & Taint Flow Viewer */}
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
-                      <FileCode2 className="size-4 text-primary" />
-                      Live Host Source Inspection & Taint Path
+                    <span className="text-xs font-semibold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <FileCode2 className="size-3.5 text-sky-400" />
+                      Source Code & Taint Path
                     </span>
-                    <Badge variant="outline" className="text-[10px] font-mono text-zinc-400">
+                    <Badge variant="outline" className="text-[10px] font-mono">
                       Line {selectedFinding.startLine || 1}
                     </Badge>
                   </div>
@@ -925,16 +900,16 @@ export function FindingsTab({
                   />
                 </div>
 
-                {/* Smallest Effective Source Fix (Cloudflare Audit Doctrine) */}
+                {/* Smallest Effective Source Fix */}
                 {selectedFinding.smallestEffectiveFix && (
-                  <div className="flex flex-col gap-2.5">
+                  <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
-                        <Code2 className="size-4 text-emerald-400" />
+                      <span className="text-xs font-semibold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                        <Code2 className="size-3.5 text-emerald-400" />
                         Smallest Effective Source Fix
                       </span>
-                      <Badge variant="outline" className="text-[10px] font-mono text-emerald-400 border-emerald-500/30 bg-emerald-500/10">
-                        Minimal Diff Surgical Remedy
+                      <Badge variant="outline" className="text-[10px] font-mono text-emerald-400 border-emerald-500/30 bg-emerald-500/5">
+                        Surgical Diff
                       </Badge>
                     </div>
                     <SurgicalDiffView
@@ -945,82 +920,27 @@ export function FindingsTab({
                   </div>
                 )}
 
-                {/* Audit Trace: Entrypoint ➔ Propagation ➔ Sink */}
-                {selectedFinding.auditTrace && selectedFinding.auditTrace.length > 0 && (
-                  <div className="flex flex-col gap-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
-                        <Layers className="size-4 text-sky-400" />
-                        Boundary Audit Trace ({selectedFinding.auditTrace.length} Hops)
-                      </span>
-                      <Badge variant="outline" className="text-[10px] font-mono text-sky-400 border-sky-500/30">
-                        Entrypoint ➔ Propagation ➔ Sink
-                      </Badge>
-                    </div>
-
-                    <div className="flex flex-col gap-2.5 border border-zinc-800/80 rounded-xl p-3.5 bg-zinc-900/30">
-                      {selectedFinding.auditTrace.map((node, idx) => (
-                        <div
-                          key={idx}
-                          className="flex flex-col gap-1.5 p-3 rounded-lg border border-zinc-800 bg-zinc-950/80 shadow-sm"
-                        >
-                          <div className="flex items-center justify-between text-xs">
-                            <div className="flex items-center gap-2">
-                              <Badge
-                                variant={
-                                  node.kind === 'entrypoint'
-                                    ? 'default'
-                                    : node.kind === 'sink'
-                                      ? 'destructive'
-                                      : 'secondary'
-                                }
-                                className="text-[10px] font-mono font-bold uppercase"
-                              >
-                                {node.kind}
-                              </Badge>
-                              <span className="font-mono text-zinc-300 text-xs font-semibold">
-                                {node.file}:{node.line}
-                              </span>
-                            </div>
-                            <span className="font-mono text-[11px] text-zinc-400 truncate max-w-[220px]">
-                              {node.scope}
-                            </span>
-                          </div>
-                          <p className="text-xs text-zinc-300 pl-1 leading-relaxed">
-                            {node.description}
-                          </p>
-                          {idx < selectedFinding.auditTrace!.length - 1 && (
-                            <div className="flex justify-center -mb-4 my-1">
-                              <ChevronRight className="size-4 text-zinc-500 rotate-90" />
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {/* Root Cause & Intended Behavior */}
                 {(selectedFinding.rootCause || selectedFinding.intendedBehavior) && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {selectedFinding.rootCause && (
-                      <div className="flex flex-col gap-1.5 p-3.5 rounded-xl border border-zinc-800 bg-zinc-900/50 shadow-sm">
-                        <span className="text-[11px] font-semibold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <div className="flex flex-col gap-1 p-3 rounded-lg border border-border/60 bg-card/40">
+                        <span className="text-[10px] font-semibold text-rose-400 uppercase tracking-wider flex items-center gap-1">
                           <span className="size-1.5 rounded-full bg-rose-500" />
-                          Identified Root Cause
+                          Root Cause
                         </span>
-                        <div className="text-xs text-zinc-300 leading-relaxed">
+                        <div className="text-xs text-muted-foreground leading-relaxed">
                           <InlineFormattedText text={selectedFinding.rootCause} />
                         </div>
                       </div>
                     )}
                     {selectedFinding.intendedBehavior && (
-                      <div className="flex flex-col gap-1.5 p-3.5 rounded-xl border border-zinc-800 bg-zinc-900/50 shadow-sm">
-                        <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <div className="flex flex-col gap-1 p-3 rounded-lg border border-border/60 bg-card/40">
+                        <span className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
                           <span className="size-1.5 rounded-full bg-emerald-500" />
-                          Intended Boundary Invariant
+                          Intended Invariant
                         </span>
-                        <div className="text-xs text-zinc-300 leading-relaxed">
+                        <div className="text-xs text-muted-foreground leading-relaxed">
                           <InlineFormattedText text={selectedFinding.intendedBehavior} />
                         </div>
                       </div>
@@ -1028,82 +948,80 @@ export function FindingsTab({
                   </div>
                 )}
 
-                {/* Vulnerability Analysis Card (Enterprise Markdown Rendered) */}
-                <div className="flex flex-col gap-2.5">
-                  <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
-                    Vulnerability Analysis &amp; Impact
+                {/* Vulnerability Analysis Card */}
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
+                    Vulnerability Analysis & Impact
                   </span>
-                  <div className="bg-zinc-900/80 border border-zinc-800 p-4 rounded-xl shadow-sm">
+                  <div className="bg-card/40 border border-border/60 p-3.5 rounded-lg text-xs">
                     <MarkdownView content={selectedFinding.description} />
                   </div>
                 </div>
 
-                {/* Remediation Guidance (Enterprise Markdown Rendered) */}
+                {/* Remediation Guidance */}
                 {selectedFinding.remediationGuidance && (
-                  <div className="flex flex-col gap-2.5">
-                    <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
                       Remediation Guidance
                     </span>
-                    <div className="bg-zinc-900/50 border border-zinc-800/80 p-4 rounded-xl shadow-sm">
+                    <div className="bg-card/40 border border-border/60 p-3.5 rounded-lg text-xs">
                       <MarkdownView content={selectedFinding.remediationGuidance} />
                     </div>
                   </div>
                 )}
 
-                {/* Taint Flow Trace (If Present) */}
+                {/* In-Engine Semantic Taint Trace */}
                 {selectedFinding.taintTrace && selectedFinding.taintTrace.length > 0 && (
-                  <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
-                        <GitBranch className="size-4 text-primary" />
-                        In-Engine Semantic Taint Trace ({selectedFinding.taintTrace.length} Steps)
+                      <span className="text-xs font-semibold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                        <GitBranch className="size-3.5 text-primary" />
+                        Semantic Taint Trace ({selectedFinding.taintTrace.length} Steps)
                       </span>
-                      <Badge variant="destructive" className="text-xs font-mono font-bold">
-                        Pure-Rust AST Proof
+                      <Badge variant="outline" className="text-[10px] font-mono text-rose-400 border-rose-500/30">
+                        AST Proof
                       </Badge>
                     </div>
 
-                    <div className="flex flex-col gap-3 border border-zinc-800 rounded-xl p-4 bg-zinc-900/40">
+                    <div className="flex flex-col gap-2 border border-border/60 rounded-lg p-3 bg-card/40">
                       {selectedFinding.taintTrace.map((step, idx) => (
                         <div
                           key={step.step}
-                          className="flex flex-col gap-2 p-3.5 rounded-lg border border-zinc-800/80 bg-zinc-950/80 relative shadow-sm"
+                          className="flex flex-col gap-1.5 p-2.5 rounded bg-background/60 border border-border/40 text-xs"
                         >
-                          <div className="flex flex-wrap items-center justify-between gap-1.5 text-xs">
-                            <div className="flex items-center gap-2.5 flex-wrap">
-                              <span className="font-mono font-bold size-6 rounded-full bg-primary/20 text-primary border border-primary/30 flex items-center justify-center text-xs">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="size-5 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center justify-center text-[10px] font-mono font-bold">
                                 {step.step}
                               </span>
                               <Badge
                                 variant="outline"
-                                className={`text-[11px] font-mono font-bold ${
+                                className={`text-[10px] font-mono font-bold px-1.5 py-0 ${
                                   step.role === 'SOURCE'
-                                    ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                                    ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
                                     : step.role === 'SINK'
-                                      ? 'border-rose-500/40 bg-rose-500/10 text-rose-300'
-                                      : step.role === 'SANITIZER'
-                                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-                                        : 'border-sky-500/40 bg-sky-500/10 text-sky-300'
+                                      ? 'border-rose-500/40 bg-rose-500/10 text-rose-400'
+                                      : 'border-sky-500/40 bg-sky-500/10 text-sky-400'
                                 }`}
                               >
                                 {step.role}
                               </Badge>
-                              <span className="font-mono text-zinc-400 text-xs">
+                              <span className="font-mono text-muted-foreground text-[11px]">
                                 {step.location}:{step.line}
                               </span>
                             </div>
-                            <span className="font-mono text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded">
+                            <span className="font-mono text-[11px] font-semibold text-primary bg-primary/10 px-1.5 py-0.2 rounded">
                               ${step.variable}
                             </span>
                           </div>
 
-                          <pre className="font-mono text-xs bg-zinc-900/95 border border-zinc-800 p-3 rounded-md mt-1 overflow-x-auto text-zinc-200 leading-relaxed">
+                          <pre className="font-mono text-[11px] bg-background/80 border border-border/40 p-2 rounded mt-1 overflow-x-auto text-foreground/90">
                             {step.codeSnippet}
                           </pre>
 
                           {idx < selectedFinding.taintTrace!.length - 1 && (
-                            <div className="flex justify-center -mb-5 my-1.5">
-                              <ChevronRight className="size-4 text-zinc-500 rotate-90" />
+                            <div className="flex justify-center -mb-3 my-0.5">
+                              <ChevronRight className="size-3.5 text-muted-foreground rotate-90" />
                             </div>
                           )}
                         </div>
@@ -1114,35 +1032,28 @@ export function FindingsTab({
               </div>
 
               {/* Sticky Bottom Actions & Governance Footer */}
-              <div className="border-t border-zinc-800/80 px-4 sm:px-6 py-3 sm:py-4 bg-zinc-950/95 backdrop-blur sticky bottom-0 z-20 flex flex-col gap-3 mt-auto">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-xs font-bold text-zinc-100 flex items-center gap-1.5">
-                      <ShieldCheck className="size-3.5 text-primary shrink-0" />
-                      Three-Tier Verified Patch Generation
-                    </span>
-                    <span className="text-[11px] text-zinc-400">
-                      Dispatches test synthesis and dual-state regression verification.
-                    </span>
-                  </div>
-                  <Button
-                    size="sm"
-                    disabled={currentRole === 'Viewer'}
-                    onClick={() => {
-                      onOpenAiPatchModal(selectedFinding)
-                      handleSelectFinding(null)
-                    }}
-                    className="font-semibold shadow-md bg-primary text-primary-foreground hover:bg-primary/90 shrink-0 flex items-center justify-center gap-1.5 w-full sm:w-auto h-8 text-xs"
-                  >
-                    <Sparkles className="size-3.5" />
-                    Synthesize AI Patch &amp; Tests
-                  </Button>
-                </div>
-                {currentRole === 'Viewer' && (
-                  <span className="text-[11px] text-zinc-500 italic">
-                    * Viewer role has read-only permissions. Switch to Operator or Admin in the top bar to propose patches.
+              <div className="border-t border-border/60 px-5 py-3 bg-card/90 backdrop-blur sticky bottom-0 z-20 flex items-center justify-between gap-3 mt-auto">
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <ShieldCheck className="size-3.5 text-primary shrink-0" />
+                    Three-Tier Verified Patch
                   </span>
-                )}
+                  <span className="text-[11px] text-muted-foreground truncate">
+                    Test synthesis & regression verification
+                  </span>
+                </div>
+                <Button
+                  size="sm"
+                  disabled={currentRole === 'Viewer'}
+                  onClick={() => {
+                    onOpenAiPatchModal(selectedFinding)
+                    handleSelectFinding(null)
+                  }}
+                  className="font-medium bg-primary text-primary-foreground hover:bg-primary/90 shrink-0 gap-1.5 h-8 text-xs"
+                >
+                  <Sparkles className="size-3" />
+                  <span>Synthesize Patch</span>
+                </Button>
               </div>
             </div>
           )}

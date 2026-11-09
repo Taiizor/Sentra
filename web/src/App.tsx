@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 
 import { Sidebar, MobileSidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
@@ -848,22 +849,27 @@ export function App() {
 
         {/* SARIF Export Dialog */}
         <Dialog open={!!sarifModalContent} onOpenChange={(open) => !open && setSarifModalContent(null)}>
-          <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col bg-zinc-950 border-zinc-800">
+          <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col bg-background/95 border-border/80 text-foreground shadow-2xl backdrop-blur-md">
             <DialogHeader>
-              <DialogTitle className="text-base font-bold flex items-center gap-2 text-zinc-100">
-                <FileDown className="size-4 text-primary" />
-                OASIS SARIF v2.1.0 Security Report
-              </DialogTitle>
-              <DialogDescription className="text-xs text-zinc-400">
-                Exportable directly to GitHub Advanced Security Code Scanning, GitLab SAST, or VS Code.
+              <div className="flex items-center justify-between">
+                <DialogTitle className="text-sm font-semibold flex items-center gap-2 text-foreground">
+                  <FileDown className="size-4 text-primary" />
+                  <span>OASIS SARIF v2.1.0 Security Report</span>
+                </DialogTitle>
+                <Badge variant="outline" className="text-[10px] font-mono border-primary/30 text-primary">
+                  JSON Schema 2.1.0
+                </Badge>
+              </div>
+              <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                Compliant with GitHub Code Scanning, GitLab SAST, VS Code, and IDE SARIF viewers.
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto bg-black/60 p-3 rounded-md border border-zinc-800 font-mono text-xs my-2 text-zinc-300">
+            <div className="flex-1 overflow-y-auto bg-background/60 p-3 rounded-md border border-border/50 font-mono text-xs my-2 text-foreground/90 max-h-[380px]">
               <pre className="whitespace-pre-wrap">{sarifModalContent}</pre>
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-zinc-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-border/60">
               <Button
                 variant="outline"
                 size="sm"
@@ -873,10 +879,10 @@ export function App() {
                     toast.success('SARIF JSON copied to clipboard')
                   }
                 }}
-                className="border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-zinc-100"
+                className="h-7 text-xs border-border/70 gap-1.5"
               >
-                <Copy className="size-3.5 mr-1.5" />
-                Copy SARIF JSON
+                <Copy className="size-3" />
+                <span>Copy SARIF JSON</span>
               </Button>
 
               <div className="flex items-center gap-2">
@@ -884,13 +890,17 @@ export function App() {
                   variant="outline"
                   size="sm"
                   onClick={() => setSarifModalContent(null)}
-                  className="border-zinc-800"
+                  className="h-7 text-xs border-border/70"
                 >
                   Close
                 </Button>
-                <Button size="sm" onClick={handleDownloadSarif} className="bg-primary text-primary-foreground font-semibold">
-                  <FileDown className="size-3.5 mr-1.5" />
-                  Download .sarif File
+                <Button
+                  size="sm"
+                  onClick={handleDownloadSarif}
+                  className="h-7 text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5"
+                >
+                  <FileDown className="size-3" />
+                  <span>Download .sarif File</span>
                 </Button>
               </div>
             </div>

@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -95,55 +95,51 @@ Aggregate digest: sha256:7f83b165...`
   }
 
   return (
-    <Card className="border-border">
-      <CardHeader className="pb-3">
+    <Card className="border-border/60 bg-card/40">
+      <CardHeader className="py-2.5 px-4 border-b border-border/40">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Terminal className="size-4 text-primary" />
-            <CardTitle className="text-sm font-semibold">Live Security Analysis Console</CardTitle>
-            <Badge variant="outline" className="text-xs">
-              Direct Core API Dispatch
+            <Terminal className="size-3.5 text-primary" />
+            <CardTitle className="text-xs font-medium text-foreground">CLI Analysis Console</CardTitle>
+            <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0">
+              Core Dispatch
             </Badge>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={handleClear}
-              className="h-8 text-xs"
+              className="h-7 text-xs border-border/60 text-muted-foreground hover:text-foreground gap-1"
             >
-              <RotateCcw data-icon="inline-start" />
-              Clear
+              <RotateCcw className="size-3" />
+              <span>Clear</span>
             </Button>
             <Button
               size="sm"
               disabled={isRunning || currentRole === 'Viewer'}
               onClick={handleRun}
-              className="h-8 text-xs"
+              className="h-7 text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5"
             >
-              <Play data-icon="inline-start" />
-              {isRunning ? 'Executing...' : 'Dispatch Command'}
+              <Play className="size-3 fill-current" />
+              <span>{isRunning ? 'Executing...' : 'Dispatch'}</span>
             </Button>
           </div>
         </div>
-        <CardDescription className="text-xs">
-          Simulate CLI dispatch for SAST, interprocedural taint flow detection, multi-lockfile audit, or CodeQL probing.
-        </CardDescription>
       </CardHeader>
 
-      <CardContent className="flex flex-col gap-3">
+      <CardContent className="p-3 flex flex-col gap-3">
         {/* Command Configuration Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground font-medium">Operation Command:</span>
             <Select value={selectedAction} onValueChange={(val) => setSelectedAction(val ?? 'scan')}>
-              <SelectTrigger className="h-8 text-xs w-full">
+              <SelectTrigger className="h-7 text-xs w-full bg-background/50 border-border/60">
                 <SelectValue placeholder="Action">
                   {(val: string | null) => {
                     if (val === 'scan') return 'sentra scan (SAST & Taint)'
                     if (val === 'audit') return 'sentra audit (Lockfile Audit)'
-                    if (val === 'codeql') return 'sentra codeql (Workspace Probe)'
+                    if (val === 'codeql') return 'sentra codeql (Probe)'
                     if (val === 'diff') return 'sentra diff (Snapshot Diff)'
                     return val || 'Action'
                   }}
@@ -154,40 +150,40 @@ Aggregate digest: sha256:7f83b165...`
                   <SelectItem value="scan">sentra scan (SAST & Taint Analysis)</SelectItem>
                   <SelectItem value="audit">sentra audit (Multi-Lockfile Audit)</SelectItem>
                   <SelectItem value="codeql">sentra codeql (Workspace Probe & SARIF)</SelectItem>
-                  <SelectItem value="diff">sentra diff (Pure-Rust Snapshot Comparison)</SelectItem>
+                  <SelectItem value="diff">sentra diff (Snapshot Comparison)</SelectItem>
                 </SelectGroup>
               </SelectContent>
             </Select>
           </div>
 
           <div className="sm:col-span-2 flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground font-medium">Target Workspace Directory:</span>
             <Input
               value={workspacePath}
               onChange={(e) => setWorkspacePath(e.target.value)}
-              className="h-8 text-xs font-mono"
+              className="h-7 text-xs font-mono bg-background/50 border-border/60"
+              placeholder="Workspace path..."
             />
           </div>
         </div>
 
         {/* Live Terminal Box */}
-        <div className="bg-black/90 text-green-400 font-mono text-xs p-3.5 rounded-md border min-h-[160px] max-h-[260px] overflow-y-auto flex flex-col gap-1 shadow-inner">
+        <div className="bg-background/90 text-emerald-400 font-mono text-[11px] p-3 rounded-md border border-border/50 min-h-[140px] max-h-[220px] overflow-y-auto flex flex-col gap-1 shadow-inner leading-relaxed">
           {consoleOutput.map((line, idx) => (
-            <div key={idx} className="whitespace-pre-wrap leading-relaxed">
+            <div key={idx} className="whitespace-pre-wrap">
               {line}
             </div>
           ))}
         </div>
 
         {/* Status footer */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs text-muted-foreground px-1">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-muted-foreground px-0.5">
           <span className="flex items-center gap-1.5">
-            <Lock className="size-3 text-primary" />
-            Host Execution Protection: Enabled
+            <Lock className="size-3 text-emerald-400" />
+            Host Execution Protection: Fail-Closed
           </span>
           <span className="flex items-center gap-1">
-            <CheckCircle2 className="size-3 text-primary" />
-            Deterministic Output Guarantee
+            <CheckCircle2 className="size-3 text-sky-400" />
+            Deterministic AST Guarantee
           </span>
         </div>
       </CardContent>
