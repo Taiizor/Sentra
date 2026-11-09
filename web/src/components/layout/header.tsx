@@ -69,7 +69,7 @@ export function Header({
     <header className="border-b bg-zinc-950/80 backdrop-blur sticky top-0 z-20 px-3 sm:px-6 h-14 flex items-center border-zinc-800/80">
       <div className="flex items-center justify-between gap-2 w-full">
         {/* Left: Mobile Menu Trigger + Active View Title */}
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <Button
             type="button"
             variant="ghost"
@@ -82,7 +82,7 @@ export function Header({
             <span className="sr-only">Toggle navigation</span>
           </Button>
 
-          <span className="font-bold text-xs sm:text-sm text-zinc-100 truncate max-w-[120px] xs:max-w-[160px] sm:max-w-none">
+          <span className="font-bold text-xs sm:text-sm text-zinc-100 truncate">
             {activeTabTitle}
           </span>
         </div>
