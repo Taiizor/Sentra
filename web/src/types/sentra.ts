@@ -246,10 +246,24 @@ export interface WorkerNodeView {
   activeJob: string | null
 }
 
+export type Ecosystem =
+  | 'npm'
+  | 'crates.io'
+  | 'PyPI'
+  | 'Go'
+  | 'Maven'
+  | 'Composer'
+  | 'NuGet'
+  | 'RubyGems'
+  | 'Swift'
+  | 'Pub'
+  | 'Erlang'
+  | 'GitHub Actions'
+
 export interface OsvAdvisoryView {
   id: string
   package: string
-  ecosystem: 'crates.io' | 'npm' | 'PyPI' | 'Go'
+  ecosystem: Ecosystem
   vulnerability: string
   affectedRange: string
   fixedVersion: string
