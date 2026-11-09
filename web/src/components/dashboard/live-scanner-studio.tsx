@@ -39,9 +39,13 @@ const PRESET_CATEGORIES = [
   'Supply Chain & CI/CD',
   'Protocols & RPC',
   'Resource & DoS',
+  'Web Protocol & Auth',
+  'Cloud & Deployment',
+  'Client-Side & DOM',
+  'Desktop & Local IPC',
+  'Memory Safety',
   'Taint & Injection',
   'Secrets & Credentials',
-  'Memory Safety',
   'Clean Guards',
 ] as const
 
@@ -435,6 +439,246 @@ export function validateEmailOrUsername(input: string) {
     isClean: false,
     cvssScore: 6.8,
   },
+  mem_int_overflow: {
+    id: 'mem_int_overflow',
+    category: 'Memory Safety',
+    label: 'Integer Overflow Alloc',
+    title: 'Integer Overflow in Buffer Allocation (Rust / C-FFI)',
+    language: 'rust',
+    code: `// Cloudflare MEMORY-SAFETY-AND-BINARY.md: Attacker-controlled arithmetic before allocation
+pub fn allocate_record_buffer(count: usize, element_size: usize) -> Vec<u8> {
+    // [SOURCE] count and element_size are external input
+    // [SINK] SENTRA-MEM-001: Integer multiplication wraps on overflow!
+    // If count = usize::MAX / 2 + 1, count * element_size wraps to small number
+    let total_bytes = count * element_size; // Defect: Missing checked_mul()!
+    
+    let mut buffer = Vec::with_capacity(total_bytes);
+    // Subsequent loop copies count items, causing heap buffer overflow!
+    buffer
+}`,
+    ruleId: 'SENTRA-MEM-001',
+    cwe: 'CWE-190',
+    severity: 'Critical' as const,
+    name: 'Integer Overflow in Buffer Allocation Arithmetic',
+    isClean: false,
+    cvssScore: 9.1,
+  },
+  web_host_poisoning: {
+    id: 'web_host_poisoning',
+    category: 'Web Protocol & Auth',
+    label: 'Host Header Poisoning',
+    title: 'Password Reset URL Poisoning via Untrusted Host Header (TypeScript)',
+    language: 'typescript',
+    code: `// Cloudflare WEB-PROTOCOL-AND-AUTH.md: Host header determines reset links
+export function generatePasswordResetLink(req: Request, resetToken: string) {
+  // [SOURCE] Untrusted Host / Forwarded header from HTTP request
+  const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
+  
+  // [SINK] SENTRA-WEB-001: Attacker sends 'Host: attacker-controlled.com'
+  // Victim receives reset link pointing to attacker domain, leaking resetToken!
+  const resetUrl = \`https://\${host}/auth/reset?token=\${resetToken}\`;
+  
+  sendEmail(req.body.email, \`Reset your password: \${resetUrl}\`);
+}`,
+    ruleId: 'SENTRA-WEB-001',
+    cwe: 'CWE-640',
+    severity: 'High' as const,
+    name: 'Password Reset URL Poisoning via Untrusted Host Header',
+    isClean: false,
+    cvssScore: 8.6,
+  },
+  web_jwt_unverified: {
+    id: 'web_jwt_unverified',
+    category: 'Web Protocol & Auth',
+    label: 'JWT Unverified Algorithm',
+    title: 'JWT Decode Without Cryptographic Signature Verification (TypeScript)',
+    language: 'typescript',
+    code: `// Cloudflare WEB-PROTOCOL-AND-AUTH.md: JWT decode-without-verify flaw
+import jwt from "jsonwebtoken";
+
+export function authenticateUser(authHeader: string) {
+  const token = authHeader.replace("Bearer ", "");
+  
+  // [SINK] SENTRA-WEB-002: jwt.decode() reads claims without signature check!
+  // Attacker can forge { "role": "admin", "sub": "root" } with zero key!
+  const decoded = jwt.decode(token) as { userId: string; role: string };
+  
+  if (decoded && decoded.role === "admin") {
+    grantSuperuserAccess(decoded.userId); // Catastrophic authentication bypass!
+  }
+}`,
+    ruleId: 'SENTRA-WEB-002',
+    cwe: 'CWE-347',
+    severity: 'Critical' as const,
+    name: 'JWT Decode Without Cryptographic Signature Verification',
+    isClean: false,
+    cvssScore: 9.8,
+  },
+  cloud_imdsv1_ssrf: {
+    id: 'cloud_imdsv1_ssrf',
+    category: 'Cloud & Deployment',
+    label: 'IMDSv1 Metadata SSRF',
+    title: 'Cloud Instance Metadata Service (IMDSv1) SSRF Credential Exposure (TypeScript)',
+    language: 'typescript',
+    code: `// Cloudflare CLOUD-AND-DEPLOYMENT.md: Metadata service reachability
+export async function fetchWebhookPreview(targetUrl: string) {
+  // [SOURCE] User-supplied URL (e.g. 'http://169.254.169.254/latest/meta-data/iam/security-credentials/')
+  // [SINK] SENTRA-CLOUD-001: Absence of IP jail allows AWS IMDSv1 token theft!
+  const response = await fetch(targetUrl, {
+    method: "GET", // Missing link-local/private IP blocking check!
+  });
+  
+  return await response.text(); // Leaks AWS instance role credentials!
+}`,
+    ruleId: 'SENTRA-CLOUD-001',
+    cwe: 'CWE-918',
+    severity: 'Critical' as const,
+    name: 'Cloud Instance Metadata Service (IMDSv1) SSRF Vulnerability',
+    isClean: false,
+    cvssScore: 9.4,
+  },
+  cloud_k8s_privileged: {
+    id: 'cloud_k8s_privileged',
+    category: 'Cloud & Deployment',
+    label: 'Privileged K8s Pod',
+    title: 'Privileged Container & Root HostPath Mount in Kubernetes (YAML)',
+    language: 'yaml',
+    code: `# Cloudflare CLOUD-AND-DEPLOYMENT.md: Host capability exposure in container
+apiVersion: v1
+kind: Pod
+metadata:
+  name: telemetry-daemon
+spec:
+  containers:
+    - name: agent
+      image: sentra-agent:latest
+      # [SINK] SENTRA-CLOUD-002: Privileged mode grants raw device access!
+      securityContext:
+        privileged: true # Defect: Container breakout to host root!
+      volumeMounts:
+        - mountPath: /host
+          name: host-volume
+  volumes:
+    - name: host-volume
+      hostPath:
+        path: / # Exposes entire host node filesystem!`,
+    ruleId: 'SENTRA-CLOUD-002',
+    cwe: 'CWE-250',
+    severity: 'Critical' as const,
+    name: 'Privileged Container & Root HostPath Mount in Kubernetes',
+    isClean: false,
+    cvssScore: 9.6,
+  },
+  dom_xss_sink: {
+    id: 'dom_xss_sink',
+    category: 'Client-Side & DOM',
+    label: 'DOM XSS via innerHTML',
+    title: 'DOM-Based Cross-Site Scripting (XSS) via Location Hash (TypeScript)',
+    language: 'typescript',
+    code: `// Cloudflare CLIENT-SIDE.md: DOM-based XSS via unescaped framework bypass
+export function renderWelcomeMessage() {
+  // [SOURCE] Untrusted DOM source (URL hash parameter)
+  const hash = window.location.hash.slice(1);
+  const params = new URLSearchParams(hash);
+  const userName = params.get("name") || "Guest"; // e.g. <img src=x onerror=alert(1)>
+  
+  // [SINK] SENTRA-DOM-001: Direct innerHTML injection executes arbitrary JS in victim session!
+  const container = document.getElementById("welcome-banner");
+  if (container) {
+    container.innerHTML = \`<h3>Welcome back, \${userName}!</h3>\`; // Vulnerable!
+  }
+}`,
+    ruleId: 'SENTRA-DOM-001',
+    cwe: 'CWE-79',
+    severity: 'High' as const,
+    name: 'DOM-Based Cross-Site Scripting via Unsanitized innerHTML',
+    isClean: false,
+    cvssScore: 8.3,
+  },
+  dom_proto_pollution: {
+    id: 'dom_proto_pollution',
+    category: 'Client-Side & DOM',
+    label: 'Prototype Pollution',
+    title: 'Prototype Pollution via Recursive Object Merge (TypeScript)',
+    language: 'typescript',
+    code: `// Cloudflare CLIENT-SIDE.md: Prototype pollution via recursive path assignment
+export function mergeConfig(target: any, source: any) {
+  for (const key of Object.keys(source)) {
+    // [SINK] SENTRA-DOM-003: Missing __proto__ / constructor key filter!
+    // Input: { "__proto__": { "isAdmin": true } } modifies Object.prototype globally!
+    if (typeof source[key] === "object" && source[key] !== null) {
+      if (!target[key]) target[key] = {};
+      mergeConfig(target[key], source[key]);
+    } else {
+      target[key] = source[key];
+    }
+  }
+  return target;
+}`,
+    ruleId: 'SENTRA-DOM-003',
+    cwe: 'CWE-1321',
+    severity: 'High' as const,
+    name: 'Prototype Pollution via Unfiltered Recursive Object Merge',
+    isClean: false,
+    cvssScore: 8.5,
+  },
+  ipc_named_pipe_unauth: {
+    id: 'ipc_named_pipe_unauth',
+    category: 'Desktop & Local IPC',
+    label: 'Named Pipe Unauth Peer',
+    title: 'Local Named Pipe / IPC Listener Without Peer Authentication (Rust)',
+    language: 'rust',
+    code: `// Cloudflare DESKTOP-MOBILE-AND-LOCAL-IPC.md: IPC peer-authentication gaps
+use tokio::net::windows::named_pipe::ServerOptions;
+
+pub async fn start_privileged_daemon_ipc() -> Result<()> {
+    // [SOURCE] Local IPC socket listener
+    let server = ServerOptions::new()
+        .first_pipe_instance(true)
+        .create(r"\\\\.\\pipe\\sentra_privileged_service")?;
+        
+    server.connect().await?;
+    
+    // [SINK] SENTRA-IPC-001: Reads command from any unprivileged local process!
+    // Lacks GetNamedPipeClientProcessId or token DACL security descriptor!
+    let mut command_buf = [0u8; 1024];
+    server.try_read(&mut command_buf)?;
+    execute_system_command(&command_buf)?; // Local Privilege Escalation!
+    Ok(())
+}`,
+    ruleId: 'SENTRA-IPC-001',
+    cwe: 'CWE-306',
+    severity: 'Critical' as const,
+    name: 'Local IPC Named Pipe Lacking Peer Process Authentication',
+    isClean: false,
+    cvssScore: 9.3,
+  },
+  ipc_deep_link_injection: {
+    id: 'ipc_deep_link_injection',
+    category: 'Desktop & Local IPC',
+    label: 'Deep-Link Command Exec',
+    title: 'Custom Protocol / Deep-Link Argument Injection in Desktop App (TypeScript)',
+    language: 'typescript',
+    code: `// Cloudflare DESKTOP-MOBILE-AND-LOCAL-IPC.md: Custom-scheme ambiguity
+import child_process from "node:child_process";
+
+export function handleDeepLinkUrl(rawUrl: string) {
+  // [SOURCE] Invoked when user clicks 'sentra://scan?target=...' in browser
+  const parsed = new URL(rawUrl);
+  const targetPath = parsed.searchParams.get("target"); // e.g. "C:/repo & calc.exe #"
+  
+  // [SINK] SENTRA-IPC-002: Deep link argument passed directly to shell execution!
+  child_process.exec(\`sentra.exe scan --workspace "\${targetPath}"\`, (err, stdout) => {
+    console.log(stdout);
+  });
+}`,
+    ruleId: 'SENTRA-IPC-002',
+    cwe: 'CWE-88',
+    severity: 'High' as const,
+    name: 'Custom Protocol Deep-Link Shell Argument Injection',
+    isClean: false,
+    cvssScore: 8.7,
+  },
   sqli_taint: {
     id: 'sqli_taint',
     category: 'Taint & Injection',
@@ -727,7 +971,17 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
                     ? 'Cloudflare RPC Rule: Enforce authentication interceptors across unary and streaming routes, and enforce idempotency tokens on event consumers.'
                     : current.ruleId.startsWith('SENTRA-DOS-')
                       ? 'Cloudflare Availability Rule: Enforce stream byte bounds (take(MAX_BYTES)) and eliminate nested quantifiers in regular expressions.'
-                      : 'Enforce parameterized queries or safe argument vector interfaces.',
+                      : current.ruleId.startsWith('SENTRA-MEM-')
+                        ? 'Cloudflare Memory Safety Rule: Enforce checked arithmetic (checked_mul), validate slice pointers non-null/aligned, and initialize struct padding.'
+                        : current.ruleId.startsWith('SENTRA-WEB-')
+                          ? 'Cloudflare Web Protocol Rule: Enforce static Host allowlists, cryptographically verify JWT signatures before reading claims, and jail outbound URLs against private IP addresses.'
+                          : current.ruleId.startsWith('SENTRA-CLOUD-')
+                            ? 'Cloudflare Cloud Security Rule: Enforce IMDSv2 token hop limits, drop all Linux capabilities (cap_drop: ALL), and eliminate root hostPath mounts.'
+                            : current.ruleId.startsWith('SENTRA-DOM-')
+                              ? 'Cloudflare Client-Side Rule: Sanitize markup via DOMPurify before innerHTML injection, specify explicit postMessage targetOrigin, and filter __proto__ keys.'
+                              : current.ruleId.startsWith('SENTRA-IPC-')
+                                ? 'Cloudflare Local IPC Rule: Enforce peer process token verification (GetNamedPipeClientProcessId / SO_PEERCRED) and sanitize custom-protocol URI parameters.'
+                                : 'Enforce parameterized queries or safe argument vector interfaces.',
             description: `Identified boundary violation matching ${current.ruleId} (${current.cwe}): ${current.name}. Evaluated under Cloudflare defensive security audit rules.`,
             createdAt: new Date().toISOString(),
           },
