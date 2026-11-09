@@ -450,3 +450,69 @@ export function transformMatchesToFindings(matches: RealScanMatch[]): FindingVie
     }
   })
 }
+
+// =========================================================================
+// Cloudflare Coverage Ledger & Audit Campaign Client Functions
+// =========================================================================
+
+export async function fetchCoverageLedger(): Promise<import('@/types/sentra').CoverageLedgerReport | null> {
+  try {
+    const res = await fetch(`${API_BASE}/audit/coverage-ledger`)
+    if (!res.ok) return null
+    return await res.json()
+  } catch (err) {
+    console.error('Failed to fetch coverage ledger:', err)
+    return null
+  }
+}
+
+export async function validateLedgerInvariants(): Promise<{ valid: boolean; checkedUnits: number; errorCount: number; errors: string[] } | null> {
+  try {
+    const res = await fetch(`${API_BASE}/audit/validate-ledger`, { method: 'POST' })
+    if (!res.ok) return null
+    return await res.json()
+  } catch (err) {
+    console.error('Failed to validate ledger invariants:', err)
+    return null
+  }
+}
+
+export async function setAuditProfile(profile: 'quick' | 'standard' | 'deep'): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/audit/set-profile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile }),
+    })
+    return res.ok
+  } catch (err) {
+    return false
+  }
+}
+
+export async function runAuditCampaignWave(): Promise<{ success: boolean; promotedCount: number; message: string } | null> {
+  try {
+    const res = await fetch(`${API_BASE}/audit/run-campaign`, { method: 'POST' })
+    if (!res.ok) return null
+    return await res.json()
+  } catch (err) {
+    return null
+  }
+}
+
+export async function validateFindingsInvariants(
+  findings: FindingView[]
+): Promise<{ invariantsPass: boolean; totalFindings: number; errors: string[]; output: string } | null> {
+  try {
+    const res = await fetch(`${API_BASE}/audit/validate-findings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ findings }),
+    })
+    if (!res.ok) return null
+    return await res.json()
+  } catch (err) {
+    console.error('Failed to validate findings invariants:', err)
+    return null
+  }
+}
