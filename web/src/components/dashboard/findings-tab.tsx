@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { cn } from 'cn'
 import {
   GitBranch,
@@ -62,6 +62,8 @@ interface FindingsTabProps {
   currentRole: UserRole
   onProposePatch: (findingId: string) => void
   onOpenAiPatchModal: (finding: FindingView) => void
+  selectedFindingId?: string | null
+  onSelectFindingId?: (id: string | null) => void
 }
 
 type SortField = 'severity' | 'ruleId' | 'title' | 'targetLocation' | 'reachability' | 'verdict'
@@ -80,14 +82,38 @@ export function FindingsTab({
   currentRole,
   onProposePatch: _onProposePatch,
   onOpenAiPatchModal,
+  selectedFindingId,
+  onSelectFindingId,
 }: FindingsTabProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [severityFilter, setSeverityFilter] = useState<string>('ALL')
   const [reachabilityFilter, setReachabilityFilter] = useState<string>('ALL')
   const [verdictFilter, setVerdictFilter] = useState<string>('ALL')
-  const [selectedFinding, setSelectedFinding] = useState<FindingView | null>(null)
+  const [selectedFinding, setSelectedFinding] = useState<FindingView | null>(() => {
+    if (selectedFindingId) {
+      return findings.find((f) => f.findingId === selectedFindingId) || null
+    }
+    return null
+  })
   const [copiedPath, setCopiedPath] = useState<string | null>(null)
   const [isValidatingSchema, setIsValidatingSchema] = useState(false)
+
+  // Synchronize deep-linked finding ID with selectedFinding state
+  useEffect(() => {
+    if (selectedFindingId) {
+      const match = findings.find((f) => f.findingId === selectedFindingId)
+      if (match && selectedFinding?.findingId !== match.findingId) {
+        setSelectedFinding(match)
+      }
+    } else if (selectedFinding !== null && selectedFindingId === null) {
+      setSelectedFinding(null)
+    }
+  }, [selectedFindingId, findings, selectedFinding])
+
+  function handleSelectFinding(f: FindingView | null) {
+    setSelectedFinding(f)
+    onSelectFindingId?.(f ? f.findingId : null)
+  }
 
   // Pagination & Sorting state
   const [currentPage, setCurrentPage] = useState(1)
@@ -659,7 +685,7 @@ export function FindingsTab({
                     <TableRow
                       key={finding.findingId}
                       className="cursor-pointer hover:bg-zinc-800/40 border-zinc-800/70 transition-colors group"
-                      onClick={() => setSelectedFinding(finding)}
+                      onClick={() => handleSelectFinding(finding)}
                     >
                       <TableCell>
                         {getVerdictBadge(finding.verdict, finding.status)}
@@ -724,7 +750,7 @@ export function FindingsTab({
                             className="h-7 text-xs px-2 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
                             onClick={(e) => {
                               e.stopPropagation()
-                              setSelectedFinding(finding)
+                              handleSelectFinding(finding)
                             }}
                           >
                             <Eye className="size-3.5 mr-1" />
@@ -800,7 +826,7 @@ export function FindingsTab({
       </Card>
 
       {/* Finding Inspector Sheet / Drawer */}
-      <Sheet open={!!selectedFinding} onOpenChange={(open) => !open && setSelectedFinding(null)}>
+      <Sheet open={!!selectedFinding} onOpenChange={(open) => !open && handleSelectFinding(null)}>
         <SheetContent className="w-full sm:max-w-[640px] md:max-w-[720px] lg:max-w-[780px] p-0 bg-zinc-950 border-zinc-800 shadow-2xl flex flex-col h-full">
           {selectedFinding && (
             <div className="flex flex-col h-full min-h-0">
@@ -1132,7 +1158,7 @@ export function FindingsTab({
                     disabled={currentRole === 'Viewer'}
                     onClick={() => {
                       onOpenAiPatchModal(selectedFinding)
-                      setSelectedFinding(null)
+                      handleSelectFinding(null)
                     }}
                     className="font-semibold shadow-md bg-primary text-primary-foreground hover:bg-primary/90 shrink-0 flex items-center gap-1.5"
                   >
