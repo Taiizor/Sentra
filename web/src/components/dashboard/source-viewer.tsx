@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { SurgicalDiffView } from '@/components/dashboard/surgical-diff-view'
 import type { TaintStep } from '@/types/sentra'
 
 interface SourceViewerProps {
@@ -182,15 +183,17 @@ export function SourceViewer({
           </div>
         ) : (
           /* Fallback if file not on disk */
-          <div className="flex flex-col gap-2 p-3 text-xs text-zinc-400">
-            <div className="flex items-center gap-1.5 text-zinc-500 text-[11px]">
-              <AlertCircle className="size-3.5" />
-              <span>{error || 'Local host file not available'} — Showing verified AST taint trace:</span>
+          <div className="flex flex-col gap-2.5 p-3 text-xs text-zinc-400">
+            <div className="flex items-center gap-1.5 text-zinc-400 text-[11px]">
+              <AlertCircle className="size-3.5 text-amber-400" />
+              <span>{error || 'Target file is in an isolated container/sandbox'} — Verified AST Remediation Diff:</span>
             </div>
             {fallbackSnippet ? (
-              <pre className="p-3 bg-black/80 text-emerald-400 rounded-md border border-zinc-800 whitespace-pre-wrap font-mono text-xs">
-                {fallbackSnippet}
-              </pre>
+              <SurgicalDiffView
+                diff={fallbackSnippet}
+                filePath={filePath}
+                title={`Verified Remediation (${filePath.split('/').pop()})`}
+              />
             ) : (
               <div className="p-4 text-center text-zinc-600">No snippet preview available.</div>
             )}
