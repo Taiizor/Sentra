@@ -1,16 +1,9 @@
 import { useState } from 'react'
 import {
-  LayoutDashboard,
-  AlertTriangle,
-  CheckCircle2,
-  Brain,
-  History,
-  Shield,
   FileDown,
+  Shield,
 } from 'lucide-react'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
   DialogContent,
@@ -20,11 +13,16 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 
+import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
+import { CommandPalette } from '@/components/layout/command-palette'
 import { OverviewTab } from '@/components/dashboard/overview-tab'
+import { LiveScannerStudio } from '@/components/dashboard/live-scanner-studio'
 import { FindingsTab } from '@/components/dashboard/findings-tab'
 import { RemediationTab } from '@/components/dashboard/remediation-tab'
+import { ThreatIntelTab } from '@/components/dashboard/threat-intel-tab'
 import { ResearchTab } from '@/components/dashboard/research-tab'
+import { WorkerFleetTab } from '@/components/dashboard/worker-fleet-tab'
 import { AuditTab } from '@/components/dashboard/audit-tab'
 import { ScannerConsole } from '@/components/dashboard/scanner-console'
 
@@ -32,18 +30,22 @@ import {
   INITIAL_AUDIT_LOGS,
   INITIAL_CAMPAIGNS,
   INITIAL_FINDINGS,
+  INITIAL_OSV_ADVISORIES,
   INITIAL_OVERVIEW,
   INITIAL_PATCHES,
+  INITIAL_SECURITY_TRENDS,
   INITIAL_SESSIONS,
+  INITIAL_WORKERS,
 } from '@/lib/dashboard-store'
 import { generateSarifJson } from '@/lib/sarif-export'
-import type { TenantId, UserRole } from '@/types/sentra'
+import type { FindingView, TenantId, UserRole } from '@/types/sentra'
 
 export function App() {
   const [currentTenant, setCurrentTenant] = useState<TenantId>('sentra-internal')
   const [currentRole, setCurrentRole] = useState<UserRole>('Operator')
   const [activeTab, setActiveTab] = useState<string>('overview')
   const [isConsoleOpen, setIsConsoleOpen] = useState<boolean>(false)
+  const [isCommandOpen, setIsCommandOpen] = useState<boolean>(false)
   const [sarifModalContent, setSarifModalContent] = useState<string | null>(null)
 
   const [findings, setFindings] = useState(INITIAL_FINDINGS)
@@ -52,6 +54,32 @@ export function App() {
   const [campaigns] = useState(INITIAL_CAMPAIGNS)
   const [auditLogs, setAuditLogs] = useState(INITIAL_AUDIT_LOGS)
   const [overview, setOverview] = useState(INITIAL_OVERVIEW)
+  const [workers] = useState(INITIAL_WORKERS)
+  const [osvAdvisories, setOsvAdvisories] = useState(INITIAL_OSV_ADVISORIES)
+  const [trends] = useState(INITIAL_SECURITY_TRENDS)
+
+  function getTabTitle(tab: string): string {
+    switch (tab) {
+      case 'overview':
+        return 'Executive Threat Posture & Overview'
+      case 'studio':
+        return 'Live SAST & Semantic Taint Analysis Studio'
+      case 'findings':
+        return 'Vulnerability Findings & Taint Flow Call Graphs'
+      case 'remediation':
+        return 'Automated Remediation & Three-Tier Verified Patches'
+      case 'intel':
+        return 'Universal OSV Threat Intelligence & Advisory Mirror'
+      case 'research':
+        return 'Deep Research Campaigns & Coverage Ledger'
+      case 'fleet':
+        return 'Remote-Worker Fleet Coordinator & Sandboxes'
+      case 'audit':
+        return 'Tamper-Resistant Immutable Audit Trail'
+      default:
+        return 'Security Operations Dashboard'
+    }
+  }
 
   function handleTenantChange(newTenant: TenantId) {
     setCurrentTenant(newTenant)
@@ -83,6 +111,33 @@ export function App() {
     URL.revokeObjectURL(url)
   }
 
+  function handleAddFindingFromStudio(newFinding: FindingView) {
+    setFindings((prev) => [newFinding, ...prev])
+    setOverview((prev) => ({
+      ...prev,
+      criticalFindings:
+        newFinding.severity === 'Critical' ? prev.criticalFindings + 1 : prev.criticalFindings,
+      highFindings: newFinding.severity === 'High' ? prev.highFindings + 1 : prev.highFindings,
+      auditEventCount: prev.auditEventCount + 1,
+    }))
+
+    setAuditLogs((prev) => [
+      {
+        eventId: `evt-${Date.now().toString().slice(-4)}`,
+        tenantId: currentTenant,
+        sequenceNumber: prev.length + 1,
+        actor: `operator-${currentRole.toLowerCase()}`,
+        action: 'studio_finding_admitted',
+        details: `Admitted finding ${newFinding.findingId} (${newFinding.ruleId}) into workspace catalog`,
+        cryptoHash: `sha256:${Date.now().toString(16)}...`,
+        timestamp: new Date().toISOString(),
+      },
+      ...prev,
+    ])
+
+    setActiveTab('findings')
+  }
+
   function handleProposePatch(findingId: string) {
     const finding = findings.find((f) => f.findingId === findingId)
     if (!finding) return
@@ -100,6 +155,8 @@ export function App() {
       attemptCount: 1,
       branchName: `sentra/patch/${finding.ruleId.toLowerCase()}-${newBundleId}`,
       ghPrCommand: `gh pr create --draft --title "[Security] Remediate ${finding.title}" --body "Automated Sentra Three-Tier Verified Patch" --base main --head sentra/patch/${finding.ruleId.toLowerCase()}-${newBundleId}`,
+      originalSnippet: `// Vulnerable unparameterized call\nlet res = execute_untrusted(input);`,
+      patchedSnippet: `// Parameterized safe call\nlet res = execute_parameterized(&safe_query, &[&input]);`,
       diff: `--- a/${finding.targetLocation}\n+++ b/${finding.targetLocation}\n@@ -${finding.startLine},3 +${finding.startLine},3 @@\n-// Potentially vulnerable code pattern\n+// Remediated with safe parameterized interface\n`,
       createdAt: new Date().toISOString(),
     }
@@ -119,12 +176,33 @@ export function App() {
         actor: `operator-${currentRole.toLowerCase()}`,
         action: 'patch_proposed_and_verified',
         details: `Three-tier verified patch generated for ${finding.findingId} (${newBundleId})`,
+        cryptoHash: `sha256:${Date.now().toString(16)}...`,
         timestamp: new Date().toISOString(),
       },
       ...prev,
     ])
 
     setActiveTab('remediation')
+  }
+
+  function handleSyncAdvisories() {
+    setAuditLogs((prev) => [
+      {
+        eventId: `evt-${Date.now().toString().slice(-4)}`,
+        tenantId: currentTenant,
+        sequenceNumber: prev.length + 1,
+        actor: `operator-${currentRole.toLowerCase()}`,
+        action: 'osv_mirror_synchronized',
+        details: 'Synchronized universal OSV v1.6 advisory feed (RustSec, Google OSV, GHSA)',
+        cryptoHash: `sha256:${Date.now().toString(16)}...`,
+        timestamp: new Date().toISOString(),
+      },
+      ...prev,
+    ])
+    setOverview((prev) => ({
+      ...prev,
+      auditEventCount: prev.auditEventCount + 1,
+    }))
   }
 
   function handleTriggerScanAction(action: string, workspace: string) {
@@ -136,6 +214,7 @@ export function App() {
         actor: `operator-${currentRole.toLowerCase()}`,
         action: `${action}_executed`,
         details: `Dispatched 'sentra ${action}' on workspace ${workspace}`,
+        cryptoHash: `sha256:${Date.now().toString(16)}...`,
         timestamp: new Date().toISOString(),
       },
       ...prev,
@@ -148,132 +227,143 @@ export function App() {
 
   return (
     <TooltipProvider>
-      <div className="min-h-screen bg-background text-foreground flex flex-col antialiased">
-        {/* Global Header */}
-        <Header
-          currentTenant={currentTenant}
-          onTenantChange={handleTenantChange}
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex antialiased selection:bg-primary/30 selection:text-white">
+        {/* Enterprise Sidebar */}
+        <Sidebar
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          findingCount={findings.length}
+          patchCount={patches.length}
+          auditCount={auditLogs.length}
           currentRole={currentRole}
-          onRoleChange={setCurrentRole}
-          onExportSarif={handleExportSarif}
-          onToggleConsole={() => setIsConsoleOpen((v) => !v)}
-          isConsoleOpen={isConsoleOpen}
+          currentTenant={currentTenant}
         />
 
-        {/* Main Body */}
-        <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col gap-6">
-          {/* Collapsible Scanner CLI Console */}
-          {isConsoleOpen && (
-            <ScannerConsole
-              currentRole={currentRole}
-              onTriggerScanAction={handleTriggerScanAction}
-            />
-          )}
+        {/* Main Content Area */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Top Header */}
+          <Header
+            currentTenant={currentTenant}
+            onTenantChange={handleTenantChange}
+            currentRole={currentRole}
+            onRoleChange={setCurrentRole}
+            onExportSarif={handleExportSarif}
+            onToggleConsole={() => setIsConsoleOpen((v) => !v)}
+            onOpenCommandPalette={() => setIsCommandOpen(true)}
+            onJumpToStudio={() => setActiveTab('studio')}
+            isConsoleOpen={isConsoleOpen}
+            activeTabTitle={getTabTitle(activeTab)}
+          />
 
-          {/* Navigation Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col gap-6">
-            <div className="border-b pb-1">
-              <TabsList className="h-10 bg-muted/60 p-1">
-                <TabsTrigger value="overview" className="text-xs flex items-center gap-1.5 px-3">
-                  <LayoutDashboard className="size-3.5" />
-                  Overview
-                </TabsTrigger>
-                <TabsTrigger value="findings" className="text-xs flex items-center gap-1.5 px-3">
-                  <AlertTriangle className="size-3.5" />
-                  Findings
-                  <Badge variant="secondary" className="text-[10px] h-4 px-1 ml-1 font-mono">
-                    {findings.length}
-                  </Badge>
-                </TabsTrigger>
-                <TabsTrigger value="remediation" className="text-xs flex items-center gap-1.5 px-3">
-                  <CheckCircle2 className="size-3.5" />
-                  Remediation & Patches
-                  <Badge variant="secondary" className="text-[10px] h-4 px-1 ml-1 font-mono">
-                    {patches.length}
-                  </Badge>
-                </TabsTrigger>
-                <TabsTrigger value="research" className="text-xs flex items-center gap-1.5 px-3">
-                  <Brain className="size-3.5" />
-                  Research Campaigns
-                </TabsTrigger>
-                <TabsTrigger value="audit" className="text-xs flex items-center gap-1.5 px-3">
-                  <History className="size-3.5" />
-                  Audit Trail
-                  <Badge variant="outline" className="text-[10px] h-4 px-1 ml-1 font-mono">
-                    {auditLogs.length}
-                  </Badge>
-                </TabsTrigger>
-              </TabsList>
-            </div>
+          {/* Main Body */}
+          <main className="flex-1 p-6 flex flex-col gap-6 max-w-[1600px] w-full mx-auto">
+            {/* Collapsible Scanner CLI Console */}
+            {isConsoleOpen && (
+              <ScannerConsole
+                currentRole={currentRole}
+                onTriggerScanAction={handleTriggerScanAction}
+              />
+            )}
 
-            {/* Tab Panes */}
-            <TabsContent value="overview">
+            {/* Active View Content */}
+            {activeTab === 'overview' && (
               <OverviewTab
                 overview={overview}
                 sessions={sessions}
+                trends={trends}
                 onSelectTab={setActiveTab}
               />
-            </TabsContent>
+            )}
 
-            <TabsContent value="findings">
+            {activeTab === 'studio' && (
+              <LiveScannerStudio
+                currentRole={currentRole}
+                onAddFinding={handleAddFindingFromStudio}
+              />
+            )}
+
+            {activeTab === 'findings' && (
               <FindingsTab
                 findings={findings}
                 currentRole={currentRole}
                 onProposePatch={handleProposePatch}
               />
-            </TabsContent>
+            )}
 
-            <TabsContent value="remediation">
+            {activeTab === 'remediation' && (
               <RemediationTab patches={patches} currentRole={currentRole} />
-            </TabsContent>
+            )}
 
-            <TabsContent value="research">
+            {activeTab === 'intel' && (
+              <ThreatIntelTab
+                advisories={osvAdvisories}
+                currentRole={currentRole}
+                onSyncAdvisories={handleSyncAdvisories}
+              />
+            )}
+
+            {activeTab === 'research' && (
               <ResearchTab campaigns={campaigns} />
-            </TabsContent>
+            )}
 
-            <TabsContent value="audit">
+            {activeTab === 'fleet' && (
+              <WorkerFleetTab workers={workers} />
+            )}
+
+            {activeTab === 'audit' && (
               <AuditTab auditLogs={auditLogs} />
-            </TabsContent>
-          </Tabs>
-        </main>
+            )}
+          </main>
 
-        {/* Footer */}
-        <footer className="border-t py-4 px-6 text-xs text-muted-foreground bg-card/30">
-          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <Shield className="size-4 text-primary" />
-              <span>Sentra Security Platform • RFC 2104 / OASIS SARIF v2.1.0 Compliant</span>
+          {/* Footer */}
+          <footer className="border-t border-zinc-850 py-3 px-6 text-xs text-zinc-500 bg-zinc-950/60 mt-auto">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <Shield className="size-3.5 text-primary" />
+                <span>Sentra Security Platform • RFC 2104 / OASIS SARIF v2.1.0 Compliant</span>
+              </div>
+              <div className="flex items-center gap-4 text-[11px] font-mono">
+                <span>Fail-Closed Host Boundary</span>
+                <span>Zero-Egress Isolation</span>
+                <span>Human-in-the-Loop Governance</span>
+              </div>
             </div>
-            <div className="flex items-center gap-4">
-              <span>Fail-Closed Host Boundary</span>
-              <span>Zero-Egress Isolation</span>
-              <span>Human-in-the-Loop Governance</span>
-            </div>
-          </div>
-        </footer>
+          </footer>
+        </div>
+
+        {/* Global Command Palette (⌘K) */}
+        <CommandPalette
+          open={isCommandOpen}
+          onOpenChange={setIsCommandOpen}
+          onSelectTab={setActiveTab}
+          onExportSarif={handleExportSarif}
+          onToggleConsole={() => setIsConsoleOpen((v) => !v)}
+          findings={findings}
+        />
 
         {/* SARIF Export Dialog */}
         <Dialog open={!!sarifModalContent} onOpenChange={(open) => !open && setSarifModalContent(null)}>
-          <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col bg-zinc-950 border-zinc-800">
             <DialogHeader>
-              <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <DialogTitle className="text-base font-bold flex items-center gap-2 text-zinc-100">
                 <FileDown className="size-4 text-primary" />
                 OASIS SARIF v2.1.0 Security Report
               </DialogTitle>
-              <DialogDescription className="text-xs">
+              <DialogDescription className="text-xs text-zinc-400">
                 Exportable directly to GitHub Advanced Security Code Scanning, GitLab SAST, or VS Code.
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto bg-muted/60 p-3 rounded-md border font-mono text-xs my-2">
+            <div className="flex-1 overflow-y-auto bg-black/60 p-3 rounded-md border border-zinc-800 font-mono text-xs my-2 text-zinc-300">
               <pre className="whitespace-pre-wrap">{sarifModalContent}</pre>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setSarifModalContent(null)}
+                className="border-zinc-800"
               >
                 Close
               </Button>

@@ -41,6 +41,8 @@ export interface FindingView {
   startLine: number
   endLine: number
   description: string
+  cvssScore: number
+  remediationGuidance: string
   taintTrace?: TaintStep[]
   createdAt: string
 }
@@ -56,6 +58,8 @@ export interface PatchBundleView {
   isVerified: boolean
   attemptCount: number
   diff: string
+  originalSnippet: string
+  patchedSnippet: string
   branchName: string
   ghPrCommand: string
   createdAt: string
@@ -76,6 +80,8 @@ export interface CampaignLedgerView {
   campaignId: string
   tenantId: TenantId
   title: string
+  targetArchitecture: string
+  fuzzEngine: string
   maxBudgetMicroUsd: number
   spentBudgetMicroUsd: number
   status: 'ACTIVE' | 'CONCLUDED' | 'PAUSED'
@@ -91,12 +97,44 @@ export interface AuditLogView {
   actor: string
   action: string
   details: string
+  cryptoHash: string
   timestamp: string
+}
+
+export interface WorkerNodeView {
+  workerId: string
+  hostname: string
+  architecture: 'x86_64-linux' | 'x86_64-windows'
+  state: 'AVAILABLE' | 'LEASED' | 'QUARANTINED' | 'RESETTING'
+  tenantLease: TenantId | null
+  cpuUsagePercent: number
+  memoryUsageMb: number
+  egressPolicy: 'StrictlyDenied'
+  activeJob: string | null
+}
+
+export interface OsvAdvisoryView {
+  id: string
+  package: string
+  ecosystem: 'crates.io' | 'npm' | 'PyPI' | 'Go'
+  vulnerability: string
+  affectedRange: string
+  fixedVersion: string
+  severity: Severity
+  publishedAt: string
+}
+
+export interface SecurityTrendPoint {
+  date: string
+  detected: number
+  remediated: number
+  activeCritical: number
 }
 
 export interface DashboardOverview {
   tenantId: TenantId
   workspaceName: string
+  securityScore: number
   totalSessions: number
   activeSessions: number
   criticalFindings: number
