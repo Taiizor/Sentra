@@ -816,7 +816,7 @@ const server = Bun.serve({
           finding: any;
           workspace?: string;
           providerConfig?: {
-            provider?: "local" | "openai" | "anthropic" | "gemini";
+            provider?: "local" | "openai" | "anthropic" | "gemini" | "deepseek" | "xai" | "openrouter";
             endpoint?: string;
             apiKey?: string;
             model?: string;
@@ -972,6 +972,118 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
                 branchName = parsed.branchName;
                 commitMessage = parsed.commitMessage;
                 modelUsed = `anthropic:${modelName}`;
+                externalSuccess = true;
+              }
+            } else if (providerCfg.provider === "deepseek") {
+              const ep = providerCfg.endpoint || "https://api.deepseek.com/chat/completions";
+              const modelName = providerCfg.model || "deepseek-chat";
+              const resp = await fetch(ep, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${providerCfg.apiKey}`,
+                },
+                body: JSON.stringify({
+                  model: modelName,
+                  messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: `Generate verified patch for: ${JSON.stringify(finding)}` },
+                  ],
+                  temperature: 0.1,
+                  response_format: { type: "json_object" },
+                }),
+              });
+
+              if (resp.ok) {
+                const jsonResp: any = await resp.json();
+                const messageObj = jsonResp.choices?.[0]?.message;
+                const contentText = messageObj?.content?.trim() || "";
+                const reasoning = messageObj?.reasoning_content;
+                const cleanJson = contentText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+                const parsed = JSON.parse(cleanJson);
+                rootCauseAnalysis = parsed.rootCauseAnalysis;
+                reproductionTestCode = parsed.reproductionTestCode;
+                originalSnippet = parsed.originalSnippet;
+                patchedSnippet = parsed.patchedSnippet;
+                diff = parsed.diff;
+                regressionOracleProof = parsed.regressionOracleProof + (reasoning ? `\n\nDeepSeek R1 Reasoning Trace:\n${reasoning}` : "");
+                branchName = parsed.branchName;
+                commitMessage = parsed.commitMessage;
+                modelUsed = `deepseek:${modelName}`;
+                externalSuccess = true;
+              }
+            } else if (providerCfg.provider === "xai") {
+              const ep = providerCfg.endpoint || "https://api.x.ai/v1/chat/completions";
+              const modelName = providerCfg.model || "grok-2-latest";
+              const resp = await fetch(ep, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${providerCfg.apiKey}`,
+                },
+                body: JSON.stringify({
+                  model: modelName,
+                  messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: `Generate verified patch for: ${JSON.stringify(finding)}` },
+                  ],
+                  temperature: 0.1,
+                  response_format: { type: "json_object" },
+                }),
+              });
+
+              if (resp.ok) {
+                const jsonResp: any = await resp.json();
+                const contentText = jsonResp.choices?.[0]?.message?.content?.trim() || "";
+                const cleanJson = contentText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+                const parsed = JSON.parse(cleanJson);
+                rootCauseAnalysis = parsed.rootCauseAnalysis;
+                reproductionTestCode = parsed.reproductionTestCode;
+                originalSnippet = parsed.originalSnippet;
+                patchedSnippet = parsed.patchedSnippet;
+                diff = parsed.diff;
+                regressionOracleProof = parsed.regressionOracleProof;
+                branchName = parsed.branchName;
+                commitMessage = parsed.commitMessage;
+                modelUsed = `xai:${modelName}`;
+                externalSuccess = true;
+              }
+            } else if (providerCfg.provider === "openrouter") {
+              const ep = providerCfg.endpoint || "https://openrouter.ai/api/v1/chat/completions";
+              const modelName = providerCfg.model || "deepseek/deepseek-r1";
+              const resp = await fetch(ep, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${providerCfg.apiKey}`,
+                  "HTTP-Referer": "https://sentra.security",
+                  "X-Title": "Sentra Security Platform",
+                },
+                body: JSON.stringify({
+                  model: modelName,
+                  messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: `Generate verified patch for: ${JSON.stringify(finding)}` },
+                  ],
+                  temperature: 0.1,
+                  response_format: { type: "json_object" },
+                }),
+              });
+
+              if (resp.ok) {
+                const jsonResp: any = await resp.json();
+                const contentText = jsonResp.choices?.[0]?.message?.content?.trim() || "";
+                const cleanJson = contentText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+                const parsed = JSON.parse(cleanJson);
+                rootCauseAnalysis = parsed.rootCauseAnalysis;
+                reproductionTestCode = parsed.reproductionTestCode;
+                originalSnippet = parsed.originalSnippet;
+                patchedSnippet = parsed.patchedSnippet;
+                diff = parsed.diff;
+                regressionOracleProof = parsed.regressionOracleProof;
+                branchName = parsed.branchName;
+                commitMessage = parsed.commitMessage;
+                modelUsed = `openrouter:${modelName}`;
                 externalSuccess = true;
               }
             }

@@ -44,7 +44,7 @@ interface AiPatchModalProps {
   onNavigateToPatches: () => void
 }
 
-type ProviderKind = 'builtin' | 'local' | 'openai' | 'anthropic'
+type ProviderKind = 'builtin' | 'local' | 'openai' | 'anthropic' | 'gemini' | 'deepseek' | 'xai' | 'openrouter'
 
 export function AiPatchModal({
   open,
@@ -88,7 +88,7 @@ export function AiPatchModal({
         provider === 'builtin'
           ? undefined
           : {
-              provider: provider === 'local' ? ('local' as const) : provider === 'openai' ? ('openai' as const) : ('anthropic' as const),
+              provider,
               endpoint: provider === 'local' ? localEndpoint : undefined,
               apiKey: apiKey.trim() || undefined,
               model: modelName.trim() || undefined,
@@ -250,10 +250,14 @@ export function AiPatchModal({
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {[
-                { id: 'builtin', label: 'Built-in Synthesizer', desc: 'Zero-latency safe AST' },
+                { id: 'builtin', label: 'Built-in Synthesizer', desc: 'Zero-latency offline AST' },
+                { id: 'deepseek', label: 'DeepSeek V3 / R1', desc: 'api.deepseek.com' },
+                { id: 'xai', label: 'xAI Grok', desc: 'api.x.ai (Grok 2)' },
+                { id: 'openrouter', label: 'OpenRouter / OpenCode', desc: '100+ models gateway' },
+                { id: 'gemini', label: 'Google Gemini', desc: 'gemini-2.5-pro / flash' },
+                { id: 'anthropic', label: 'Anthropic Claude', desc: 'Claude 3.7 Sonnet' },
+                { id: 'openai', label: 'OpenAI', desc: 'GPT-4o / o1' },
                 { id: 'local', label: 'Local Ollama / vLLM', desc: 'http://localhost:11434' },
-                { id: 'openai', label: 'OpenAI GPT-4o', desc: 'api.openai.com' },
-                { id: 'anthropic', label: 'Anthropic Claude', desc: 'api.anthropic.com' },
               ].map((p) => (
                 <button
                   key={p.id}
