@@ -139,9 +139,17 @@ Aggregate digest: sha256:7f83b165...`
             <span className="text-xs text-muted-foreground font-medium">Operation Command:</span>
             <Select value={selectedAction} onValueChange={(val) => setSelectedAction(val ?? 'scan')}>
               <SelectTrigger className="h-8 text-xs w-full">
-                <SelectValue placeholder="Action" />
+                <SelectValue placeholder="Action">
+                  {(val: string | null) => {
+                    if (val === 'scan') return 'sentra scan (SAST & Taint)'
+                    if (val === 'audit') return 'sentra audit (Lockfile Audit)'
+                    if (val === 'codeql') return 'sentra codeql (Workspace Probe)'
+                    if (val === 'diff') return 'sentra diff (Snapshot Diff)'
+                    return val || 'Action'
+                  }}
+                </SelectValue>
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="min-w-[340px]">
                 <SelectGroup>
                   <SelectItem value="scan">sentra scan (SAST & Taint Analysis)</SelectItem>
                   <SelectItem value="audit">sentra audit (Multi-Lockfile Audit)</SelectItem>

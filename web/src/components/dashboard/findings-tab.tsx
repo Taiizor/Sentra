@@ -447,7 +447,15 @@ export function FindingsTab({
               }}
             >
               <SelectTrigger className="w-[160px] h-9 text-xs bg-zinc-950/70 border-zinc-800">
-                <SelectValue placeholder="Verdict" />
+                <SelectValue placeholder="Verdict">
+                  {(val: string | null) => {
+                    if (val === 'ALL' || !val) return 'All Verdicts'
+                    if (val === 'confirmed') return 'Confirmed'
+                    if (val === 'needs_validation') return 'Needs Validation'
+                    if (val === 'rejected') return 'Rejected'
+                    return val
+                  }}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
@@ -468,7 +476,9 @@ export function FindingsTab({
               }}
             >
               <SelectTrigger className="w-[140px] h-9 text-xs bg-zinc-950/70 border-zinc-800">
-                <SelectValue placeholder="Severity" />
+                <SelectValue placeholder="Severity">
+                  {(val: string | null) => (val === 'ALL' || !val ? 'All Severities' : val)}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
@@ -490,7 +500,15 @@ export function FindingsTab({
               }}
             >
               <SelectTrigger className="w-[170px] h-9 text-xs bg-zinc-950/70 border-zinc-800">
-                <SelectValue placeholder="Reachability" />
+                <SelectValue placeholder="Reachability">
+                  {(val: string | null) => {
+                    if (val === 'ALL' || !val) return 'All Reachability'
+                    if (val === 'ReachableCallPath') return 'Reachable Call Path'
+                    if (val === 'SinkOnly') return 'Sink Only'
+                    if (val === 'Unreachable') return 'Unreachable'
+                    return val
+                  }}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>

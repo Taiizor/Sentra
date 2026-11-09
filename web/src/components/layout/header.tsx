@@ -79,10 +79,17 @@ export function Header({
                 if (val) onTenantChange(val as TenantId)
               }}
             >
-              <SelectTrigger className="w-[195px] sm:w-[210px] h-8 text-xs bg-zinc-900/80 border-zinc-800">
-                <SelectValue placeholder="Select Workspace" />
+              <SelectTrigger className="w-[210px] sm:w-[225px] h-8 text-xs bg-zinc-900/80 border-zinc-800">
+                <SelectValue placeholder="Select Workspace">
+                  {(val: string | null) => {
+                    if (val === 'sentra-internal') return 'Sentra Core (Internal)'
+                    if (val === 'tenant-alpha') return 'Tenant Alpha (Isolated)'
+                    if (val === 'acme-corp') return 'Acme Corp (Enterprise)'
+                    return val || 'Select Workspace'
+                  }}
+                </SelectValue>
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="min-w-[225px]">
                 <SelectGroup>
                   <SelectItem value="sentra-internal">Sentra Core (Internal)</SelectItem>
                   <SelectItem value="tenant-alpha">Tenant Alpha (Isolated)</SelectItem>

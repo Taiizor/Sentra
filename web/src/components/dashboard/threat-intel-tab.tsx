@@ -139,7 +139,16 @@ export function ThreatIntelTab({ advisories, currentRole, onSyncAdvisories }: Th
 
             <Select value={ecosystem} onValueChange={(val) => setEcosystem(val ?? 'ALL')}>
               <SelectTrigger className="w-[160px] h-9 text-xs">
-                <SelectValue placeholder="Ecosystem" />
+                <SelectValue placeholder="Ecosystem">
+                  {(val: string | null) => {
+                    if (val === 'ALL' || !val) return 'All Ecosystems'
+                    if (val === 'npm') return 'npm / Node.js'
+                    if (val === 'crates.io') return 'crates.io (Rust)'
+                    if (val === 'PyPI') return 'PyPI (Python)'
+                    if (val === 'Go') return 'Go Modules'
+                    return val
+                  }}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
