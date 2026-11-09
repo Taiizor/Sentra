@@ -32,6 +32,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { generateAiPatch, applyPatchToWorkspace, rollbackPatch } from '@/lib/api-client'
+import { DiffViewer } from '@/components/dashboard/diff-viewer'
 import type { FindingView, PatchBundleView, UserRole } from '@/types/sentra'
 
 interface AiPatchModalProps {
@@ -432,46 +433,14 @@ export function AiPatchModal({
                   </TabsTrigger>
                 </TabsList>
 
-                {/* Tab 1: Unified Git Diff */}
+                {/* Tab 1: High-Fidelity Unified & Split Git Diff */}
                 <TabsContent value="diff" className="pt-3 flex flex-col gap-2">
-                  <div className="flex items-center justify-between text-xs text-zinc-400">
-                    <span>Patch Target: <code className="font-mono text-zinc-200">{finding.targetLocation}</code></span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleCopy(patchResult.diff, 'diff', 'Unified Diff')}
-                      className="h-7 text-xs text-zinc-400 hover:text-zinc-100"
-                    >
-                      {copiedKey === 'diff' ? <Check className="size-3 mr-1 text-emerald-400" /> : <Copy className="size-3 mr-1" />}
-                      Copy Diff
-                    </Button>
-                  </div>
-                  <pre className="font-mono text-xs bg-zinc-950 border border-zinc-800 rounded-lg p-4 overflow-x-auto text-zinc-200 leading-relaxed max-h-[340px]">
-                    {patchResult.diff.split('\n').map((line: string, idx: number) => {
-                      if (line.startsWith('+')) {
-                        return (
-                          <div key={idx} className="text-emerald-400 bg-emerald-500/10 px-1 rounded">
-                            {line}
-                          </div>
-                        )
-                      }
-                      if (line.startsWith('-')) {
-                        return (
-                          <div key={idx} className="text-rose-400 bg-rose-500/10 px-1 rounded">
-                            {line}
-                          </div>
-                        )
-                      }
-                      if (line.startsWith('@@')) {
-                        return (
-                          <div key={idx} className="text-cyan-400 font-bold">
-                            {line}
-                          </div>
-                        )
-                      }
-                      return <div key={idx}>{line}</div>
-                    })}
-                  </pre>
+                  <DiffViewer
+                    diff={patchResult.diff}
+                    filePath={finding.targetLocation}
+                    defaultMode="split"
+                    maxHeight="max-h-[360px]"
+                  />
                 </TabsContent>
 
                 {/* Tab 2: Reproduction Test */}
