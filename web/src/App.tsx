@@ -36,6 +36,7 @@ import { AiPatchModal } from '@/components/dashboard/ai-patch-modal'
 import { AddTenantDialog } from '@/components/dashboard/add-tenant-dialog'
 import { SettingsDialog } from '@/components/dashboard/settings-dialog'
 import { generateExecutiveReportHtml } from '@/lib/executive-report'
+import { useAppRouter } from '@/lib/router'
 
 import {
   DEFAULT_TENANTS,
@@ -60,13 +61,23 @@ import {
   triggerLiveCodeQl,
   transformMatchesToFindings,
 } from '@/lib/api-client'
-import type { FindingView, TenantId, TenantView, UserRole, SessionSummaryView, AuditLogView } from '@/types/sentra'
+import type { FindingView, TenantId, TenantView, SessionSummaryView, AuditLogView } from '@/types/sentra'
 
 export function App() {
+  const {
+    activeTab,
+    currentTenant,
+    currentRole,
+    currentWorkspace,
+    selectedFindingId,
+    setTab: setActiveTab,
+    setTenant: setCurrentTenant,
+    setRole: setCurrentRole,
+    setWorkspace: setCurrentWorkspace,
+    setSelectedFindingId,
+  } = useAppRouter()
+
   const [tenants, setTenants] = useState<TenantView[]>(DEFAULT_TENANTS)
-  const [currentTenant, setCurrentTenant] = useState<TenantId>('sentra-internal')
-  const [currentRole, setCurrentRole] = useState<UserRole>('Operator')
-  const [activeTab, setActiveTab] = useState<string>('overview')
   const [isConsoleOpen, setIsConsoleOpen] = useState<boolean>(false)
   const [isCommandOpen, setIsCommandOpen] = useState<boolean>(false)
   const [isStreamModalOpen, setIsStreamModalOpen] = useState<boolean>(false)
@@ -76,7 +87,6 @@ export function App() {
   const [sarifModalContent, setSarifModalContent] = useState<string | null>(null)
 
   // Real Workspace State
-  const [currentWorkspace, setCurrentWorkspace] = useState<string>('E:/MyProject/Mix/GitHub/Sentra')
   const [backendConnected, setBackendConnected] = useState<boolean>(false)
   const [binaryPath, setBinaryPath] = useState<string>('')
   const [isScanning, setIsScanning] = useState<boolean>(false)
@@ -768,6 +778,8 @@ export function App() {
                 currentRole={currentRole}
                 onProposePatch={handleProposePatch}
                 onOpenAiPatchModal={(finding) => setSelectedPatchFinding(finding)}
+                selectedFindingId={selectedFindingId}
+                onSelectFindingId={setSelectedFindingId}
               />
             )}
 
