@@ -149,14 +149,15 @@ export function RemediationTab({ patches, currentRole }: RemediationTabProps) {
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
-                  {/* Disk Patch Application State */}
+                  {/* Disk Patch Application State (Restricted to SecurityAdmin) */}
                   {!(patchStates[patch.bundleId]?.applied || patch.isAppliedToDisk) ? (
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={patchStates[patch.bundleId]?.loading || currentRole === 'Viewer'}
+                      disabled={patchStates[patch.bundleId]?.loading || currentRole !== 'SecurityAdmin'}
                       onClick={() => handleApply(patch)}
-                      className="h-8 text-xs border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 font-semibold"
+                      className="h-8 text-xs border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 font-semibold disabled:opacity-40"
+                      title={currentRole !== 'SecurityAdmin' ? "Direct disk mutation requires SecurityAdmin role" : undefined}
                     >
                       <HardDrive className="size-3.5 mr-1" />
                       {patchStates[patch.bundleId]?.loading ? 'Applying...' : 'Apply to Workspace'}
@@ -165,9 +166,10 @@ export function RemediationTab({ patches, currentRole }: RemediationTabProps) {
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={patchStates[patch.bundleId]?.loading}
+                      disabled={patchStates[patch.bundleId]?.loading || currentRole !== 'SecurityAdmin'}
                       onClick={() => handleRollback(patch)}
-                      className="h-8 text-xs border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 font-semibold"
+                      className="h-8 text-xs border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 font-semibold disabled:opacity-40"
+                      title={currentRole !== 'SecurityAdmin' ? "Rollback requires SecurityAdmin role" : undefined}
                     >
                       <RotateCcw className="size-3.5 mr-1" />
                       {patchStates[patch.bundleId]?.loading ? 'Rolling back...' : 'Rollback Disk'}
