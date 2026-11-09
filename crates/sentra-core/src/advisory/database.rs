@@ -267,6 +267,24 @@ impl AdvisoryDatabase {
         self.advisories.push(advisory);
     }
 
+    /// Ingests advisories from an OSV JSON payload (either single record or array bundle).
+    pub fn ingest_osv_payload(&mut self, json_str: &str) -> Result<usize, AdvisoryError> {
+        let advisories = crate::advisory::osv::parse_osv_payload(json_str)?;
+        let count = advisories.len();
+        for adv in advisories {
+            self.add_advisory(adv);
+        }
+        Ok(count)
+    }
+
+    /// Ingests all `.json` OSV files from a local mirror directory.
+    pub fn ingest_osv_directory(
+        &mut self,
+        dir_path: &std::path::Path,
+    ) -> Result<usize, AdvisoryError> {
+        crate::advisory::osv::ingest_osv_directory(self, dir_path)
+    }
+
     /// Audits a slice of package records against all registered advisories (Requirement F-07).
     pub fn audit_packages(
         &self,

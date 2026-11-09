@@ -74,7 +74,7 @@ fn test_tools_list_returns_canonical_suite() {
         .expect("Expected tools array")
         .clone();
 
-    assert_eq!(tools.len(), 6);
+    assert_eq!(tools.len(), 7);
     let names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
 
     assert!(names.contains(&"sentra_discover_workspace"));
@@ -83,6 +83,7 @@ fn test_tools_list_returns_canonical_suite() {
     assert!(names.contains(&"sentra_list_findings"));
     assert!(names.contains(&"sentra_propose_patch"));
     assert!(names.contains(&"sentra_request_approval"));
+    assert!(names.contains(&"sentra_scan_code"));
 
     for tool in &tools {
         assert_eq!(tool["inputSchema"]["type"], "object");
@@ -346,4 +347,29 @@ fn test_stdio_transport_line_processing() {
     let parsed_err: serde_json::Value =
         serde_json::from_str(&parse_resp).expect("Valid JSON error");
     assert_eq!(parsed_err["error"]["code"], McpErrorCode::ParseError.code());
+}
+
+#[test]
+fn test_tool_execution_scan_code() {
+    let mut server = McpServer::new(SessionId::from_sequence(11));
+    server.initialized = true;
+
+    let call_req = McpRequest {
+        jsonrpc: "2.0".to_string(),
+        id: Some(RequestId::Number(99)),
+        method: "tools/call".to_string(),
+        params: Some(serde_json::json!({
+            "name": "sentra_scan_code",
+            "arguments": {
+                "path": "."
+            }
+        })),
+    };
+
+    let res = server.handle_request(call_req);
+    assert!(res.error.is_none());
+    let result = res.result.expect("Expected scan_code result");
+    assert!(result["files_scanned"].is_number());
+    assert!(result["signals_found"].is_number());
+    assert!(result["matches"].is_array());
 }

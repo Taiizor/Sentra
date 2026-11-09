@@ -12,6 +12,7 @@ use crate::{
     diff::{SnapshotDiff, compare_snapshots},
     manifest::{SnapshotLimits, capture_source_snapshot},
     persistence::{PersistenceError, PersistenceRepository, SqliteConnectionManager, TaskState},
+    sast::{SastReport, SastScanner},
     workspace::WorkspaceBoundary,
 };
 
@@ -140,6 +141,19 @@ pub struct LocalAuditReport {
     pub task_id: TaskId,
     /// Consolidated audit result.
     pub audit_result: AdvisoryAuditResult,
+    /// Authoritative candidate findings.
+    pub candidate_findings: Vec<Finding>,
+}
+
+/// Result returned after running a SAST and secret code scan on the workspace (Requirement F-05).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LocalScanReport {
+    /// Associated session identifier.
+    pub session_id: SessionId,
+    /// Task identifier assigned to this scan.
+    pub task_id: TaskId,
+    /// SAST report details.
+    pub sast_report: SastReport,
     /// Authoritative candidate findings.
     pub candidate_findings: Vec<Finding>,
 }
@@ -367,6 +381,177 @@ impl LocalWorkspace {
         let report = Self::audit_dependencies(workspace, database, advisory_db)?;
         crate::export::export_audit_to_sarif_json(&report, env!("CARGO_PKG_VERSION"))
             .map_err(|_| LocalWorkspaceError::new(LocalWorkspaceErrorKind::Service))
+    }
+
+    /// Scans workspace source files for secrets and code antipatterns directly without persistence.
+    pub fn scan_source_direct(workspace: &Path) -> Result<SastReport, LocalWorkspaceError> {
+        let boundary = WorkspaceBoundary::establish(
+            workspace,
+            SessionId::new(),
+            SecurityClassification::Internal,
+        )
+        .map_err(|_| LocalWorkspaceError::new(LocalWorkspaceErrorKind::Workspace))?;
+
+        let scanner = SastScanner::new();
+        scanner
+            .scan_workspace(boundary.root().canonical_path())
+            .map_err(|_| LocalWorkspaceError::new(LocalWorkspaceErrorKind::Workspace))
+    }
+
+    /// Scans workspace source files for secrets and code antipatterns with authoritative session persistence.
+    pub fn scan_source(
+        workspace: &Path,
+        database: &Path,
+    ) -> Result<LocalScanReport, LocalWorkspaceError> {
+        use LocalWorkspaceErrorKind as Kind;
+        let boundary = WorkspaceBoundary::establish(
+            workspace,
+            SessionId::new(),
+            SecurityClassification::Internal,
+        )
+        .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
+        let parent = database
+            .parent()
+            .ok_or_else(|| LocalWorkspaceError::new(Kind::StorageLocation))?;
+        let storage = WorkspaceBoundary::establish(
+            parent,
+            SessionId::new(),
+            SecurityClassification::Internal,
+        )
+        .map_err(|_| LocalWorkspaceError::new(Kind::StorageLocation))?;
+        if storage
+            .root()
+            .canonical_path()
+            .starts_with(boundary.root().canonical_path())
+        {
+            return Err(LocalWorkspaceError::new(Kind::StorageLocation));
+        }
+        let _admission = SqliteConnectionManager::local_context_admission(database)
+            .map_err(LocalWorkspaceError::persistence)?;
+        let present = exists(database)?;
+        if !present {
+            return Err(LocalWorkspaceError::new(Kind::Incomplete));
+        }
+
+        let clock = Arc::new(SystemClock::new());
+        let manager = SqliteConnectionManager::open_existing(database, &clock)
+            .map_err(LocalWorkspaceError::persistence)?;
+        let (repository, authority) = PersistenceRepository::with_authority(manager.clone());
+        let service = CoreService::new(
+            CoreServiceConfig::default(),
+            repository.clone(),
+            authority,
+            PolicyEngine::new(),
+            Arc::new(FailClosedBackend::new()),
+            clock.clone(),
+        );
+
+        let record = service
+            .local_session()
+            .map_err(LocalWorkspaceError::service)?;
+
+        if record.state == SessionState::Created {
+            return Err(LocalWorkspaceError::new(Kind::Incomplete));
+        }
+        if Path::new(&record.metadata.workspace_root) != boundary.root().canonical_path() {
+            return Err(LocalWorkspaceError::new(Kind::WorkspaceMismatch));
+        }
+
+        let scanner = SastScanner::new();
+        let sast_report = scanner
+            .scan_workspace(boundary.root().canonical_path())
+            .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
+
+        let task_id = TaskId::new();
+        let existing_tasks = repository
+            .list_tasks(record.metadata.session_id)
+            .map_err(LocalWorkspaceError::persistence)?;
+        let sequence_number = (existing_tasks.len() as u64) + 1;
+
+        let task_title = "Source Code SAST & Secret Scan".to_string();
+        repository
+            .create_task(
+                record.metadata.session_id,
+                task_id,
+                sequence_number,
+                &task_title,
+                &*clock,
+            )
+            .map_err(LocalWorkspaceError::persistence)?;
+
+        repository
+            .update_task_state(
+                task_id,
+                TaskState::Pending,
+                TaskState::InProgress,
+                EventId::new(),
+                &*clock,
+            )
+            .map_err(LocalWorkspaceError::persistence)?;
+
+        repository
+            .update_task_state(
+                task_id,
+                TaskState::InProgress,
+                TaskState::Completed,
+                EventId::new(),
+                &*clock,
+            )
+            .map_err(LocalWorkspaceError::persistence)?;
+
+        let now = clock.now();
+        let candidate_findings =
+            sast_report.to_candidate_findings(record.metadata.session_id, task_id, now);
+
+        let report = LocalScanReport {
+            session_id: record.metadata.session_id,
+            task_id,
+            sast_report,
+            candidate_findings,
+        };
+
+        match manager.shutdown() {
+            Ok(_) => Ok(report),
+            Err(error) => Err(LocalWorkspaceError::persistence(error)),
+        }
+    }
+
+    /// Exports SAST and secret findings to an OASIS SARIF v2.1.0 document.
+    pub fn export_scan_sarif(
+        workspace: &Path,
+        database: Option<&Path>,
+    ) -> Result<String, LocalWorkspaceError> {
+        let findings = if let Some(db) = database {
+            let rep = Self::scan_source(workspace, db)?;
+            rep.candidate_findings
+        } else {
+            let sast_report = Self::scan_source_direct(workspace)?;
+            let now = TimestampUtc::now();
+            sast_report.to_candidate_findings(SessionId::new(), TaskId::new(), now)
+        };
+
+        crate::export::generate_sarif_json(&findings, env!("CARGO_PKG_VERSION"))
+            .map_err(|_| LocalWorkspaceError::new(LocalWorkspaceErrorKind::Service))
+    }
+
+    /// Generates automated remediation PR proposals for all identified vulnerabilities in the workspace.
+    pub fn propose_remediations(
+        workspace: &Path,
+        database: &Path,
+        advisory_db: &AdvisoryDatabase,
+    ) -> Result<Vec<crate::remediation::RemediationPrPackage>, LocalWorkspaceError> {
+        let audit = Self::audit_dependencies(workspace, database, advisory_db)?;
+        let mut proposals = Vec::new();
+        for m in &audit.audit_result.matches {
+            proposals.push(
+                crate::remediation::RemediationPrPackage::from_advisory_match(
+                    m,
+                    "Cargo.lock",
+                    "HEAD",
+                ),
+            );
+        }
+        Ok(proposals)
     }
 
     fn run(

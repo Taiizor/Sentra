@@ -48,8 +48,12 @@ pub mod plugin;
 pub mod policy;
 /// Capability-scoped model provider abstraction and privacy-preserving gateway.
 pub mod provider;
+/// Automated remediation PR proposer and patch packaging.
+pub mod remediation;
 /// Deep security research campaigns, Scout/Analyst task fanout, and coverage ledgers.
 pub mod research;
+/// Static application security testing (SAST), secret scanning, and code pattern checks.
+pub mod sast;
 /// Integrated Core Service coordination foundation.
 pub mod service;
 /// Session lifecycle, state machine, and metadata.
@@ -63,9 +67,10 @@ pub mod workspace;
 
 pub use advisory::{
     Advisory, AdvisoryAuditResult, AdvisoryDatabase, AdvisoryError, AdvisoryErrorKind,
-    AdvisoryMatch, LockfileKind, PackageRecord, SemverVersion, VersionReq,
-    discover_workspace_lockfiles, parse_bun_lock, parse_cargo_lock, parse_deno_lock,
-    parse_lockfile_content, parse_package_lock, parse_pnpm_lock, parse_yarn_lock,
+    AdvisoryMatch, LockfileKind, OsvAffected, OsvPackage, OsvRange, OsvRecord, OsvSeverity,
+    PackageRecord, SemverVersion, VersionReq, discover_workspace_lockfiles, ingest_osv_directory,
+    parse_bun_lock, parse_cargo_lock, parse_deno_lock, parse_lockfile_content, parse_osv_payload,
+    parse_package_lock, parse_pnpm_lock, parse_yarn_lock,
 };
 pub use audit::{AuditEvent, AuditEventKind};
 pub use common::{
@@ -148,6 +153,7 @@ pub use provider::{
     Trace as ProviderTrace, Usage as ProviderUsage, Value as ProviderValue,
     VirtualControl as ProviderVirtualControl, full_model,
 };
+pub use remediation::RemediationPrPackage;
 pub use research::{
     ApproachRunMetrics, ApproachSummary, Campaign, CampaignLimits, CampaignStatus,
     CampaignStopReason, CampaignTask, CoverageLedger, CoverageSummary, CoveredRegion,
@@ -158,11 +164,15 @@ pub use research::{
     assert_peer_approval_forbidden, generate_reference_tri_method_matrix, minimize_input,
     reference_root_cause_targets,
 };
+pub use sast::{
+    BUILTIN_RULES, MAX_SCANNABLE_FILE_BYTES, RuleCategory, SastMatch, SastReport, SastRule,
+    SastScanner, find_rule_by_id,
+};
 pub use service::{
     AdmitResultRequest, CancellationPhase, CancellationReason, CancellationReport, CoreService,
-    CoreServiceConfig, CoreServiceHarness, LocalAuditReport, ReconciledAttempt, ServiceError,
-    ServiceErrorKind, ServicePolicyDecision, SessionResumeReport, TaskExecutionReport,
-    TaskExecutionRequest,
+    CoreServiceConfig, CoreServiceHarness, LocalAuditReport, LocalScanReport, ReconciledAttempt,
+    ServiceError, ServiceErrorKind, ServicePolicyDecision, SessionResumeReport,
+    TaskExecutionReport, TaskExecutionRequest,
 };
 pub use session::{
     AssessmentCompleteness, OperatingMode, SessionMetadata, SessionState, SessionStateMachine,

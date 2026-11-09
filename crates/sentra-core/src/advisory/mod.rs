@@ -17,6 +17,7 @@ pub mod database;
 pub mod deno_lock;
 pub mod error;
 pub mod multi_lock;
+pub mod osv;
 pub mod package_lock;
 pub mod pnpm_lock;
 pub mod semver;
@@ -29,6 +30,10 @@ pub use deno_lock::parse_deno_lock;
 pub use error::{AdvisoryError, AdvisoryErrorKind};
 pub use multi_lock::{
     LockfileKind, discover_workspace_lockfiles, parse_lockfile_content, split_package_specifier,
+};
+pub use osv::{
+    OsvAffected, OsvPackage, OsvRange, OsvRecord, OsvSeverity, ingest_osv_directory,
+    parse_osv_payload,
 };
 pub use package_lock::parse_package_lock;
 pub use pnpm_lock::parse_pnpm_lock;

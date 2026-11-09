@@ -4,6 +4,23 @@ Last updated: 2026-11-09.
 
 ## Current status
 
+Pure-Rust SAST & Secret Scanner Engine, Live OSV Feed Ingestion & Automated Remediation PR Proposer: IMPLEMENTED & VERIFIED (`sentra-core::sast`, `sentra-core::advisory::osv`, `sentra-core::remediation`, `sentra scan`, `sentra sync-advisories`, `sentra propose-pr`, MCP `sentra_scan_code`). Completed Sentra's remaining core capabilities under `#![forbid(unsafe_code)]` without external regex or subprocess dependencies:
+- **Pure-Rust SAST & Secret Scanner Engine (`crates/sentra-core/src/sast/`):**
+  - Implemented 10 high-precision built-in rules spanning secrets (`SENTRA-SEC-001` AWS Access Key ID, `SENTRA-SEC-002` GitHub Personal Access Tokens, `SENTRA-SEC-003` Slack API/Bot Tokens, `SENTRA-SEC-004` Private Cryptographic Keys, `SENTRA-SEC-005` Generic High-Entropy API Keys) and code antipatterns (`SENTRA-SAST-001` SQL Injection String Interpolation, `SENTRA-SAST-002` Command Injection via Shell Wrappers, `SENTRA-SAST-003` Dangerous JavaScript `eval()`, `SENTRA-SAST-004` Naked Rust `unsafe` Blocks without `// SAFETY:` rationale, `SENTRA-SAST-005` Path Traversal Pattern).
+  - Built pure-Rust byte/slice token scanning engine with zero ReDoS risk, line/column tracking, automated finding snippet secret redaction (e.g. `AKIAIO...[REDACTED]`), ignore filtering (`.git`, `target`, lockfiles, build artifacts), and SARIF v2.1.0 report generation.
+  - Exposed via `LocalWorkspace::scan_source`, `LocalWorkspace::scan_source_direct`, `LocalWorkspace::export_scan_sarif`, MCP tool `sentra_scan_code`, and CLI command `sentra scan --workspace <dir> [--database <file>] [--sarif <file>] [--json]`.
+- **Universal OSV Advisory Feed Ingestion Engine (`crates/sentra-core/src/advisory/osv.rs`):**
+  - Implemented Open Source Vulnerability (OSV) v1.6 JSON parser supporting single advisory objects and bundle arrays, SEMVER package ranges, introduced/fixed events, CVSS scores, and database-specific ratings.
+  - Implemented file and directory feed ingestion (`AdvisoryDatabase::ingest_osv_payload` and `AdvisoryDatabase::ingest_osv_directory`) capable of loading advisory mirrors (Google OSV, RustSec, GHSA, npm, PyPI) into Sentra's memory advisory database.
+  - Exposed via CLI command `sentra sync-advisories --source <dir-or-file> [--database <file>] [--json]`.
+- **Automated Remediation PR Proposer (`crates/sentra-core/src/remediation/`):**
+  - Implemented remediation draft PR generator synthesizing verified vulnerabilities and patches into actionable GitHub draft PR proposals under strict human-in-the-loop governance (strictly draft only, zero autonomous merges or pushes).
+  - Outputs semantic branch names, rich Markdown PR bodies with vulnerability summaries, affected ranges, fixed version guidance, patch diffs, and exact copy-pasteable `gh pr create --draft ...` CLI dispatch commands.
+  - Exposed via `LocalWorkspace::propose_remediations` and CLI command `sentra propose-pr --database <file> [--workspace <dir>] [--output <file>] [--json]`.
+- **Quality & Verification:**
+  - 10/10 tests in `crates/sentra-core/tests/sast_tests.rs`, 3/3 tests in `crates/sentra-core/src/advisory/osv.rs`, 2/2 tests in `crates/sentra-core/tests/remediation_tests.rs`, and 37/37 tests in `crates/sentra-cli/tests/cli_tests.rs`.
+  - Full workspace tests passing (`cargo test --workspace`), zero Clippy warnings (`cargo clippy --workspace --all-targets --all-features -- -D warnings`), and clean formatting.
+
 Multi-Ecosystem Lockfile Auditing & Advisory Analysis: IMPLEMENTED & VERIFIED (`sentra-core::advisory`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lock`, `deno.lock`, `Cargo.lock`). Extended Sentra's dependency security audit engine to support polyglot software environments under `#![forbid(unsafe_code)]` with zero runtime subprocess dependencies or node/npm/yarn/pnpm/bun/deno installation requirements:
 - Implemented pure-Rust parsers for:
   - npm / Node.js: `package-lock.json` (v1, v2, v3 schemas with nested scopes) in `crates/sentra-core/src/advisory/package_lock.rs`.

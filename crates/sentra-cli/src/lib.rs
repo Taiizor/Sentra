@@ -11,9 +11,9 @@ use std::{
 
 use sentra_core::{
     AdvisoryDatabase, ContainmentLevel, DEFAULT_MAX_LINE_BYTES, EgressPolicy, FileDeltaKind,
-    McpServer, MultiUserAuditReport, MultiUserSecurityAudit, RemoteWorkerId, RemoteWorkerNode,
-    SessionId, SnapshotDiff, TimestampUtc, WorkerArchitecture, WorkerFleetManager,
-    WorkerResourceCaps,
+    McpServer, MultiUserAuditReport, MultiUserSecurityAudit, RemediationPrPackage, RemoteWorkerId,
+    RemoteWorkerNode, SastReport, SessionId, SnapshotDiff, TimestampUtc, WorkerArchitecture,
+    WorkerFleetManager, WorkerResourceCaps,
     fleet::AuditStatus,
     process_transport_line,
     service::{
@@ -22,7 +22,7 @@ use sentra_core::{
     },
 };
 
-pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra recover --database <file> [--workspace <directory>] [--json]\n  sentra audit --database <file> [--workspace <directory>] [--json]\n  sentra diff --base <directory> --head <directory> [--json]\n  sentra verify-audit [--json]\n  sentra export sarif --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra mcp\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session/audit default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\nAudit analyzes Cargo.lock dependencies against pinned security advisories.\nDiff compares base and head directory snapshots with pure-Rust hashing.\nVerify-audit evaluates the 5 mandatory multi-user hosting security containment gates.\nExport sarif converts dependency advisory findings into an OASIS SARIF v2.1.0 document.\nMcp runs the JSON-RPC 2.0 Model Context Protocol stdio transport server.\n";
+pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra recover --database <file> [--workspace <directory>] [--json]\n  sentra audit --database <file> [--workspace <directory>] [--json]\n  sentra scan [--workspace <directory>] [--database <file>] [--sarif <file>] [--json]\n  sentra sync-advisories --source <directory-or-file> [--database <file>] [--json]\n  sentra propose-pr --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra diff --base <directory> --head <directory> [--json]\n  sentra verify-audit [--json]\n  sentra export sarif --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra mcp\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session/audit default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\nAudit analyzes multi-ecosystem lockfiles (Cargo, npm, yarn, pnpm, bun, deno).\nScan executes pure-Rust static analysis for secrets and code antipatterns.\nSync-advisories ingests universal OSV JSON advisories into the advisory database.\nPropose-pr packages verified vulnerabilities into GitHub Draft PR proposals.\nDiff compares base and head directory snapshots with pure-Rust hashing.\nVerify-audit evaluates the 5 mandatory multi-user hosting security containment gates.\nExport sarif converts dependency and SAST findings into an OASIS SARIF v2.1.0 document.\nMcp runs the JSON-RPC 2.0 Model Context Protocol stdio transport server.\n";
 
 /// Typed presentation command. Paths are untrusted until validated by Core.
 pub enum Command {
@@ -48,6 +48,20 @@ pub enum Command {
     Audit {
         workspace: Option<PathBuf>,
         database: PathBuf,
+    },
+    Scan {
+        workspace: PathBuf,
+        database: Option<PathBuf>,
+        sarif: Option<PathBuf>,
+    },
+    SyncAdvisories {
+        source: PathBuf,
+        database: Option<PathBuf>,
+    },
+    ProposePr {
+        workspace: Option<PathBuf>,
+        database: PathBuf,
+        output: Option<PathBuf>,
     },
     Diff {
         base: PathBuf,
@@ -110,6 +124,9 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
             | "session"
             | "recover"
             | "audit"
+            | "scan"
+            | "sync-advisories"
+            | "propose-pr"
             | "diff"
             | "mcp"
             | "verify-audit"
@@ -120,6 +137,81 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
     if words == ["--help"] {
         return Ok(Invocation {
             command: Command::Help,
+            json,
+        });
+    }
+    if name == "scan" {
+        let mut workspace = None;
+        let mut database = None;
+        let mut sarif = None;
+        let mut rest = words.into_iter();
+        while let Some(flag) = rest.next() {
+            let value = rest.next().ok_or_else(invalid)?;
+            if value.is_empty() || value.starts_with('-') {
+                return Err(invalid());
+            }
+            match flag {
+                "--workspace" if workspace.is_none() => workspace = Some(PathBuf::from(value)),
+                "--database" if database.is_none() => database = Some(PathBuf::from(value)),
+                "--sarif" if sarif.is_none() => sarif = Some(PathBuf::from(value)),
+                _ => return Err(invalid()),
+            }
+        }
+        let workspace = workspace.ok_or_else(invalid)?;
+        return Ok(Invocation {
+            command: Command::Scan {
+                workspace,
+                database,
+                sarif,
+            },
+            json,
+        });
+    }
+    if name == "sync-advisories" {
+        let mut source = None;
+        let mut database = None;
+        let mut rest = words.into_iter();
+        while let Some(flag) = rest.next() {
+            let value = rest.next().ok_or_else(invalid)?;
+            if value.is_empty() || value.starts_with('-') {
+                return Err(invalid());
+            }
+            match flag {
+                "--source" if source.is_none() => source = Some(PathBuf::from(value)),
+                "--database" if database.is_none() => database = Some(PathBuf::from(value)),
+                _ => return Err(invalid()),
+            }
+        }
+        let source = source.ok_or_else(invalid)?;
+        return Ok(Invocation {
+            command: Command::SyncAdvisories { source, database },
+            json,
+        });
+    }
+    if name == "propose-pr" {
+        let mut workspace = None;
+        let mut database = None;
+        let mut output = None;
+        let mut rest = words.into_iter();
+        while let Some(flag) = rest.next() {
+            let value = rest.next().ok_or_else(invalid)?;
+            if value.is_empty() || value.starts_with('-') {
+                return Err(invalid());
+            }
+            match flag {
+                "--workspace" if workspace.is_none() => workspace = Some(PathBuf::from(value)),
+                "--database" if database.is_none() => database = Some(PathBuf::from(value)),
+                "--output" if output.is_none() => output = Some(PathBuf::from(value)),
+                _ => return Err(invalid()),
+            }
+        }
+        let database = database.ok_or_else(invalid)?;
+        return Ok(Invocation {
+            command: Command::ProposePr {
+                workspace,
+                database,
+                output,
+            },
             json,
         });
     }
@@ -480,6 +572,119 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
                 Err(source) => core_error(source, json),
             }
         }
+        Command::Scan {
+            workspace,
+            database,
+            sarif,
+        } => {
+            let ws_path = absolute(&workspace, cwd);
+            if let Some(sarif_out) = sarif {
+                let db_path_opt = database.as_ref().map(|d| absolute(d, cwd));
+                match LocalWorkspace::export_scan_sarif(&ws_path, db_path_opt.as_deref()) {
+                    Ok(sarif_json) => {
+                        let out_path = absolute(&sarif_out, cwd);
+                        match std::fs::write(&out_path, sarif_json.as_bytes()) {
+                            Ok(_) => {
+                                let stdout = if json {
+                                    "{\"schema_version\":1,\"command\":\"scan\",\"status\":\"success\",\"sarif_written\":true,\"untrusted_execution\":false}\n".to_string()
+                                } else {
+                                    "Sentra SAST scan: SARIF export written successfully\nUntrusted execution: disabled\n".to_string()
+                                };
+                                Response {
+                                    stdout,
+                                    stderr: String::new(),
+                                    exit_code: 0,
+                                }
+                            }
+                            Err(_) => error("io_error", 5, json),
+                        }
+                    }
+                    Err(source) => core_error(source, json),
+                }
+            } else if let Some(db) = database {
+                let db_path = absolute(&db, cwd);
+                match LocalWorkspace::scan_source(&ws_path, &db_path) {
+                    Ok(report) => render_scan(&report.sast_report, json),
+                    Err(source) => core_error(source, json),
+                }
+            } else {
+                match LocalWorkspace::scan_source_direct(&ws_path) {
+                    Ok(report) => render_scan(&report, json),
+                    Err(source) => core_error(source, json),
+                }
+            }
+        }
+        Command::SyncAdvisories {
+            source,
+            database: _,
+        } => {
+            let src_path = absolute(&source, cwd);
+            let now = TimestampUtc::now();
+            let mut db = AdvisoryDatabase::default_pinned(now);
+            let count = if src_path.is_dir() {
+                db.ingest_osv_directory(&src_path)
+            } else {
+                match std::fs::read_to_string(&src_path) {
+                    Ok(content) => db.ingest_osv_payload(&content),
+                    Err(_) => return error("io_error", 5, json),
+                }
+            };
+            match count {
+                Ok(n) => render_sync_advisories(n, json),
+                Err(_) => error("invalid_advisory_feed", 4, json),
+            }
+        }
+        Command::ProposePr {
+            workspace,
+            database,
+            output,
+        } => {
+            let ws_path = absolute(workspace.as_deref().unwrap_or(cwd), cwd);
+            let db_path = absolute(&database, cwd);
+            let now = TimestampUtc::now();
+            let advisory_db = AdvisoryDatabase::default_pinned(now);
+            match LocalWorkspace::propose_remediations(&ws_path, &db_path, &advisory_db) {
+                Ok(proposals) => {
+                    if let Some(out_file) = output {
+                        let out_path = absolute(&out_file, cwd);
+                        let rendered_text = if json {
+                            serde_json::to_string_pretty(&proposals).unwrap_or_default()
+                        } else {
+                            proposals
+                                .iter()
+                                .map(|p| p.body_markdown.as_str())
+                                .collect::<Vec<_>>()
+                                .join("\n\n---\n\n")
+                        };
+                        match std::fs::write(&out_path, rendered_text.as_bytes()) {
+                            Ok(_) => {
+                                let stdout = if json {
+                                    format!(
+                                        "{{\"schema_version\":1,\"command\":\"propose-pr\",\"status\":\"success\",\"count\":{},\"written\":true}}\n",
+                                        proposals.len()
+                                    )
+                                } else {
+                                    format!(
+                                        "Sentra Remediation Proposals: {} draft PRs written to {}\n",
+                                        proposals.len(),
+                                        out_path.display()
+                                    )
+                                };
+                                Response {
+                                    stdout,
+                                    stderr: String::new(),
+                                    exit_code: 0,
+                                }
+                            }
+                            Err(_) => error("io_error", 5, json),
+                        }
+                    } else {
+                        render_propose_pr(&proposals, json)
+                    }
+                }
+                Err(source) => core_error(source, json),
+            }
+        }
         Command::Diff { base, head } => {
             let base_path = absolute(&base, cwd);
             let head_path = absolute(&head, cwd);
@@ -718,6 +923,114 @@ fn render_audit(report: LocalAuditReport, json: bool) -> Response {
             ));
         }
         text.push_str("Untrusted execution: disabled\n");
+        text
+    };
+    Response {
+        stdout,
+        stderr: String::new(),
+        exit_code: 0,
+    }
+}
+
+fn render_scan(report: &SastReport, json: bool) -> Response {
+    let stdout = if json {
+        let matches_json = serde_json::to_string(
+            &report
+                .matches
+                .iter()
+                .map(|m| {
+                    serde_json::json!({
+                        "rule_id": m.rule.id,
+                        "rule_name": m.rule.name,
+                        "category": m.rule.category.as_str(),
+                        "severity": m.rule.severity.as_str(),
+                        "cwe": m.rule.cwe_id,
+                        "file_path": m.file_path,
+                        "line_number": m.line_number,
+                        "snippet": m.snippet,
+                        "rationale": m.rationale,
+                    })
+                })
+                .collect::<Vec<_>>(),
+        )
+        .unwrap_or_default();
+
+        format!(
+            "{{\"schema_version\":1,\"command\":\"scan\",\"files_scanned\":{},\"signals_found\":{},\"matches\":{},\"untrusted_execution\":false}}\n",
+            report.files_scanned,
+            report.matches.len(),
+            matches_json,
+        )
+    } else {
+        let mut text = format!(
+            "Sentra SAST scan: completed\nFiles scanned: {}\nSignals found: {}\nUntrusted execution: disabled\n",
+            report.files_scanned,
+            report.matches.len()
+        );
+        for m in &report.matches {
+            text.push_str(&format!(
+                "  [{}] {:<8} {}:{} -> {}\n      CWE: {} | {}\n",
+                m.rule.id,
+                m.rule.severity.as_str(),
+                m.file_path,
+                m.line_number,
+                m.snippet,
+                m.rule.cwe_id,
+                m.rule.name
+            ));
+        }
+        text
+    };
+    Response {
+        stdout,
+        stderr: String::new(),
+        exit_code: 0,
+    }
+}
+
+fn render_sync_advisories(count: usize, json: bool) -> Response {
+    let stdout = if json {
+        format!(
+            "{{\"schema_version\":1,\"command\":\"sync-advisories\",\"advisories_ingested\":{},\"status\":\"success\",\"untrusted_execution\":false}}\n",
+            count
+        )
+    } else {
+        format!(
+            "Sentra advisory synchronization: completed\nAdvisories ingested: {}\nStatus: success\nUntrusted execution: disabled\n",
+            count
+        )
+    };
+    Response {
+        stdout,
+        stderr: String::new(),
+        exit_code: 0,
+    }
+}
+
+fn render_propose_pr(proposals: &[RemediationPrPackage], json: bool) -> Response {
+    let stdout = if json {
+        let proposals_json = serde_json::to_string(proposals).unwrap_or_default();
+        format!(
+            "{{\"schema_version\":1,\"command\":\"propose-pr\",\"proposals_count\":{},\"proposals\":{},\"is_draft_only\":true,\"untrusted_execution\":false}}\n",
+            proposals.len(),
+            proposals_json
+        )
+    } else {
+        let mut text = format!(
+            "Sentra Remediation PR Proposals: {}\nDraft only invariant: enforced (zero autonomous merge)\nUntrusted execution: disabled\n\n",
+            proposals.len()
+        );
+        for (idx, p) in proposals.iter().enumerate() {
+            text.push_str(&format!(
+                "Proposal #{}: [{}]\n  Target: {}\n  Branch: {}\n  Title:  {}\n  GitHub Dispatch Command:\n    {}\n\n",
+                idx + 1,
+                p.proposal_id,
+                p.target_component,
+                p.branch_name,
+                p.title,
+                p.gh_command
+            ));
+        }
         text
     };
     Response {

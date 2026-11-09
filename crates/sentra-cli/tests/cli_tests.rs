@@ -970,3 +970,155 @@ checksum = "52524bb7379625ca310543f1e8f48446b1f997ca92021c152ab74507ddfc4043"
     assert_eq!(sarif.runs[0].results.len(), 1);
     assert_eq!(sarif.runs[0].results[0].rule_id, "RUSTSEC-2021-0145");
 }
+
+#[test]
+fn binary_scan_detects_secrets_and_outputs_human_and_json() {
+    let f = Fixture::new();
+
+    let sample_code = r#"
+        const AWS_KEY = "AKIAIOSFODNN7EXAMPLE";
+        function query(id) {
+            return format!("SELECT * FROM users WHERE id = '{}'", id);
+        }
+    "#;
+    fs::write(f.workspace.join("vuln.js"), sample_code).unwrap();
+
+    // Human output
+    let out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["scan", "--workspace", f.workspace.to_str().unwrap()])
+        .output()
+        .unwrap();
+
+    assert!(out.status.success());
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.contains("Sentra SAST scan: completed"));
+    assert!(stdout.contains("SENTRA-SEC-001"));
+    assert!(stdout.contains("SENTRA-SAST-001"));
+
+    // JSON output
+    let out_json = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "scan",
+            "--workspace",
+            f.workspace.to_str().unwrap(),
+            "--json",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(out_json.status.success());
+    let stdout_json = String::from_utf8(out_json.stdout).unwrap();
+    assert!(stdout_json.contains("\"command\":\"scan\""));
+    assert!(stdout_json.contains("\"signals_found\":2"));
+}
+
+#[test]
+fn binary_scan_sarif_export() {
+    let f = Fixture::new();
+
+    let sample_code = r#"
+        const API_SECRET = "sk_live_1234567890abcdefghijklmnopqrstuvwxyz";
+    "#;
+    fs::write(f.workspace.join("secret.ts"), sample_code).unwrap();
+    let sarif_path = f.workspace.parent().unwrap().join("sast-results.sarif");
+
+    let out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "scan",
+            "--workspace",
+            f.workspace.to_str().unwrap(),
+            "--sarif",
+            sarif_path.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+
+    assert!(out.status.success());
+    assert!(sarif_path.exists());
+    let content = fs::read_to_string(&sarif_path).unwrap();
+    let sarif: sentra_core::SarifLog = serde_json::from_str(&content).unwrap();
+    assert_eq!(sarif.runs[0].results.len(), 1);
+    assert_eq!(sarif.runs[0].results[0].rule_id, "SENTRA-SEC-005");
+    let _ = fs::remove_file(sarif_path);
+}
+
+#[test]
+fn binary_sync_advisories_ingests_osv_feed() {
+    let f = Fixture::new();
+
+    let osv_feed = r#"[
+        {
+            "id": "GHSA-custom-test-001",
+            "summary": "Custom test advisory",
+            "affected": [
+                {
+                    "package": { "name": "sample-lib" },
+                    "ranges": [
+                        {
+                            "type": "SEMVER",
+                            "events": [
+                                { "introduced": "0" },
+                                { "fixed": "2.0.0" }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]"#;
+    let feed_path = f.workspace.parent().unwrap().join("feed.json");
+    fs::write(&feed_path, osv_feed).unwrap();
+
+    let out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "sync-advisories",
+            "--source",
+            feed_path.to_str().unwrap(),
+            "--json",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(out.status.success());
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.contains("\"command\":\"sync-advisories\""));
+    assert!(stdout.contains("\"advisories_ingested\":1"));
+    let _ = fs::remove_file(feed_path);
+}
+
+#[test]
+fn binary_propose_pr_generates_draft_proposals() {
+    let f = Fixture::new();
+    f.init();
+
+    let pkg_lock = r#"{
+        "name": "target-app",
+        "lockfileVersion": 3,
+        "packages": {
+            "": { "name": "target-app" },
+            "node_modules/lodash": {
+                "version": "4.17.11"
+            }
+        }
+    }"#;
+    fs::write(f.workspace.join("package-lock.json"), pkg_lock).unwrap();
+
+    let out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "propose-pr",
+            "--workspace",
+            f.workspace.to_str().unwrap(),
+            "--database",
+            f.db.to_str().unwrap(),
+            "--json",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(out.status.success());
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.contains("\"command\":\"propose-pr\""));
+    assert!(stdout.contains("\"is_draft_only\":true"));
+    assert!(stdout.contains("GHSA-p6mc-m468-83gw"));
+    assert!(stdout.contains("gh pr create --draft"));
+}
