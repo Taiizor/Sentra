@@ -8,7 +8,7 @@ authors = ["Sentra Team"]
 
 [dependencies]
 # Exact cached versions approved for Increment 5.4.2; resolve/build offline.
-rusqlite = { version = "=0.32.1", default-features = false, features = ["bundled"] }
+rusqlite = { version = "=0.41.1", default-features = false, features = ["bundled"] }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.154"
 # Pure Rust cryptographic hashing approved for Increment 2.1 (REQ-F01/F02, OQ-24)
