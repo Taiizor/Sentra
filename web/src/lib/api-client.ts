@@ -516,3 +516,25 @@ export async function validateFindingsInvariants(
     return null
   }
 }
+
+export async function fetchReconTopology(): Promise<import('@/types/sentra').ReconTopologyReport | null> {
+  try {
+    const res = await fetch(`${API_BASE}/audit/recon-topology`)
+    if (!res.ok) return null
+    return await res.json()
+  } catch (err) {
+    console.error('Failed to fetch recon topology:', err)
+    return null
+  }
+}
+
+export async function runPhase1Reconnaissance(): Promise<import('@/types/sentra').Phase1ReconReport | null> {
+  try {
+    const res = await fetch(`${API_BASE}/audit/run-reconnaissance`, { method: 'POST' })
+    if (!res.ok) return null
+    return await res.json()
+  } catch (err) {
+    console.error('Failed to run Phase 1 reconnaissance:', err)
+    return null
+  }
+}
