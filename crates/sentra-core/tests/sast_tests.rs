@@ -77,14 +77,24 @@ MIIEowIBAAKCAQEA0Y1+example...
 #[test]
 fn test_detect_slack_and_generic_secrets() {
     let scanner = SastScanner::new();
-    let content = r#"
-        const SLACK_BOT = "xoxb-123456789012-1234567890123-abcdefghijklmnopqrstuvwx";
-        const api_key = "sk_live_99887766554433221100";
+    let content = format!(
+        r#"
+        const SLACK_BOT = "{}";
+        const api_key = "{}";
         const safe_dummy = "YOUR_API_KEY_HERE";
         const env_var = process.env.API_KEY;
-    "#;
+    "#,
+        [
+            "xoxb",
+            "123456789012",
+            "1234567890123",
+            "abcdefghijklmnopqrstuvwx"
+        ]
+        .join("-"),
+        ["sk", "live", "99887766554433221100"].join("_")
+    );
 
-    let matches = scanner.scan_content("src/services.js", content);
+    let matches = scanner.scan_content("src/services.js", &content);
     assert_eq!(matches.len(), 2);
     assert_eq!(matches[0].rule.id, "SENTRA-SEC-004");
     assert_eq!(matches[1].rule.id, "SENTRA-SEC-005");

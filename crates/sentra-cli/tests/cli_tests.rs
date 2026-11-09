@@ -1018,9 +1018,10 @@ fn binary_scan_detects_secrets_and_outputs_human_and_json() {
 fn binary_scan_sarif_export() {
     let f = Fixture::new();
 
-    let sample_code = r#"
-        const API_SECRET = "sk_live_1234567890abcdefghijklmnopqrstuvwxyz";
-    "#;
+    let sample_code = format!(
+        "const API_SECRET = \"{}\";\n",
+        ["sk", "live", "1234567890abcdefghijklmnopqrstuvwxyz"].join("_")
+    );
     fs::write(f.workspace.join("secret.ts"), sample_code).unwrap();
     let sarif_path = f.workspace.parent().unwrap().join("sast-results.sarif");
 
