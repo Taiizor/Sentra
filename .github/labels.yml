@@ -1,0 +1,151 @@
+# Declarative GitHub Label Configuration for Sentra
+# Managed via .github/workflows/labels-sync.yml
+
+- name: "type:bug"
+  color: "d73a4a"
+  description: "Something isn't working as expected or fails fail-closed assertions."
+
+- name: "type:feature"
+  color: "a2eeef"
+  description: "New capability, adapter, or architecture enhancement."
+
+- name: "type:security"
+  color: "ee0701"
+  description: "Security vulnerability, sandbox escape, or containment defect."
+
+- name: "type:documentation"
+  color: "0075ca"
+  description: "Improvements or additions to ADRs, specs, or user documentation."
+
+- name: "type:performance"
+  color: "d4c5f9"
+  description: "Performance, memory footprint, or execution latency improvement."
+
+- name: "type:refactor"
+  color: "cfd3d7"
+  description: "Code refactoring without changing observable behavior or boundaries."
+
+- name: "type:test"
+  color: "bfdadc"
+  description: "Adding, updating, or expanding unit, integration, or fixture tests."
+
+- name: "type:chore"
+  color: "fef2c0"
+  description: "Repository maintenance, dependencies, or toolchain updates."
+
+# Scopes
+- name: "scope:core"
+  color: "0e8a16"
+  description: "Core Rust library (crates/sentra-core: domain, boundary, persistence)."
+
+- name: "scope:cli"
+  color: "1d76db"
+  description: "Command Line Interface binary (crates/sentra-cli)."
+
+- name: "scope:web"
+  color: "5319e7"
+  description: "React 19 + Vite + Tailwind CSS + shadcn/ui web operations dashboard."
+
+- name: "scope:mcp"
+  color: "f9d0c4"
+  description: "Model Context Protocol JSON-RPC stdio server."
+
+- name: "scope:sast"
+  color: "b60205"
+  description: "Static Analysis & interprocedural taint flow tracking engine."
+
+- name: "scope:advisory"
+  color: "d93f0b"
+  description: "Multi-ecosystem lockfile auditing and OSV/RustSec advisory ingestion."
+
+- name: "scope:remediation"
+  color: "0052cc"
+  description: "Automated patch generation and draft pull request proposer."
+
+- name: "scope:fuzzing"
+  color: "fbca04"
+  description: "Dynamic fuzzing engines, ASan crash artifact analysis, and harnesses."
+
+- name: "scope:fleet"
+  color: "e99695"
+  description: "Remote worker fleet management, node lifecycle, and leasing."
+
+- name: "scope:ci"
+  color: "1f883d"
+  description: "GitHub Actions workflows, Docker test runner, and automation."
+
+- name: "scope:docs"
+  color: "0366d6"
+  description: "Architectural documentation, ADRs, and verification records."
+
+# Platforms
+- name: "platform:windows"
+  color: "0078d7"
+  description: "Specific to Windows 11 / Windows 10 MSVC environment."
+
+- name: "platform:linux"
+  color: "fcc624"
+  description: "Specific to Linux x86_64 / containerized POSIX environment."
+
+- name: "platform:macos"
+  color: "000000"
+  description: "Specific to macOS Darwin (Apple Silicon ARM64 / Intel)."
+
+# Roadmap Phases
+- name: "phase:phase1"
+  color: "c5def5"
+  description: "Phase 1: Local Foundation & Hardening."
+
+- name: "phase:phase2"
+  color: "bfdadc"
+  description: "Phase 2: Continuous Security Review Pilot."
+
+- name: "phase:phase3"
+  color: "c2e0c6"
+  description: "Phase 3: Deep Security Research Pilot."
+
+- name: "phase:phase4"
+  color: "e1bee7"
+  description: "Phase 4: Ecosystem Integration & Worker Fleet."
+
+- name: "phase:phase5"
+  color: "ffcc80"
+  description: "Phase 5: Managed Deployment & Autonomous Remediation."
+
+- name: "phase:phase6"
+  color: "ffab91"
+  description: "Phase 6: Multi-Tenant Enterprise Operations."
+
+# Severity
+- name: "severity:critical"
+  color: "b60205"
+  description: "Critical severity vulnerability or fatal breaking flaw."
+
+- name: "severity:high"
+  color: "d93f0b"
+  description: "High severity issue requiring immediate prioritization."
+
+- name: "severity:medium"
+  color: "fbca04"
+  description: "Medium severity issue."
+
+- name: "severity:low"
+  color: "0e8a16"
+  description: "Low severity or minor enhancement."
+
+# Workflow Status
+- name: "status:in-review"
+  color: "fbca04"
+  description: "Currently undergoing human-in-the-loop technical review."
+
+- name: "status:approved"
+  color: "0e8a16"
+  description: "Reviewed, verified, and approved by project owner."
+
+- name: "status:blocked"
+  color: "b60205"
+  description: "Blocked by unmet prerequisites, policy, or upstream dependencies."
+
+- name: "status:needs-triage"
+  color: "d4c5f9"
+  description: "New issue awaiting review and classification."

@@ -1,0 +1,53 @@
+name: Feature Request / Architecture Proposal
+description: Propose a new feature, adapter, capability, or architecture improvement for Sentra.
+title: "[FEAT]: "
+labels: ["type:feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please refer to our [Roadmap](https://github.com/Taiizor/Sentra/blob/develop/ROADMAP.md) and [Architecture Specifications](https://github.com/Taiizor/Sentra/tree/develop/docs) before submitting.
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Target Roadmap Phase
+      description: Which roadmap phase does this proposal align with?
+      options:
+        - "Phase 1: Local Foundation & Hardening"
+        - "Phase 2: Continuous Security Review Pilot"
+        - "Phase 3: Deep Security Research Pilot"
+        - "Phase 4: Ecosystem Integration & Worker Fleet"
+        - "Phase 5: Managed Deployment & Autonomous Remediation"
+        - "Phase 6: Multi-Tenant Enterprise Operations"
+        - "General / Cross-Cutting Improvement"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement / Motivation
+      description: Is your feature request related to a specific problem or capability gap?
+      placeholder: A clear and concise description of the problem or limitation...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution & Technical Design
+      description: Describe your proposed design, APIs, or architectural changes.
+      placeholder: Detailed technical specification, CLI interface, or safe Rust abstraction...
+    validations:
+      required: true
+  - type: textarea
+    id: security_impact
+    attributes:
+      label: Security & Containment Impact
+      description: Does this introduce any external network egress, untrusted execution, or security boundary modifications?
+      placeholder: Detail containment invariants, fail-closed behavior, and redaction policies...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Considered Alternatives
+      description: Any alternative solutions or features you considered.

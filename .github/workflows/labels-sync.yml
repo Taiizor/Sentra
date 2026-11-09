@@ -1,0 +1,31 @@
+name: Sync Repository Labels
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - '.github/labels.yml'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+concurrency:
+  group: labels-sync
+  cancel-in-progress: true
+
+jobs:
+  sync-labels:
+    name: Synchronize Declarative Labels
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Sync labels via endbug/label-sync
+        uses: endbug/label-sync@v2
+        with:
+          config-file: .github/labels.yml
+          delete-other-labels: false
