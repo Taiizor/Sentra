@@ -16,6 +16,7 @@ import {
   Key,
   ShieldAlert,
   FileText,
+  ChevronRight,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { copyText } from '@/lib/clipboard'
@@ -24,6 +25,13 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { triggerScanSnippet, transformMatchesToFindings } from '@/lib/api-client'
 import type { FindingView, UserRole } from '@/types/sentra'
 
@@ -925,6 +933,24 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
     setScanDuration(null)
   }
 
+  function handleCategoryChange(cat: PresetCategory) {
+    setActiveCategory(cat)
+    const matching = Object.values(PRESETS).filter(
+      (p) => cat === 'All' || p.category === cat
+    )
+    if (matching.length > 0 && !matching.some((m) => m.id === selectedPreset)) {
+      handleSelectPreset(matching[0].id)
+    }
+  }
+
+  function handleNextPreset() {
+    const list = visiblePresets
+    if (list.length === 0) return
+    const currentIndex = list.findIndex((p) => p.id === selectedPreset)
+    const nextIndex = (currentIndex + 1) % list.length
+    handleSelectPreset(list[nextIndex].id)
+  }
+
   function handleCopyCode() {
     copyText(sourceCode)
     setCopiedCode(true)
@@ -1065,113 +1091,137 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       {/* Studio Header Card */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-0.5">
           <div className="flex flex-wrap items-center gap-2">
             <Code2 className="size-5 text-primary" />
-            <h2 className="text-lg font-bold tracking-tight text-zinc-100">
-              Pure-Rust SAST &amp; Semantic Taint Analysis Studio
+            <h2 className="text-base sm:text-lg font-bold tracking-tight text-zinc-100">
+              SAST &amp; Semantic Taint Studio
             </h2>
-            <Badge variant="outline" className="text-xs font-mono border-zinc-700 text-zinc-300">
-              Live sentra.exe Engine Connection
+            <Badge variant="outline" className="text-[10px] font-mono border-zinc-800 text-zinc-400">
+              Live sentra.exe
             </Badge>
           </div>
           <p className="text-xs text-zinc-400">
-            Interactive playground to test Sentra&apos;s interprocedural data-flow tracking, lexical taint propagation,
-            ReDoS-proof regex tokens, and sanitizer false-positive suppression directly on real code.
+            Interactive playground for lexical taint tracking, AST data-flow analysis, and sanitizer validation.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {currentRole === 'Viewer' && (
             <span className="text-[11px] text-amber-400 font-medium mr-1 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-              Viewer mode: Analysis disabled
+              Viewer mode: Read Only
             </span>
           )}
           <Button
             variant="outline"
             size="sm"
             onClick={() => setSourceCode('')}
-            className="h-8 text-xs border-zinc-800 bg-zinc-900 hover:text-zinc-100 text-zinc-300"
+            className="h-8 text-xs border-zinc-800 bg-zinc-900/60 hover:text-zinc-100 text-zinc-300 cursor-pointer"
           >
             <RotateCcw className="size-3.5 mr-1.5" />
-            Clear Code
+            Clear
           </Button>
           <Button
             size="sm"
             disabled={isScanning || !sourceCode.trim() || currentRole === 'Viewer'}
             onClick={handleAnalyze}
-            className="h-8 text-xs font-semibold bg-primary text-primary-foreground shadow-md hover:bg-primary/90 disabled:opacity-40"
+            className="h-8 text-xs font-semibold bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 disabled:opacity-40 cursor-pointer"
             title={currentRole === 'Viewer' ? "Viewer role is read-only. Switch to Operator or Admin to execute scans." : undefined}
           >
-            <Play className="size-3.5 mr-1.5 fill-current" />
-            <span>{isScanning ? 'Executing sentra.exe...' : 'Run Engine Scan'}</span>
-            <span className="hidden sm:inline">{!isScanning ? ' (Live sentra.exe)' : ''}</span>
+            <Play className={`size-3.5 mr-1.5 fill-current ${isScanning ? 'animate-spin' : ''}`} />
+            <span>{isScanning ? 'Analyzing with sentra.exe...' : 'Run Analysis'}</span>
           </Button>
         </div>
       </div>
 
-      {/* Category Tabs & Quick Scenario Pills */}
-      <div className="flex flex-col gap-3 p-3.5 rounded-xl border border-zinc-800 bg-zinc-900/60 shadow-md">
-        {/* Category Selector */}
-        <div className="flex items-center gap-1.5 border-b border-zinc-800/80 pb-2.5 overflow-x-auto no-scrollbar max-w-full">
-          <span className="text-xs font-medium text-zinc-400 mr-2 flex items-center gap-1.5 shrink-0">
+      {/* Preset Scenario Selector Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-2.5 rounded-xl border border-zinc-800/80 bg-zinc-900/40 shadow-xs">
+        <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+          <span className="text-xs font-medium text-zinc-400 flex items-center gap-1.5 shrink-0">
             <Sparkles className="size-3.5 text-primary" />
-            Category:
+            <span>Presets:</span>
           </span>
-          {PRESET_CATEGORIES.map((cat) => {
-            const isCatActive = activeCategory === cat
-            return (
-              <Button
-                key={cat}
-                variant={isCatActive ? 'default' : 'outline'}
-                size="sm"
-                className={`h-7 text-xs rounded-full px-3 transition-all shrink-0 ${
-                  isCatActive
-                    ? 'font-bold shadow-sm'
-                    : 'bg-zinc-950/70 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                }`}
-                onClick={() => setActiveCategory(cat)}
-              >
-                {cat}
-              </Button>
-            )
-          })}
+
+          {/* Category Dropdown */}
+          <Select value={activeCategory} onValueChange={(val) => { if (val) handleCategoryChange(val as PresetCategory) }}>
+            <SelectTrigger className="h-7.5 w-[145px] sm:w-[165px] text-xs bg-zinc-950/80 border-zinc-800 text-zinc-200 font-medium">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent>
+              {PRESET_CATEGORIES.map((cat) => (
+                <SelectItem key={cat} value={cat}>
+                  {cat}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Scenario Dropdown */}
+          <Select value={selectedPreset} onValueChange={(val) => { if (val) handleSelectPreset(val) }}>
+            <SelectTrigger className="h-7.5 w-[190px] sm:w-[250px] text-xs bg-zinc-950/80 border-zinc-800 text-zinc-200 font-medium">
+              <SelectValue placeholder="Scenario">
+                {(val: string | null) => {
+                  if (!val) return 'Select Scenario'
+                  const match = PRESETS[val as keyof typeof PRESETS]
+                  return match ? match.label : val
+                }}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent className="max-h-[300px]">
+              {visiblePresets.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`size-1.5 rounded-full shrink-0 ${
+                        p.isClean
+                          ? 'bg-emerald-400'
+                          : p.severity === 'Critical'
+                            ? 'bg-rose-500'
+                            : p.severity === 'High'
+                              ? 'bg-amber-400'
+                              : 'bg-sky-400'
+                      }`}
+                    />
+                    <span className="truncate">{p.label}</span>
+                    <span className="text-[10px] text-zinc-500 font-mono ml-auto">({p.cwe})</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Next Scenario Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleNextPreset}
+            className="h-7.5 text-xs border-zinc-800 bg-zinc-950/60 hover:bg-zinc-800 text-zinc-300 px-2 cursor-pointer"
+            title="Next preset scenario"
+          >
+            <ChevronRight className="size-3.5" />
+          </Button>
         </div>
 
-        {/* Individual Scenario Buttons */}
-        <div className="flex items-center gap-2 pt-1 overflow-x-auto no-scrollbar max-w-full">
-          {visiblePresets.map((p) => {
-            const isSelected = selectedPreset === p.id
-            return (
-              <Button
-                key={p.id}
-                variant={isSelected ? 'default' : 'outline'}
-                size="sm"
-                className={`h-7 text-xs rounded-lg px-2.5 transition-all flex items-center gap-1.5 shrink-0 ${
-                  isSelected
-                    ? 'font-bold shadow-md'
-                    : 'bg-zinc-950/60 border-zinc-800 hover:border-zinc-700 text-zinc-300'
-                }`}
-                onClick={() => handleSelectPreset(p.id)}
-              >
-                <span
-                  className={`size-1.5 rounded-full ${
-                    p.isClean
-                      ? 'bg-emerald-400'
-                      : p.severity === 'Critical'
-                        ? 'bg-rose-500'
-                        : p.severity === 'High'
-                          ? 'bg-amber-400'
-                          : 'bg-sky-400'
-                  }`}
-                />
-                <span>{p.label}</span>
-              </Button>
-            )
-          })}
+        {/* Active Scenario Meta Pills */}
+        <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+          <Badge
+            variant={PRESETS[selectedPreset].isClean ? 'outline' : 'secondary'}
+            className={`text-[10px] font-mono font-semibold ${
+              PRESETS[selectedPreset].isClean
+                ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
+                : PRESETS[selectedPreset].severity === 'Critical'
+                  ? 'text-rose-400 border-rose-500/30 bg-rose-500/10'
+                  : 'text-amber-400 border-amber-500/30 bg-amber-500/10'
+            }`}
+          >
+            {PRESETS[selectedPreset].ruleId}
+          </Badge>
+          <Badge variant="outline" className="text-[10px] font-mono text-zinc-400 border-zinc-800">
+            {PRESETS[selectedPreset].language}
+          </Badge>
         </div>
       </div>
 
