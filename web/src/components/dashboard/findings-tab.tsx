@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { cn } from 'cn'
 import {
   AlertTriangle,
   GitBranch,
@@ -568,6 +569,7 @@ export function FindingsTab({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
+                    <SelectItem value="5">5</SelectItem>
                     <SelectItem value="10">10</SelectItem>
                     <SelectItem value="15">15</SelectItem>
                     <SelectItem value="25">25</SelectItem>
@@ -752,7 +754,12 @@ export function FindingsTab({
                       key={p}
                       variant={currentPage === p ? 'default' : 'outline'}
                       size="sm"
-                      className="h-8 w-8 text-xs p-0 bg-zinc-900 border-zinc-800"
+                      className={cn(
+                        "h-8 w-8 text-xs p-0 font-medium transition-colors",
+                        currentPage === p
+                          ? "bg-zinc-100 text-zinc-950 font-bold border-zinc-100 shadow-sm hover:bg-white hover:text-black"
+                          : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
+                      )}
                       onClick={() => setCurrentPage(p)}
                     >
                       {p}

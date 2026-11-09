@@ -534,9 +534,10 @@ export function AiPatchModal({
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={isApplying || currentRole === 'Viewer'}
+                    disabled={isApplying || currentRole !== 'SecurityAdmin'}
                     onClick={handleApplyToWorkspace}
-                    className="h-8 text-xs border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 font-semibold"
+                    className="h-8 text-xs border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 font-semibold disabled:opacity-40"
+                    title={currentRole !== 'SecurityAdmin' ? "Direct disk mutation requires SecurityAdmin role" : undefined}
                   >
                     <HardDrive className="size-3.5 mr-1.5" />
                     {isApplying ? 'Applying to Disk...' : 'Apply to Workspace Disk'}
@@ -545,9 +546,10 @@ export function AiPatchModal({
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={isRollingBack}
+                    disabled={isRollingBack || currentRole !== 'SecurityAdmin'}
                     onClick={handleRollback}
-                    className="h-8 text-xs border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 font-semibold"
+                    className="h-8 text-xs border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 font-semibold disabled:opacity-40"
+                    title={currentRole !== 'SecurityAdmin' ? "Rollback requires SecurityAdmin role" : undefined}
                   >
                     <RotateCcw className="size-3.5 mr-1.5" />
                     {isRollingBack ? 'Rolling Back...' : 'Rollback from Backup'}

@@ -10,6 +10,7 @@ import {
   History,
   FileDown,
   Terminal,
+  Webhook,
 } from 'lucide-react'
 import {
   CommandDialog,
@@ -147,6 +148,15 @@ export function CommandPalette({
           </CommandItem>
           <CommandItem
             onSelect={() => {
+              onSelectTab('webhooks')
+              onOpenChange(false)
+            }}
+          >
+            <Webhook data-icon="inline-start" />
+            <span>CI/CD Webhook Intakes &amp; Pipeline Automation</span>
+          </CommandItem>
+          <CommandItem
+            onSelect={() => {
               onSelectTab('audit')
               onOpenChange(false)
             }}
@@ -159,19 +169,25 @@ export function CommandPalette({
         <CommandSeparator />
 
         {/* Jump to Findings */}
-        <CommandGroup heading={`Active Security Findings (Showing top ${Math.min(15, findings.length)} of ${findings.length})`}>
-          {findings.slice(0, 15).map((finding) => (
+        <CommandGroup heading={`Active Security Findings (${findings.length} total)`}>
+          {findings.map((finding) => (
             <CommandItem
               key={finding.findingId}
+              value={`${finding.ruleId} ${finding.title} ${finding.cwe} ${finding.targetLocation || ''} ${finding.severity}`}
               onSelect={() => {
                 onSelectTab('findings')
                 onOpenChange(false)
               }}
             >
-              <AlertTriangle data-icon="inline-start" className="text-rose-400 size-3.5" />
-              <span className="truncate">
-                [{finding.ruleId}] {finding.title} ({finding.cwe})
-              </span>
+              <AlertTriangle data-icon="inline-start" className="text-rose-400 size-3.5 shrink-0" />
+              <div className="flex flex-col min-w-0">
+                <span className="truncate text-xs font-medium text-zinc-200">
+                  [{finding.ruleId}] {finding.title}
+                </span>
+                <span className="text-[10px] text-zinc-500 truncate">
+                  {finding.cwe} &bull; {finding.targetLocation}:{finding.startLine} &bull; {finding.severity}
+                </span>
+              </div>
             </CommandItem>
           ))}
         </CommandGroup>
