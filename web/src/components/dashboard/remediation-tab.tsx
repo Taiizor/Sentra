@@ -6,19 +6,19 @@ import {
   Check,
   GitPullRequestDraft,
   ShieldCheck,
-  FileCode,
-  HardDrive,
   RotateCcw,
   Download,
+  Terminal,
+  Sparkles,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { copyText } from '@/lib/clipboard'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { applyPatchToWorkspace, rollbackPatch } from '@/lib/api-client'
 import { DiffViewer } from '@/components/dashboard/diff-viewer'
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import type { PatchBundleView, UserRole } from '@/types/sentra'
 
 interface RemediationTabProps {
@@ -107,183 +107,216 @@ export function RemediationTab({ patches, currentRole }: RemediationTabProps) {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Three-Tier Invariant Header Card */}
-      <Alert>
-        <ShieldCheck className="size-5 text-primary" />
-        <AlertTitle className="text-sm font-semibold">
-          Sentra Three-Tier Verification Invariant
-        </AlertTitle>
-        <AlertDescription className="text-xs text-muted-foreground mt-1">
-          A patch candidate is never accepted based on LLM assertion alone.
-          Verification requires mathematical and experimental proof: (1) Baseline fails on unpatched code,
-          (2) Target passes on patched code, and (3) Zero regression across existing test suites.
-        </AlertDescription>
-      </Alert>
+    <div className="flex flex-col gap-4">
+      {/* Streamlined Header Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="size-5 text-emerald-400" />
+            <h2 className="text-base sm:text-lg font-bold tracking-tight text-zinc-100">
+              Automated Remediation &amp; Verified Patches
+            </h2>
+            <Badge variant="outline" className="text-[10px] font-mono border-zinc-800 text-emerald-400 bg-emerald-500/10">
+              {patches.length} Verified
+            </Badge>
+          </div>
+          <p className="text-xs text-zinc-400">
+            Dual-state oracle verified patch candidates with mathematical and regression sound execution gates.
+          </p>
+        </div>
+      </div>
 
       {/* Verified Patch Bundles */}
-      <div className="flex flex-col gap-4">
-        {patches.map((patch) => (
-          <Card key={patch.bundleId} className="border-border/80">
-            <CardHeader>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-col gap-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge variant="outline" className="font-mono text-xs">
-                      {patch.bundleId}
-                    </Badge>
-                    <Badge variant="secondary" className="text-xs flex items-center gap-1">
-                      <CheckCircle2 className="size-3 text-primary" />
-                      Verified Remediated
-                    </Badge>
-                    <span className="text-xs text-muted-foreground font-mono truncate max-w-[240px] sm:max-w-none" title={patch.branchName}>
-                      Branch: {patch.branchName}
-                    </span>
+      {patches.length === 0 ? (
+        <Card className="border-zinc-800/80 bg-zinc-900/40 shadow-xs">
+          <CardContent className="p-0">
+            <Empty className="py-12">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <ShieldCheck className="size-8 text-emerald-400" />
+                </EmptyMedia>
+                <EmptyTitle>No Pending Remediation Bundles</EmptyTitle>
+                <EmptyDescription>
+                  All confirmed findings are either clean or have not yet had a patch synthesized.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {patches.map((patch) => {
+            const isApplied = patchStates[patch.bundleId]?.applied || patch.isAppliedToDisk
+            const isLoading = patchStates[patch.bundleId]?.loading
+
+            return (
+              <Card key={patch.bundleId} className="border-zinc-800/80 bg-zinc-900/40 shadow-xs">
+                <CardHeader className="py-3 px-4 sm:px-5 border-b border-zinc-800/80 bg-zinc-950/40">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    {/* Patch Identity & Title */}
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="outline" className="font-mono text-[10px] border-zinc-800 text-zinc-400">
+                          {patch.bundleId}
+                        </Badge>
+                        <Badge variant="secondary" className="text-[10px] flex items-center gap-1 font-mono text-emerald-400 bg-emerald-500/10 border-emerald-500/20">
+                          <CheckCircle2 className="size-3 text-emerald-400" />
+                          Verified Fix
+                        </Badge>
+                        <span className="text-[11px] text-zinc-500 font-mono truncate max-w-[240px] sm:max-w-none" title={patch.branchName}>
+                          Branch: {patch.branchName}
+                        </span>
+                      </div>
+                      <CardTitle className="text-sm font-bold text-zinc-100 mt-0.5">
+                        {patch.title}
+                      </CardTitle>
+                      <CardDescription className="text-xs text-zinc-400">
+                        Linked Finding: <span className="font-mono text-zinc-300 font-medium">{patch.findingId}</span> • Verified in {patch.attemptCount} attempt(s)
+                      </CardDescription>
+                    </div>
+
+                    {/* Action Controls */}
+                    <div className="flex items-center gap-1.5 flex-wrap w-full sm:w-auto">
+                      {!isApplied ? (
+                        <Button
+                          size="sm"
+                          disabled={isLoading || currentRole !== 'SecurityAdmin'}
+                          onClick={() => handleApply(patch)}
+                          className="h-7.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs disabled:opacity-40 cursor-pointer"
+                          title={currentRole !== 'SecurityAdmin' ? "Direct workspace patch application requires SecurityAdmin role" : undefined}
+                        >
+                          <CheckCircle2 className="size-3.5 mr-1" />
+                          {isLoading ? 'Applying...' : 'Apply to Workspace'}
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={isLoading || currentRole !== 'SecurityAdmin'}
+                          onClick={() => handleRollback(patch)}
+                          className="h-7.5 text-xs border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 font-semibold disabled:opacity-40 cursor-pointer"
+                          title={currentRole !== 'SecurityAdmin' ? "Rollback requires SecurityAdmin role" : undefined}
+                        >
+                          <RotateCcw className="size-3.5 mr-1" />
+                          {isLoading ? 'Rolling back...' : 'Rollback Disk'}
+                        </Button>
+                      )}
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7.5 text-xs border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-300 cursor-pointer"
+                        onClick={() => handleDownloadPatch(patch)}
+                        title="Download unified .patch file"
+                      >
+                        <Download className="size-3.5 mr-1" />
+                        .patch
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7.5 text-xs border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-300 cursor-pointer"
+                        onClick={() => copyToClipboard(patch.ghPrCommand, patch.bundleId)}
+                        title="Copy GitHub CLI draft PR command"
+                      >
+                        {copiedId === patch.bundleId ? (
+                          <Check className="text-emerald-400 size-3.5 mr-1" />
+                        ) : (
+                          <Copy className="size-3.5 mr-1" />
+                        )}
+                        {copiedId === patch.bundleId ? 'Copied' : 'Draft PR'}
+                      </Button>
+                    </div>
                   </div>
-                  <CardTitle className="text-base font-bold mt-1">
-                    {patch.title}
-                  </CardTitle>
-                  <CardDescription className="text-xs">
-                    Linked Finding ID: <span className="font-mono font-semibold">{patch.findingId}</span> • Verified in {patch.attemptCount} attempt(s)
-                  </CardDescription>
-                </div>
+                </CardHeader>
 
-                <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
-                  {/* Disk Patch Application State (Restricted to SecurityAdmin) */}
-                  {!(patchStates[patch.bundleId]?.applied || patch.isAppliedToDisk) ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={patchStates[patch.bundleId]?.loading || currentRole !== 'SecurityAdmin'}
-                      onClick={() => handleApply(patch)}
-                      className="h-8 text-xs border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 font-semibold disabled:opacity-40"
-                      title={currentRole !== 'SecurityAdmin' ? "Direct disk mutation requires SecurityAdmin role" : undefined}
-                    >
-                      <HardDrive className="size-3.5 mr-1" />
-                      {patchStates[patch.bundleId]?.loading ? 'Applying...' : 'Apply to Workspace'}
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={patchStates[patch.bundleId]?.loading || currentRole !== 'SecurityAdmin'}
-                      onClick={() => handleRollback(patch)}
-                      className="h-8 text-xs border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 font-semibold disabled:opacity-40"
-                      title={currentRole !== 'SecurityAdmin' ? "Rollback requires SecurityAdmin role" : undefined}
-                    >
-                      <RotateCcw className="size-3.5 mr-1" />
-                      {patchStates[patch.bundleId]?.loading ? 'Rolling back...' : 'Rollback Disk'}
-                    </Button>
-                  )}
+                <CardContent className="p-4 sm:p-5 flex flex-col gap-4">
+                  {/* Three-Tier Verification Invariant Proof Strip */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-2.5 rounded-lg border border-zinc-800/80 bg-zinc-950/60 text-xs">
+                    {/* 1. Baseline Fails */}
+                    <div className="flex items-center gap-2">
+                      {patch.originalTestStatus === 'Failed' ? (
+                        <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
+                      ) : (
+                        <XCircle className="size-4 text-rose-500 shrink-0" />
+                      )}
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-semibold text-zinc-200 text-[11px]">1. Baseline Fails</span>
+                        <span className="text-[10px] text-zinc-400 font-mono truncate">
+                          Original Test: {patch.originalTestStatus} (Confirms Bug)
+                        </span>
+                      </div>
+                    </div>
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 text-xs border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-zinc-300"
-                    onClick={() => handleDownloadPatch(patch)}
-                  >
-                    <Download className="size-3.5 mr-1" />
-                    .patch
-                  </Button>
+                    {/* 2. Patched Passes */}
+                    <div className="flex items-center gap-2">
+                      {patch.patchedTestStatus === 'Passed' ? (
+                        <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
+                      ) : (
+                        <XCircle className="size-4 text-rose-500 shrink-0" />
+                      )}
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-semibold text-zinc-200 text-[11px]">2. Patched Passes</span>
+                        <span className="text-[10px] text-zinc-400 font-mono truncate">
+                          Patched Test: {patch.patchedTestStatus} (Confirms Fix)
+                        </span>
+                      </div>
+                    </div>
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 text-xs border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-zinc-300"
-                    onClick={() => copyToClipboard(patch.ghPrCommand, patch.bundleId)}
-                  >
-                    {copiedId === patch.bundleId ? (
-                      <Check data-icon="inline-start" className="text-primary size-3.5 mr-1" />
-                    ) : (
-                      <Copy data-icon="inline-start" className="size-3.5 mr-1" />
-                    )}
-                    {copiedId === patch.bundleId ? 'Copied' : 'Draft PR Command'}
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-
-            <CardContent className="flex flex-col gap-4">
-              {/* Three-Tier Verification Invariant Proof Strip */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-lg border bg-muted/20">
-                {/* 1. Baseline Fails */}
-                <div className="flex items-center gap-2.5">
-                  {patch.originalTestStatus === 'Failed' ? (
-                    <CheckCircle2 className="size-4 text-primary" />
-                  ) : (
-                    <XCircle className="size-4 text-destructive" />
-                  )}
-                  <div className="flex flex-col">
-                    <span className="text-xs font-medium">1. Baseline Fails (Vulnerable)</span>
-                    <span className="text-[11px] text-muted-foreground font-mono">
-                      Original Test: {patch.originalTestStatus} (Confirms Bug)
-                    </span>
+                    {/* 3. Regressions Pass */}
+                    <div className="flex items-center gap-2">
+                      {patch.regressionsPass ? (
+                        <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
+                      ) : (
+                        <XCircle className="size-4 text-rose-500 shrink-0" />
+                      )}
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-semibold text-zinc-200 text-[11px]">3. Zero Regressions</span>
+                        <span className="text-[10px] text-zinc-400 font-mono truncate">
+                          Existing Suites: {patch.regressionsPass ? 'Zero Regressions' : 'Regression Found'}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                </div>
 
-                {/* 2. Patched Passes */}
-                <div className="flex items-center gap-2.5">
-                  {patch.patchedTestStatus === 'Passed' ? (
-                    <CheckCircle2 className="size-4 text-primary" />
-                  ) : (
-                    <XCircle className="size-4 text-destructive" />
-                  )}
-                  <div className="flex flex-col">
-                    <span className="text-xs font-medium">2. Patched Passes (Remediated)</span>
-                    <span className="text-[11px] text-muted-foreground font-mono">
-                      Patched Test: {patch.patchedTestStatus} (Confirms Fix)
-                    </span>
+                  {/* High-Fidelity Unified & Split Diff Viewer */}
+                  <div className="flex flex-col gap-1.5">
+                    <DiffViewer
+                      diff={patch.diff}
+                      filePath={patch.targetLocation}
+                      defaultMode="unified"
+                      maxHeight="max-h-[360px]"
+                    />
                   </div>
-                </div>
 
-                {/* 3. Regressions Pass */}
-                <div className="flex items-center gap-2.5">
-                  {patch.regressionsPass ? (
-                    <CheckCircle2 className="size-4 text-primary" />
-                  ) : (
-                    <XCircle className="size-4 text-destructive" />
-                  )}
-                  <div className="flex flex-col">
-                    <span className="text-xs font-medium">3. Regressions Pass (Soundness)</span>
-                    <span className="text-[11px] text-muted-foreground font-mono">
-                      Existing Suites: {patch.regressionsPass ? 'Zero Regressions' : 'Defect Detected'}
-                    </span>
+                  {/* GitHub Draft PR Dispatch Command Box */}
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-xs text-zinc-400">
+                      <span className="font-semibold flex items-center gap-1.5">
+                        <Terminal className="size-3.5 text-zinc-400" />
+                        <span>Human-in-the-Loop CLI Dispatch:</span>
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 bg-zinc-950/80 px-3 py-2 rounded-lg border border-zinc-800 font-mono text-[11px] min-w-0 text-zinc-300">
+                      <span className="truncate min-w-0 flex-1">{patch.ghPrCommand}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-xs px-2 shrink-0 hover:text-zinc-100 text-zinc-400 cursor-pointer"
+                        onClick={() => copyToClipboard(patch.ghPrCommand, patch.bundleId)}
+                      >
+                        {copiedId === patch.bundleId ? <Check className="size-3 text-emerald-400 mr-1" /> : <Copy className="size-3 mr-1" />}
+                        {copiedId === patch.bundleId ? 'Copied' : 'Copy'}
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </div>
-
-              {/* High-Fidelity Unified & Split Diff Viewer */}
-              <div className="flex flex-col gap-1.5">
-                <DiffViewer
-                  diff={patch.diff}
-                  filePath={patch.targetLocation}
-                  defaultMode="unified"
-                  maxHeight="max-h-[360px]"
-                />
-              </div>
-
-              {/* GitHub Draft PR Dispatch Command Box */}
-              <div className="flex flex-col gap-1.5">
-                <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-                  <GitPullRequestDraft className="size-3.5" />
-                  Operator Human-in-the-Loop CLI Dispatch
-                </span>
-                <div className="flex items-center justify-between gap-2 bg-muted/40 p-2.5 rounded-md border font-mono text-xs min-w-0">
-                  <span className="truncate min-w-0 flex-1">{patch.ghPrCommand}</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 text-xs px-2 shrink-0"
-                    onClick={() => copyToClipboard(patch.ghPrCommand, patch.bundleId)}
-                  >
-                    Copy
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
