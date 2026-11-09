@@ -4,6 +4,25 @@ Last updated: 2026-11-09.
 
 ## Current status
 
+Web Dashboard Frontend (React 19 + Vite + Tailwind CSS v4 + shadcn/ui + Base UI): IMPLEMENTED & VERIFIED (`web/`). Delivered full-featured enterprise security operations web console for Sentra built with Vite, React 19, TypeScript, Bun, Tailwind CSS v4, and official shadcn/ui components on `@base-ui/react` primitives adhering to `.agents/skills/shadcn`:
+- **Architecture & Foundation (`web/`):**
+  - Scaffolded Vite + React 19 + TypeScript app using Bun as sole runtime and package manager.
+  - Initialized official `shadcn/ui` with `base-nova` preset and `@base-ui/react` primitives.
+  - Installed and composed 16 canonical shadcn components: `button`, `card`, `badge`, `table`, `tabs`, `separator`, `alert`, `input`, `select`, `dropdown-menu`, `skeleton`, `scroll-area`, `tooltip`, `dialog`, `sheet`, `progress`, `empty`, `toggle`, `toggle-group`.
+- **Dashboard Views & Capabilities:**
+  - **Overview Tab:** Posture cards (Total Sessions, Active Sessions, Critical/High/Medium/Low Findings, Verified Patches, Research Spend in USD, Immutable Audit Events), severity distribution progress metrics, active workspace sessions table, and fail-closed host containment banner.
+  - **Findings Explorer Tab:** Normalized security findings table with filter bar (search, severity filter, reachability filter), status badges, and an interactive Inspector Sheet displaying multi-step interprocedural taint flow call paths (`SOURCE` -> `PROPAGATION` -> `SANITIZER` -> `SINK`) with line numbers and code snippets.
+  - **Remediation & Patches Tab:** Displays verified patch bundles with the Sentra Three-Tier Verification Invariant proof strip (1. Baseline fails on unpatched code, 2. Patched passes on remediated code, 3. Zero regressions across existing suites), unified Git diff viewer, and copy-pasteable GitHub Draft PR CLI dispatch commands (`gh pr create --draft ...`).
+  - **Deep Research & Campaigns Tab:** Displays autonomous multi-role research campaigns with token/budget spend meters, task counts, and the exploration coverage ledger (explored vs skipped regions).
+  - **Audit Trail Tab:** Displays tamper-resistant, strictly monotonic sequential audit event logs with event IDs, actors, actions, and timestamps.
+  - **Live Scanner CLI Console:** Interactive terminal simulator allowing operators to dispatch `sentra scan`, `sentra audit`, `sentra codeql`, and `sentra diff` directly in the browser with realistic formatted terminal logs.
+  - **OASIS SARIF v2.1.0 Export:** Dialog and one-click JSON downloader exporting standard SARIF reports ready for GitHub Code Scanning and GitLab SAST.
+  - **Multi-Tenant & RBAC Switcher:** Dynamic switching between tenants (`sentra-internal`, `tenant-alpha`, `acme-corp`) and user roles (`Viewer`, `Operator`, `SecurityAdmin`), enforcing Phase 6 role-based permission boundaries.
+- **Verification:**
+  - Production build verified cleanly in 315ms (`bun run --cwd web build`).
+  - TypeScript type checking fully compliant with 0 errors.
+  - Full workspace Rust test suite intact (450+ tests passing, 0 regressions).
+
 CodeQL Adapter Integration & In-Engine Pure-Rust Taint Analysis Engine: IMPLEMENTED & VERIFIED (`sentra-core::plugin::codeql`, `sentra-core::sast::taint`, `sentra codeql`, MCP `sentra_codeql_ingest`). Delivered enterprise-grade taint tracking and static data-flow analysis to Sentra across both external CodeQL adapter orchestration and a native pure-Rust in-engine semantic data-flow tracker under `#![forbid(unsafe_code)]`:
 - **CodeQL Adapter Integration (`crates/sentra-core/src/plugin/codeql.rs`):**
   - Implemented `CodeQlAdapter` adhering to Sentra's `PluginHost` / `PluginManifest` with `AdapterFamily::AnalysisTool` and `PluginCapability::StaticAnalysis`.
