@@ -1,4 +1,13 @@
-export type TenantId = 'sentra-internal' | 'tenant-alpha' | 'acme-corp'
+export type TenantId = string
+
+export interface TenantView {
+  tenantId: TenantId
+  name: string
+  description?: string
+  defaultWorkspace?: string
+  isolationLevel: 'single_operator' | 'multi_tenant_isolated'
+  createdAt: string
+}
 
 export type UserRole = 'Viewer' | 'Operator' | 'SecurityAdmin'
 
