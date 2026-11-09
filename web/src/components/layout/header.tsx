@@ -8,6 +8,7 @@ import {
   Settings,
   Menu,
   MoreVertical,
+  ChevronDown,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -169,29 +170,35 @@ export function Header({
             <span>Studio</span>
           </Button>
 
-          {/* Desktop Executive HTML Report (visible on xl:) */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onExportReport}
-            title="Export Executive CISO & Security Audit HTML Report"
-            className="hidden xl:flex h-8 text-xs border-zinc-800 bg-zinc-900/60 text-zinc-300 hover:text-primary hover:border-primary/50 px-2.5"
-          >
-            <FileText data-icon="inline-start" className="size-3.5" />
-            <span>Report</span>
-          </Button>
-
-          {/* Desktop SARIF Export (visible on xl:) */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onExportSarif}
-            title="Export OASIS SARIF v2.1.0"
-            className="hidden xl:flex h-8 text-xs border-zinc-800 bg-zinc-900/60 px-2.5"
-          >
-            <Download data-icon="inline-start" className="size-3.5" />
-            <span>SARIF</span>
-          </Button>
+          {/* Consolidated Desktop Export Dropdown (visible on xl:) */}
+          <div className="hidden xl:block">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className="inline-flex items-center justify-center h-8 text-xs font-medium rounded-md border border-zinc-800 bg-zinc-900/60 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/80 hover:border-zinc-700 px-2.5 gap-1.5 transition-colors cursor-pointer shrink-0 outline-none"
+                title="Export reports & SARIF findings"
+              >
+                <Download className="size-3.5" />
+                <span>Export</span>
+                <ChevronDown className="size-3 text-zinc-400" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 bg-zinc-950 border border-zinc-800 p-1.5 text-zinc-200">
+                <DropdownMenuItem
+                  onClick={onExportReport}
+                  className="cursor-pointer text-xs flex items-center gap-2 py-1.5 px-2 hover:bg-zinc-900 rounded"
+                >
+                  <FileText className="size-3.5 text-primary" />
+                  <span>Executive Report (HTML)</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={onExportSarif}
+                  className="cursor-pointer text-xs flex items-center gap-2 py-1.5 px-2 hover:bg-zinc-900 rounded"
+                >
+                  <Download className="size-3.5 text-cyan-400" />
+                  <span>OASIS SARIF v2.1.0 (JSON)</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
 
           {/* Scanner CLI Drawer Toggle (visible on tablet and desktop) */}
           <Button

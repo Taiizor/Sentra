@@ -8,7 +8,6 @@ import {
   TrendingUp,
   Activity,
   Layers,
-  Radio,
 } from 'lucide-react'
 import {
   AreaChart,
@@ -18,12 +17,9 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { Button } from '@/components/ui/button'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
-import { SentraLogoIcon } from '@/components/ui/sentra-logo'
 import {
   Table,
   TableBody,
@@ -42,7 +38,7 @@ interface OverviewTabProps {
   onOpenLiveStream?: () => void
 }
 
-export function OverviewTab({ overview, sessions, trends, onSelectTab, onOpenLiveStream }: OverviewTabProps) {
+export function OverviewTab({ overview, sessions, trends, onSelectTab }: OverviewTabProps) {
   const totalFindings =
     overview.criticalFindings +
     overview.highFindings +
@@ -72,75 +68,47 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab, onOpenLiv
     score >= 50 ? ('outline' as const) : ('destructive' as const)
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Fail-Closed Platform Security Banner */}
-      <Alert className="border-primary/30 bg-primary/5">
-        <SentraLogoIcon size={20} className="shrink-0" />
-        <AlertTitle className="text-sm font-semibold flex flex-col md:flex-row md:items-center justify-between gap-2.5">
-          <span className="leading-snug">Fail-Closed Host Boundary &amp; Zero Untrusted Target Execution Active</span>
-          <div className="flex items-center gap-2 flex-wrap shrink-0">
-            {onOpenLiveStream && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={onOpenLiveStream}
-                className="h-7 text-xs border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 font-semibold"
-              >
-                <Radio className="size-3 mr-1.5 animate-pulse text-primary" />
-                Live Stream Scan
-              </Button>
-            )}
-            <Badge variant="outline" className="text-xs font-mono">
-              ADR-0004 &amp; ADR-0005
-            </Badge>
-          </div>
-        </AlertTitle>
-        <AlertDescription className="text-xs text-muted-foreground mt-1">
-          Untrusted code execution on operator host is strictly disabled (<code className="font-mono">FailClosedBackend</code>).
-          Dynamic builds, ASan fuzzers, and PoC reproductions run strictly inside disposable single-tenant Linux VM sandboxes with strictly denied network egress.
-        </AlertDescription>
-      </Alert>
-
+    <div className="flex flex-col gap-5">
       {/* Primary Threat Posture Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
         {/* Security Posture Score */}
         <Card
-          className="border-border/80 hover:border-primary/50 transition-colors cursor-pointer"
+          className="border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-900/70 hover:border-primary/40 transition-all cursor-pointer shadow-xs"
           onClick={() => onSelectTab('findings')}
         >
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">
+          <CardHeader className="flex flex-row items-center justify-between pb-1.5 pt-3.5 px-4">
+            <CardTitle className="text-xs font-medium text-zinc-400">
               Security Score
             </CardTitle>
             <Activity className={`size-4 ${scoreColor}`} />
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 pb-3.5 pt-0">
             <div className={`text-2xl font-bold ${scoreColor}`}>
-              {overview.securityScore} <span className="text-xs text-muted-foreground font-normal">/ 100</span>
+              {overview.securityScore} <span className="text-xs text-zinc-500 font-normal">/ 100</span>
             </div>
-            <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1.5">
+            <div className="text-[11px] text-zinc-400 mt-1 flex items-center gap-1.5">
               <Badge variant={gradeBadgeVariant} className="text-[10px] h-4 px-1.5 font-bold">
                 {grade}
               </Badge>
-              <span>{overview.securityScore >= 75 ? '3-tier verification active' : 'Critical signals require action'}</span>
-            </p>
+              <span className="truncate">{overview.securityScore >= 75 ? 'Verified Posture' : 'Action Required'}</span>
+            </div>
           </CardContent>
         </Card>
 
         {/* Total Sessions */}
         <Card
-          className="border-border/80 hover:border-primary/50 transition-colors cursor-pointer"
+          className="border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-900/70 hover:border-primary/40 transition-all cursor-pointer shadow-xs"
           onClick={() => onSelectTab('fleet')}
         >
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">
+          <CardHeader className="flex flex-row items-center justify-between pb-1.5 pt-3.5 px-4">
+            <CardTitle className="text-xs font-medium text-zinc-400">
               Workspace Sessions
             </CardTitle>
-            <FolderGit2 className="size-4 text-muted-foreground" />
+            <FolderGit2 className="size-4 text-zinc-400" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{overview.totalSessions}</div>
-            <p className="text-[11px] text-muted-foreground mt-1">
+          <CardContent className="px-4 pb-3.5 pt-0">
+            <div className="text-2xl font-bold text-zinc-100">{overview.totalSessions}</div>
+            <p className="text-[11px] text-zinc-400 mt-1 truncate">
               {overview.activeSessions} active scoped instance(s)
             </p>
           </CardContent>
@@ -148,25 +116,25 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab, onOpenLiv
 
         {/* Security Findings */}
         <Card
-          className="border-border/80 hover:border-destructive/50 transition-colors cursor-pointer"
+          className="border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-900/70 hover:border-rose-500/40 transition-all cursor-pointer shadow-xs"
           onClick={() => onSelectTab('findings')}
         >
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">
+          <CardHeader className="flex flex-row items-center justify-between pb-1.5 pt-3.5 px-4">
+            <CardTitle className="text-xs font-medium text-zinc-400">
               Vulnerabilities
             </CardTitle>
             <AlertTriangle className="size-4 text-rose-500" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 pb-3.5 pt-0">
             <div className="text-2xl font-bold flex items-center gap-2">
-              <span>{totalFindings}</span>
+              <span className="text-zinc-100">{totalFindings}</span>
               {overview.criticalFindings > 0 && (
-                <Badge variant="destructive" className="text-xs">
+                <Badge variant="destructive" className="text-[10px] h-4 px-1.5">
                   {overview.criticalFindings} Critical
                 </Badge>
               )}
             </div>
-            <p className="text-[11px] text-muted-foreground mt-1">
+            <p className="text-[11px] text-zinc-400 mt-1 truncate">
               {overview.highFindings} high, {overview.mediumFindings} medium
             </p>
           </CardContent>
@@ -174,20 +142,20 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab, onOpenLiv
 
         {/* Verified Patches */}
         <Card
-          className="border-border/80 hover:border-emerald-500/50 transition-colors cursor-pointer"
+          className="border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-900/70 hover:border-emerald-500/40 transition-all cursor-pointer shadow-xs"
           onClick={() => onSelectTab('remediation')}
         >
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">
+          <CardHeader className="flex flex-row items-center justify-between pb-1.5 pt-3.5 px-4">
+            <CardTitle className="text-xs font-medium text-zinc-400">
               Verified Patches
             </CardTitle>
             <CheckCircle2 className="size-4 text-emerald-400" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 pb-3.5 pt-0">
             <div className="text-2xl font-bold text-emerald-400">
               {overview.verifiedPatches}
             </div>
-            <p className="text-[11px] text-muted-foreground mt-1">
+            <p className="text-[11px] text-zinc-400 mt-1 truncate">
               Dual-state oracle verified
             </p>
           </CardContent>
@@ -195,21 +163,21 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab, onOpenLiv
 
         {/* Budget Spend */}
         <Card
-          className="border-border/80 hover:border-primary/50 transition-colors cursor-pointer"
+          className="border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-900/70 hover:border-amber-500/40 transition-all cursor-pointer shadow-xs"
           onClick={() => onSelectTab('research')}
         >
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">
-              Research Tokens Spent
+          <CardHeader className="flex flex-row items-center justify-between pb-1.5 pt-3.5 px-4">
+            <CardTitle className="text-xs font-medium text-zinc-400">
+              Research Tokens
             </CardTitle>
             <Coins className="size-4 text-amber-400" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 pb-3.5 pt-0">
             <div className="text-2xl font-bold text-zinc-100 font-mono">
               ${(overview.totalSpentMicroUsd / 1_000_000).toFixed(2)}
             </div>
-            <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
-              <History className="size-3" />
+            <p className="text-[11px] text-zinc-400 mt-1 flex items-center gap-1 truncate">
+              <History className="size-3 shrink-0" />
               <span>{overview.auditEventCount} immutable audit logs</span>
             </p>
           </CardContent>
@@ -217,26 +185,26 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab, onOpenLiv
       </div>
 
       {/* Two Column Layout: Recharts Threat Trend & CWE Breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Recharts Area Chart: 14-Day Vulnerability Trend */}
-        <Card className="lg:col-span-8 border-border/80">
-          <CardHeader className="pb-2">
+        <Card className="lg:col-span-8 border-zinc-800/80 bg-zinc-900/40">
+          <CardHeader className="pb-2 pt-4 px-4 sm:px-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex flex-col">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <TrendingUp className="size-4 text-primary" />
-                  Vulnerability Velocity & Remediation Rate
+                  Vulnerability Velocity &amp; Remediation Rate
                 </CardTitle>
-                <CardDescription className="text-xs">
+                <CardDescription className="text-xs text-zinc-400">
                   Historical telemetry showing signals detected vs verified remediations over time
                 </CardDescription>
               </div>
-              <Badge variant="secondary" className="text-xs font-mono">
+              <Badge variant="secondary" className="text-xs font-mono self-start sm:self-auto">
                 MTTR: 4.2 min
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="pt-2">
+          <CardContent className="pt-2 px-3 sm:px-4 pb-4">
             <div className="h-[220px] w-full min-h-[220px] min-w-0">
               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                 <AreaChart data={trends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -285,17 +253,17 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab, onOpenLiv
         </Card>
 
         {/* Severity & Attack Surface Breakdown */}
-        <Card className="lg:col-span-4 border-border/80 flex flex-col justify-between">
-          <CardHeader className="pb-2">
+        <Card className="lg:col-span-4 border-zinc-800/80 bg-zinc-900/40 flex flex-col justify-between">
+          <CardHeader className="pb-2 pt-4 px-4 sm:px-5">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <Layers className="size-4 text-primary" />
               Attack Surface Breakdown
             </CardTitle>
-            <CardDescription className="text-xs">
+            <CardDescription className="text-xs text-zinc-400">
               Normalized SAST, Taint, and Dependency signals
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col gap-3 pt-2">
+          <CardContent className="flex flex-col gap-3 pt-2 px-4 sm:px-5 pb-4">
             {/* Critical */}
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between text-xs">
@@ -303,7 +271,7 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab, onOpenLiv
                   <span className="size-2 rounded-full bg-rose-500" />
                   Critical Severity
                 </span>
-                <span className="font-mono text-muted-foreground">
+                <span className="font-mono text-zinc-400">
                   {overview.criticalFindings} ({criticalPercent}%)
                 </span>
               </div>
@@ -317,7 +285,7 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab, onOpenLiv
                   <span className="size-2 rounded-full bg-amber-500" />
                   High Severity
                 </span>
-                <span className="font-mono text-muted-foreground">
+                <span className="font-mono text-zinc-400">
                   {overview.highFindings} ({highPercent}%)
                 </span>
               </div>
@@ -331,7 +299,7 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab, onOpenLiv
                   <span className="size-2 rounded-full bg-blue-500" />
                   Medium Severity
                 </span>
-                <span className="font-mono text-muted-foreground">
+                <span className="font-mono text-zinc-400">
                   {overview.mediumFindings} ({mediumPercent}%)
                 </span>
               </div>
@@ -339,21 +307,21 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab, onOpenLiv
             </div>
 
             {/* CWE Tags */}
-            <div className="border-t pt-3 mt-1 flex flex-wrap gap-1.5">
-              <Badge variant="outline" className="text-[10px] font-mono">
+            <div className="border-t border-zinc-800/80 pt-3 mt-1 flex flex-wrap gap-1.5">
+              <Badge variant="outline" className="text-[10px] font-mono text-zinc-400 border-zinc-800">
                 CWE-89 SQLi
               </Badge>
-              <Badge variant="outline" className="text-[10px] font-mono">
-                CWE-78 Command Injection
+              <Badge variant="outline" className="text-[10px] font-mono text-zinc-400 border-zinc-800">
+                CWE-78 Cmd Injection
               </Badge>
-              <Badge variant="outline" className="text-[10px] font-mono">
+              <Badge variant="outline" className="text-[10px] font-mono text-zinc-400 border-zinc-800">
                 CWE-798 Secrets
               </Badge>
-              <Badge variant="outline" className="text-[10px] font-mono">
-                CWE-22 Path Traversal
+              <Badge variant="outline" className="text-[10px] font-mono text-zinc-400 border-zinc-800">
+                CWE-22 Traversal
               </Badge>
-              <Badge variant="outline" className="text-[10px] font-mono">
-                CWE-1321 Proto Pollution
+              <Badge variant="outline" className="text-[10px] font-mono text-zinc-400 border-zinc-800">
+                CWE-1321 Proto
               </Badge>
             </div>
           </CardContent>
@@ -361,23 +329,23 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab, onOpenLiv
       </div>
 
       {/* Active Workspace Sessions */}
-      <Card className="border-border/80">
-        <CardHeader>
+      <Card className="border-zinc-800/80 bg-zinc-900/40">
+        <CardHeader className="pt-4 pb-2 px-4 sm:px-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex flex-col">
               <CardTitle className="text-sm font-semibold">
-                Bounded Workspace Sessions (SQLite WAL Storage)
+                Active Workspace Sessions
               </CardTitle>
-              <CardDescription className="text-xs">
-                Deterministic session manifests bound to canonical source snapshots with CAS blob storage
+              <CardDescription className="text-xs text-zinc-400">
+                Audit-backed deterministic workspace snapshots with CAS storage
               </CardDescription>
             </div>
-            <Badge variant="outline" className="text-xs font-mono shrink-0 self-start sm:self-auto">
-              rusqlite 0.32.1
+            <Badge variant="outline" className="text-[10px] font-mono shrink-0 self-start sm:self-auto text-zinc-400 border-zinc-800">
+              WAL Journal
             </Badge>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 sm:px-5 pb-4">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -396,20 +364,20 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab, onOpenLiv
                     <TableCell className="font-mono text-xs font-semibold whitespace-nowrap">
                       {session.sessionId}
                     </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground truncate max-w-[320px]">
+                    <TableCell className="font-mono text-xs text-zinc-400 truncate max-w-[320px]">
                       {session.workspaceRoot}
                     </TableCell>
                     <TableCell>
                       <Badge
                         variant={session.state === 'SCOPED' ? 'secondary' : 'outline'}
-                        className="text-xs font-mono"
+                        className="text-[10px] font-mono"
                       >
                         {session.state}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-xs font-mono">{session.taskCount}</TableCell>
                     <TableCell className="text-xs font-mono">#{session.fencingEpoch}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground font-mono text-right">
+                    <TableCell className="text-xs text-zinc-400 font-mono text-right">
                       {new Date(session.createdAt).toLocaleTimeString()}
                     </TableCell>
                   </TableRow>

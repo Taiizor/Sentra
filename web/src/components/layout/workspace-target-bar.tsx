@@ -2,19 +2,27 @@ import { useState, useEffect } from 'react'
 import {
   FolderGit2,
   Play,
-  RotateCw,
-  SearchCode,
-  ShieldCheck,
-  CheckCircle2,
-  Terminal,
-  Cpu,
-  Layers,
-  Sparkles,
   Radio,
+  ShieldCheck,
+  SearchCode,
+  ChevronDown,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import type { UserRole } from '@/types/sentra'
 
 interface WorkspaceTargetBarProps {
@@ -59,71 +67,54 @@ export function WorkspaceTargetBar({
     setInputVal(currentWorkspace)
   }, [currentWorkspace])
 
-  function handleSelectPreset(path: string) {
-    setInputVal(path)
-    onWorkspaceChange(path)
-  }
-
   function handleCommit() {
     if (inputVal.trim() && inputVal.trim() !== currentWorkspace) {
       onWorkspaceChange(inputVal.trim())
     }
   }
 
+  const activePreset = PRESETS.find((p) => p.path === currentWorkspace)
+
   return (
-    <div className="border border-zinc-800 bg-zinc-900/60 rounded-xl p-3 sm:p-3.5 backdrop-blur flex flex-col gap-3 shadow-md">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-        {/* Left: Target Path & Status */}
-        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-          <div className="size-8 rounded-md bg-primary/10 border border-primary/30 text-primary flex items-center justify-center shrink-0">
-            <FolderGit2 className="size-4" />
-          </div>
-          <div className="flex flex-col min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-bold text-zinc-100">Target Workspace:</span>
-              <Badge
-                variant={backendConnected ? 'secondary' : 'destructive'}
-                className="text-[10px] h-4 font-mono flex items-center gap-1 font-semibold"
-              >
-                <span
-                  className={`size-1.5 rounded-full ${backendConnected ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`}
-                />
-                {backendConnected ? 'sentra.exe Live' : 'Disconnected'}
-              </Badge>
-            </div>
-            <span className="text-[11px] text-zinc-400 font-mono truncate max-w-[240px] sm:max-w-[450px]">
-              {binaryPath ? binaryPath : 'Checking sentra.exe...'}
-            </span>
-          </div>
+    <div className="border border-zinc-800/80 bg-zinc-900/40 rounded-xl p-2 sm:px-3 sm:py-2 backdrop-blur flex flex-col md:flex-row md:items-center justify-between gap-2.5 shadow-xs">
+      {/* Left: Target Preset & Path Selection */}
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="size-7 rounded-lg bg-primary/10 border border-primary/25 text-primary flex items-center justify-center shrink-0">
+          <FolderGit2 className="size-3.5" />
         </div>
 
-        {/* Right: Quick Target Presets Pills (Horizontal scroll on mobile, no breaking) */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 max-w-full">
-          <span className="text-xs text-zinc-400 font-medium mr-1 hidden md:inline shrink-0">Target Presets:</span>
-          {PRESETS.map((p) => {
-            const isSelected = currentWorkspace === p.path
-            return (
-              <Button
-                key={p.id}
-                variant={isSelected ? 'default' : 'outline'}
-                size="sm"
-                className={`h-7 text-xs rounded-lg px-2.5 shrink-0 ${
-                  isSelected
-                    ? 'font-bold shadow-sm'
-                    : 'bg-zinc-950/70 border-zinc-800 hover:border-zinc-700 text-zinc-300'
-                }`}
-                onClick={() => handleSelectPreset(p.path)}
-              >
+        {/* Preset Selector Dropdown */}
+        <Select
+          value={activePreset ? activePreset.id : 'custom'}
+          onValueChange={(val) => {
+            const match = PRESETS.find((p) => p.id === val)
+            if (match) {
+              setInputVal(match.path)
+              onWorkspaceChange(match.path)
+            }
+          }}
+        >
+          <SelectTrigger className="h-7.5 w-[125px] sm:w-[145px] text-xs bg-zinc-950/80 border-zinc-800 text-zinc-200 shrink-0 px-2 font-medium">
+            <SelectValue placeholder="Preset">
+              {activePreset ? activePreset.label : 'Custom Target'}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {PRESETS.map((p) => (
+              <SelectItem key={p.id} value={p.id}>
                 {p.label}
-              </Button>
-            )
-          })}
-        </div>
-      </div>
+              </SelectItem>
+            ))}
+            {!activePreset && (
+              <SelectItem value="custom" disabled>
+                Custom Path
+              </SelectItem>
+            )}
+          </SelectContent>
+        </Select>
 
-      {/* Target Directory Path Input Bar & Actions */}
-      <div className="flex flex-col md:flex-row md:items-center gap-2 pt-2 border-t border-zinc-800/60">
-        <div className="flex-1 min-w-0">
+        {/* Editable Path Input */}
+        <div className="relative flex-1 min-w-[130px] max-w-[420px]">
           <Input
             value={inputVal}
             onChange={(e) => setInputVal(e.target.value)}
@@ -131,72 +122,85 @@ export function WorkspaceTargetBar({
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleCommit()
             }}
-            placeholder="Type absolute folder path (e.g. D:/MyProject)..."
-            className="h-8 text-xs font-mono bg-zinc-950 border-zinc-800 focus-visible:ring-primary/40 text-zinc-200 w-full"
+            placeholder="Type folder path..."
+            className="h-7.5 text-xs font-mono bg-zinc-950/70 border-zinc-800 text-zinc-300 w-full px-2.5 focus-visible:ring-primary/30"
+            title={inputVal}
           />
         </div>
 
-        {/* Actions triggering sentra.exe */}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
-          {currentRole === 'Viewer' && (
-            <div className="text-[11px] text-amber-400 font-medium bg-amber-500/10 px-2.5 py-1 rounded border border-amber-500/20 text-center shrink-0">
-              Viewer: Read Only
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5 sm:gap-2">
-            <Button
-              size="sm"
-              disabled={currentRole === 'Viewer'}
-              onClick={onOpenLiveStream}
-              className="h-8 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-md flex items-center justify-center gap-1.5 disabled:opacity-40 px-2.5 sm:px-3"
-              title={currentRole === 'Viewer' ? "Viewer role is read-only. Switch to Operator or Admin to execute scans." : undefined}
-            >
-              <Radio className="size-3.5 text-primary-foreground animate-pulse" />
-              <span className="hidden sm:inline">Live SSE Stream Scan</span>
-              <span className="sm:hidden">Live SSE</span>
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isScanning || !backendConnected || currentRole === 'Viewer'}
-              onClick={onRunScan}
-              className="h-8 text-xs font-medium border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-200 disabled:opacity-40 px-2 sm:px-2.5 flex items-center justify-center"
-              title={currentRole === 'Viewer' ? "Viewer role is read-only. Switch to Operator or Admin to execute scans." : undefined}
-            >
-              <Play className={`size-3.5 mr-1 fill-current ${isScanning ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">{isScanning ? 'Scanning...' : 'Direct SAST'}</span>
-              <span className="sm:hidden">SAST</span>
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isAuditing || !backendConnected || currentRole === 'Viewer'}
-              onClick={onRunAudit}
-              className="h-8 text-xs font-medium border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-200 disabled:opacity-40 px-2 sm:px-2.5 flex items-center justify-center"
-              title={currentRole === 'Viewer' ? "Viewer role is read-only. Switch to Operator or Admin to execute scans." : undefined}
-            >
-              <ShieldCheck className={`size-3.5 mr-1 ${isAuditing ? 'animate-spin text-primary' : ''}`} />
-              <span className="hidden sm:inline">{isAuditing ? 'Auditing...' : 'Audit Lockfiles'}</span>
-              <span className="sm:hidden">Audit</span>
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isCodeQlProbing || !backendConnected || currentRole === 'Viewer'}
-              onClick={onRunCodeQl}
-              className="h-8 text-xs font-medium border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-200 disabled:opacity-40 px-2 sm:px-2.5 flex items-center justify-center"
-              title={currentRole === 'Viewer' ? "Viewer role is read-only. Switch to Operator or Admin to execute scans." : undefined}
-            >
-              <SearchCode className={`size-3.5 mr-1 ${isCodeQlProbing ? 'animate-spin text-primary' : ''}`} />
-              <span className="hidden sm:inline">{isCodeQlProbing ? 'Probing...' : 'Probe CodeQL'}</span>
-              <span className="sm:hidden">CodeQL</span>
-            </Button>
-          </div>
+        {/* Engine Ready Indicator */}
+        <div
+          className="hidden xl:flex items-center gap-1.5 text-[11px] font-mono text-zinc-400 bg-zinc-950/60 border border-zinc-800/80 px-2 py-0.5 rounded-md shrink-0 select-none"
+          title={binaryPath || 'sentra.exe engine'}
+        >
+          <span
+            className={`size-1.5 rounded-full ${backendConnected ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`}
+          />
+          <span className="text-[10px]">{backendConnected ? 'sentra.exe' : 'Disconnected'}</span>
         </div>
+      </div>
+
+      {/* Right: Scan Actions */}
+      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 self-end md:self-auto">
+        {currentRole === 'Viewer' ? (
+          <Badge variant="outline" className="text-[10px] text-amber-400 border-amber-500/30 font-medium">
+            Viewer: Read Only
+          </Badge>
+        ) : (
+          <>
+            {/* Primary Action: Live SSE Stream Scan */}
+            <Button
+              size="sm"
+              onClick={onOpenLiveStream}
+              className="h-7.5 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs flex items-center gap-1.5 px-3 cursor-pointer"
+            >
+              <Radio className="size-3 animate-pulse" />
+              <span>Live Scan</span>
+            </Button>
+
+            {/* Direct SAST Scan */}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isScanning || !backendConnected}
+              onClick={onRunScan}
+              className="h-7.5 text-xs font-medium border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-200 px-2.5 flex items-center gap-1 cursor-pointer"
+              title="Run direct native AST & taint analysis"
+            >
+              <Play className={`size-3 fill-current ${isScanning ? 'animate-spin text-primary' : ''}`} />
+              <span>{isScanning ? 'Scanning...' : 'Direct SAST'}</span>
+            </Button>
+
+            {/* More Scan Tools Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className="inline-flex items-center justify-center h-7.5 text-xs font-medium rounded-md border border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-300 px-2 gap-1 cursor-pointer transition-colors outline-none"
+                title="More audit and discovery tools"
+              >
+                <span className="hidden sm:inline">Tools</span>
+                <ChevronDown className="size-3 text-zinc-400" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 bg-zinc-950 border border-zinc-800 p-1.5 text-zinc-200">
+                <DropdownMenuItem
+                  disabled={isAuditing || !backendConnected}
+                  onClick={onRunAudit}
+                  className="cursor-pointer text-xs flex items-center gap-2 py-1.5"
+                >
+                  <ShieldCheck className={`size-3.5 text-emerald-400 ${isAuditing ? 'animate-spin' : ''}`} />
+                  <span>{isAuditing ? 'Auditing...' : 'Audit Lockfiles (RustSec)'}</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={isCodeQlProbing || !backendConnected}
+                  onClick={onRunCodeQl}
+                  className="cursor-pointer text-xs flex items-center gap-2 py-1.5"
+                >
+                  <SearchCode className={`size-3.5 text-cyan-400 ${isCodeQlProbing ? 'animate-spin' : ''}`} />
+                  <span>{isCodeQlProbing ? 'Probing...' : 'Probe CodeQL Ecosystem'}</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        )}
       </div>
     </div>
   )
