@@ -4,15 +4,14 @@ A clear, concise description of the purpose of this Pull Request and what techni
 
 Fixes #(issue)
 
-## Target Roadmap Phase
+## Affected Subsystem
 
-- [ ] Phase 1: Local Foundation & Hardening
-- [ ] Phase 2: Continuous Security Review Pilot
-- [ ] Phase 3: Deep Security Research Pilot
-- [ ] Phase 4: Ecosystem Integration & Worker Fleet
-- [ ] Phase 5: Managed Deployment & Autonomous Remediation
-- [ ] Phase 6: Multi-Tenant Enterprise Operations
-- [ ] Cross-Cutting / Tooling / CI
+- [ ] `sentra-core` (Core domain, persistence, workspace boundary, advisory)
+- [ ] `sentra-cli` (Command line binary and command handlers)
+- [ ] `web` (React/Vite dashboard and UI components)
+- [ ] `mcp` (Model Context Protocol JSON-RPC server)
+- [ ] `sast / taint` (Static analysis, taint rules, and secret scanner)
+- [ ] `docs / ci / tooling` (Documentation, GitHub workflows, release automation)
 
 ## Architectural & Security Invariant Checklist
 

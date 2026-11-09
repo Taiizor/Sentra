@@ -91,30 +91,18 @@
   color: "000000"
   description: "Specific to macOS Darwin (Apple Silicon ARM64 / Intel)."
 
-# Roadmap Phases
-- name: "phase:phase1"
-  color: "c5def5"
-  description: "Phase 1: Local Foundation & Hardening."
+# Community & Contribution
+- name: "good first issue"
+  color: "7057ff"
+  description: "Good for newcomers and first-time contributors."
 
-- name: "phase:phase2"
-  color: "bfdadc"
-  description: "Phase 2: Continuous Security Review Pilot."
+- name: "help wanted"
+  color: "008672"
+  description: "Extra attention or community contribution is requested."
 
-- name: "phase:phase3"
-  color: "c2e0c6"
-  description: "Phase 3: Deep Security Research Pilot."
-
-- name: "phase:phase4"
-  color: "e1bee7"
-  description: "Phase 4: Ecosystem Integration & Worker Fleet."
-
-- name: "phase:phase5"
-  color: "ffcc80"
-  description: "Phase 5: Managed Deployment & Autonomous Remediation."
-
-- name: "phase:phase6"
-  color: "ffab91"
-  description: "Phase 6: Multi-Tenant Enterprise Operations."
+- name: "discussion"
+  color: "d4c5f9"
+  description: "Technical discussion, proposal, or architectural RFC."
 
 # Severity
 - name: "severity:critical"

@@ -8,18 +8,19 @@ body:
       value: |
         Please refer to our [Roadmap](https://github.com/Taiizor/Sentra/blob/develop/ROADMAP.md) and [Architecture Specifications](https://github.com/Taiizor/Sentra/tree/develop/docs) before submitting.
   - type: dropdown
-    id: phase
+    id: component
     attributes:
-      label: Target Roadmap Phase
-      description: Which roadmap phase does this proposal align with?
+      label: Target Component
+      description: Which subsystem or component does this proposal relate to?
       options:
-        - "Phase 1: Local Foundation & Hardening"
-        - "Phase 2: Continuous Security Review Pilot"
-        - "Phase 3: Deep Security Research Pilot"
-        - "Phase 4: Ecosystem Integration & Worker Fleet"
-        - "Phase 5: Managed Deployment & Autonomous Remediation"
-        - "Phase 6: Multi-Tenant Enterprise Operations"
-        - "General / Cross-Cutting Improvement"
+        - "sentra-core (Rust core engine, domain, persistence, advisory)"
+        - "sentra-cli (CLI commands, flags, terminal outputs)"
+        - "web (React/Vite web operations console)"
+        - "mcp (Model Context Protocol server)"
+        - "sast / taint (Static analysis, data-flow rules, taint sinks)"
+        - "fuzzing / campaigns (Fuzzing harnesses, research campaigns)"
+        - "fleet / remote-workers (Worker nodes, leasing, enterprise hosting)"
+        - "docs / general"
     validations:
       required: true
   - type: textarea
