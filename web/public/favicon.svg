@@ -1,45 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-  <defs>
-    <linearGradient id="fav-shield-bg" x1="50" y1="8" x2="50" y2="92" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#0b1120" />
-      <stop offset="100%" stop-color="#020408" />
-    </linearGradient>
-    <linearGradient id="fav-rim" x1="12" y1="8" x2="88" y2="92" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#22d3ee" />
-      <stop offset="50%" stop-color="#6366f1" />
-      <stop offset="100%" stop-color="#10b981" />
-    </linearGradient>
-    <linearGradient id="fav-s" x1="30" y1="26" x2="70" y2="74" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#06b6d4" />
-      <stop offset="50%" stop-color="#3b82f6" />
-      <stop offset="100%" stop-color="#10b981" />
-    </linearGradient>
-  </defs>
+  <!-- Outer Matte Obsidian Squircle Frame -->
+  <rect x="5" y="5" width="90" height="90" rx="22" fill="#09090b" stroke="#27272a" stroke-width="2" />
 
-  <!-- Base Shield -->
-  <path
-    d="M 50 6 L 90 22 C 90 58 76 82 50 94 C 24 82 10 58 10 22 Z"
-    fill="url(#fav-shield-bg)"
-    stroke="url(#fav-rim)"
-    stroke-width="3.5"
-    stroke-linejoin="round"
-  />
-
-  <!-- S-Curve Flow -->
-  <path
-    d="M 68 31 C 68 26 62 24 50 24 C 36 24 33 28 33 34 C 33 42 41 46 51 49 C 64 53 67 58 67 66 C 67 72 62 76 50 76 C 36 76 32 72 32 67"
-    stroke="url(#fav-s)"
-    stroke-width="6"
-    stroke-linecap="round"
-    fill="none"
-  />
-
-  <!-- Central Sentinel Diamond -->
+  <!-- Top Hex Segment (Electric Cyan #00F0FF) -->
   <polygon
-    points="50,41 60,50 50,59 40,50"
-    fill="#38bdf8"
-    stroke="#ffffff"
-    stroke-width="2"
+    points="50,20 76,35 76,47 62,40 50,33 38,40 38,52 24,44 24,35"
+    fill="#00f0ff"
   />
-  <circle cx="50" cy="50" r="3" fill="#ffffff" />
+
+  <!-- Bottom Hex Segment (Pure Crisp White #FFFFFF - Exact 180° Rotation) -->
+  <polygon
+    points="50,80 24,65 24,53 38,60 50,67 62,60 62,48 76,56 76,65"
+    fill="#ffffff"
+  />
+
+  <!-- Center Verification Nexus Dot (Emerald Mint #10B981) -->
+  <circle cx="50" cy="50" r="4.5" fill="#10b981" />
 </svg>
