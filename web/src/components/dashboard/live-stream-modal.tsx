@@ -232,33 +232,33 @@ export function LiveStreamModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden bg-zinc-950 border-zinc-800 text-zinc-100 shadow-2xl">
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden bg-background/95 border-border/80 text-foreground shadow-2xl backdrop-blur-md">
         {/* Sticky Header */}
-        <DialogHeader className="px-4 sm:px-6 py-4 border-b border-zinc-800 bg-zinc-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pr-10">
+        <DialogHeader className="px-5 py-3.5 border-b border-border/60 bg-card/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pr-12">
           <div className="flex flex-col gap-0.5 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <Terminal className="size-5 text-primary shrink-0" />
-              <DialogTitle className="text-base font-bold tracking-tight text-zinc-100">
-                Live Security Scan Console (Server-Sent Events)
+              <Terminal className="size-4 text-primary shrink-0" />
+              <DialogTitle className="text-sm font-semibold tracking-tight text-foreground">
+                Live Security Scan Console
               </DialogTitle>
-              <Badge variant="outline" className="text-[10px] font-mono border-primary/30 text-primary shrink-0">
+              <Badge variant="outline" className="text-[10px] font-mono border-primary/30 text-primary shrink-0 px-1.5 py-0">
                 sentra.exe core
               </Badge>
             </div>
-            <DialogDescription className="text-xs text-zinc-400">
-              Direct real-time streaming from the pure-Rust zero-unsafe engine to local SQLite WAL storage.
+            <DialogDescription className="text-xs text-muted-foreground">
+              Real-time SSE event stream from pure-Rust engine to SQLite WAL storage.
             </DialogDescription>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
             {status === 'running' && (
-              <Badge variant="secondary" className="text-xs font-mono flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
+              <Badge variant="secondary" className="text-[11px] font-mono flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 border-emerald-500/30 px-2 py-0.5">
+                <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 Live: {elapsedSeconds}s
               </Badge>
             )}
             {status === 'completed' && (
-              <Badge variant="secondary" className="text-xs font-mono bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+              <Badge variant="secondary" className="text-[11px] font-mono bg-emerald-500/10 text-emerald-400 border-emerald-500/30 px-2 py-0.5">
                 <CheckCircle2 className="size-3 mr-1 inline" /> Completed ({elapsedSeconds}s)
               </Badge>
             )}
@@ -550,8 +550,8 @@ export function LiveStreamModal({
         )}
 
         {/* Footer Actions */}
-        <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-t border-zinc-800 bg-zinc-900/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="text-xs text-zinc-400 font-mono">
+        <div className="px-5 py-3 border-t border-border/60 bg-card/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="text-xs text-muted-foreground font-mono">
             {status === 'running' ? 'Scanning active... Fail-closed boundary intact' : 'Zero untrusted execution'}
           </div>
 
@@ -561,10 +561,10 @@ export function LiveStreamModal({
                 variant="destructive"
                 size="sm"
                 onClick={handleStopScan}
-                className="h-8 text-xs font-semibold shadow-sm"
+                className="h-7 text-xs font-medium gap-1.5"
               >
-                <Square className="size-3.5 mr-1.5 fill-current" />
-                Abort Scan
+                <Square className="size-3 fill-current" />
+                <span>Abort Scan</span>
               </Button>
             )}
 
@@ -574,7 +574,7 @@ export function LiveStreamModal({
                   variant="outline"
                   size="sm"
                   onClick={() => setStatus('idle')}
-                  className="h-8 text-xs border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
+                  className="h-7 text-xs border-border/70"
                 >
                   Run Another Scan
                 </Button>
@@ -584,10 +584,10 @@ export function LiveStreamModal({
                     onOpenChange(false)
                     onNavigateToFindings()
                   }}
-                  className="h-8 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
+                  className="h-7 text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm gap-1.5"
                 >
-                  Explore Findings
-                  <ArrowRight className="size-3.5 ml-1.5" />
+                  <span>Explore Findings</span>
+                  <ArrowRight className="size-3" />
                 </Button>
               </>
             )}
@@ -597,7 +597,7 @@ export function LiveStreamModal({
                 variant="outline"
                 size="sm"
                 onClick={() => onOpenChange(false)}
-                className="h-8 text-xs border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
+                className="h-7 text-xs border-border/70"
               >
                 Close
               </Button>

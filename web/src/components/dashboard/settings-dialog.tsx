@@ -218,32 +218,32 @@ export function SettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
+      <DialogContent className="max-w-2xl border-border/80 bg-background/95 text-foreground shadow-2xl backdrop-blur-md">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Settings className="size-4" />
+            <div className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary border border-primary/20">
+              <Settings className="size-3.5" />
             </div>
             <div>
-              <DialogTitle className="text-base font-semibold text-zinc-100">
+              <DialogTitle className="text-sm font-semibold text-foreground">
                 Platform Settings & Frontier AI Providers
               </DialogTitle>
-              <DialogDescription className="text-xs text-zinc-400 mt-0.5">
-                Configure frontier LLM API keys for autonomous patch synthesis, code triage, and sandbox verification.
+              <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                Configure frontier LLM API keys for autonomous patch synthesis, code triage, and verification.
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-2">
-          <TabsList className="bg-zinc-900 border border-zinc-800 w-full justify-start h-9 p-0.5">
-            <TabsTrigger value="providers" className="text-xs flex items-center gap-1.5 data-[state=active]:bg-zinc-800">
-              <Key className="size-3.5" />
-              AI Model Providers
+          <TabsList className="bg-card/60 border border-border/60 w-full justify-start h-8 p-0.5">
+            <TabsTrigger value="providers" className="text-xs flex items-center gap-1.5 h-7">
+              <Key className="size-3" />
+              <span>AI Providers</span>
             </TabsTrigger>
-            <TabsTrigger value="policy" className="text-xs flex items-center gap-1.5 data-[state=active]:bg-zinc-800">
-              <ShieldCheck className="size-3.5" />
-              Security & Sandbox Policy
+            <TabsTrigger value="policy" className="text-xs flex items-center gap-1.5 h-7">
+              <ShieldCheck className="size-3" />
+              <span>Security & Policy</span>
             </TabsTrigger>
           </TabsList>
 
@@ -400,19 +400,19 @@ export function SettingsDialog({
           </TabsContent>
         </Tabs>
 
-        <DialogFooter className="mt-2 pt-2 border-t border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
-            <CheckCircle2 className="size-3 text-primary" />
+        <DialogFooter className="mt-2 pt-2 border-t border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <CheckCircle2 className="size-3 text-emerald-400" />
             <span>Encrypted SQLite WAL Storage</span>
           </div>
 
           <div className="flex items-center gap-2">
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={() => onOpenChange(false)}
-              className="h-8 text-xs text-zinc-400 hover:text-zinc-100"
+              className="h-7 text-xs border-border/70 text-muted-foreground hover:text-foreground"
             >
               Cancel
             </Button>
@@ -421,17 +421,17 @@ export function SettingsDialog({
               size="sm"
               onClick={handleSave}
               disabled={isViewer || saving}
-              className="h-8 text-xs font-medium"
+              className="h-7 text-xs font-medium gap-1.5"
             >
               {saving ? (
                 <>
-                  <Loader2 className="size-3 animate-spin mr-1.5" />
-                  Saving...
+                  <Loader2 className="size-3 animate-spin" />
+                  <span>Saving...</span>
                 </>
               ) : (
                 <>
-                  <Save className="size-3.5 mr-1.5" />
-                  Save AI Configuration
+                  <Save className="size-3" />
+                  <span>Save Settings</span>
                 </>
               )}
             </Button>
