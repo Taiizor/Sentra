@@ -2,6 +2,12 @@
 
 **Autonomous AI Security Research & Verified Remediation Platform**
 
+[![CI](https://github.com/Taiizor/Sentra/actions/workflows/ci.yml/badge.svg)](https://github.com/Taiizor/Sentra/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/Taiizor/Sentra/actions/workflows/codeql.yml/badge.svg)](https://github.com/Taiizor/Sentra/actions/workflows/codeql.yml)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Safety](https://img.shields.io/badge/unsafe-forbidden-success.svg)](#architectural-boundaries--key-invariants)
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-informational)](#development-prerequisites)
+
 Sentra is an open-source, extensible, dual-mode security research platform for autonomous repository vulnerability discovery, differential code review, and independently verified patch generation across open-source and proprietary software.
 
 ---
@@ -120,6 +126,10 @@ pwsh -NoProfile -File scripts/docker-test.ps1 -Mode all
 
 | Document | Purpose |
 |---|---|
+| [Contributing Guide](CONTRIBUTING.md) | Guidelines, invariant checklist, and development workflow |
+| [Code of Conduct](CODE_OF_CONDUCT.md) | Standards of professional conduct and community participation |
+| [Security Policy](SECURITY.md) | Coordinated disclosure process, reporting channels, and SLAs |
+| [Changelog](CHANGELOG.md) | Historical release milestones and version change records |
 | [Installation Guide](docs/INSTALLATION.md) | Setup, compiler prerequisites, and CLI execution |
 | [Limitations & Constraints](docs/LIMITATIONS.md) | Documented security assumptions, assurance limits, and non-goals |
 | [Security Policy](SECURITY.md) | Coordinated disclosure process, reporting channels, and SLAs |

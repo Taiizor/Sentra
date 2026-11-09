@@ -1,1 +1,59 @@
+# Rust build artifacts
 /target/
+**/*.rs.bk
+*.profraw
+*.profdata
+
+# Web Frontend & Bun artifacts
+node_modules/
+web/node_modules/
+web/dist/
+dist/
+.bun/
+
+# Local SQLite databases, test stores & session caches
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+.sentra/
+.sentra-storage/
+local-storage/
+
+# Environment configurations and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# IDE and Editor configurations
+.idea/
+*.swp
+*.swo
+*~
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Operating System artifacts
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Test, coverage, logs and report artifacts
+target/reports/
+coverage/
+*.sarif.tmp
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
