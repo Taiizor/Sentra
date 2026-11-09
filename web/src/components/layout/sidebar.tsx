@@ -1,5 +1,4 @@
 import {
-  ShieldAlert,
   LayoutDashboard,
   Code2,
   AlertTriangle,
@@ -9,16 +8,15 @@ import {
   Server,
   History,
   Lock,
-  ChevronRight,
-  HardDrive,
   Webhook,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { SentraLogo } from '@/components/ui/sentra-logo'
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet'
 import { cn } from 'cn'
 import type { TenantId, UserRole } from '@/types/sentra'
 
-interface SidebarProps {
+export interface SidebarProps {
   activeTab: string
   onSelectTab: (tab: string) => void
   findingCount: number
@@ -26,9 +24,15 @@ interface SidebarProps {
   auditCount: number
   currentRole: UserRole
   currentTenant: TenantId
+  className?: string
 }
 
-export function Sidebar({
+export interface MobileSidebarProps extends SidebarProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}
+
+function SidebarContent({
   activeTab,
   onSelectTab,
   findingCount,
@@ -95,7 +99,7 @@ export function Sidebar({
   ]
 
   return (
-    <aside className="w-64 border-r bg-zinc-950/80 backdrop-blur flex flex-col justify-between shrink-0 h-screen sticky top-0 border-zinc-800/80">
+    <div className="flex flex-col justify-between h-full min-h-0 select-none">
       {/* Brand & Platform Identity */}
       <div className="flex flex-col">
         <div className="p-4 border-b border-zinc-800/80">
@@ -103,7 +107,7 @@ export function Sidebar({
         </div>
 
         {/* Navigation Menu */}
-        <nav className="p-3 flex flex-col gap-1">
+        <nav className="p-3 flex flex-col gap-1 overflow-y-auto">
           <span className="text-[10px] font-semibold tracking-wider text-zinc-500 uppercase px-2 mb-1">
             Platform Capabilities
           </span>
@@ -113,6 +117,7 @@ export function Sidebar({
             return (
               <button
                 key={item.id}
+                type="button"
                 onClick={() => onSelectTab(item.id)}
                 className={cn(
                   'w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all text-left',
@@ -143,7 +148,7 @@ export function Sidebar({
       </div>
 
       {/* Footer Security Isolation & Status Widget */}
-      <div className="p-3 border-t border-zinc-800/80 flex flex-col gap-2.5 bg-zinc-900/30">
+      <div className="p-3 border-t border-zinc-800/80 flex flex-col gap-2.5 bg-zinc-900/30 shrink-0">
         {/* Security Gates Pill */}
         <div className="p-2.5 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col gap-1.5">
           <div className="flex items-center justify-between text-[11px]">
@@ -161,12 +166,56 @@ export function Sidebar({
 
         {/* Tenant and Role Indicator */}
         <div className="flex items-center justify-between px-1 text-[11px] text-zinc-400 font-mono">
-          <span className="truncate">Tenant: {currentTenant}</span>
-          <Badge variant="outline" className="text-[10px] h-4 px-1 font-mono">
+          <span className="truncate max-w-[130px]" title={currentTenant}>
+            Tenant: {currentTenant}
+          </span>
+          <Badge variant="outline" className="text-[10px] h-4 px-1 font-mono shrink-0">
             {currentRole}
           </Badge>
         </div>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Desktop Sidebar (visible on large screens lg:)
+ */
+export function Sidebar({ className, ...props }: SidebarProps) {
+  return (
+    <aside
+      className={cn(
+        'hidden lg:flex w-64 border-r bg-zinc-950/80 backdrop-blur flex-col justify-between shrink-0 h-screen sticky top-0 border-zinc-800/80 z-20',
+        className
+      )}
+    >
+      <SidebarContent {...props} />
     </aside>
+  )
+}
+
+/**
+ * Mobile Drawer Sidebar (slide-over sheet on mobile / tablet)
+ */
+export function MobileSidebar({ open, onOpenChange, ...props }: MobileSidebarProps) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="left"
+        className="w-[280px] p-0 bg-zinc-950 border-r border-zinc-800 text-zinc-100 flex flex-col h-full shadow-2xl"
+      >
+        <div className="sr-only">
+          <SheetTitle>Navigation Menu</SheetTitle>
+          <SheetDescription>Platform capabilities and audit controls</SheetDescription>
+        </div>
+        <SidebarContent
+          {...props}
+          onSelectTab={(tab) => {
+            props.onSelectTab(tab)
+            onOpenChange(false)
+          }}
+        />
+      </SheetContent>
+    </Sheet>
   )
 }

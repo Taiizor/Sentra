@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 
-import { Sidebar } from '@/components/layout/sidebar'
+import { Sidebar, MobileSidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { CommandPalette } from '@/components/layout/command-palette'
 import { WorkspaceTargetBar } from '@/components/layout/workspace-target-bar'
@@ -78,6 +78,7 @@ export function App() {
   } = useAppRouter()
 
   const [tenants, setTenants] = useState<TenantView[]>(DEFAULT_TENANTS)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false)
   const [isConsoleOpen, setIsConsoleOpen] = useState<boolean>(false)
   const [isCommandOpen, setIsCommandOpen] = useState<boolean>(false)
   const [isStreamModalOpen, setIsStreamModalOpen] = useState<boolean>(false)
@@ -689,8 +690,21 @@ export function App() {
   return (
     <TooltipProvider>
       <div className="min-h-screen bg-zinc-950 text-zinc-100 flex antialiased selection:bg-primary/30 selection:text-white">
-        {/* Enterprise Sidebar */}
+        {/* Desktop Sidebar (visible on lg: screens) */}
         <Sidebar
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          findingCount={tenantFindings.length}
+          patchCount={tenantPatches.length}
+          auditCount={tenantAuditLogs.length}
+          currentRole={currentRole}
+          currentTenant={currentTenant}
+        />
+
+        {/* Mobile Slide-Over Sheet Sidebar */}
+        <MobileSidebar
+          open={isMobileMenuOpen}
+          onOpenChange={setIsMobileMenuOpen}
           activeTab={activeTab}
           onSelectTab={setActiveTab}
           findingCount={tenantFindings.length}
@@ -716,12 +730,13 @@ export function App() {
             onToggleConsole={() => setIsConsoleOpen((v) => !v)}
             onOpenCommandPalette={() => setIsCommandOpen(true)}
             onJumpToStudio={() => setActiveTab('studio')}
+            onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
             isConsoleOpen={isConsoleOpen}
             activeTabTitle={getTabTitle(activeTab)}
           />
 
           {/* Main Body */}
-          <main className="flex-1 p-6 flex flex-col gap-6 max-w-[1600px] w-full mx-auto">
+          <main className="flex-1 p-3 sm:p-4 md:p-6 flex flex-col gap-4 sm:gap-6 max-w-[1600px] w-full mx-auto">
             {/* Live Workspace Target Bar (Selects real folder on disk & triggers real sentra.exe) */}
             <WorkspaceTargetBar
               currentRole={currentRole}
