@@ -1823,7 +1823,7 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
       }
     }
 
-    // POST /api/patch/apply - Safely Apply Verified Patch Directly to Workspace Source File
+    // POST /api/patch/apply - Safely Apply Verified Patch Directly to Workspace Source File via Native Core CLI
     if (url.pathname === "/api/patch/apply" && req.method === "POST") {
       try {
         const body = (await req.json()) as {
@@ -1835,65 +1835,45 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
 
         const workspace = path.resolve(body.workspace || REPO_ROOT);
         const relLocation = (body.targetLocation || "").replace(/^[ab]\//, "");
-        const targetPath = path.resolve(workspace, relLocation);
+        const patchTmpFile = path.resolve(STORAGE_DIR, `patch_${body.patchId || Date.now()}.diff`);
+        await fs.writeFile(patchTmpFile, body.diff, "utf8");
 
-        // Path Traversal Security Jail Guard
-        if (!targetPath.startsWith(workspace)) {
-          return new Response(
-            JSON.stringify({ error: "Path traversal violation: target file escapes workspace root boundary." }),
-            { status: 403, headers: corsHeaders }
-          );
-        }
+        const cliRes = await runSentra([
+          "patch",
+          "apply",
+          "--patch",
+          patchTmpFile,
+          "--workspace",
+          workspace,
+          "--target",
+          relLocation,
+          "--backup-dir",
+          BACKUP_DIR,
+          "--database",
+          DEFAULT_STORAGE,
+          "--json",
+        ]);
 
-        if (!fsSync.existsSync(targetPath)) {
-          return new Response(
-            JSON.stringify({ error: `Target file not found at path: ${targetPath}` }),
-            { status: 404, headers: corsHeaders }
-          );
-        }
+        await fs.rm(patchTmpFile, { force: true }).catch(() => {});
 
-        // 1. Create Atomic Safety Backup
-        const originalContent = await fs.readFile(targetPath, "utf8");
-        const cleanName = path.basename(targetPath);
-        const backupFileName = `${body.patchId || "patch"}_${cleanName}_${Date.now()}.bak`;
-        const backupPath = path.resolve(BACKUP_DIR, backupFileName);
-        await fs.writeFile(backupPath, originalContent, "utf8");
-
-        // 2. Apply Unified Diff Hunk
-        const patchRes = applyHunkToContent(originalContent, body.diff);
-        if (!patchRes.success) {
+        if (cliRes.code !== 0 || !cliRes.data || cliRes.data.status !== "success") {
           return new Response(
             JSON.stringify({
-              error: patchRes.error || "Failed to apply hunk to source content.",
-              backupPreserved: backupPath,
+              error: cliRes.data?.error || cliRes.stderr || "Patch application failed in core engine",
             }),
             { status: 422, headers: corsHeaders }
           );
         }
 
-        if (!patchRes.alreadyPatched) {
-          // Write remediated content to disk
-          await fs.writeFile(targetPath, patchRes.newContent, "utf8");
-        }
-
-        // 3. Record Immutable Audit Event in SQLite WAL
-        recordAuditEvent("patch_applied_to_workspace", {
-          patch_id: body.patchId,
-          target_location: relLocation,
-          resolved_path: targetPath,
-          backup_path: backupPath,
-          already_patched: !!patchRes.alreadyPatched,
-        });
-
         return new Response(
           JSON.stringify({
             success: true,
             patchId: body.patchId,
-            targetLocation: relLocation,
-            resolvedPath: targetPath,
-            backupPath,
-            alreadyPatched: !!patchRes.alreadyPatched,
-            message: patchRes.alreadyPatched
+            targetLocation: cliRes.data.target_path,
+            resolvedPath: path.resolve(workspace, cliRes.data.target_path),
+            backupPath: cliRes.data.backup_path,
+            alreadyPatched: !!cliRes.data.already_patched,
+            message: cliRes.data.already_patched
               ? "File is already in patched state."
               : "Patch applied successfully with atomic rollback backup preserved.",
           }),
@@ -1907,7 +1887,7 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
       }
     }
 
-    // POST /api/patch/rollback - Atomic Rollback from Backup
+    // POST /api/patch/rollback - Atomic Rollback from Backup via Native Core CLI
     if (url.pathname === "/api/patch/rollback" && req.method === "POST") {
       try {
         const body = (await req.json()) as {
@@ -1919,23 +1899,29 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
 
         const workspace = path.resolve(body.workspace || REPO_ROOT);
         const relLocation = (body.targetLocation || "").replace(/^[ab]\//, "");
-        const targetPath = path.resolve(workspace, relLocation);
 
-        if (!fsSync.existsSync(body.backupPath)) {
+        const cliRes = await runSentra([
+          "patch",
+          "rollback",
+          "--backup",
+          body.backupPath,
+          "--workspace",
+          workspace,
+          "--target",
+          relLocation,
+          "--database",
+          DEFAULT_STORAGE,
+          "--json",
+        ]);
+
+        if (cliRes.code !== 0 || !cliRes.data || cliRes.data.status !== "success") {
           return new Response(
-            JSON.stringify({ error: `Backup file not found at: ${body.backupPath}` }),
-            { status: 404, headers: corsHeaders }
+            JSON.stringify({
+              error: cliRes.data?.error || cliRes.stderr || "Rollback failed in core engine",
+            }),
+            { status: 422, headers: corsHeaders }
           );
         }
-
-        const backupContent = await fs.readFile(body.backupPath, "utf8");
-        await fs.writeFile(targetPath, backupContent, "utf8");
-
-        recordAuditEvent("patch_rolled_back", {
-          patch_id: body.patchId,
-          target_location: relLocation,
-          restored_from: body.backupPath,
-        });
 
         return new Response(
           JSON.stringify({
@@ -2549,24 +2535,12 @@ Target: Sentra (Pure-Rust Security Platform)
     if (url.pathname === "/api/scan-snippet" && req.method === "POST") {
       try {
         const body = (await req.json()) as { code: string; language?: string };
-        const extMap: Record<string, string> = {
-          rust: "rs",
-          python: "py",
-          javascript: "js",
-          typescript: "ts",
-          json: "json",
-          yaml: "yaml",
-          yml: "yml",
-          text: "txt",
-        };
-        const ext = extMap[body.language || ""] || "ts";
-        const tempDir = path.resolve(REPO_ROOT, "target/tmp_studio_" + Date.now());
-        await fs.mkdir(tempDir, { recursive: true });
-        const filePath = path.resolve(tempDir, `sample.${ext}`);
-        await fs.writeFile(filePath, body.code, "utf8");
+        if (!body.code) {
+          return new Response(JSON.stringify({ error: "Missing 'code' parameter" }), { status: 400, headers: corsHeaders });
+        }
 
-        const res = await runSentra(["scan", "--workspace", tempDir, "--json"]);
-        await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+        // Delegate directly to native Sentra CLI in-memory snippet scanner (Zero disk I/O)
+        const res = await runSentra(["scan", "--snippet", body.code, "--json"]);
 
         return new Response(JSON.stringify(res.data || { raw: res.stdout, error: res.stderr, code: res.code }), {
           headers: corsHeaders,

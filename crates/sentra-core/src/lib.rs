@@ -84,8 +84,9 @@ pub use dashboard::{
 };
 pub use diff::{
     DiffError, DiffErrorKind, DiffHunk, DiffLine, DiffSummary, FileContentDiff, FileDelta,
-    FileDeltaKind, HunkLimits, RevisionBinding, SnapshotDiff, compare_snapshots, compute_line_diff,
-    reconcile_findings_anti_regression, validate_patch_approval_invalidation,
+    FileDeltaKind, HunkLimits, PatchFileResult, PatchOutcome, RevisionBinding, SnapshotDiff,
+    apply_hunk_to_content, apply_patch_file, compare_snapshots, compute_line_diff,
+    reconcile_findings_anti_regression, rollback_patch_file, validate_patch_approval_invalidation,
 };
 pub use domain::{
     ApprovalId, AttemptId, CampaignId, Confidence, DomainError, EventId, EvidenceId, ExecutionId,
@@ -173,9 +174,10 @@ pub use sast::{
 };
 pub use service::{
     AdmitResultRequest, CancellationPhase, CancellationReason, CancellationReport, CoreService,
-    CoreServiceConfig, CoreServiceHarness, LocalAuditReport, LocalScanReport, ReconciledAttempt,
+    CoreServiceConfig, CoreServiceHarness, LocalAuditReport, LocalScanReport, LocalWorkspace,
+    LocalWorkspaceError, LocalWorkspaceErrorKind, LocalWorkspaceReport, ReconciledAttempt,
     ServiceError, ServiceErrorKind, ServicePolicyDecision, SessionResumeReport,
-    TaskExecutionReport, TaskExecutionRequest,
+    TaskExecutionReport, TaskExecutionRequest, TenantRecord,
 };
 pub use session::{
     AssessmentCompleteness, OperatingMode, SessionMetadata, SessionState, SessionStateMachine,

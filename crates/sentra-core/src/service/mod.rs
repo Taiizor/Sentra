@@ -24,5 +24,5 @@ pub use lifecycle::{
 };
 pub use local_workspace::{
     LocalAuditReport, LocalScanReport, LocalSessionSummary, LocalWorkspace, LocalWorkspaceError,
-    LocalWorkspaceErrorKind, LocalWorkspaceReport,
+    LocalWorkspaceErrorKind, LocalWorkspaceReport, TenantRecord,
 };

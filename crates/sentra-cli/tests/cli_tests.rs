@@ -1242,3 +1242,203 @@ fn binary_codeql_probe_and_sarif_ingest() {
     assert!(ingest_stdout.contains("\"highest_severity\":\"HIGH\""));
     assert!(ingest_stdout.contains("py/sql-injection"));
 }
+
+#[test]
+fn binary_fleet_commands() {
+    let status_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["fleet", "status", "--json"])
+        .output()
+        .unwrap();
+    assert!(status_out.status.success());
+    let status_str = String::from_utf8(status_out.stdout).unwrap();
+    assert!(status_str.contains("\"command\":\"fleet status\""));
+    assert!(status_str.contains("\"total_workers\":4"));
+    assert!(status_str.contains("\"containment_ready\":true"));
+
+    let list_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["fleet", "list", "--json"])
+        .output()
+        .unwrap();
+    assert!(list_out.status.success());
+    let list_str = String::from_utf8(list_out.stdout).unwrap();
+    assert!(list_str.contains("\"command\":\"fleet list\""));
+    assert!(list_str.contains("worker-x86-01"));
+}
+
+#[test]
+fn binary_tenant_commands() {
+    let f = Fixture::new();
+    let init_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "init",
+            "--workspace",
+            f.workspace.to_str().unwrap(),
+            "--database",
+            f.db.to_str().unwrap(),
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(init_out.status.success());
+
+    let list_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["tenant", "list", "--database", f.db.to_str().unwrap(), "--json"])
+        .output()
+        .unwrap();
+    assert!(list_out.status.success());
+    let list_str = String::from_utf8(list_out.stdout).unwrap();
+    assert!(list_str.contains("\"command\":\"tenant list\""));
+    assert!(list_str.contains("sentra-internal"));
+
+    let add_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "tenant",
+            "add",
+            "--id",
+            "custom-corp",
+            "--name",
+            "Custom Corp Global",
+            "--database",
+            f.db.to_str().unwrap(),
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(add_out.status.success());
+    let add_str = String::from_utf8(add_out.stdout).unwrap();
+    assert!(add_str.contains("\"command\":\"tenant add\""));
+    assert!(add_str.contains("custom-corp"));
+
+    let list_after = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["tenant", "list", "--database", f.db.to_str().unwrap(), "--json"])
+        .output()
+        .unwrap();
+    let list_after_str = String::from_utf8(list_after.stdout).unwrap();
+    assert!(list_after_str.contains("custom-corp"));
+}
+
+#[test]
+fn binary_config_commands() {
+    let f = Fixture::new();
+    let set_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "config",
+            "set",
+            "--key",
+            "ai_provider",
+            "--value",
+            "anthropic",
+            "--database",
+            f.db.to_str().unwrap(),
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(set_out.status.success());
+    let set_str = String::from_utf8(set_out.stdout).unwrap();
+    assert!(set_str.contains("\"command\":\"config set\""));
+
+    let show_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "config",
+            "show",
+            "--key",
+            "ai_provider",
+            "--database",
+            f.db.to_str().unwrap(),
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(show_out.status.success());
+    let show_str = String::from_utf8(show_out.stdout).unwrap();
+    assert!(show_str.contains("anthropic"));
+
+    let test_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["config", "test", "--provider", "anthropic", "--json"])
+        .output()
+        .unwrap();
+    assert!(test_out.status.success());
+    let test_str = String::from_utf8(test_out.stdout).unwrap();
+    assert!(test_str.contains("\"status\":\"connected\""));
+}
+
+#[test]
+fn binary_scan_snippet() {
+    let snippet_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "scan",
+            "--snippet",
+            "const awsKey = 'AKIAIOSFODNN7EXAMPLE';",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(snippet_out.status.success());
+    let str_out = String::from_utf8(snippet_out.stdout).unwrap();
+    assert!(str_out.contains("\"signals_found\":1"));
+    assert!(str_out.contains("SENTRA-SEC-001"));
+}
+
+#[test]
+fn binary_patch_apply_and_rollback() {
+    let f = Fixture::new();
+    let target_file = f.workspace.join("auth.ts");
+    fs::write(&target_file, "function auth() {\n  let token = 'old';\n}\n").unwrap();
+
+    let patch_file = f.root.join("fix.patch");
+    let diff = "--- a/auth.ts\n+++ b/auth.ts\n@@ -2,1 +2,1 @@\n-  let token = 'old';\n+  let token = process.env.TOKEN;\n";
+    fs::write(&patch_file, diff).unwrap();
+
+    let backup_dir = f.root.join("backups");
+
+    let apply_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "patch",
+            "apply",
+            "--patch",
+            patch_file.to_str().unwrap(),
+            "--workspace",
+            f.workspace.to_str().unwrap(),
+            "--target",
+            "auth.ts",
+            "--backup-dir",
+            backup_dir.to_str().unwrap(),
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(apply_out.status.success());
+    let apply_str = String::from_utf8(apply_out.stdout).unwrap();
+    assert!(apply_str.contains("\"command\":\"patch apply\""));
+    assert!(apply_str.contains("\"status\":\"success\""));
+
+    let patched_content = fs::read_to_string(&target_file).unwrap();
+    assert!(patched_content.contains("let token = process.env.TOKEN;"));
+
+    // Find the backup file created
+    let backup_entries = fs::read_dir(&backup_dir).unwrap().collect::<Vec<_>>();
+    assert_eq!(backup_entries.len(), 1);
+    let backup_path = backup_entries[0].as_ref().unwrap().path();
+
+    let rollback_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "patch",
+            "rollback",
+            "--backup",
+            backup_path.to_str().unwrap(),
+            "--workspace",
+            f.workspace.to_str().unwrap(),
+            "--target",
+            "auth.ts",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(rollback_out.status.success());
+    let rollback_str = String::from_utf8(rollback_out.stdout).unwrap();
+    assert!(rollback_str.contains("\"command\":\"patch rollback\""));
+
+    let rolled_back_content = fs::read_to_string(&target_file).unwrap();
+    assert!(rolled_back_content.contains("let token = 'old';"));
+}
