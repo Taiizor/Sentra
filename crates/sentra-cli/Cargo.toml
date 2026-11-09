@@ -9,7 +9,7 @@ homepage.workspace = true
 readme = "README.md"
 description = "Command-line interface for the Sentra autonomous security research and verified remediation platform"
 documentation = "https://docs.rs/sentra-cli"
-keywords = ["security", "cli", "sast", "vulnerability-scanner", "mcp"]
+keywords = ["security", "cli", "sast", "audit", "mcp"]
 categories = ["command-line-utilities", "development-tools"]
 
 [[bin]]

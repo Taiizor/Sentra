@@ -9,7 +9,7 @@ homepage.workspace = true
 documentation = "https://docs.rs/sentra"
 readme = "README.md"
 description = "Autonomous security research, taint analysis, and independently verified remediation platform"
-keywords = ["security", "sast", "taint-analysis", "vulnerability-scanner", "mcp"]
+keywords = ["security", "sast", "taint-analysis", "audit", "mcp"]
 categories = ["development-tools"]
 
 [dependencies]
