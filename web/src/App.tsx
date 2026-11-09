@@ -4,7 +4,11 @@ import {
   Shield,
   CheckCircle2,
   AlertTriangle,
+  Copy,
+  Check,
 } from 'lucide-react'
+import { toast } from 'sonner'
+import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   Dialog,
@@ -142,13 +146,18 @@ export function App() {
     a.download = `sentra-findings-${currentTenant}.sarif`
     a.click()
     URL.revokeObjectURL(url)
+    toast.success('SARIF Report Exported', {
+      description: `Downloaded sentra-findings-${currentTenant}.sarif (OASIS v2.1.0)`,
+    })
   }
 
   // Real scan action triggered against sentra.exe
   async function handleRealScan() {
     setIsScanning(true)
+    const startMs = performance.now()
     try {
       const res = await triggerLiveScan(currentWorkspace)
+      const durationMs = Math.round(performance.now() - startMs)
       const realFindings = transformMatchesToFindings(res.matches || [])
 
       setFindings(realFindings)
@@ -163,7 +172,7 @@ export function App() {
         criticalFindings: criticalCount,
         highFindings: highCount,
         mediumFindings: mediumCount,
-        securityScore: Math.max(40, 100 - criticalCount * 12 - highCount * 5),
+        securityScore: Math.max(35, 100 - criticalCount * 12 - highCount * 5),
         auditEventCount: prev.auditEventCount + 1,
       }))
 
@@ -186,16 +195,23 @@ export function App() {
           sequenceNumber: prev.length + 1,
           actor: `operator-${currentRole.toLowerCase()}`,
           action: 'live_sast_scan_executed',
-          details: `Scanned ${res.files_scanned} files in ${currentWorkspace}. Found ${res.signals_found} signals, admitted ${realFindings.length} findings.`,
+          details: `Scanned ${res.files_scanned} files in ${currentWorkspace}. Found ${res.signals_found} signals, admitted ${realFindings.length} findings in ${durationMs}ms.`,
           cryptoHash: `sha256:${Date.now().toString(16)}...`,
           timestamp: new Date().toISOString(),
         },
         ...prev,
       ])
 
+      toast.success('Pure-Rust SAST & Taint Scan Complete', {
+        description: `Scanned ${res.files_scanned} files in ${durationMs}ms. Admitted ${realFindings.length} findings.`,
+      })
+
       setActiveTab('findings')
     } catch (err) {
       console.error('Failed to trigger scan:', err)
+      toast.error('Scan Failed', {
+        description: 'Failed to communicate with sentra.exe binary.',
+      })
     } finally {
       setIsScanning(false)
     }
@@ -204,8 +220,10 @@ export function App() {
   // Real audit action against sentra.exe
   async function handleRealAudit() {
     setIsAuditing(true)
+    const startMs = performance.now()
     try {
       const res = await triggerLiveAudit(currentWorkspace)
+      const durationMs = Math.round(performance.now() - startMs)
       setAuditLogs((prev) => [
         {
           eventId: `evt-audit-${Date.now().toString().slice(-4)}`,
@@ -223,8 +241,14 @@ export function App() {
         ...prev,
         auditEventCount: prev.auditEventCount + 1,
       }))
+      toast.success('Lockfile Security Audit Complete', {
+        description: `Audited ${res.packages_audited} packages in ${durationMs}ms. Vulnerable packages: ${res.vulnerable_packages}`,
+      })
     } catch (err) {
       console.error('Failed to audit dependencies:', err)
+      toast.error('Audit Failed', {
+        description: 'Failed to execute lockfile audit.',
+      })
     } finally {
       setIsAuditing(false)
     }
@@ -233,8 +257,10 @@ export function App() {
   // Real CodeQL probe action against sentra.exe
   async function handleRealCodeQl() {
     setIsCodeQlProbing(true)
+    const startMs = performance.now()
     try {
       const res = await triggerLiveCodeQl(currentWorkspace)
+      const durationMs = Math.round(performance.now() - startMs)
       const langSummary = (res.detected_languages || []).map((l) => `${l.language}: ${l.files_count}`).join(', ')
       setAuditLogs((prev) => [
         {
@@ -253,8 +279,14 @@ export function App() {
         ...prev,
         auditEventCount: prev.auditEventCount + 1,
       }))
+      toast.info('CodeQL Polyglot Discovery Ready', {
+        description: `Primary language: ${res.primary_language}. Detected ${res.detected_languages?.length || 0} language ecosystem(s) in ${durationMs}ms.`,
+      })
     } catch (err) {
       console.error('Failed to probe CodeQL:', err)
+      toast.error('CodeQL Probe Failed', {
+        description: 'Failed to inspect workspace languages.',
+      })
     } finally {
       setIsCodeQlProbing(false)
     }
@@ -515,22 +547,42 @@ export function App() {
               <pre className="whitespace-pre-wrap">{sarifModalContent}</pre>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-zinc-800">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setSarifModalContent(null)}
-                className="border-zinc-800"
+                onClick={() => {
+                  if (sarifModalContent) {
+                    navigator.clipboard.writeText(sarifModalContent)
+                    toast.success('SARIF JSON copied to clipboard')
+                  }
+                }}
+                className="border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-zinc-100"
               >
-                Close
+                <Copy className="size-3.5 mr-1.5" />
+                Copy SARIF JSON
               </Button>
-              <Button size="sm" onClick={handleDownloadSarif}>
-                <FileDown data-icon="inline-start" />
-                Download .sarif File
-              </Button>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSarifModalContent(null)}
+                  className="border-zinc-800"
+                >
+                  Close
+                </Button>
+                <Button size="sm" onClick={handleDownloadSarif} className="bg-primary text-primary-foreground font-semibold">
+                  <FileDown className="size-3.5 mr-1.5" />
+                  Download .sarif File
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Global Sonner Toaster */}
+        <Toaster />
       </div>
     </TooltipProvider>
   )

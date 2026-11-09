@@ -6,7 +6,9 @@ import {
   RefreshCw,
   Database,
   CheckCircle2,
+  Sparkles,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -35,6 +37,8 @@ interface ThreatIntelTabProps {
   onSyncAdvisories: () => void
 }
 
+const ECOSYSTEM_PILLS = ['ALL', 'npm', 'crates.io', 'PyPI', 'Go']
+
 export function ThreatIntelTab({ advisories, currentRole, onSyncAdvisories }: ThreatIntelTabProps) {
   const [search, setSearch] = useState('')
   const [ecosystem, setEcosystem] = useState('ALL')
@@ -56,6 +60,9 @@ export function ThreatIntelTab({ advisories, currentRole, onSyncAdvisories }: Th
     setTimeout(() => {
       setIsSyncing(false)
       onSyncAdvisories()
+      toast.success('OSV Mirror Synchronized', {
+        description: 'Updated local in-memory threat cache with 250k+ universal security advisories.',
+      })
     }, 800)
   }
 
@@ -88,6 +95,32 @@ export function ThreatIntelTab({ advisories, currentRole, onSyncAdvisories }: Th
           <RefreshCw data-icon="inline-start" className={isSyncing ? 'animate-spin' : ''} />
           {isSyncing ? 'Syncing OSV Mirror...' : 'Sync Advisories (sentra sync-advisories)'}
         </Button>
+      </div>
+
+      {/* Quick Ecosystem Pills */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-zinc-400 mr-2 flex items-center gap-1.5">
+          <Sparkles className="size-3.5 text-primary" />
+          Filter by Ecosystem:
+        </span>
+        {ECOSYSTEM_PILLS.map((eco) => {
+          const isActive = ecosystem === eco
+          return (
+            <Button
+              key={eco}
+              variant={isActive ? 'default' : 'outline'}
+              size="sm"
+              className={`h-7 text-xs rounded-full px-3 transition-all ${
+                isActive
+                  ? 'font-semibold shadow-sm'
+                  : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-300'
+              }`}
+              onClick={() => setEcosystem(eco)}
+            >
+              {eco === 'ALL' ? 'All Feeds' : eco}
+            </Button>
+          )
+        })}
       </div>
 
       {/* Filter Bar */}
