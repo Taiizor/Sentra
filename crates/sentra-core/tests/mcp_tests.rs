@@ -74,7 +74,7 @@ fn test_tools_list_returns_canonical_suite() {
         .expect("Expected tools array")
         .clone();
 
-    assert_eq!(tools.len(), 7);
+    assert_eq!(tools.len(), 8);
     let names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
 
     assert!(names.contains(&"sentra_discover_workspace"));
@@ -84,6 +84,7 @@ fn test_tools_list_returns_canonical_suite() {
     assert!(names.contains(&"sentra_propose_patch"));
     assert!(names.contains(&"sentra_request_approval"));
     assert!(names.contains(&"sentra_scan_code"));
+    assert!(names.contains(&"sentra_codeql_ingest"));
 
     for tool in &tools {
         assert_eq!(tool["inputSchema"]["type"], "object");

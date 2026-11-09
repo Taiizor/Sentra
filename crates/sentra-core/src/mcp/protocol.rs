@@ -209,5 +209,19 @@ pub fn canonical_tool_definitions() -> Vec<ToolDefinition> {
                 }
             }),
         },
+        ToolDefinition {
+            name: "sentra_codeql_ingest".to_string(),
+            description: "Ingests GitHub CodeQL SARIF v2.1.0 output into Sentra, extracting interprocedural taint flows (REQ-F05, REQ-F16).".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "sarif_content": {
+                        "type": "string",
+                        "description": "Raw JSON content of the CodeQL SARIF v2.1.0 report"
+                    }
+                },
+                "required": ["sarif_content"]
+            }),
+        },
     ]
 }

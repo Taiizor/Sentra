@@ -6,7 +6,10 @@ use std::collections::{HashMap, HashSet};
 use crate::{
     advisory::{AdvisoryDatabase, LockfileKind, parse_lockfile_content},
     common::crypto::sha256_prefixed,
-    domain::{TimestampUtc, id::SessionId},
+    domain::{
+        TimestampUtc,
+        id::{SessionId, TaskId},
+    },
     mcp::{
         error::{McpErrorCode, McpErrorObject},
         protocol::{McpRequest, McpResponse, ToolDefinition, canonical_tool_definitions},
@@ -305,6 +308,34 @@ impl McpServer {
                             "snippet": m.snippet
                         })
                     }).collect::<Vec<_>>()
+                }))
+            }
+            "sentra_codeql_ingest" => {
+                let sarif_content = args
+                    .get("sarif_content")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        McpErrorObject::invalid_params("Missing required 'sarif_content' argument")
+                    })?;
+
+                let clock_now = TimestampUtc::now();
+                let task_id = TaskId::new();
+                let res = crate::plugin::codeql::ingest_codeql_sarif_payload(
+                    sarif_content,
+                    &self.session_id,
+                    task_id,
+                    clock_now,
+                )
+                .map_err(|e| {
+                    McpErrorObject::internal_error(format!("CodeQL SARIF ingest failed: {e}"))
+                })?;
+
+                Ok(serde_json::json!({
+                    "total_sarif_results": res.total_sarif_results,
+                    "findings_admitted": res.findings.len(),
+                    "taint_traces_extracted": res.taint_traces_extracted,
+                    "rules": res.rules_identified,
+                    "highest_severity": res.highest_severity.map(|s| s.to_string())
                 }))
             }
             // Sensitive actions requiring explicit human approval ticket

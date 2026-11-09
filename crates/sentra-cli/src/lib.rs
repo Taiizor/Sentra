@@ -10,10 +10,11 @@ use std::{
 };
 
 use sentra_core::{
-    AdvisoryDatabase, ContainmentLevel, DEFAULT_MAX_LINE_BYTES, EgressPolicy, FileDeltaKind,
-    McpServer, MultiUserAuditReport, MultiUserSecurityAudit, RemediationPrPackage, RemoteWorkerId,
-    RemoteWorkerNode, SastReport, SessionId, SnapshotDiff, TimestampUtc, WorkerArchitecture,
-    WorkerFleetManager, WorkerResourceCaps,
+    AdvisoryDatabase, CodeQlProbeReport, CodeQlSarifIngestResult, ContainmentLevel,
+    DEFAULT_MAX_LINE_BYTES, EgressPolicy, FileDeltaKind, McpServer, MultiUserAuditReport,
+    MultiUserSecurityAudit, RemediationPrPackage, RemoteWorkerId, RemoteWorkerNode, SastReport,
+    SessionId, SnapshotDiff, TimestampUtc, WorkerArchitecture, WorkerFleetManager,
+    WorkerResourceCaps,
     fleet::AuditStatus,
     process_transport_line,
     service::{
@@ -22,7 +23,7 @@ use sentra_core::{
     },
 };
 
-pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra recover --database <file> [--workspace <directory>] [--json]\n  sentra audit --database <file> [--workspace <directory>] [--json]\n  sentra scan [--workspace <directory>] [--database <file>] [--sarif <file>] [--json]\n  sentra sync-advisories --source <directory-or-file> [--database <file>] [--json]\n  sentra propose-pr --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra diff --base <directory> --head <directory> [--json]\n  sentra verify-audit [--json]\n  sentra export sarif --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra mcp\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session/audit default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\nAudit analyzes multi-ecosystem lockfiles (Cargo, npm, yarn, pnpm, bun, deno).\nScan executes pure-Rust static analysis for secrets and code antipatterns.\nSync-advisories ingests universal OSV JSON advisories into the advisory database.\nPropose-pr packages verified vulnerabilities into GitHub Draft PR proposals.\nDiff compares base and head directory snapshots with pure-Rust hashing.\nVerify-audit evaluates the 5 mandatory multi-user hosting security containment gates.\nExport sarif converts dependency and SAST findings into an OASIS SARIF v2.1.0 document.\nMcp runs the JSON-RPC 2.0 Model Context Protocol stdio transport server.\n";
+pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra recover --database <file> [--workspace <directory>] [--json]\n  sentra audit --database <file> [--workspace <directory>] [--json]\n  sentra scan [--workspace <directory>] [--database <file>] [--sarif <file>] [--json]\n  sentra sync-advisories --source <directory-or-file> [--database <file>] [--json]\n  sentra propose-pr --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra codeql [--workspace <directory>] [--sarif <file>] [--database <file>] [--json]\n  sentra diff --base <directory> --head <directory> [--json]\n  sentra verify-audit [--json]\n  sentra export sarif --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra mcp\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session/audit default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\nAudit analyzes multi-ecosystem lockfiles (Cargo, npm, yarn, pnpm, bun, deno).\nScan executes pure-Rust static analysis for secrets and code antipatterns.\nSync-advisories ingests universal OSV JSON advisories into the advisory database.\nPropose-pr packages verified vulnerabilities into GitHub Draft PR proposals.\nCodeql probes workspace for languages, generates CLI commands, or ingests CodeQL SARIF logs.\nDiff compares base and head directory snapshots with pure-Rust hashing.\nVerify-audit evaluates the 5 mandatory multi-user hosting security containment gates.\nExport sarif converts dependency and SAST findings into an OASIS SARIF v2.1.0 document.\nMcp runs the JSON-RPC 2.0 Model Context Protocol stdio transport server.\n";
 
 /// Typed presentation command. Paths are untrusted until validated by Core.
 pub enum Command {
@@ -62,6 +63,11 @@ pub enum Command {
         workspace: Option<PathBuf>,
         database: PathBuf,
         output: Option<PathBuf>,
+    },
+    Codeql {
+        workspace: Option<PathBuf>,
+        sarif: Option<PathBuf>,
+        database: Option<PathBuf>,
     },
     Diff {
         base: PathBuf,
@@ -127,6 +133,7 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
             | "scan"
             | "sync-advisories"
             | "propose-pr"
+            | "codeql"
             | "diff"
             | "mcp"
             | "verify-audit"
@@ -211,6 +218,35 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
                 workspace,
                 database,
                 output,
+            },
+            json,
+        });
+    }
+    if name == "codeql" {
+        let mut workspace = None;
+        let mut sarif = None;
+        let mut database = None;
+        let mut rest = words.into_iter();
+        while let Some(flag) = rest.next() {
+            let value = rest.next().ok_or_else(invalid)?;
+            if value.is_empty() || value.starts_with('-') {
+                return Err(invalid());
+            }
+            match flag {
+                "--workspace" if workspace.is_none() => workspace = Some(PathBuf::from(value)),
+                "--sarif" if sarif.is_none() => sarif = Some(PathBuf::from(value)),
+                "--database" if database.is_none() => database = Some(PathBuf::from(value)),
+                _ => return Err(invalid()),
+            }
+        }
+        if workspace.is_none() && sarif.is_none() {
+            return Err(invalid());
+        }
+        return Ok(Invocation {
+            command: Command::Codeql {
+                workspace,
+                sarif,
+                database,
             },
             json,
         });
@@ -685,6 +721,33 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
                 Err(source) => core_error(source, json),
             }
         }
+        Command::Codeql {
+            workspace,
+            sarif,
+            database,
+        } => {
+            if let Some(sarif_file) = sarif {
+                let sarif_path = absolute(&sarif_file, cwd);
+                let ws_path = workspace.map(|w| absolute(&w, cwd));
+                let db_path = database.map(|d| absolute(&d, cwd));
+                match LocalWorkspace::ingest_codeql_sarif(
+                    ws_path.as_deref(),
+                    db_path.as_deref(),
+                    &sarif_path,
+                ) {
+                    Ok(result) => render_codeql_ingest(&result, json),
+                    Err(source) => core_error(source, json),
+                }
+            } else if let Some(ws) = workspace {
+                let ws_path = absolute(&ws, cwd);
+                match LocalWorkspace::probe_codeql(&ws_path) {
+                    Ok(probe) => render_codeql_probe(&probe, json),
+                    Err(source) => core_error(source, json),
+                }
+            } else {
+                error("invalid_arguments", 2, json)
+            }
+        }
         Command::Diff { base, head } => {
             let base_path = absolute(&base, cwd);
             let head_path = absolute(&head, cwd);
@@ -1031,6 +1094,132 @@ fn render_propose_pr(proposals: &[RemediationPrPackage], json: bool) -> Response
                 p.gh_command
             ));
         }
+        text
+    };
+    Response {
+        stdout,
+        stderr: String::new(),
+        exit_code: 0,
+    }
+}
+
+fn render_codeql_probe(probe: &CodeQlProbeReport, json: bool) -> Response {
+    let stdout = if json {
+        let langs_json = probe
+            .detected_languages
+            .iter()
+            .map(|(l, c)| {
+                format!(
+                    "{{\"language\":\"{}\",\"files_count\":{}}}",
+                    l.as_codeql_identifier(),
+                    c
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        let primary_str = probe
+            .primary_language
+            .map(|p| format!("\"{}\"", p.as_codeql_identifier()))
+            .unwrap_or_else(|| "null".to_string());
+        let create_str = probe
+            .database_create_command
+            .as_ref()
+            .map(|c| format!("\"{}\"", c.replace('\\', "/")))
+            .unwrap_or_else(|| "null".to_string());
+        let analyze_str = probe
+            .database_analyze_command
+            .as_ref()
+            .map(|c| format!("\"{}\"", c.replace('\\', "/")))
+            .unwrap_or_else(|| "null".to_string());
+        format!(
+            "{{\"schema_version\":1,\"command\":\"codeql\",\"mode\":\"probe\",\"workspace\":\"{}\",\"primary_language\":{},\"detected_languages\":[{}],\"database_create_command\":{},\"database_analyze_command\":{},\"untrusted_execution\":false}}\n",
+            probe.workspace_root, primary_str, langs_json, create_str, analyze_str
+        )
+    } else {
+        let mut text = format!(
+            "Sentra CodeQL workspace probe: completed\nWorkspace: {}\n",
+            probe.workspace_root
+        );
+        if let Some(primary) = probe.primary_language {
+            text.push_str(&format!("Primary language: {}\n", primary));
+        }
+        text.push_str("Detected languages:\n");
+        for (lang, count) in &probe.detected_languages {
+            text.push_str(&format!(
+                "  - {:<12} ({} files)\n",
+                lang.as_codeql_identifier(),
+                count
+            ));
+        }
+        if let Some(create) = &probe.database_create_command {
+            text.push_str(&format!("CodeQL Database Create:\n  {}\n", create));
+        }
+        if let Some(analyze) = &probe.database_analyze_command {
+            text.push_str(&format!("CodeQL Database Analyze:\n  {}\n", analyze));
+        }
+        text.push_str("Untrusted execution: disabled\n");
+        text
+    };
+    Response {
+        stdout,
+        stderr: String::new(),
+        exit_code: 0,
+    }
+}
+
+fn render_codeql_ingest(result: &CodeQlSarifIngestResult, json: bool) -> Response {
+    let stdout = if json {
+        let rules_json = result
+            .rules_identified
+            .iter()
+            .map(|r| format!("\"{}\"", r.replace('"', "\\\"")))
+            .collect::<Vec<_>>()
+            .join(",");
+        let highest_str = result
+            .highest_severity
+            .map(|s| format!("\"{}\"", s.as_str()))
+            .unwrap_or_else(|| "null".to_string());
+        format!(
+            "{{\"schema_version\":1,\"command\":\"codeql\",\"mode\":\"ingest\",\"total_sarif_results\":{},\"findings_admitted\":{},\"taint_traces_extracted\":{},\"highest_severity\":{},\"rules\":[{}],\"untrusted_execution\":false}}\n",
+            result.total_sarif_results,
+            result.findings.len(),
+            result.taint_traces_extracted,
+            highest_str,
+            rules_json
+        )
+    } else {
+        let mut text = format!(
+            "Sentra CodeQL analysis ingestion: completed\nTotal SARIF results: {}\nFindings admitted: {}\nTaint traces extracted: {}\nHighest severity: {}\nRules identified: {}\n\n",
+            result.total_sarif_results,
+            result.findings.len(),
+            result.taint_traces_extracted,
+            result
+                .highest_severity
+                .map(|s| s.as_str())
+                .unwrap_or("NONE"),
+            result.rules_identified.join(", ")
+        );
+        for f in &result.findings {
+            let loc_str = f
+                .location()
+                .map(|l| {
+                    if let Some(line) = l.start_line {
+                        format!("{}:{}", l.path, line)
+                    } else {
+                        l.path.clone()
+                    }
+                })
+                .unwrap_or_else(|| "unknown".to_string());
+
+            text.push_str(&format!(
+                "  [{}] {:<8} {} -> {}\n",
+                f.id(),
+                f.severity().as_str(),
+                loc_str,
+                f.title()
+            ));
+        }
+        text.push_str("Untrusted execution: disabled\n");
         text
     };
     Response {

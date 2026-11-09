@@ -4,6 +4,31 @@ Last updated: 2026-11-09.
 
 ## Current status
 
+CodeQL Adapter Integration & In-Engine Pure-Rust Taint Analysis Engine: IMPLEMENTED & VERIFIED (`sentra-core::plugin::codeql`, `sentra-core::sast::taint`, `sentra codeql`, MCP `sentra_codeql_ingest`). Delivered enterprise-grade taint tracking and static data-flow analysis to Sentra across both external CodeQL adapter orchestration and a native pure-Rust in-engine semantic data-flow tracker under `#![forbid(unsafe_code)]`:
+- **CodeQL Adapter Integration (`crates/sentra-core/src/plugin/codeql.rs`):**
+  - Implemented `CodeQlAdapter` adhering to Sentra's `PluginHost` / `PluginManifest` with `AdapterFamily::AnalysisTool` and `PluginCapability::StaticAnalysis`.
+  - Added workspace polyglot language detection (`CodeQlLanguage` supporting JavaScript/TypeScript, Python, Rust, Go, C/C++, Java, C#, Ruby, Swift) with automatic file counting and primary language selection.
+  - Generates deterministic CLI execution plans: `codeql database create` and `codeql database analyze` targeting SARIF v2.1.0 output.
+  - Implemented SARIF v2.1.0 ingestion engine extracting interprocedural taint flows from `codeFlows` and `threadFlows`, reconstructing multi-step call graph traces from `Source` through `Propagation` and `Sanitizer` to `Sink`.
+  - Normalizes CodeQL results into canonical `Finding` records with `Reachability::ReachableCallPath`, `Confidence::High`, security severity calculation, and formatted Markdown call path tables.
+  - Integrated into `sentra-cli` (`sentra codeql [--workspace <dir>] [--sarif <file>] [--database <file>] [--json]`) and MCP server tool `sentra_codeql_ingest`.
+- **In-Engine Pure-Rust Taint Analysis & Data-Flow Tracking Engine (`crates/sentra-core/src/sast/taint/`):**
+  - Built pure-Rust, zero-dependency, ReDoS-proof intra-procedural data-flow tracking engine (`TaintAnalysisEngine`) operating without external tools or compiler wrappers.
+  - Tracks symbol tables and lexical variable assignments (`let`, `const`, `var`, Python assignments, Rust `let mut`).
+  - Detects untrusted external sources (`req.body`, `req.query`, `req.params`, `request.args`, `request.form`, `sys.argv`, `process.argv`, `env::args`, etc.).
+  - Tracks data propagation across variable reassignments, method transformations, string concatenations, template literals, and format strings.
+  - Implements sanitizer guards (`parseInt`, `parseFloat`, `int()`, `float()`, `.parse::<...>()`, `to_digit()`, `uuid::parse()`, `escape_string()`, `encodeURIComponent()`, `validator.is...()`, `html.escape()`).
+  - Implements sink checks for SQL queries (`db.query`, `db.execute`, `cursor.execute`, `sqlx::query`), OS commands (`exec`, `system`, `subprocess`, `Command::new`), dynamic eval (`eval`), and path traversal (`readFile`, `open`, `File::open`).
+  - **False Positive Elimination:** Suppresses alerts when sinks consume static string constants or variables sanitized along the flow path.
+  - Added 4 canonical in-engine taint rules: `SENTRA-TAINT-001` (SQL Injection via Taint Flow, CWE-89), `SENTRA-TAINT-002` (Command Injection via Taint Flow, CWE-78), `SENTRA-TAINT-003` (Dynamic Code Eval via Taint Flow, CWE-95), and `SENTRA-TAINT-004` (Path Traversal via Taint Flow, CWE-22).
+  - Integrated into `SastScanner::scan_content` and `SastReport::to_candidate_findings` with `Reachability::ReachableCallPath`.
+- **Quality & Verification:**
+  - 5/5 tests in `crates/sentra-core/tests/codeql_tests.rs`.
+  - 6/6 tests in `crates/sentra-core/tests/taint_tests.rs`.
+  - 38/38 tests in `crates/sentra-cli/tests/cli_tests.rs`.
+  - 11/11 tests in `crates/sentra-core/tests/mcp_tests.rs`.
+  - Entire workspace test suite passing with 0 failures (`cargo test --workspace`), zero Clippy warnings (`cargo clippy --workspace --all-targets --all-features -- -D warnings`), and clean formatting (`cargo fmt --all -- --check`).
+
 Pure-Rust SAST & Secret Scanner Engine, Live OSV Feed Ingestion & Automated Remediation PR Proposer: IMPLEMENTED & VERIFIED (`sentra-core::sast`, `sentra-core::advisory::osv`, `sentra-core::remediation`, `sentra scan`, `sentra sync-advisories`, `sentra propose-pr`, MCP `sentra_scan_code`). Completed Sentra's remaining core capabilities under `#![forbid(unsafe_code)]` without external regex or subprocess dependencies:
 - **Pure-Rust SAST & Secret Scanner Engine (`crates/sentra-core/src/sast/`):**
   - Implemented 10 high-precision built-in rules spanning secrets (`SENTRA-SEC-001` AWS Access Key ID, `SENTRA-SEC-002` GitHub Personal Access Tokens, `SENTRA-SEC-003` Slack API/Bot Tokens, `SENTRA-SEC-004` Private Cryptographic Keys, `SENTRA-SEC-005` Generic High-Entropy API Keys) and code antipatterns (`SENTRA-SAST-001` SQL Injection String Interpolation, `SENTRA-SAST-002` Command Injection via Shell Wrappers, `SENTRA-SAST-003` Dangerous JavaScript `eval()`, `SENTRA-SAST-004` Naked Rust `unsafe` Blocks without `// SAFETY:` rationale, `SENTRA-SAST-005` Path Traversal Pattern).

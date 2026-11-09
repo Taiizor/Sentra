@@ -1122,3 +1122,123 @@ fn binary_propose_pr_generates_draft_proposals() {
     assert!(stdout.contains("GHSA-p6mc-m468-83gw"));
     assert!(stdout.contains("gh pr create --draft"));
 }
+
+#[test]
+fn binary_codeql_probe_and_sarif_ingest() {
+    let f = Fixture::new();
+    f.init();
+
+    // 1. Test CodeQL Probe
+    fs::write(
+        f.workspace.join("service.py"),
+        "import sys\nprint(sys.argv)",
+    )
+    .unwrap();
+    let probe_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "codeql",
+            "--workspace",
+            f.workspace.to_str().unwrap(),
+            "--json",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(probe_out.status.success());
+    let probe_stdout = String::from_utf8(probe_out.stdout).unwrap();
+    assert!(probe_stdout.contains("\"command\":\"codeql\""));
+    assert!(probe_stdout.contains("\"mode\":\"probe\""));
+    assert!(probe_stdout.contains("\"primary_language\":\"python\""));
+    assert!(probe_stdout.contains("codeql database create"));
+
+    // 2. Test CodeQL SARIF Ingest
+    let sample_sarif = r#"{
+      "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+      "version": "2.1.0",
+      "runs": [
+        {
+          "tool": {
+            "driver": {
+              "name": "CodeQL",
+              "rules": [
+                {
+                  "id": "py/sql-injection",
+                  "name": "SQL Injection",
+                  "properties": { "security-severity": "8.5" }
+                }
+              ]
+            }
+          },
+          "results": [
+            {
+              "ruleId": "py/sql-injection",
+              "level": "error",
+              "message": { "text": "SQL query formed from untrusted user input." },
+              "locations": [
+                {
+                  "physicalLocation": {
+                    "artifactLocation": { "uri": "service.py" },
+                    "region": { "startLine": 12 }
+                  }
+                }
+              ],
+              "codeFlows": [
+                {
+                  "threadFlows": [
+                    {
+                      "locations": [
+                        {
+                          "location": {
+                            "physicalLocation": {
+                              "artifactLocation": { "uri": "service.py" },
+                              "region": { "startLine": 5 }
+                            },
+                            "message": { "text": "source: sys.argv[1]" }
+                          }
+                        },
+                        {
+                          "location": {
+                            "physicalLocation": {
+                              "artifactLocation": { "uri": "service.py" },
+                              "region": { "startLine": 12 }
+                            },
+                            "message": { "text": "sink: cursor.execute(query)" }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }"#;
+
+    let sarif_file = f.root.join("codeql-output.sarif");
+    fs::write(&sarif_file, sample_sarif).unwrap();
+
+    let ingest_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "codeql",
+            "--sarif",
+            sarif_file.to_str().unwrap(),
+            "--workspace",
+            f.workspace.to_str().unwrap(),
+            "--database",
+            f.db.to_str().unwrap(),
+            "--json",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(ingest_out.status.success());
+    let ingest_stdout = String::from_utf8(ingest_out.stdout).unwrap();
+    assert!(ingest_stdout.contains("\"command\":\"codeql\""));
+    assert!(ingest_stdout.contains("\"mode\":\"ingest\""));
+    assert!(ingest_stdout.contains("\"total_sarif_results\":1"));
+    assert!(ingest_stdout.contains("\"taint_traces_extracted\":1"));
+    assert!(ingest_stdout.contains("\"highest_severity\":\"HIGH\""));
+    assert!(ingest_stdout.contains("py/sql-injection"));
+}
