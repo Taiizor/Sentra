@@ -196,5 +196,18 @@ pub fn canonical_tool_definitions() -> Vec<ToolDefinition> {
                 "required": ["action_name", "action_summary"]
             }),
         },
+        ToolDefinition {
+            name: "sentra_scan_code".to_string(),
+            description: "Scans workspace source files for secrets, API tokens, and critical code antipatterns using pure-Rust static analysis (REQ-F05).".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Directory or file to scan (defaults to current directory '.')"
+                    }
+                }
+            }),
+        },
     ]
 }

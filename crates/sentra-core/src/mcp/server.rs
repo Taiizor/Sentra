@@ -270,6 +270,43 @@ impl McpServer {
                     "message": "External agents cannot approve their own actions. Awaiting operator grant."
                 }))
             }
+            "sentra_scan_code" => {
+                let target_path = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
+                let scanner = crate::sast::SastScanner::new();
+                let path = std::path::Path::new(target_path);
+                let report = if path.is_file() {
+                    let content = std::fs::read_to_string(path).unwrap_or_default();
+                    let matches = scanner.scan_content(target_path, &content);
+                    crate::sast::SastReport {
+                        files_scanned: 1,
+                        directories_scanned: 0,
+                        matches,
+                    }
+                } else {
+                    scanner
+                        .scan_workspace(path)
+                        .unwrap_or(crate::sast::SastReport {
+                            files_scanned: 0,
+                            directories_scanned: 0,
+                            matches: Vec::new(),
+                        })
+                };
+
+                Ok(serde_json::json!({
+                    "files_scanned": report.files_scanned,
+                    "signals_found": report.matches.len(),
+                    "matches": report.matches.iter().map(|m| {
+                        serde_json::json!({
+                            "rule_id": m.rule.id,
+                            "severity": m.rule.severity.as_str(),
+                            "cwe": m.rule.cwe_id,
+                            "file": m.file_path,
+                            "line": m.line_number,
+                            "snippet": m.snippet
+                        })
+                    }).collect::<Vec<_>>()
+                }))
+            }
             // Sensitive actions requiring explicit human approval ticket
             "sentra_apply_checkout_mutation" => {
                 let ticket = args
