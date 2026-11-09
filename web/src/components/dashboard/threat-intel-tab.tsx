@@ -90,6 +90,24 @@ export function ThreatIntelTab({ advisories, currentRole, onSyncAdvisories }: Th
     }
   }
 
+  function getAdvisoryUrl(advisory: OsvAdvisoryView): string {
+    if (advisory.url) return advisory.url
+    const id = advisory.id
+    if (id.startsWith('RUSTSEC-')) {
+      return `https://rustsec.org/advisories/${id}.html`
+    }
+    if (id.startsWith('GHSA-')) {
+      return `https://github.com/advisories/${id}`
+    }
+    if (id.startsWith('CVE-')) {
+      return `https://nvd.nist.gov/vuln/detail/${id}`
+    }
+    if (id.startsWith('GO-')) {
+      return `https://pkg.go.dev/vuln/${id}`
+    }
+    return `https://osv.dev/vulnerability/${id}`
+  }
+
   return (
     <div className="flex flex-col gap-5">
       {/* Sleek Page Header */}
@@ -261,7 +279,7 @@ export function ThreatIntelTab({ advisories, currentRole, onSyncAdvisories }: Th
                       </TableCell>
                       <TableCell className="text-right py-2.5 pr-4">
                         <a
-                          href={`https://github.com/advisories/${item.id}`}
+                          href={getAdvisoryUrl(item)}
                           target="_blank"
                           rel="noreferrer"
                           className="inline-flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300 transition-colors"
