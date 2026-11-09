@@ -613,107 +613,133 @@ export function FindingsTab({ findings, currentRole, onProposePatch }: FindingsT
 
       {/* Finding Inspector Sheet / Drawer */}
       <Sheet open={!!selectedFinding} onOpenChange={(open) => !open && setSelectedFinding(null)}>
-        <SheetContent className="sm:max-w-xl overflow-y-auto bg-zinc-950 border-zinc-800">
+        <SheetContent className="w-full sm:max-w-[640px] md:max-w-[720px] lg:max-w-[780px] p-0 bg-zinc-950 border-zinc-800 shadow-2xl flex flex-col h-full">
           {selectedFinding && (
-            <div className="flex flex-col gap-6 py-4">
-              <SheetHeader>
-                <div className="flex items-center gap-2">
-                  <Badge variant={getSeverityBadgeVariant(selectedFinding.severity)}>
+            <div className="flex flex-col h-full min-h-0">
+              {/* Sticky Top Header with Safe Close Button Margin */}
+              <SheetHeader className="px-6 py-5 border-b border-zinc-800/80 bg-zinc-950/95 sticky top-0 z-20 backdrop-blur pr-14 text-left">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={getSeverityBadgeVariant(selectedFinding.severity)} className="text-xs font-bold uppercase">
                     {selectedFinding.severity}
                   </Badge>
-                  <Badge variant="outline" className="font-mono">
+                  <Badge variant="outline" className="font-mono text-xs text-zinc-300 border-zinc-750">
                     {selectedFinding.ruleId}
                   </Badge>
-                  <Badge variant="secondary" className="font-mono">
+                  <Badge variant="secondary" className="font-mono text-xs text-zinc-300">
                     {selectedFinding.cwe}
                   </Badge>
+                  {selectedFinding.reachability === 'ReachableCallPath' && (
+                    <Badge variant="destructive" className="text-xs font-mono flex items-center gap-1 font-bold">
+                      <GitBranch className="size-3" />
+                      Verified Reachable Flow
+                    </Badge>
+                  )}
                 </div>
-                <SheetTitle className="text-lg font-bold mt-2 text-zinc-100">
+                <SheetTitle className="text-lg font-bold mt-2 text-zinc-100 leading-snug">
                   {selectedFinding.title}
                 </SheetTitle>
-                <SheetDescription className="text-xs text-zinc-400">
-                  Located in {selectedFinding.targetLocation} (Lines {selectedFinding.startLine}-{selectedFinding.endLine})
+                <SheetDescription className="text-xs text-zinc-400 mt-1 font-mono flex items-center gap-2">
+                  <span>File: {selectedFinding.targetLocation}</span>
+                  <span>•</span>
+                  <span>Lines: {selectedFinding.startLine}-{selectedFinding.endLine}</span>
                 </SheetDescription>
               </SheetHeader>
 
-              {/* Description */}
-              <div className="flex flex-col gap-2">
-                <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
-                  Vulnerability Analysis
-                </span>
-                <p className="text-sm bg-zinc-900/80 border border-zinc-800 p-3 rounded-md text-zinc-200">
-                  {selectedFinding.description}
-                </p>
-              </div>
-
-              {/* Taint Flow Trace (If Present) */}
-              {selectedFinding.taintTrace && selectedFinding.taintTrace.length > 0 && (
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <GitBranch className="size-3.5 text-primary" />
-                      Interprocedural Taint Flow Call Path
-                    </span>
-                    <Badge variant="destructive" className="text-xs font-mono">
-                      {selectedFinding.taintTrace.length} Steps
-                    </Badge>
-                  </div>
-
-                  <div className="flex flex-col gap-2 border border-zinc-800 rounded-md p-3 bg-zinc-900/50">
-                    {selectedFinding.taintTrace.map((step, idx) => (
-                      <div
-                        key={step.step}
-                        className="flex flex-col gap-1 p-2.5 rounded border border-zinc-800/80 bg-zinc-950/70 relative"
-                      >
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono font-bold size-5 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs">
-                              {step.step}
-                            </span>
-                            <Badge
-                              variant={
-                                step.role === 'SOURCE'
-                                  ? 'destructive'
-                                  : step.role === 'SINK'
-                                    ? 'destructive'
-                                    : 'secondary'
-                              }
-                              className="text-[10px] font-mono"
-                            >
-                              {step.role}
-                            </Badge>
-                            <span className="font-mono text-zinc-400 text-[11px]">
-                              {step.location}:{step.line}
-                            </span>
-                          </div>
-                          <span className="font-mono text-xs font-bold text-zinc-200 bg-zinc-800/80 px-1.5 py-0.5 rounded">
-                            ${step.variable}
-                          </span>
-                        </div>
-                        <pre className="font-mono text-xs bg-zinc-900/90 border border-zinc-800 p-2 rounded mt-1.5 overflow-x-auto text-zinc-200">
-                          {step.codeSnippet}
-                        </pre>
-                        {idx < selectedFinding.taintTrace!.length - 1 && (
-                          <div className="flex justify-center -mb-3.5 my-1">
-                            <ChevronRight className="size-4 text-zinc-500 rotate-90" />
-                          </div>
-                        )}
-                      </div>
-                    ))}
+              {/* Scrollable Inspector Body with Generous Padding */}
+              <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-6">
+                {/* Vulnerability Analysis Card */}
+                <div className="flex flex-col gap-2.5">
+                  <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                    Vulnerability Analysis &amp; Impact
+                  </span>
+                  <div className="text-sm bg-zinc-900/80 border border-zinc-800 p-4 rounded-xl text-zinc-200 leading-relaxed shadow-sm">
+                    {selectedFinding.description}
                   </div>
                 </div>
-              )}
 
-              {/* Remediation Action */}
-              <div className="border-t border-zinc-800 pt-4 flex flex-col gap-3">
-                <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
-                  Remediation &amp; Governance
-                </span>
-                <div className="flex items-center justify-between gap-3 bg-zinc-900/60 p-3 rounded-lg border border-zinc-800">
+                {/* Remediation Guidance */}
+                {selectedFinding.remediationGuidance && (
+                  <div className="flex flex-col gap-2.5">
+                    <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                      Remediation Guidance
+                    </span>
+                    <div className="text-xs bg-zinc-900/50 border border-zinc-800/80 p-3.5 rounded-xl text-zinc-300 font-mono leading-relaxed">
+                      {selectedFinding.remediationGuidance}
+                    </div>
+                  </div>
+                )}
+
+                {/* Taint Flow Trace (If Present) */}
+                {selectedFinding.taintTrace && selectedFinding.taintTrace.length > 0 && (
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
+                        <GitBranch className="size-4 text-primary" />
+                        In-Engine Semantic Taint Trace ({selectedFinding.taintTrace.length} Steps)
+                      </span>
+                      <Badge variant="destructive" className="text-xs font-mono font-bold">
+                        Pure-Rust AST Proof
+                      </Badge>
+                    </div>
+
+                    <div className="flex flex-col gap-3 border border-zinc-800 rounded-xl p-4 bg-zinc-900/40">
+                      {selectedFinding.taintTrace.map((step, idx) => (
+                        <div
+                          key={step.step}
+                          className="flex flex-col gap-2 p-3.5 rounded-lg border border-zinc-800/80 bg-zinc-950/80 relative shadow-sm"
+                        >
+                          <div className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-2.5">
+                              <span className="font-mono font-bold size-6 rounded-full bg-primary/20 text-primary border border-primary/30 flex items-center justify-center text-xs">
+                                {step.step}
+                              </span>
+                              <Badge
+                                variant={
+                                  step.role === 'SOURCE'
+                                    ? 'destructive'
+                                    : step.role === 'SINK'
+                                      ? 'destructive'
+                                      : 'secondary'
+                                }
+                                className="text-[11px] font-mono font-bold"
+                              >
+                                {step.role}
+                              </Badge>
+                              <span className="font-mono text-zinc-400 text-xs">
+                                {step.location}:{step.line}
+                              </span>
+                            </div>
+                            <span className="font-mono text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded">
+                              ${step.variable}
+                            </span>
+                          </div>
+
+                          <pre className="font-mono text-xs bg-zinc-900/95 border border-zinc-800 p-3 rounded-md mt-1 overflow-x-auto text-zinc-200 leading-relaxed">
+                            {step.codeSnippet}
+                          </pre>
+
+                          {idx < selectedFinding.taintTrace!.length - 1 && (
+                            <div className="flex justify-center -mb-5 my-1.5">
+                              <ChevronRight className="size-4 text-zinc-500 rotate-90" />
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Sticky Bottom Actions & Governance Footer */}
+              <div className="border-t border-zinc-800/80 px-6 py-4 bg-zinc-950/95 backdrop-blur sticky bottom-0 z-20 flex flex-col gap-3 mt-auto">
+                <div className="flex items-center justify-between gap-4">
                   <div className="flex flex-col">
-                    <span className="text-xs font-medium text-zinc-100">Three-Tier Verified Patch</span>
-                    <span className="text-xs text-zinc-400">
-                      Proposes an isolated overlay patch verified with dual-state regression oracles.
+                    <span className="text-xs font-bold text-zinc-100 flex items-center gap-1.5">
+                      <ShieldCheck className="size-3.5 text-primary" />
+                      Three-Tier Verified Patch Generation
+                    </span>
+                    <span className="text-[11px] text-zinc-400">
+                      Dispatches test synthesis and dual-state regression verification.
                     </span>
                   </div>
                   <Button
@@ -723,16 +749,17 @@ export function FindingsTab({ findings, currentRole, onProposePatch }: FindingsT
                       onProposePatch(selectedFinding.findingId)
                       setSelectedFinding(null)
                       toast.success('Patch Candidate Proposed', {
-                        description: `Dispatched verification for ${selectedFinding.findingId}.`,
+                        description: `Dispatched three-tier verification for ${selectedFinding.findingId}.`,
                       })
                     }}
+                    className="font-semibold shadow-md bg-primary text-primary-foreground hover:bg-primary/90 shrink-0"
                   >
                     Propose Patch
                   </Button>
                 </div>
                 {currentRole === 'Viewer' && (
-                  <span className="text-xs text-zinc-500 italic">
-                    * Viewer role cannot propose patches. Switch to Operator or Admin role in header.
+                  <span className="text-[11px] text-zinc-500 italic">
+                    * Viewer role has read-only permissions. Switch to Operator or Admin in the top bar to propose patches.
                   </span>
                 )}
               </div>
