@@ -15,8 +15,10 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import type { UserRole } from '@/types/sentra'
 
 interface WorkspaceTargetBarProps {
+  currentRole: UserRole
   currentWorkspace: string
   onWorkspaceChange: (path: string) => void
   onRunScan: () => void
@@ -38,6 +40,7 @@ const PRESETS = [
 ]
 
 export function WorkspaceTargetBar({
+  currentRole,
   currentWorkspace,
   onWorkspaceChange,
   onRunScan,
@@ -134,11 +137,19 @@ export function WorkspaceTargetBar({
         </div>
 
         {/* Actions triggering the real sentra.exe binary */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {currentRole === 'Viewer' && (
+            <span className="text-[11px] text-amber-400 font-medium mr-1 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+              Viewer: Scans Disabled
+            </span>
+          )}
+
           <Button
             size="sm"
+            disabled={currentRole === 'Viewer'}
             onClick={onOpenLiveStream}
-            className="h-8 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-md flex items-center gap-1.5"
+            className="h-8 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-md flex items-center gap-1.5 disabled:opacity-40"
+            title={currentRole === 'Viewer' ? "Viewer role is read-only. Switch to Operator or Admin to execute scans." : undefined}
           >
             <Radio className="size-3.5 text-primary-foreground animate-pulse" />
             Live SSE Stream Scan
@@ -147,9 +158,10 @@ export function WorkspaceTargetBar({
           <Button
             variant="outline"
             size="sm"
-            disabled={isScanning || !backendConnected}
+            disabled={isScanning || !backendConnected || currentRole === 'Viewer'}
             onClick={onRunScan}
-            className="h-8 text-xs font-medium border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-200"
+            className="h-8 text-xs font-medium border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-200 disabled:opacity-40"
+            title={currentRole === 'Viewer' ? "Viewer role is read-only. Switch to Operator or Admin to execute scans." : undefined}
           >
             <Play className={`size-3.5 mr-1.5 fill-current ${isScanning ? 'animate-spin' : ''}`} />
             {isScanning ? 'Scanning...' : 'Direct SAST'}
@@ -158,9 +170,10 @@ export function WorkspaceTargetBar({
           <Button
             variant="outline"
             size="sm"
-            disabled={isAuditing || !backendConnected}
+            disabled={isAuditing || !backendConnected || currentRole === 'Viewer'}
             onClick={onRunAudit}
-            className="h-8 text-xs font-medium border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-200"
+            className="h-8 text-xs font-medium border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-200 disabled:opacity-40"
+            title={currentRole === 'Viewer' ? "Viewer role is read-only. Switch to Operator or Admin to execute scans." : undefined}
           >
             <ShieldCheck className={`size-3.5 mr-1.5 ${isAuditing ? 'animate-spin text-primary' : ''}`} />
             {isAuditing ? 'Auditing...' : 'Audit Lockfiles'}
@@ -169,9 +182,10 @@ export function WorkspaceTargetBar({
           <Button
             variant="outline"
             size="sm"
-            disabled={isCodeQlProbing || !backendConnected}
+            disabled={isCodeQlProbing || !backendConnected || currentRole === 'Viewer'}
             onClick={onRunCodeQl}
-            className="h-8 text-xs font-medium border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-200"
+            className="h-8 text-xs font-medium border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-200 disabled:opacity-40"
+            title={currentRole === 'Viewer' ? "Viewer role is read-only. Switch to Operator or Admin to execute scans." : undefined}
           >
             <SearchCode className={`size-3.5 mr-1.5 ${isCodeQlProbing ? 'animate-spin text-primary' : ''}`} />
             {isCodeQlProbing ? 'Probing...' : 'Probe CodeQL'}

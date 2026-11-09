@@ -48,10 +48,12 @@ import type {
   LedgerStatus,
   ReconTopologyReport,
   Phase1ReconReport,
+  UserRole,
 } from '@/types/sentra'
 
 interface ResearchTabProps {
   campaigns: CampaignLedgerView[]
+  currentRole: UserRole
 }
 
 const STATUS_BADGES: Record<
@@ -105,7 +107,7 @@ const STATUS_BADGES: Record<
   },
 }
 
-export function ResearchTab({ campaigns }: ResearchTabProps) {
+export function ResearchTab({ campaigns, currentRole }: ResearchTabProps) {
   const [report, setReport] = useState<CoverageLedgerReport | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -133,6 +135,12 @@ export function ResearchTab({ campaigns }: ResearchTabProps) {
   }
 
   async function handleRunPhase1Recon() {
+    if (currentRole === 'Viewer') {
+      toast.error('Action Denied: Viewer Role', {
+        description: 'Viewer role is read-only. Switch to Operator or Admin to execute reconnaissance engines.',
+      })
+      return
+    }
     setIsRunningRecon(true)
     try {
       const data = await runPhase1Reconnaissance()
@@ -159,6 +167,12 @@ export function ResearchTab({ campaigns }: ResearchTabProps) {
   }
 
   async function handleProfileChange(newProfile: AuditProfile) {
+    if (currentRole === 'Viewer') {
+      toast.error('Action Denied: Viewer Role', {
+        description: 'Viewer role is read-only. Switch to Operator or Admin to change audit profiles.',
+      })
+      return
+    }
     const success = await setAuditProfile(newProfile)
     if (success) {
       toast.success(`Audit Run Profile Switched to ${newProfile.toUpperCase()}`, {
@@ -189,6 +203,12 @@ export function ResearchTab({ campaigns }: ResearchTabProps) {
   }
 
   async function handleRunWave() {
+    if (currentRole === 'Viewer') {
+      toast.error('Action Denied: Viewer Role', {
+        description: 'Viewer role is read-only. Switch to Operator or Admin to dispatch hunter waves.',
+      })
+      return
+    }
     const res = await runAuditCampaignWave()
     if (res && res.success) {
       toast.success('Hunter Wave Dispatched', {

@@ -38,12 +38,13 @@ import {
   type StreamLogItem,
   type PathValidationResult,
 } from '@/lib/api-client'
-import type { FindingView } from '@/types/sentra'
+import type { FindingView, UserRole } from '@/types/sentra'
 
 interface LiveStreamModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   initialWorkspace: string
+  currentRole: UserRole
   onScanComplete: (findings: FindingView[], rawResult: any) => void
   onNavigateToFindings: () => void
 }
@@ -59,6 +60,7 @@ export function LiveStreamModal({
   open,
   onOpenChange,
   initialWorkspace,
+  currentRole,
   onScanComplete,
   onNavigateToFindings,
 }: LiveStreamModalProps) {
@@ -128,6 +130,12 @@ export function LiveStreamModal({
   }
 
   function handleStartScan() {
+    if (currentRole === 'Viewer') {
+      toast.error('Action Denied: Viewer Role', {
+        description: 'Viewer role has read-only access. Switch to Operator or Admin to execute scans.',
+      })
+      return
+    }
     setStatus('running')
     setLogs([])
     setProgressPercent(5)
@@ -417,14 +425,22 @@ export function LiveStreamModal({
                 </span>
               </label>
 
-              <Button
-                onClick={handleStartScan}
-                disabled={!pathInfo?.exists}
-                className="h-9 px-4 text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 shadow-md"
-              >
-                <Play className="size-3.5 mr-1.5 fill-current" />
-                Start Live Streaming Scan
-              </Button>
+              <div className="flex items-center gap-3">
+                {currentRole === 'Viewer' && (
+                  <span className="text-[11px] text-amber-400 font-medium">
+                    Viewer mode: Scans disabled
+                  </span>
+                )}
+                <Button
+                  onClick={handleStartScan}
+                  disabled={!pathInfo?.exists || currentRole === 'Viewer'}
+                  className="h-9 px-4 text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 shadow-md disabled:opacity-40"
+                  title={currentRole === 'Viewer' ? "Viewer role is read-only. Switch to Operator or Admin to execute scans." : undefined}
+                >
+                  <Play className="size-3.5 mr-1.5 fill-current" />
+                  Start Live Streaming Scan
+                </Button>
+              </div>
             </div>
           </div>
         )}
