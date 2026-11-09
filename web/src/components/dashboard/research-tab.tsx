@@ -37,6 +37,8 @@ import {
   validateLedgerInvariants,
   setAuditProfile,
   runAuditCampaignWave,
+  fetchReconTopology,
+  runPhase1Reconnaissance,
 } from '@/lib/api-client'
 import type {
   CampaignLedgerView,
@@ -44,6 +46,8 @@ import type {
   CoverageLedgerUnit,
   AuditProfile,
   LedgerStatus,
+  ReconTopologyReport,
+  Phase1ReconReport,
 } from '@/types/sentra'
 
 interface ResearchTabProps {
@@ -108,10 +112,42 @@ export function ResearchTab({ campaigns }: ResearchTabProps) {
   const [statusFilter, setStatusFilter] = useState<'ALL' | LedgerStatus>('ALL')
   const [isValidating, setIsValidating] = useState(false)
   const [selectedUnit, setSelectedUnit] = useState<CoverageLedgerUnit | null>(null)
+  
+  // Phase 1 Reconnaissance and Topology States
+  const [activeView, setActiveView] = useState<'matrix' | 'topology' | 'recon'>('matrix')
+  const [topologyReport, setTopologyReport] = useState<ReconTopologyReport | null>(null)
+  const [reconReport, setReconReport] = useState<Phase1ReconReport | null>(null)
+  const [isRunningRecon, setIsRunningRecon] = useState(false)
+  const [isLoadingTopology, setIsLoadingTopology] = useState(false)
 
   useEffect(() => {
     loadLedger()
+    loadTopology()
   }, [])
+
+  async function loadTopology() {
+    setIsLoadingTopology(true)
+    const data = await fetchReconTopology()
+    if (data) setTopologyReport(data)
+    setIsLoadingTopology(false)
+  }
+
+  async function handleRunPhase1Recon() {
+    setIsRunningRecon(true)
+    try {
+      const data = await runPhase1Reconnaissance()
+      if (data) {
+        setReconReport(data)
+        toast.success('Phase 1 Reconnaissance Complete (4 Agents Finished)', {
+          description: `Synthesized architecture boundary map with ${data.derivedUnitsCount} derived canonical units.`,
+        })
+      }
+    } catch (err: any) {
+      toast.error('Reconnaissance Error', { description: err.message })
+    } finally {
+      setIsRunningRecon(false)
+    }
+  }
 
   async function loadLedger() {
     setIsLoading(true)
@@ -245,7 +281,290 @@ export function ResearchTab({ campaigns }: ResearchTabProps) {
         </div>
       </div>
 
-      {/* Metrics Row */}
+      {/* 3-Way Sub-Navigation: Matrix, Fast Topology, Phase 1 Recon */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800 pb-3">
+        <Button
+          variant={activeView === 'matrix' ? 'default' : 'outline'}
+          size="sm"
+          className="h-8 text-xs font-semibold rounded-lg"
+          onClick={() => setActiveView('matrix')}
+        >
+          <Layers className="size-3.5 mr-1.5" />
+          4D Coverage Ledger ({report?.units.length || 0})
+        </Button>
+        <Button
+          variant={activeView === 'topology' ? 'default' : 'outline'}
+          size="sm"
+          className="h-8 text-xs font-semibold rounded-lg border-zinc-750"
+          onClick={() => {
+            setActiveView('topology')
+            loadTopology()
+          }}
+        >
+          <FileCheck2 className="size-3.5 mr-1.5 text-sky-400" />
+          Fast Topology Map (LLM-Free)
+        </Button>
+        <Button
+          variant={activeView === 'recon' ? 'default' : 'outline'}
+          size="sm"
+          className="h-8 text-xs font-semibold rounded-lg border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+          onClick={() => setActiveView('recon')}
+        >
+          <Sparkles className="size-3.5 mr-1.5 text-amber-400" />
+          Phase 1: 4-Agent Recon (LLM-Assisted)
+        </Button>
+      </div>
+
+      {/* ================================================================= */}
+      {/* VIEW 1: LLM-FREE FAST TOPOLOGY MAP */}
+      {/* ================================================================= */}
+      {activeView === 'topology' && (
+        <div className="flex flex-col gap-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+                <FileCheck2 className="size-4 text-sky-400" />
+                Deterministic Workspace Static Topology (Zero-LLM Fast Mapper)
+              </h3>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Computed via pure-Rust AST directory traversal in &lt;100ms. Invariant baseline for hunting assignments.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadTopology}
+              disabled={isLoadingTopology}
+              className="h-7 text-xs border-zinc-800 bg-zinc-900"
+            >
+              <RotateCw className={`size-3 mr-1 ${isLoadingTopology ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
+
+          {/* Subsystems & Trust Boundaries */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            {topologyReport?.subsystems.map((sub) => (
+              <Card key={sub.name} className="border-zinc-800 bg-zinc-950/70 shadow-sm">
+                <CardHeader className="pb-2 pt-3 px-4">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline" className="text-[10px] font-mono">
+                      {sub.language}
+                    </Badge>
+                    <Badge
+                      variant={sub.trustLevel === 'untrusted_input' ? 'destructive' : 'secondary'}
+                      className="text-[10px] font-mono uppercase"
+                    >
+                      {sub.trustLevel.replace('_', ' ')}
+                    </Badge>
+                  </div>
+                  <CardTitle className="text-xs font-bold font-mono text-zinc-200 mt-2">
+                    {sub.name}
+                  </CardTitle>
+                  <CardDescription className="text-[11px] font-mono text-zinc-400">
+                    {sub.path}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="px-4 pb-3">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+                    Source Controls:
+                  </span>
+                  <ul className="list-disc list-inside text-[11px] text-zinc-300 space-y-0.5">
+                    {sub.controls.map((c, i) => (
+                      <li key={i} className="truncate">{c}</li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Entrypoints Table */}
+          <Card className="border-zinc-800 bg-zinc-950/60 shadow-md">
+            <CardHeader className="py-3 px-5 border-b border-zinc-800">
+              <CardTitle className="text-xs font-semibold text-zinc-200 flex items-center justify-between">
+                <span>Identified Entry Surfaces &amp; Execution Gates ({topologyReport?.entrypoints.length || 0})</span>
+                <span className="text-[11px] font-mono text-zinc-400 font-normal">Deterministic Static Inventory</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader className="bg-zinc-900/60 text-xs">
+                  <TableRow className="border-zinc-800 hover:bg-transparent">
+                    <TableHead className="text-zinc-400">Type</TableHead>
+                    <TableHead className="text-zinc-400">Surface</TableHead>
+                    <TableHead className="text-zinc-400">Location</TableHead>
+                    <TableHead className="text-zinc-400">Handler Scope</TableHead>
+                    <TableHead className="text-zinc-400 text-right">Auth Required</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="text-xs font-mono">
+                  {topologyReport?.entrypoints.map((ep, i) => (
+                    <TableRow key={i} className="hover:bg-zinc-900/40 border-zinc-800/60">
+                      <TableCell>
+                        <Badge variant="outline" className="text-[10px] font-mono">
+                          {ep.type}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-zinc-300">{ep.surface}</TableCell>
+                      <TableCell className="text-zinc-400">{ep.path}:{ep.line}</TableCell>
+                      <TableCell className="text-primary truncate max-w-[280px]">{ep.handler}</TableCell>
+                      <TableCell className="text-right">
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${ep.authRequired ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
+                          {ep.authRequired ? 'ENFORCED' : 'UNAUTHENTICATED'}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {/* Testability & Prohibited Actions */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/40 flex flex-col gap-2">
+              <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                <CheckCircle2 className="size-3.5 text-emerald-400" />
+                Validated Offline Test Commands
+              </span>
+              <ul className="space-y-1 text-xs font-mono text-emerald-300/90">
+                {topologyReport?.offlineTestCommands.map((cmd, i) => (
+                  <li key={i} className="bg-zinc-950 p-2 rounded border border-zinc-800/80">
+                    $ {cmd}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/40 flex flex-col gap-2">
+              <span className="text-xs font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
+                <ShieldAlert className="size-3.5" />
+                Permanently Prohibited Actions (Fail-Closed)
+              </span>
+              <ul className="space-y-1 text-xs text-zinc-400">
+                {topologyReport?.prohibitedActions.map((act, i) => (
+                  <li key={i} className="bg-zinc-950 p-2 rounded border border-zinc-800/80 flex items-center gap-2">
+                    <span className="text-rose-400 font-bold">✕</span> {act}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================= */}
+      {/* VIEW 2: LLM-ASSISTED PHASE 1 RECONNAISSANCE ENGINE */}
+      {/* ================================================================= */}
+      {activeView === 'recon' && (
+        <div className="flex flex-col gap-5">
+          <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+                <Sparkles className="size-4 text-amber-400" />
+                Cloudflare Phase 1: 4-Agent Autonomous Reconnaissance Engine
+              </h3>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Spawns 4 specialized read-only research agents to build source-grounded trust boundaries and architecture map.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              onClick={handleRunPhase1Recon}
+              disabled={isRunningRecon}
+              className="h-8 text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-zinc-950 shadow-md"
+            >
+              <Sparkles className={`size-3.5 mr-1.5 ${isRunningRecon ? 'animate-spin' : ''}`} />
+              {isRunningRecon ? '4 Agents Reconnoitering...' : 'Run Phase 1 Recon'}
+            </Button>
+          </div>
+
+          {/* 4 Agent Output Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            {(reconReport?.agents || [
+              {
+                agentId: '1a_product_stack' as const,
+                agentName: 'Agent 1a: Product, Stack & Local Boundaries',
+                summary: 'Maps tech stack, frameworks, offline build commands, and comparable open source software without network access.',
+                findingsCount: 4,
+                sourceRefs: ['crates/sentra-core/Cargo.toml', 'web/package.json'],
+              },
+              {
+                agentId: '1b_principals_controls' as const,
+                agentName: 'Agent 1b: Principals, Authority & Tenant Scopes',
+                summary: 'Identifies every lower-trust principal, tenant scopes, role hierarchy, and source-visible authorization controls.',
+                findingsCount: 6,
+                sourceRefs: ['crates/sentra-core/src/tenant.rs', 'web/src/types/sentra.ts'],
+              },
+              {
+                agentId: '1c_surfaces_sinks' as const,
+                agentName: 'Agent 1c: Entry Surfaces & Critical Execution Sinks',
+                summary: 'Inventories all entrypoints (HTTP, CLI, Webhook, MCP) and follows data transformations to dangerous execution sinks.',
+                findingsCount: 11,
+                sourceRefs: ['crates/sentra-cli/src/main.rs', 'agents/tools/bash_executor.py'],
+              },
+              {
+                agentId: '1d_sandbox_testability' as const,
+                agentName: 'Agent 1d: Sandbox Readiness & Offline Testability',
+                summary: 'Validates loopback test isolation, scratch file promotion controls, and OS sandbox enforcement readiness.',
+                findingsCount: 5,
+                sourceRefs: ['crates/sentra-core/src/backend/fail_closed.rs'],
+              },
+            ]).map((agent) => (
+              <div key={agent.agentId} className="p-4 rounded-xl border border-zinc-800 bg-zinc-950/80 shadow-sm flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                    <Brain className="size-3.5 text-amber-400" />
+                    {agent.agentName}
+                  </span>
+                  <Badge variant="outline" className="text-[10px] font-mono border-amber-500/30 text-amber-300">
+                    {agent.findingsCount} Facts Mapped
+                  </Badge>
+                </div>
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  {agent.summary}
+                </p>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {agent.sourceRefs.map((ref, idx) => (
+                    <span key={idx} className="text-[10px] font-mono bg-zinc-900 border border-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded">
+                      {ref}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Synthesized Architecture Boundary Map */}
+          {reconReport?.architectureSummaryMd && (
+            <Card className="border-zinc-800 bg-zinc-950/80 shadow-md">
+              <CardHeader className="py-3 px-5 border-b border-zinc-800 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-xs font-bold text-zinc-200">
+                    Synthesized Architecture Boundary Map (&lt;1,000 Words Cap)
+                  </CardTitle>
+                  <CardDescription className="text-[11px] font-mono text-zinc-400">
+                    Saved to docs/architecture-recon.md • Mapped to {reconReport.derivedUnitsCount} Canonical Ledger Units
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" className="text-[10px] font-mono text-emerald-400 border-emerald-500/30 bg-emerald-500/10">
+                  RECON PHASE 1 COMPLETE
+                </Badge>
+              </CardHeader>
+              <CardContent className="p-5 font-mono text-xs text-zinc-300 leading-relaxed overflow-x-auto whitespace-pre-wrap bg-zinc-900/50">
+                {reconReport.architectureSummaryMd}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* ================================================================= */}
+      {/* VIEW 3: 4D COVERAGE LEDGER MATRIX */}
+      {/* ================================================================= */}
+      {activeView === 'matrix' && (
+        <>
+          {/* Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Ledger Units */}
         <Card className="border-zinc-800 bg-zinc-950/60 shadow-sm">
@@ -483,6 +802,8 @@ export function ResearchTab({ campaigns }: ResearchTabProps) {
           </div>
         </CardContent>
       </Card>
+      </>
+      )}
     </div>
   )
 }

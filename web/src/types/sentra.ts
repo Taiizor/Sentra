@@ -155,6 +155,51 @@ export interface CoverageLedgerReport {
   validationOutput?: string
 }
 
+export interface ReconTopologyEntrypoint {
+  type: 'http_route' | 'cli_command' | 'grpc_service' | 'queue_consumer' | 'model_tool'
+  path: string
+  line: number
+  handler: string
+  surface: string
+  authRequired: boolean
+}
+
+export interface ReconSubsystemBoundary {
+  name: string
+  path: string
+  language: string
+  trustLevel: 'untrusted_input' | 'internal_service' | 'isolated_storage' | 'high_privilege'
+  controls: string[]
+}
+
+export interface ReconTopologyReport {
+  repoName: string
+  languages: { name: string; percentage: number; files: number }[]
+  frameworks: string[]
+  subsystems: ReconSubsystemBoundary[]
+  entrypoints: ReconTopologyEntrypoint[]
+  offlineTestCommands: string[]
+  prohibitedActions: string[]
+  missingTools: string[]
+  timestamp: string
+}
+
+export interface Phase1ReconAgentOutput {
+  agentId: '1a_product_stack' | '1b_principals_controls' | '1c_surfaces_sinks' | '1d_sandbox_testability'
+  agentName: string
+  summary: string
+  findingsCount: number
+  sourceRefs: string[]
+}
+
+export interface Phase1ReconReport {
+  repoName: string
+  agents: Phase1ReconAgentOutput[]
+  architectureSummaryMd: string
+  derivedUnitsCount: number
+  timestamp: string
+}
+
 export interface CampaignLedgerView {
   campaignId: string
   tenantId: TenantId
