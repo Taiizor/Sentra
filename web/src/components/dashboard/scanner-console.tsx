@@ -149,7 +149,7 @@ Aggregate digest: sha256:7f83b165...`
                   }}
                 </SelectValue>
               </SelectTrigger>
-              <SelectContent className="min-w-[380px]">
+              <SelectContent className="min-w-[320px] sm:min-w-[380px] max-w-[calc(100vw-2rem)]">
                 <SelectGroup>
                   <SelectItem value="scan">sentra scan (SAST & Taint Analysis)</SelectItem>
                   <SelectItem value="audit">sentra audit (Multi-Lockfile Audit)</SelectItem>
