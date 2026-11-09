@@ -8,12 +8,41 @@ import type {
   SecurityTrendPoint,
   SessionSummaryView,
   TenantId,
+  TenantView,
   UserRole,
   WorkerNodeView,
 } from '@/types/sentra'
 
+export const DEFAULT_TENANTS: TenantView[] = [
+  {
+    tenantId: 'sentra-internal',
+    name: 'Sentra Core (Internal)',
+    description: 'Core platform codebase and internal security services',
+    defaultWorkspace: 'E:/MyProject/Mix/GitHub/Sentra',
+    isolationLevel: 'single_operator',
+    createdAt: '2026-11-01T08:00:00Z',
+  },
+  {
+    tenantId: 'tenant-alpha',
+    name: 'Tenant Alpha (Isolated)',
+    description: 'Isolated client cloud infrastructure and billing services',
+    defaultWorkspace: 'E:/MyProject/Mix/GitHub/Sentra/apps/tenant-alpha',
+    isolationLevel: 'multi_tenant_isolated',
+    createdAt: '2026-11-03T10:30:00Z',
+  },
+  {
+    tenantId: 'acme-corp',
+    name: 'Acme Corp (Enterprise)',
+    description: 'Acme Enterprise fintech & payment pipelines',
+    defaultWorkspace: 'E:/MyProject/Mix/GitHub/Sentra/apps/acme-corp',
+    isolationLevel: 'multi_tenant_isolated',
+    createdAt: '2026-11-05T14:15:00Z',
+  },
+]
+
 export interface DashboardState {
   currentTenant: TenantId
+  tenants: TenantView[]
   currentRole: UserRole
   overview: DashboardOverview
   sessions: SessionSummaryView[]

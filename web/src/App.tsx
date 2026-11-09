@@ -36,8 +36,10 @@ import { WebhookTab } from '@/components/dashboard/webhook-tab'
 import { ScannerConsole } from '@/components/dashboard/scanner-console'
 import { LiveStreamModal } from '@/components/dashboard/live-stream-modal'
 import { AiPatchModal } from '@/components/dashboard/ai-patch-modal'
+import { AddTenantDialog } from '@/components/dashboard/add-tenant-dialog'
 
 import {
+  DEFAULT_TENANTS,
   INITIAL_AUDIT_LOGS,
   INITIAL_CAMPAIGNS,
   INITIAL_FINDINGS,
@@ -59,15 +61,17 @@ import {
   triggerLiveCodeQl,
   transformMatchesToFindings,
 } from '@/lib/api-client'
-import type { FindingView, TenantId, UserRole, SessionSummaryView, AuditLogView } from '@/types/sentra'
+import type { FindingView, TenantId, TenantView, UserRole, SessionSummaryView, AuditLogView } from '@/types/sentra'
 
 export function App() {
+  const [tenants, setTenants] = useState<TenantView[]>(DEFAULT_TENANTS)
   const [currentTenant, setCurrentTenant] = useState<TenantId>('sentra-internal')
   const [currentRole, setCurrentRole] = useState<UserRole>('Operator')
   const [activeTab, setActiveTab] = useState<string>('overview')
   const [isConsoleOpen, setIsConsoleOpen] = useState<boolean>(false)
   const [isCommandOpen, setIsCommandOpen] = useState<boolean>(false)
   const [isStreamModalOpen, setIsStreamModalOpen] = useState<boolean>(false)
+  const [isAddTenantOpen, setIsAddTenantOpen] = useState<boolean>(false)
   const [selectedPatchFinding, setSelectedPatchFinding] = useState<FindingView | null>(null)
   const [sarifModalContent, setSarifModalContent] = useState<string | null>(null)
 
@@ -107,6 +111,19 @@ export function App() {
         fetchRealSessions(),
         fetchRealAuditTrail(),
       ])
+
+      // Fetch persistent tenants from SQLite WAL
+      try {
+        const tRes = await fetch('/api/tenants')
+        if (tRes.ok) {
+          const tData = await tRes.json()
+          if (tData.tenants && tData.tenants.length > 0) {
+            setTenants(tData.tenants)
+          }
+        }
+      } catch (err) {
+        console.warn('Using default tenants, backend offline or unreachable', err)
+      }
 
       if (realOverview) {
         setOverview((prev) => ({
@@ -212,14 +229,11 @@ export function App() {
 
     const baseScore = Math.max(35, 100 - criticalCount * 12 - highCount * 6 - mediumCount * 2)
 
+    const currentTenantObj = tenants.find((t) => t.tenantId === currentTenant)
+
     return {
       tenantId: currentTenant,
-      workspaceName:
-        currentTenant === 'sentra-internal'
-          ? 'Sentra Security Core'
-          : currentTenant === 'tenant-alpha'
-            ? 'Tenant Alpha (Isolated)'
-            : 'Acme Corp Enterprise',
+      workspaceName: currentTenantObj ? currentTenantObj.name : (currentTenant === 'sentra-internal' ? 'Sentra Security Core' : currentTenant),
       totalSessions: tenantSessions.length,
       activeSessions: tenantSessions.filter((s) => s.state === 'SCOPED').length || 1,
       criticalFindings: criticalCount,
@@ -234,18 +248,44 @@ export function App() {
       lastActivityTimestamp: new Date().toISOString(),
       securityScore: total === 0 ? 100 : baseScore,
     }
-  }, [currentTenant, tenantFindings, tenantPatches, tenantSessions, tenantAuditLogs])
+  }, [currentTenant, tenants, tenantFindings, tenantPatches, tenantSessions, tenantAuditLogs])
 
   function handleTenantChange(newTenant: TenantId) {
     setCurrentTenant(newTenant)
-    const label =
-      newTenant === 'sentra-internal'
-        ? 'Sentra Core (Internal)'
-        : newTenant === 'tenant-alpha'
-          ? 'Tenant Alpha (Isolated)'
-          : 'Acme Corp (Enterprise)'
+    const match = tenants.find((t) => t.tenantId === newTenant)
+    const label = match ? match.name : newTenant
+    if (match && match.defaultWorkspace) {
+      setCurrentWorkspace(match.defaultWorkspace)
+    }
     toast.info(`Switched Workspace to ${label}`, {
       description: 'Strict tenant data isolation applied. Displaying workspace-scoped findings and audit trail.',
+    })
+  }
+
+  function handleTenantCreated(newTenant: TenantView) {
+    setTenants((prev) => {
+      if (prev.some((t) => t.tenantId === newTenant.tenantId)) return prev
+      return [...prev, newTenant]
+    })
+    setCurrentTenant(newTenant.tenantId)
+    if (newTenant.defaultWorkspace) {
+      setCurrentWorkspace(newTenant.defaultWorkspace)
+    }
+
+    const newAuditEntry: AuditLogView = {
+      eventId: `evt-tenant-${Date.now()}`,
+      tenantId: newTenant.tenantId,
+      sequenceNumber: (auditLogs[0]?.sequenceNumber || 65) + 1,
+      actor: currentRole,
+      action: 'tenant_registered',
+      details: `Workspace '${newTenant.name}' (${newTenant.isolationLevel}) provisioned`,
+      cryptoHash: `sha256:${Date.now().toString(16)}`,
+      timestamp: new Date().toISOString(),
+    }
+    setAuditLogs((prev) => [newAuditEntry, ...prev])
+
+    toast.success(`Organization '${newTenant.name}' Provisioned`, {
+      description: `Activated tenant '${newTenant.tenantId}' with ${newTenant.isolationLevel === 'multi_tenant_isolated' ? 'Strict Multi-Tenant Fencing' : 'Single Operator'} isolation.`,
     })
   }
 
@@ -632,7 +672,9 @@ export function App() {
           {/* Top Header */}
           <Header
             currentTenant={currentTenant}
+            tenants={tenants}
             onTenantChange={handleTenantChange}
+            onOpenAddTenant={() => setIsAddTenantOpen(true)}
             currentRole={currentRole}
             onRoleChange={setCurrentRole}
             onExportSarif={handleExportSarif}
@@ -820,6 +862,15 @@ export function App() {
           currentRole={currentRole}
           onAdmitPatch={handleAdmitPatch}
           onNavigateToPatches={() => setActiveTab('remediation')}
+        />
+
+        {/* Dynamic Organization / Tenant Registration Modal */}
+        <AddTenantDialog
+          open={isAddTenantOpen}
+          onOpenChange={setIsAddTenantOpen}
+          currentRole={currentRole}
+          onTenantCreated={handleTenantCreated}
+          currentWorkspace={currentWorkspace}
         />
 
         {/* Global Sonner Toaster */}

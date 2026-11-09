@@ -6,6 +6,7 @@ import {
   Search,
   Code2,
   CheckCircle2,
+  Plus,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -14,15 +15,18 @@ import {
   SelectContent,
   SelectGroup,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import type { TenantId, UserRole } from '@/types/sentra'
+import type { TenantId, TenantView, UserRole } from '@/types/sentra'
 
 interface HeaderProps {
   currentTenant: TenantId
+  tenants: TenantView[]
   onTenantChange: (tenant: TenantId) => void
+  onOpenAddTenant: () => void
   currentRole: UserRole
   onRoleChange: (role: UserRole) => void
   onExportSarif: () => void
@@ -35,7 +39,9 @@ interface HeaderProps {
 
 export function Header({
   currentTenant,
+  tenants,
   onTenantChange,
+  onOpenAddTenant,
   currentRole,
   onRoleChange,
   onExportSarif,
@@ -71,32 +77,53 @@ export function Header({
         {/* Right Controls & Governance */}
         <div className="flex flex-wrap items-center gap-3">
           {/* Tenant Selector */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <span className="text-xs font-medium text-zinc-400">Tenant:</span>
             <Select
               value={currentTenant}
               onValueChange={(val) => {
+                if (val === '__add_new__') {
+                  onOpenAddTenant()
+                  return
+                }
                 if (val) onTenantChange(val as TenantId)
               }}
             >
               <SelectTrigger className="w-[210px] sm:w-[225px] h-8 text-xs bg-zinc-900/80 border-zinc-800">
                 <SelectValue placeholder="Select Workspace">
                   {(val: string | null) => {
-                    if (val === 'sentra-internal') return 'Sentra Core (Internal)'
-                    if (val === 'tenant-alpha') return 'Tenant Alpha (Isolated)'
-                    if (val === 'acme-corp') return 'Acme Corp (Enterprise)'
-                    return val || 'Select Workspace'
+                    const match = tenants?.find((t) => t.tenantId === val)
+                    return match ? match.name : (val || 'Select Workspace')
                   }}
                 </SelectValue>
               </SelectTrigger>
-              <SelectContent className="min-w-[225px]">
+              <SelectContent className="min-w-[240px]">
                 <SelectGroup>
-                  <SelectItem value="sentra-internal">Sentra Core (Internal)</SelectItem>
-                  <SelectItem value="tenant-alpha">Tenant Alpha (Isolated)</SelectItem>
-                  <SelectItem value="acme-corp">Acme Corp (Enterprise)</SelectItem>
+                  {(tenants || []).map((t) => (
+                    <SelectItem key={t.tenantId} value={t.tenantId}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                  <SelectSeparator />
+                  <SelectItem value="__add_new__" className="text-primary font-medium focus:text-primary">
+                    <span className="flex items-center gap-1.5">
+                      <Plus className="size-3.5" />
+                      + Register New Tenant...
+                    </span>
+                  </SelectItem>
                 </SelectGroup>
               </SelectContent>
             </Select>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onOpenAddTenant}
+              title="Register New Organization / Tenant Workspace"
+              className="size-8 p-0 bg-zinc-900/80 border-zinc-800 text-zinc-300 hover:text-primary hover:border-primary/50"
+            >
+              <Plus className="size-3.5" />
+            </Button>
           </div>
 
           {/* RBAC Role Selector */}
