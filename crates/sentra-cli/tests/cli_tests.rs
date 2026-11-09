@@ -147,7 +147,8 @@ struct Fixture {
 }
 impl Fixture {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
+        let temp = fs::canonicalize(std::env::temp_dir()).unwrap_or_else(|_| std::env::temp_dir());
+        let root = temp.join(format!(
             "sentra-cli-{}-{}",
             std::process::id(),
             SessionId::new()
@@ -634,7 +635,8 @@ fn verify_audit_and_mcp_parse_arguments() {
 
 #[test]
 fn diff_computes_directory_differences_human_and_json() {
-    let temp_dir = std::env::temp_dir().join(format!("sentra_diff_test_{}", SessionId::new()));
+    let temp = fs::canonicalize(std::env::temp_dir()).unwrap_or_else(|_| std::env::temp_dir());
+    let temp_dir = temp.join(format!("sentra_diff_test_{}", SessionId::new()));
     fs::create_dir_all(&temp_dir).unwrap();
     let base = temp_dir.join("base");
     let head = temp_dir.join("head");
