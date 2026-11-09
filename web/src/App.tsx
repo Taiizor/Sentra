@@ -32,6 +32,7 @@ import { ThreatIntelTab } from '@/components/dashboard/threat-intel-tab'
 import { ResearchTab } from '@/components/dashboard/research-tab'
 import { WorkerFleetTab } from '@/components/dashboard/worker-fleet-tab'
 import { AuditTab } from '@/components/dashboard/audit-tab'
+import { WebhookTab } from '@/components/dashboard/webhook-tab'
 import { ScannerConsole } from '@/components/dashboard/scanner-console'
 import { LiveStreamModal } from '@/components/dashboard/live-stream-modal'
 import { AiPatchModal } from '@/components/dashboard/ai-patch-modal'
@@ -173,6 +174,8 @@ export function App() {
         return 'Deep Research Campaigns & Coverage Ledger'
       case 'fleet':
         return 'Remote-Worker Fleet Coordinator & Sandboxes'
+      case 'webhooks':
+        return 'Continuous Integration Webhook Intake & Automated Proposals'
       case 'audit':
         return 'Tamper-Resistant Immutable Audit Trail'
       default:
@@ -637,6 +640,8 @@ export function App() {
             {activeTab === 'research' && <ResearchTab campaigns={campaigns} />}
 
             {activeTab === 'fleet' && <WorkerFleetTab workers={workers} />}
+
+            {activeTab === 'webhooks' && <WebhookTab currentRole={currentRole} />}
 
             {activeTab === 'audit' && <AuditTab auditLogs={auditLogs} />}
           </main>

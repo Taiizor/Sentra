@@ -11,6 +11,7 @@ import {
   Lock,
   ChevronRight,
   HardDrive,
+  Webhook,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from 'cn'
@@ -77,6 +78,12 @@ export function Sidebar({
       label: 'Worker Fleet & Sandboxes',
       icon: Server,
       badge: 'Phase 6',
+    },
+    {
+      id: 'webhooks',
+      label: 'CI/CD & Webhook Intake',
+      icon: Webhook,
+      badge: 'Phase 5',
     },
     {
       id: 'audit',

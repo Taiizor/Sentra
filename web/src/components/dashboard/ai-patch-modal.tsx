@@ -15,6 +15,8 @@ import {
   Settings2,
   ArrowRight,
   ExternalLink,
+  HardDrive,
+  RotateCcw,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { copyText } from '@/lib/clipboard'
@@ -29,7 +31,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { generateAiPatch } from '@/lib/api-client'
+import { generateAiPatch, applyPatchToWorkspace, rollbackPatch } from '@/lib/api-client'
 import type { FindingView, PatchBundleView, UserRole } from '@/types/sentra'
 
 interface AiPatchModalProps {
@@ -62,6 +64,12 @@ export function AiPatchModal({
   const [generationStep, setGenerationStep] = useState(0)
   const [patchResult, setPatchResult] = useState<any | null>(null)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
+
+  // Patch Application State
+  const [isApplying, setIsApplying] = useState(false)
+  const [isRollingBack, setIsRollingBack] = useState(false)
+  const [backupPath, setBackupPath] = useState<string | null>(null)
+  const [isApplied, setIsApplied] = useState(false)
 
   if (!finding) return null
 
@@ -108,6 +116,51 @@ export function AiPatchModal({
     setTimeout(() => setCopiedKey(null), 2000)
   }
 
+  async function handleApplyToWorkspace() {
+    if (!patchResult) return
+    setIsApplying(true)
+    try {
+      const res = await applyPatchToWorkspace({
+        patchId: patchResult.bundleId,
+        diff: patchResult.diff,
+        targetLocation: finding!.targetLocation,
+      })
+      setBackupPath(res.backupPath)
+      setIsApplied(true)
+      toast.success(res.alreadyPatched ? 'File Already Patched' : 'Patch Applied to Workspace on Disk', {
+        description: `Atomic backup safely preserved at: ${res.backupPath}`,
+      })
+    } catch (err: any) {
+      toast.error('Failed to Apply Patch', {
+        description: err.message || 'Error writing patch to file.',
+      })
+    } finally {
+      setIsApplying(false)
+    }
+  }
+
+  async function handleRollback() {
+    if (!patchResult || !backupPath) return
+    setIsRollingBack(true)
+    try {
+      await rollbackPatch({
+        patchId: patchResult.bundleId,
+        backupPath,
+        targetLocation: finding!.targetLocation,
+      })
+      setIsApplied(false)
+      toast.info('Patch Rolled Back', {
+        description: `Restored ${finding!.targetLocation} to pre-patch state.`,
+      })
+    } catch (err: any) {
+      toast.error('Failed to Rollback Patch', {
+        description: err.message || 'Error restoring from backup.',
+      })
+    } finally {
+      setIsRollingBack(false)
+    }
+  }
+
   function handleDownloadPatchFile() {
     if (!patchResult) return
     const blob = new Blob([patchResult.diff], { type: 'text/plain' })
@@ -137,6 +190,9 @@ export function AiPatchModal({
       attemptCount: 1,
       branchName: patchResult.branchName,
       ghPrCommand: patchResult.ghPrCommand,
+      targetLocation: finding!.targetLocation,
+      backupPath: backupPath || undefined,
+      isAppliedToDisk: isApplied,
       originalSnippet: patchResult.originalSnippet,
       patchedSnippet: patchResult.patchedSnippet,
       diff: patchResult.diff,
@@ -500,6 +556,30 @@ export function AiPatchModal({
 
             {patchResult && (
               <>
+                {!isApplied ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isApplying || currentRole === 'Viewer'}
+                    onClick={handleApplyToWorkspace}
+                    className="h-8 text-xs border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 font-semibold"
+                  >
+                    <HardDrive className="size-3.5 mr-1.5" />
+                    {isApplying ? 'Applying to Disk...' : 'Apply to Workspace Disk'}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isRollingBack}
+                    onClick={handleRollback}
+                    className="h-8 text-xs border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 font-semibold"
+                  >
+                    <RotateCcw className="size-3.5 mr-1.5" />
+                    {isRollingBack ? 'Rolling Back...' : 'Rollback from Backup'}
+                  </Button>
+                )}
+
                 <Button
                   variant="outline"
                   size="sm"
