@@ -8,7 +8,6 @@ import {
   FileText,
   ChevronDown,
   ChevronRight,
-  Sparkles,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { copyText } from '@/lib/clipboard'
@@ -280,7 +279,7 @@ export function DiffViewer({
     <div className="flex flex-col border border-zinc-800 rounded-xl bg-zinc-950 overflow-hidden shadow-lg">
       {/* Diff Header Bar */}
       <div className="px-4 py-2.5 bg-zinc-900/90 border-b border-zinc-800/80 flex flex-wrap items-center justify-between gap-3 text-xs select-none">
-        <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0 max-w-full">
           {collapsible && (
             <button
               type="button"
@@ -362,7 +361,8 @@ export function DiffViewer({
             className="h-7 text-xs text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"
           >
             {copied ? <Check className="size-3 mr-1 text-emerald-400" /> : <Copy className="size-3 mr-1" />}
-            Copy Diff
+            <span className="hidden sm:inline">Copy Diff</span>
+            <span className="inline sm:hidden">Copy</span>
           </Button>
         </div>
       </div>
@@ -460,7 +460,7 @@ export function DiffViewer({
 
           {/* Split (Side-by-Side) View */}
           {mode === 'split' && (
-            <table className="w-full border-collapse table-fixed">
+            <table className="w-full border-collapse table-fixed min-w-[580px]">
               <thead>
                 <tr className="bg-zinc-900/60 text-zinc-400 text-[11px] border-b border-zinc-800/80">
                   <th className="w-1/2 px-3 py-1 text-left font-semibold border-r border-zinc-800/80">

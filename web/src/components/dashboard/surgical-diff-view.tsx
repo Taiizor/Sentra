@@ -158,14 +158,14 @@ export function SurgicalDiffView({
     <div className={`flex flex-col rounded-xl border border-zinc-800 bg-zinc-950 overflow-hidden shadow-lg ${className}`}>
       {/* Diff Header Bar */}
       <div className="flex flex-wrap items-center justify-between px-3.5 py-2.5 bg-zinc-900/90 border-b border-zinc-800 text-xs select-none gap-2">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 max-w-full">
           <div className="size-6 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0">
             <GitCompare className="size-3.5" />
           </div>
           <span className="font-mono font-bold text-zinc-200 truncate">
             {title || filePath || 'Surgical Diff Remedy'}
           </span>
-          <div className="flex items-center gap-1.5 font-mono text-[10px] ml-1">
+          <div className="flex items-center gap-1.5 font-mono text-[10px] ml-1 shrink-0">
             <Badge variant="outline" className="px-1.5 py-0 border-emerald-500/30 bg-emerald-500/10 text-emerald-400 font-bold">
               +{parsed.additions}
             </Badge>
@@ -289,7 +289,8 @@ export function SurgicalDiffView({
         </div>
       ) : (
         /* Split (Side-by-Side) Diff View */
-        <div className="grid grid-cols-2 divide-x divide-zinc-800 font-mono text-xs overflow-x-auto select-text">
+        <div className="overflow-x-auto select-text">
+          <div className="grid grid-cols-2 divide-x divide-zinc-800 font-mono text-xs min-w-[500px]">
           {/* Left: Deletions (Before) */}
           <div className="flex flex-col divide-y divide-zinc-850/40 bg-zinc-950/80">
             <div className="px-3 py-1.5 bg-rose-950/20 border-b border-rose-900/30 text-rose-300 text-[11px] font-semibold flex items-center justify-between">
@@ -340,6 +341,7 @@ export function SurgicalDiffView({
             )}
           </div>
         </div>
+      </div>
       )}
     </div>
   )

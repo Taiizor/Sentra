@@ -8,8 +8,7 @@ import {
   RotateCw,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import type { WorkerNodeView } from '@/types/sentra'
 
@@ -22,7 +21,7 @@ export function WorkerFleetTab({ workers }: WorkerFleetTabProps) {
     <div className="flex flex-col gap-6">
       {/* Header */}
       <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Server className="size-5 text-primary" />
           <h2 className="text-lg font-bold tracking-tight">
             Remote-Worker Fleet Coordinator & Isolation Sandboxes
@@ -38,7 +37,7 @@ export function WorkerFleetTab({ workers }: WorkerFleetTabProps) {
       </div>
 
       {/* 5-Gate Multi-User Security Audit Banner */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-3 p-4 rounded-lg border bg-card/60">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 p-4 rounded-lg border bg-card/60">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
             <ShieldCheck className="size-4" />
@@ -91,7 +90,7 @@ export function WorkerFleetTab({ workers }: WorkerFleetTabProps) {
       </div>
 
       {/* Worker Nodes Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {workers.map((worker) => (
           <Card key={worker.workerId} className="flex flex-col justify-between border-border/80">
             <CardHeader className="pb-3 border-b bg-muted/20">

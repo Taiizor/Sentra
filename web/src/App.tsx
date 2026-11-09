@@ -826,7 +826,7 @@ export function App() {
                 <Shield className="size-3.5 text-primary" />
                 <span>Sentra Security Platform • RFC 2104 / OASIS SARIF v2.1.0 Compliant</span>
               </div>
-              <div className="flex items-center gap-4 text-[11px] font-mono">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-mono">
                 <span>Fail-Closed Host Boundary</span>
                 <span>Zero-Egress Isolation</span>
                 <span>Human-in-the-Loop Governance</span>
@@ -862,7 +862,7 @@ export function App() {
               <pre className="whitespace-pre-wrap">{sarifModalContent}</pre>
             </div>
 
-            <div className="flex items-center justify-between gap-2 pt-2 border-t border-zinc-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-zinc-800">
               <Button
                 variant="outline"
                 size="sm"

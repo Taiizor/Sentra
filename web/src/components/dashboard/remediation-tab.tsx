@@ -127,8 +127,8 @@ export function RemediationTab({ patches, currentRole }: RemediationTabProps) {
           <Card key={patch.bundleId} className="border-border/80">
             <CardHeader>
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <Badge variant="outline" className="font-mono text-xs">
                       {patch.bundleId}
                     </Badge>
@@ -136,7 +136,7 @@ export function RemediationTab({ patches, currentRole }: RemediationTabProps) {
                       <CheckCircle2 className="size-3 text-primary" />
                       Verified Remediated
                     </Badge>
-                    <span className="text-xs text-muted-foreground font-mono">
+                    <span className="text-xs text-muted-foreground font-mono truncate max-w-[240px] sm:max-w-none" title={patch.branchName}>
                       Branch: {patch.branchName}
                     </span>
                   </div>
@@ -148,7 +148,7 @@ export function RemediationTab({ patches, currentRole }: RemediationTabProps) {
                   </CardDescription>
                 </div>
 
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
                   {/* Disk Patch Application State (Restricted to SecurityAdmin) */}
                   {!(patchStates[patch.bundleId]?.applied || patch.isAppliedToDisk) ? (
                     <Button
@@ -268,8 +268,8 @@ export function RemediationTab({ patches, currentRole }: RemediationTabProps) {
                   <GitPullRequestDraft className="size-3.5" />
                   Operator Human-in-the-Loop CLI Dispatch
                 </span>
-                <div className="flex items-center justify-between gap-2 bg-muted/40 p-2.5 rounded-md border font-mono text-xs">
-                  <span className="truncate">{patch.ghPrCommand}</span>
+                <div className="flex items-center justify-between gap-2 bg-muted/40 p-2.5 rounded-md border font-mono text-xs min-w-0">
+                  <span className="truncate min-w-0 flex-1">{patch.ghPrCommand}</span>
                   <Button
                     variant="ghost"
                     size="sm"

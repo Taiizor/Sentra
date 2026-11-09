@@ -180,7 +180,7 @@ Aggregate digest: sha256:7f83b165...`
         </div>
 
         {/* Status footer */}
-        <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs text-muted-foreground px-1">
           <span className="flex items-center gap-1.5">
             <Lock className="size-3 text-primary" />
             Host Execution Protection: Enabled
