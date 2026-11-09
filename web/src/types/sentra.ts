@@ -18,6 +18,16 @@ export type FindingStatus =
   | 'Rejected'
   | 'VerifiedRemediated'
 
+export type FindingVerdict = 'confirmed' | 'needs_validation' | 'rejected'
+
+export interface FindingTraceNode {
+  kind: 'entrypoint' | 'propagation' | 'sink'
+  file: string
+  line: number
+  scope: string
+  description: string
+}
+
 export interface TaintStep {
   step: number
   role: 'SOURCE' | 'PROPAGATION' | 'SANITIZER' | 'SINK'
@@ -37,6 +47,19 @@ export interface FindingView {
   confidence: Confidence
   reachability: Reachability
   status: FindingStatus
+  verdict?: FindingVerdict
+  rootCause?: string
+  intendedBehavior?: string
+  smallestEffectiveFix?: string
+  unresolvedBlocker?: string
+  blockers?: string[]
+  validationPlan?: {
+    local?: string
+    deployment?: string
+  }
+  rejectionReason?: string
+  fingerprint?: string
+  auditTrace?: FindingTraceNode[]
   targetLocation: string
   startLine: number
   endLine: number
@@ -77,6 +100,59 @@ export interface SessionSummaryView {
   taskCount: number
   createdAt: string
   updatedAt: string
+}
+
+export type LedgerStatus =
+  | 'planned'
+  | 'candidate'
+  | 'covered'
+  | 'needs_validation'
+  | 'deferred'
+  | 'blocked'
+  | 'out_of_scope'
+  | 'not_applicable'
+  | 'in_progress'
+
+export type AuditProfile = 'quick' | 'standard' | 'deep'
+
+export interface CoverageLedgerUnit {
+  coverageId: string
+  surface: string
+  boundary: string
+  subsystem: string
+  attackClass: string
+  status: LedgerStatus
+  wave: number
+  agentId?: string
+  reviewedPaths: string[]
+  localChecks: string[]
+  resultFingerprints: string[]
+  unresolved?: string
+}
+
+export interface CoverageLedgerReport {
+  repoName: string
+  targetRef: string
+  profile: AuditProfile
+  budget: {
+    maxAgentCalls: number
+    spentAgentCalls: number
+    reservedCritics: number
+    reservedVerifiers: number
+  }
+  stats: {
+    totalUnits: number
+    covered: number
+    candidate: number
+    needsValidation: number
+    planned: number
+    deferred: number
+    blocked: number
+    outOfScope: number
+  }
+  units: CoverageLedgerUnit[]
+  invariantsPass: boolean
+  validationOutput?: string
 }
 
 export interface CampaignLedgerView {

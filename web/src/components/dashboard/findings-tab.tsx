@@ -16,9 +16,18 @@ import {
   ChevronLeft,
   Filter,
   Sparkles,
+  CheckCircle2,
+  HelpCircle,
+  XCircle,
+  FileCode,
+  ShieldAlert,
+  Layers,
+  ArrowRight,
+  Code2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { copyText } from '@/lib/clipboard'
+import { validateFindingsInvariants } from '@/lib/api-client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -47,7 +56,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
-import type { FindingView, Severity, Reachability, UserRole } from '@/types/sentra'
+import type { FindingView, Severity, Reachability, UserRole, FindingVerdict } from '@/types/sentra'
 
 interface FindingsTabProps {
   findings: FindingView[]
@@ -56,7 +65,7 @@ interface FindingsTabProps {
   onOpenAiPatchModal: (finding: FindingView) => void
 }
 
-type SortField = 'severity' | 'ruleId' | 'title' | 'targetLocation' | 'reachability'
+type SortField = 'severity' | 'ruleId' | 'title' | 'targetLocation' | 'reachability' | 'verdict'
 type SortDir = 'asc' | 'desc'
 
 const SEVERITY_WEIGHT: Record<Severity, number> = {
@@ -76,8 +85,10 @@ export function FindingsTab({
   const [searchTerm, setSearchTerm] = useState('')
   const [severityFilter, setSeverityFilter] = useState<string>('ALL')
   const [reachabilityFilter, setReachabilityFilter] = useState<string>('ALL')
+  const [verdictFilter, setVerdictFilter] = useState<string>('ALL')
   const [selectedFinding, setSelectedFinding] = useState<FindingView | null>(null)
   const [copiedPath, setCopiedPath] = useState<string | null>(null)
+  const [isValidatingSchema, setIsValidatingSchema] = useState(false)
 
   // Pagination & Sorting state
   const [currentPage, setCurrentPage] = useState(1)
@@ -93,6 +104,9 @@ export function FindingsTab({
       high: findings.filter((f) => f.severity === 'High').length,
       medium: findings.filter((f) => f.severity === 'Medium').length,
       reachable: findings.filter((f) => f.reachability === 'ReachableCallPath').length,
+      confirmed: findings.filter((f) => f.verdict === 'confirmed' || (!f.verdict && f.status !== 'Rejected')).length,
+      needsValidation: findings.filter((f) => f.verdict === 'needs_validation').length,
+      rejected: findings.filter((f) => f.verdict === 'rejected' || f.status === 'Rejected').length,
     }
   }, [findings])
 
@@ -102,14 +116,18 @@ export function FindingsTab({
         f.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         f.ruleId.toLowerCase().includes(searchTerm.toLowerCase()) ||
         f.targetLocation.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        f.cwe.toLowerCase().includes(searchTerm.toLowerCase())
+        f.cwe.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (f.fingerprint && f.fingerprint.toLowerCase().includes(searchTerm.toLowerCase()))
 
       const matchesSeverity = severityFilter === 'ALL' || f.severity === severityFilter
       const matchesReachability = reachabilityFilter === 'ALL' || f.reachability === reachabilityFilter
+      
+      const effectiveVerdict = f.verdict ?? (f.status === 'Rejected' ? 'rejected' : 'confirmed')
+      const matchesVerdict = verdictFilter === 'ALL' || effectiveVerdict === verdictFilter
 
-      return matchesSearch && matchesSeverity && matchesReachability
+      return matchesSearch && matchesSeverity && matchesReachability && matchesVerdict
     })
-  }, [findings, searchTerm, severityFilter, reachabilityFilter])
+  }, [findings, searchTerm, severityFilter, reachabilityFilter, verdictFilter])
 
   const sortedFindings = useMemo(() => {
     const list = [...filteredFindings]
@@ -125,6 +143,10 @@ export function FindingsTab({
         cmp = a.targetLocation.localeCompare(b.targetLocation)
       } else if (sortField === 'reachability') {
         cmp = a.reachability.localeCompare(b.reachability)
+      } else if (sortField === 'verdict') {
+        const vA = a.verdict ?? (a.status === 'Rejected' ? 'rejected' : 'confirmed')
+        const vB = b.verdict ?? (b.status === 'Rejected' ? 'rejected' : 'confirmed')
+        cmp = vA.localeCompare(vB)
       }
       return sortDir === 'asc' ? cmp : -cmp
     })
@@ -159,11 +181,11 @@ export function FindingsTab({
   }
 
   function handleExportCsv() {
-    const header = 'Severity,Rule,CWE,Title,File,Line,Reachability,Status\n'
+    const header = 'Verdict,Severity,Rule,CWE,Title,File,Line,Reachability,Status\n'
     const rows = sortedFindings
       .map(
         (f) =>
-          `"${f.severity}","${f.ruleId}","${f.cwe}","${f.title.replace(/"/g, '""')}","${f.targetLocation}",${f.startLine},"${f.reachability}","${f.status}"`
+          `"${f.verdict || (f.status === 'Rejected' ? 'rejected' : 'confirmed')}","${f.severity}","${f.ruleId}","${f.cwe}","${f.title.replace(/"/g, '""')}","${f.targetLocation}",${f.startLine},"${f.reachability}","${f.status}"`
       )
       .join('\n')
     const blob = new Blob([header + rows], { type: 'text/csv' })
@@ -174,7 +196,7 @@ export function FindingsTab({
     a.click()
     URL.revokeObjectURL(url)
     toast.success('CSV Export Ready', {
-      description: `Downloaded ${sortedFindings.length} findings as CSV.`,
+      description: `Downloaded ${sortedFindings.length} findings as CSV with Cloudflare Three-Verdict classifications.`,
     })
   }
 
@@ -188,8 +210,59 @@ export function FindingsTab({
     a.click()
     URL.revokeObjectURL(url)
     toast.success('JSON Export Ready', {
-      description: `Downloaded ${sortedFindings.length} findings as JSON.`,
+      description: `Downloaded ${sortedFindings.length} findings as JSON (OASIS SARIF / Cloudflare audit format).`,
     })
+  }
+
+  async function handleValidateSchema() {
+    setIsValidatingSchema(true)
+    try {
+      const res = await validateFindingsInvariants(findings)
+      if (res && res.invariantsPass) {
+        toast.success('Cloudflare Schema Invariants Pass', {
+          description: `All ${res.totalFindings} findings strictly comply with Cloudflare Three-Verdict criteria and source-grounding.`,
+        })
+      } else if (res && !res.invariantsPass) {
+        toast.error('Schema Invariants Failed', {
+          description: `Found ${res.errors.length} error(s). First: ${res.errors[0]}`,
+        })
+      } else {
+        toast.info('Validation Offline', {
+          description: 'Web API bridge is unreachable. Displaying cached verified findings.',
+        })
+      }
+    } catch (err: any) {
+      toast.error('Validation Error', { description: err.message })
+    } finally {
+      setIsValidatingSchema(false)
+    }
+  }
+
+  function getVerdictBadge(verdict?: FindingVerdict, status?: string) {
+    const effectiveVerdict = verdict ?? (status === 'Rejected' ? 'rejected' : 'confirmed')
+    switch (effectiveVerdict) {
+      case 'confirmed':
+        return (
+          <Badge variant="destructive" className="text-[10px] font-mono font-bold flex items-center gap-1 bg-rose-500/15 text-rose-400 border border-rose-500/30">
+            <CheckCircle2 className="size-3" />
+            CONFIRMED
+          </Badge>
+        )
+      case 'needs_validation':
+        return (
+          <Badge variant="outline" className="text-[10px] font-mono font-bold flex items-center gap-1 bg-amber-500/15 text-amber-400 border border-amber-500/30">
+            <HelpCircle className="size-3" />
+            NEEDS VALIDATION
+          </Badge>
+        )
+      case 'rejected':
+        return (
+          <Badge variant="secondary" className="text-[10px] font-mono font-bold flex items-center gap-1 bg-zinc-800 text-zinc-400 border border-zinc-700">
+            <XCircle className="size-3" />
+            REJECTED
+          </Badge>
+        )
+    }
   }
 
   function getSeverityBadgeVariant(severity: Severity) {
@@ -251,10 +324,11 @@ export function FindingsTab({
       {/* Quick Interactive Filter Chips */}
       <div className="flex flex-wrap items-center gap-2">
         <Button
-          variant={severityFilter === 'ALL' && reachabilityFilter === 'ALL' ? 'default' : 'outline'}
+          variant={verdictFilter === 'ALL' && severityFilter === 'ALL' && reachabilityFilter === 'ALL' ? 'default' : 'outline'}
           size="sm"
           className="h-7 text-xs rounded-full px-3"
           onClick={() => {
+            setVerdictFilter('ALL')
             setSeverityFilter('ALL')
             setReachabilityFilter('ALL')
             setCurrentPage(1)
@@ -262,6 +336,48 @@ export function FindingsTab({
         >
           All ({counts.all})
         </Button>
+
+        {/* Cloudflare Three-Verdict Filter Chips */}
+        <Button
+          variant={verdictFilter === 'confirmed' ? 'destructive' : 'outline'}
+          size="sm"
+          className="h-7 text-xs rounded-full px-3 border-rose-500/30 hover:border-rose-500/80 bg-rose-500/10 text-rose-300"
+          onClick={() => {
+            setVerdictFilter(verdictFilter === 'confirmed' ? 'ALL' : 'confirmed')
+            setCurrentPage(1)
+          }}
+        >
+          <CheckCircle2 className="size-3 mr-1.5 text-rose-400" />
+          Confirmed ({counts.confirmed})
+        </Button>
+
+        <Button
+          variant={verdictFilter === 'needs_validation' ? 'secondary' : 'outline'}
+          size="sm"
+          className="h-7 text-xs rounded-full px-3 border-amber-500/40 hover:border-amber-500/80 bg-amber-500/10 text-amber-300"
+          onClick={() => {
+            setVerdictFilter(verdictFilter === 'needs_validation' ? 'ALL' : 'needs_validation')
+            setCurrentPage(1)
+          }}
+        >
+          <HelpCircle className="size-3 mr-1.5 text-amber-400" />
+          Needs Validation ({counts.needsValidation})
+        </Button>
+
+        <Button
+          variant={verdictFilter === 'rejected' ? 'secondary' : 'outline'}
+          size="sm"
+          className="h-7 text-xs rounded-full px-3 border-zinc-700 hover:border-zinc-500 bg-zinc-800/40 text-zinc-400"
+          onClick={() => {
+            setVerdictFilter(verdictFilter === 'rejected' ? 'ALL' : 'rejected')
+            setCurrentPage(1)
+          }}
+        >
+          <XCircle className="size-3 mr-1.5 text-zinc-400" />
+          Rejected ({counts.rejected})
+        </Button>
+
+        <div className="h-4 w-px bg-zinc-800 mx-1 hidden sm:block" />
 
         <Button
           variant={severityFilter === 'Critical' ? 'destructive' : 'outline'}
@@ -287,19 +403,6 @@ export function FindingsTab({
         >
           <span className="size-1.5 rounded-full bg-amber-400 mr-1.5" />
           High ({counts.high})
-        </Button>
-
-        <Button
-          variant={severityFilter === 'Medium' ? 'secondary' : 'outline'}
-          size="sm"
-          className="h-7 text-xs rounded-full px-3 border-sky-500/30 hover:border-sky-500/80"
-          onClick={() => {
-            setSeverityFilter(severityFilter === 'Medium' ? 'ALL' : 'Medium')
-            setCurrentPage(1)
-          }}
-        >
-          <span className="size-1.5 rounded-full bg-sky-400 mr-1.5" />
-          Medium ({counts.medium})
         </Button>
 
         <Button
@@ -333,6 +436,27 @@ export function FindingsTab({
                 className="pl-9 h-9 text-xs bg-zinc-950/70 border-zinc-800 text-zinc-100 placeholder:text-zinc-500"
               />
             </div>
+
+            {/* Verdict Select (Cloudflare Three-Verdict Model) */}
+            <Select
+              value={verdictFilter}
+              onValueChange={(val) => {
+                setVerdictFilter(val ?? 'ALL')
+                setCurrentPage(1)
+              }}
+            >
+              <SelectTrigger className="w-[160px] h-9 text-xs bg-zinc-950/70 border-zinc-800">
+                <SelectValue placeholder="Verdict" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="ALL">All Verdicts</SelectItem>
+                  <SelectItem value="confirmed">Confirmed</SelectItem>
+                  <SelectItem value="needs_validation">Needs Validation</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
 
             {/* Severity Select */}
             <Select
@@ -377,8 +501,18 @@ export function FindingsTab({
               </SelectContent>
             </Select>
 
-            {/* Export Actions */}
+            {/* Export & Invariant Actions */}
             <div className="flex items-center gap-1.5 ml-auto">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 text-xs bg-zinc-950/70 border-zinc-800 text-primary hover:text-primary hover:bg-primary/10"
+                onClick={handleValidateSchema}
+                disabled={isValidatingSchema}
+              >
+                <ShieldCheck className="size-3.5 mr-1" />
+                {isValidatingSchema ? 'Validating...' : 'Validate Schema'}
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -463,6 +597,12 @@ export function FindingsTab({
                 <TableHeader className="bg-zinc-950/40">
                   <TableRow className="border-zinc-800/80 hover:bg-transparent">
                     <TableHead
+                      className="text-xs cursor-pointer select-none text-zinc-300 font-semibold w-[130px]"
+                      onClick={() => handleSort('verdict')}
+                    >
+                      Verdict {renderSortIcon('verdict')}
+                    </TableHead>
+                    <TableHead
                       className="text-xs cursor-pointer select-none text-zinc-300 font-semibold w-[110px]"
                       onClick={() => handleSort('severity')}
                     >
@@ -492,7 +632,7 @@ export function FindingsTab({
                     >
                       Reachability {renderSortIcon('reachability')}
                     </TableHead>
-                    <TableHead className="text-xs text-zinc-300 font-semibold w-[100px]">Status</TableHead>
+                    <TableHead className="text-xs text-zinc-300 font-semibold w-[90px]">Status</TableHead>
                     <TableHead className="text-xs text-right text-zinc-300 font-semibold w-[100px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -503,6 +643,9 @@ export function FindingsTab({
                       className="cursor-pointer hover:bg-zinc-800/40 border-zinc-800/70 transition-colors group"
                       onClick={() => setSelectedFinding(finding)}
                     >
+                      <TableCell>
+                        {getVerdictBadge(finding.verdict, finding.status)}
+                      </TableCell>
                       <TableCell>
                         <Badge variant={getSeverityBadgeVariant(finding.severity)} className="text-[11px] font-bold">
                           {finding.severity}
@@ -641,6 +784,7 @@ export function FindingsTab({
               {/* Sticky Top Header with Safe Close Button Margin */}
               <SheetHeader className="px-6 py-5 border-b border-zinc-800/80 bg-zinc-950/95 sticky top-0 z-20 backdrop-blur pr-14 text-left">
                 <div className="flex flex-wrap items-center gap-2">
+                  {getVerdictBadge(selectedFinding.verdict, selectedFinding.status)}
                   <Badge variant={getSeverityBadgeVariant(selectedFinding.severity)} className="text-xs font-bold uppercase">
                     {selectedFinding.severity}
                   </Badge>
@@ -660,15 +804,187 @@ export function FindingsTab({
                 <SheetTitle className="text-lg font-bold mt-2 text-zinc-100 leading-snug">
                   {selectedFinding.title}
                 </SheetTitle>
-                <SheetDescription className="text-xs text-zinc-400 mt-1 font-mono flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-zinc-400 font-mono">
                   <span>File: {selectedFinding.targetLocation}</span>
                   <span>•</span>
                   <span>Lines: {selectedFinding.startLine}-{selectedFinding.endLine}</span>
-                </SheetDescription>
+                  {selectedFinding.fingerprint && (
+                    <>
+                      <span>•</span>
+                      <span className="text-[11px] text-zinc-500 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded">
+                        FP: {selectedFinding.fingerprint}
+                      </span>
+                    </>
+                  )}
+                </div>
               </SheetHeader>
 
               {/* Scrollable Inspector Body with Generous Padding */}
               <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-6">
+                {/* Cloudflare Three-Verdict: Needs Validation Banner & Blockers */}
+                {selectedFinding.verdict === 'needs_validation' && (
+                  <div className="p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 flex flex-col gap-3">
+                    <div className="flex items-center gap-2 text-amber-400 font-semibold text-xs tracking-wider uppercase">
+                      <HelpCircle className="size-4 shrink-0" />
+                      <span>Decisive Validation Blocked (Phase 4 Incomplete)</span>
+                    </div>
+                    <p className="text-xs text-amber-200/90 leading-relaxed">
+                      This finding is a source-grounded candidate whose confirmation requires live environment access or operational telemetry. Under Cloudflare audit rules, unverified candidates do not receive an arbitrary severity score.
+                    </p>
+                    {selectedFinding.blockers && selectedFinding.blockers.length > 0 && (
+                      <div className="flex flex-col gap-1.5 mt-1 bg-zinc-950/60 p-3 rounded-lg border border-amber-500/20">
+                        <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider">
+                          Unresolved Blockers:
+                        </span>
+                        <ul className="list-disc list-inside text-xs text-zinc-300 space-y-1">
+                          {selectedFinding.blockers.map((b, i) => (
+                            <li key={i} className="leading-snug">{b}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {selectedFinding.validationPlan && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                        {selectedFinding.validationPlan.local && (
+                          <div className="p-2.5 rounded bg-zinc-950/60 border border-zinc-800">
+                            <span className="font-bold text-zinc-300 block mb-1">Local Test Plan:</span>
+                            <span className="text-zinc-400 text-[11px] leading-relaxed">{selectedFinding.validationPlan.local}</span>
+                          </div>
+                        )}
+                        {selectedFinding.validationPlan.deployment && (
+                          <div className="p-2.5 rounded bg-zinc-950/60 border border-zinc-800">
+                            <span className="font-bold text-zinc-300 block mb-1">Deployment Telemetry Plan:</span>
+                            <span className="text-zinc-400 text-[11px] leading-relaxed">{selectedFinding.validationPlan.deployment}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Cloudflare Three-Verdict: Rejected / Refuted Hypothesis Banner */}
+                {selectedFinding.verdict === 'rejected' && (
+                  <div className="p-4 rounded-xl border border-zinc-700 bg-zinc-900/60 flex flex-col gap-2.5">
+                    <div className="flex items-center gap-2 text-zinc-300 font-semibold text-xs tracking-wider uppercase">
+                      <XCircle className="size-4 shrink-0 text-zinc-400" />
+                      <span>Refuted Candidate / Disproven Hypothesis</span>
+                    </div>
+                    <p className="text-xs text-zinc-400 leading-relaxed">
+                      This hypothesis was investigated during Phase 3 hunting and decisively disproven by code analysis or local tests. Retained in the audit ledger to eliminate duplicate audit cycles.
+                    </p>
+                    {selectedFinding.rejectionReason && (
+                      <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-300 font-mono leading-relaxed">
+                        <span className="font-bold text-primary block mb-1 font-sans">Disproven Rationale:</span>
+                        {selectedFinding.rejectionReason}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Smallest Effective Source Fix (Cloudflare Audit Doctrine) */}
+                {selectedFinding.smallestEffectiveFix && (
+                  <div className="flex flex-col gap-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <Code2 className="size-4 text-emerald-400" />
+                        Smallest Effective Source Fix
+                      </span>
+                      <Badge variant="outline" className="text-[10px] font-mono text-emerald-400 border-emerald-500/30 bg-emerald-500/10">
+                        Minimal Diff Surgical Remedy
+                      </Badge>
+                    </div>
+                    <div className="p-3.5 rounded-xl border border-emerald-500/25 bg-zinc-950 shadow-sm flex flex-col gap-2">
+                      <p className="text-[11px] text-zinc-400">
+                        Surgical remediation preserving codebase invariants without broad architectural disruption.
+                      </p>
+                      <pre className="font-mono text-xs bg-zinc-900/90 border border-zinc-800 p-3 rounded-lg overflow-x-auto text-emerald-300 leading-relaxed">
+                        {selectedFinding.smallestEffectiveFix}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+
+                {/* Audit Trace: Entrypoint ➔ Propagation ➔ Sink */}
+                {selectedFinding.auditTrace && selectedFinding.auditTrace.length > 0 && (
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                        <Layers className="size-4 text-sky-400" />
+                        Boundary Audit Trace ({selectedFinding.auditTrace.length} Hops)
+                      </span>
+                      <Badge variant="outline" className="text-[10px] font-mono text-sky-400 border-sky-500/30">
+                        Entrypoint ➔ Propagation ➔ Sink
+                      </Badge>
+                    </div>
+
+                    <div className="flex flex-col gap-2.5 border border-zinc-800/80 rounded-xl p-3.5 bg-zinc-900/30">
+                      {selectedFinding.auditTrace.map((node, idx) => (
+                        <div
+                          key={idx}
+                          className="flex flex-col gap-1.5 p-3 rounded-lg border border-zinc-800 bg-zinc-950/80 shadow-sm"
+                        >
+                          <div className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-2">
+                              <Badge
+                                variant={
+                                  node.kind === 'entrypoint'
+                                    ? 'default'
+                                    : node.kind === 'sink'
+                                      ? 'destructive'
+                                      : 'secondary'
+                                }
+                                className="text-[10px] font-mono font-bold uppercase"
+                              >
+                                {node.kind}
+                              </Badge>
+                              <span className="font-mono text-zinc-300 text-xs font-semibold">
+                                {node.file}:{node.line}
+                              </span>
+                            </div>
+                            <span className="font-mono text-[11px] text-zinc-400 truncate max-w-[220px]">
+                              {node.scope}
+                            </span>
+                          </div>
+                          <p className="text-xs text-zinc-300 pl-1 leading-relaxed">
+                            {node.description}
+                          </p>
+                          {idx < selectedFinding.auditTrace!.length - 1 && (
+                            <div className="flex justify-center -mb-4 my-1">
+                              <ChevronRight className="size-4 text-zinc-500 rotate-90" />
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Root Cause & Intended Behavior */}
+                {(selectedFinding.rootCause || selectedFinding.intendedBehavior) && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {selectedFinding.rootCause && (
+                      <div className="flex flex-col gap-1.5 p-3.5 rounded-xl border border-zinc-800 bg-zinc-900/50">
+                        <span className="text-[11px] font-semibold text-rose-400 uppercase tracking-wider">
+                          Identified Root Cause
+                        </span>
+                        <p className="text-xs text-zinc-300 leading-relaxed">
+                          {selectedFinding.rootCause}
+                        </p>
+                      </div>
+                    )}
+                    {selectedFinding.intendedBehavior && (
+                      <div className="flex flex-col gap-1.5 p-3.5 rounded-xl border border-zinc-800 bg-zinc-900/50">
+                        <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">
+                          Intended Boundary Invariant
+                        </span>
+                        <p className="text-xs text-zinc-300 leading-relaxed">
+                          {selectedFinding.intendedBehavior}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Vulnerability Analysis Card */}
                 <div className="flex flex-col gap-2.5">
                   <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
