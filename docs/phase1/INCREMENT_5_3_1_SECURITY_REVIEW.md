@@ -4,7 +4,7 @@ Date: 2026-11-05. **Implemented and tested; the original in-process A-to-B vulne
 
 ## Original vulnerability and root causes
 
-The [5.3 review](INCREMENT_5_3_WORKSPACE_VALIDATION.md) and its preserved [Failed probe result](../../experiments/phase1/workspace/results/policy-context.json) showed a grant for Restricted metadata action A authorizing different action B. Source inspection traced the entire lifecycle rather than relying on the earlier 5.2.1 pass count. There is no separate 5.2 report file; its implementation record is the corresponding PROGRESS.md section and the existing domain/session/policy tests.
+The [5.3 review](INCREMENT_5_3_WORKSPACE_VALIDATION.md) and its preserved Failed probe result showed a grant for Restricted metadata action A authorizing different action B. Source inspection traced the entire lifecycle rather than relying on the earlier 5.2.1 pass count. There is no separate 5.2 report file; its implementation record is the corresponding PROGRESS.md section and the existing domain/session/policy tests.
 
 The defects were:
 
@@ -25,8 +25,8 @@ The existing Mutex already prevented two simultaneous consumers of the same matc
 | [policy/mod.rs](../../crates/sentra-core/src/policy/mod.rs), [lib.rs](../../crates/sentra-core/src/lib.rs) | Export the authority capability alongside the same existing broker mechanism |
 | [policy_tests.rs](../../crates/sentra-core/tests/policy_tests.rs), [security_tests.rs](../../crates/sentra-core/tests/security_tests.rs) | Migrate affected setup/issuance/consume calls while preserving all 19 test intents |
 | [authorization_tests.rs](../../crates/sentra-core/tests/authorization_tests.rs) | 27 focused regressions, including the exact A/B case and repeated barrier races |
-| [original probe source](../../experiments/phase1/workspace/PolicyContextProbe.rs) | Use real broker issuance; require the precise mismatch denial, matching success and replay rejection |
-| [validation runner](../../experiments/phase1/authorization/Validate.ps1) | Offline commands, individual outcomes, source hashes, repeated concurrency and independent probe execution |
+| original probe source | Use real broker issuance; require the precise mismatch denial, matching success and replay rejection |
+| validation runner | Offline commands, individual outcomes, source hashes, repeated concurrency and independent probe execution |
 
 No workspace boundary/discovery source or fixture, domain model, session state machine, budget implementation, manifest, dependency, accepted ADR, persistence, provider, execution backend, CLI or sandbox implementation changed. The two old capability/sensitivity fixtures declared a file count inconsistent with their target-path list; their counts were corrected to their actual lists. Malformed operations now deny, and separate negative coverage verifies that rule.
 
@@ -92,7 +92,7 @@ Run from the repository root:
 pwsh -NoProfile -File experiments/phase1/authorization/Validate.ps1
 ```
 
-The [final raw result](../../experiments/phase1/authorization/results/1793904967368.json) records all 13 exact command arrays, full stdout/stderr, exits, timeouts, individual tests, aggregate summaries, versions, zero dependencies and 37 input SHA-256 digests. Inputs did not change during execution. The earlier 1793904491573 record is preserved; the final run strengthens the two compile-fail examples with their real method signatures, without changing runtime behavior or counts. Environment: Windows 11 x64, reported build 10.0.26300; PowerShell 7.6.9; installed Rust/Cargo 1.99.0, x86_64-pc-windows-msvc. No dependency/toolchain download, network operation, API key, telemetry or host configuration change occurred.
+The final raw result records all 13 exact command arrays, full stdout/stderr, exits, timeouts, individual tests, aggregate summaries, versions, zero dependencies and 37 input SHA-256 digests. Inputs did not change during execution. The earlier 1793904491573 record is preserved; the final run strengthens the two compile-fail examples with their real method signatures, without changing runtime behavior or counts. Environment: Windows 11 x64, reported build 10.0.26300; PowerShell 7.6.9; installed Rust/Cargo 1.99.0, x86_64-pc-windows-msvc. No dependency/toolchain download, network operation, API key, telemetry or host configuration change occurred.
 
 | Check | Status | Actual outcome |
 | --- | --- | --- |

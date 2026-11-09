@@ -111,13 +111,13 @@ cargo clippy --workspace --all-targets --all-features --offline -- -D warnings
 cargo test --workspace --offline
 ```
 
-[Raw verification evidence](../../experiments/phase1/cli/results/612-1794006630618.json) records exact commands, outputs, timings, environment, test names and pre/post non-Markdown fingerprints. Observed Windows x64/MSVC, PowerShell **7.6.9**, OS build `Microsoft Windows 10.0.26300`; no new platform claim. All four checks Passed; Clippy ran with warnings denied.
+Raw verification evidence records exact commands, outputs, timings, environment, test names and pre/post non-Markdown fingerprints. Observed Windows x64/MSVC, PowerShell **7.6.9**, OS build `Microsoft Windows 10.0.26300`; no new platform claim. All four checks Passed; Clippy ran with warnings denied.
 
 This run has **302 harness entries**: 295 runtime (290 passed, 5 ignored) plus 7 passed compile-fail doctests. There are **297 direct passes, 0 failed**. Two ignored entries are subprocess helpers invoked by parent tests; do not count them again. The three ignored junction/access-denied/10,000-file platform fixtures were **Not Tested separately in this increment**. Their prior 6.1/6.1.1 results remain historical; this task does not claim a new 300-case/platform-validation run. Specialized persistence/authorization/workspace/CLI validators were not rerun because this is documentation-only; their existing nonignored tests run in the full workspace suite.
 
 Existing tests rerun include row-preserving init/status/session inspection, incomplete schema/Created fixtures, orphan sidecar preservation, reader-blocked checkpoint failure and real SQLite process-termination recovery (committed data retained, uncommitted data discarded). These assertions support bounded current behavior, not a tested future recovery mechanism. The local row-comparison helper enumerates the five domain tables; unchanged migration records are supported by the inspected existing-schema validation branch, not a newly executed six-table byte-comparison experiment. File/DDL crash-window behavior is source-inspected, not new CLI kill injection. Read-only-media/ACL side effects, all four CLI bootstrap kill points, atomic publish, flush/device/power-loss behavior and either future recovery option were **Not Tested as new experiments** here.
 
-[Documentation and Git evidence](../../experiments/phase1/cli/results/612-documentation-and-git.json) records changed-document local-link/heading checks, requirement references, ADR preservation, full tracked-file comparisons and Git fingerprints. No general Markdown renderer or live external-link verification is claimed; no network operation was performed.
+Documentation and Git evidence records changed-document local-link/heading checks, requirement references, ADR preservation, full tracked-file comparisons and Git fingerprints. No general Markdown renderer or live external-link verification is claimed; no network operation was performed.
 
 ## Git safety and remaining limitations
 

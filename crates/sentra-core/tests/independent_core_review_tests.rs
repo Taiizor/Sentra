@@ -1,5 +1,4 @@
 //! 5.6.2.1 adversarial assertions promoted to 5.6.2.2 regression coverage.
-//! Original source is preserved under experiments/phase1/core-review/archive/.
 //! Run `cargo test --test independent_core_review_tests --offline`.
 #![forbid(unsafe_code)]
 

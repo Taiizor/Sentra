@@ -30,7 +30,7 @@ This review audited production call paths, data models, error handlers, and inte
 | **Service Coordination** | [`crates/sentra-core/src/service/core.rs`](file:///E:/MyProject/Mix/GitHub/Sentra/crates/sentra-core/src/service/core.rs) | `CoreService::new`, `evaluate_action`, `execute_task` |
 | **Service Error Model** | [`crates/sentra-core/src/service/error.rs`](file:///E:/MyProject/Mix/GitHub/Sentra/crates/sentra-core/src/service/error.rs) | `ServiceError`, `ServiceErrorKind::Persistence`, `ServicePrimaryError::Persistence` |
 | **Hardening Test Suite** | [`crates/sentra-core/tests/authorization_isolation_review_tests.rs`](file:///E:/MyProject/Mix/GitHub/Sentra/crates/sentra-core/tests/authorization_isolation_review_tests.rs) | All 22 test functions covering policy immutability, ABA rotation, live dispatch concurrency, preview read-only guarantees, fault injection, and v1 migration |
-| **Validator Scripts** | [`experiments/phase1/authorization/Validate.ps1`](file:///E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/authorization/Validate.ps1), [`Validate-Portability.ps1`](file:///E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/authorization/Validate-Portability.ps1) | Dynamic target directory resolution, rlib discovery, probe compilation, 180s command budget |
+| **Validator Scripts** | `experiments/phase1/authorization/Validate.ps1`, `Validate-Portability.ps1` | Dynamic target directory resolution, rlib discovery, probe compilation, 180s command budget |
 
 ---
 
@@ -135,7 +135,7 @@ The preview pipeline was audited across [`crates/sentra-core/src/persistence/rep
 
 ## 8. Authorization Validator Portability (F-562221-03 Verification)
 
-The authorization validation harness ([`experiments/phase1/authorization/Validate.ps1`](file:///E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/authorization/Validate.ps1)) was verified:
+The authorization validation harness (`experiments/phase1/authorization/Validate.ps1`) was verified:
 1. **Dynamic Target Directory Resolution:** Uses `cargo metadata --offline --no-deps --format-version=1` to query the active `target_directory`.
 2. **Artifact Identification:** Parses `cargo build --offline --package sentra-core --message-format=json` compiler-artifact records to select the exact `libsentra_core.rlib` produced by that run.
 3. **Dependency Derivation:** Derives `$dependencyRoot` directly from the rlib's parent directory (`deps`), eliminating hardcoded paths.

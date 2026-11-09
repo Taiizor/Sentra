@@ -3,7 +3,7 @@
 **Date:** 2026-11-08  
 **Status:** **Contract Validated with Explicit Closures and Retained Blockers.** Phase 1 remains **NOT APPROVED**. Phase 2 remains **UNAUTHORIZED**.  
 **Reviewed Findings:** F-11-01, F-11-02, F-11-03, F-11-04, F-11-05 (from [INCREMENT_1_1_INDEPENDENT_REVIEW.md](INCREMENT_1_1_INDEPENDENT_REVIEW.md)).  
-**Dedicated Experiment Suite:** [`experiments/phase1/filesystem-publication/`](../../experiments/phase1/filesystem-publication/)
+**Dedicated Experiment Suite:** `experiments/phase1/filesystem-publication/`
 
 ---
 
@@ -38,7 +38,7 @@ The repository baseline was verified prior to experiment execution and documenta
 ## 3. Adversarial Experiment Results & Finding Closures
 
 ### 3.1 F-11-01: Hard-Link Content Mutability & Zero-Window Lifecycle (CLOSED)
-**Harness:** [`experiments/phase1/filesystem-publication/test_f11_01_mutability.ps1`](../../experiments/phase1/filesystem-publication/test_f11_01_mutability.ps1) & [`test_exclusive_zero_window.ps1`](../../experiments/phase1/filesystem-publication/test_exclusive_zero_window.ps1).
+**Harness:** `experiments/phase1/filesystem-publication/test_f11_01_mutability.ps1` & `test_exclusive_zero_window.ps1`.
 
 #### Empirical Test Outcomes:
 1. **Already-Open Writable Handle:** A writer holding an open handle with write access called `CreateHardLinkW(dst, src)` and subsequently wrote additional bytes. Result: `DestinationTampered = true`. Destination content was modified through the open handle.
@@ -79,7 +79,7 @@ sequenceDiagram
 ---
 
 ### 3.2 F-11-02: Windows Path Containment (CLOSED)
-**Harness:** [`experiments/phase1/filesystem-publication/test_path_containment.rs`](../../experiments/phase1/filesystem-publication/test_path_containment.rs).
+**Harness:** `experiments/phase1/filesystem-publication/test_path_containment.rs`.
 
 #### Empirical Test Outcomes:
 - **Test 2 (Case Mismatch):** Standard Rust `Path::starts_with` returned `false` on Windows when path casing differed (`c:\users\...` vs `C:\Users\...`).
@@ -102,8 +102,8 @@ sequenceDiagram
 
 ### 3.3 F-11-03: Multi-Process Races and Crash Injection (CLOSED)
 **Harnesses:**
-- [`experiments/phase1/filesystem-publication/test_independent_process_race.ps1`](../../experiments/phase1/filesystem-publication/test_independent_process_race.ps1) & [`race_worker.rs`](../../experiments/phase1/filesystem-publication/race_worker.rs)
-- [`experiments/phase1/filesystem-publication/test_process_termination.ps1`](../../experiments/phase1/filesystem-publication/test_process_termination.ps1) & [`termination_worker.ps1`](../../experiments/phase1/filesystem-publication/termination_worker.ps1)
+- `experiments/phase1/filesystem-publication/test_independent_process_race.ps1` & `race_worker.rs`
+- `experiments/phase1/filesystem-publication/test_process_termination.ps1` & `termination_worker.ps1`
 
 #### Multi-Process Race Results:
 - **Total Rounds Executed:** 20
@@ -151,7 +151,7 @@ The blanket prohibition of `std::fs::rename` is scoped narrowly in the revised c
 
 ## 4. Cross-Volume Staging Protocol
 
-**Harness:** [`experiments/phase1/filesystem-publication/test_cross_volume_staging.ps1`](../../experiments/phase1/filesystem-publication/test_cross_volume_staging.ps1).
+**Harness:** `experiments/phase1/filesystem-publication/test_cross_volume_staging.ps1`.
 
 Hard links cannot span volume boundaries (Win32 Error 17). To support publishing when the source workload resides on volume C: and blob storage resides on volume E:, Sentra establishes the **Destination-Volume Staging Protocol**:
 1. Allocate temporary staging directory on the **destination volume** (`E:\storage\staging\<uuid>\`).

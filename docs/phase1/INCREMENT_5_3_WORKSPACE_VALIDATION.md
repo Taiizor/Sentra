@@ -18,7 +18,7 @@ The implementation follows the [Core Engine design](CORE_ENGINE_DESIGN.md), [Mil
 | [discovery.rs](../../crates/sentra-core/src/workspace/discovery.rs) | Bounded directory enumeration, opaque Git metadata, name-only Cargo detection and subtree retraction |
 | [lib.rs](../../crates/sentra-core/src/lib.rs) | Exposes the workspace module; preserves existing exports and unsafe prohibition |
 | [workspace_tests.rs](../../crates/sentra-core/tests/workspace_tests.rs) | Maintainer-controlled Windows fixtures and explicit environment/scale tests |
-| [Validate.ps1](../../experiments/phase1/workspace/Validate.ps1) | Offline checks, disposable junction/ACL fixtures, benchmark measurements, source digests and cleanup |
+| `Validate.ps1` | Offline checks, disposable junction/ACL fixtures, benchmark measurements, source digests and cleanup |
 
 The workspace retains the existing SessionId and SecurityClassification. No new identifier generator, persistence layer, provider, subprocess dispatcher or CLI was introduced. Cargo manifests and lockfile are unchanged; there are zero third-party dependencies. Edition 2024 and `#![forbid(unsafe_code)]` are preserved.
 
@@ -80,7 +80,7 @@ From the repository root:
 pwsh -NoProfile -File experiments/phase1/workspace/Validate.ps1
 ```
 
-The [final raw record](../../experiments/phase1/workspace/results/1793902387953.json) contains exact command arrays, stdout/stderr, exits, individual outcomes, 35 source/manifest/runner hashes, unchanged-input verification, hardware and fixture cleanup. It records **76 unique tests Passed, 0 Failed, 0 Not Tested** across the workspace and explicit fixture/scale runs. The four deferred validation categories below are separate from that executable-test count. No Windows security scenario in the implemented suite was silently skipped.
+The final raw record contains exact command arrays, stdout/stderr, exits, individual outcomes, 35 source/manifest/runner hashes, unchanged-input verification, hardware and fixture cleanup. It records **76 unique tests Passed, 0 Failed, 0 Not Tested** across the workspace and explicit fixture/scale runs. The four deferred validation categories below are separate from that executable-test count. No Windows security scenario in the implemented suite was silently skipped.
 
 | Executed group | Status | Result |
 | --- | --- | --- |
@@ -106,13 +106,13 @@ Benchmark host: Windows 11 x64, reported build 10.0.26300; PowerShell 7.6.9; Rus
 
 This meets the 30-second / 512-MiB engineering target on the declared small-text fixture. Timing excludes fixture creation, cleanup, compilation, Git acquisition and models. Memory samples the actual standalone reviewed test process's PeakWorkingSet64 while alive every 25 ms, including setup/discovery/cleanup; it is not Cargo memory or an OS memory quota. The last interval before exit is not an atomic exit-time measurement. No full 100-MiB corpus or other-machine performance claim follows.
 
-The [first raw run](../../experiments/phase1/workspace/results/1793901859226.json) is preserved as Failed: the narrower deny-ACL fixture still permitted metadata access, and benchmark assertions used an incorrect expected byte count and lacked a live memory sample. Actual timing tests exited successfully, but those failed quality checks were not labeled Passed. The [intermediate flat-fixture run](../../experiments/phase1/workspace/results/1793902182023.json) is superseded; the final record adds varied depth/Unicode, corrected case accounting and final source hashes. Earlier writer-exclusion assumptions were removed after real tests contradicted them.
+The first raw run is preserved as Failed: the narrower deny-ACL fixture still permitted metadata access, and benchmark assertions used an incorrect expected byte count and lacked a live memory sample. Actual timing tests exited successfully, but those failed quality checks were not labeled Passed. The intermediate flat-fixture run is superseded; the final record adds varied depth/Unicode, corrected case accounting and final source hashes. Earlier writer-exclusion assumptions were removed after real tests contradicted them.
 
 ## Separate preexisting approval-context finding
 
 **Failed — S-02 current-operation binding.** Source review found that PolicyEngine::evaluate forwards a grant to ApprovalBroker::verify_and_consume without comparing it to the current action/session/revision. The broker compares the grant to its stored old request, which does not establish permission for the currently evaluated action.
 
-The [synthetic policy probe](../../experiments/phase1/workspace/PolicyContextProbe.rs) creates a Restricted metadata request A, constructs its fixture grant, then evaluates different Restricted metadata action B with that grant. The [raw probe result](../../experiments/phase1/workspace/results/policy-context.json) records exit 1 and `POLICY_CONTEXT_BINDING=Failed: grant for metadata A accepted for metadata B`. No filesystem content, execution, network request or real approval was involved. This probe is deliberately separate from the 76 passing tests; its failure is not waived into the workspace pass count.
+The synthetic policy probe creates a Restricted metadata request A, constructs its fixture grant, then evaluates different Restricted metadata action B with that grant. The raw probe result records exit 1 and `POLICY_CONTEXT_BINDING=Failed: grant for metadata A accepted for metadata B`. No filesystem content, execution, network request or real approval was involved. This probe is deliberately separate from the 76 passing tests; its failure is not waived into the workspace pass count.
 
 Reproduce after the offline build by locating the current `libsentra_core-*.rlib` under target/debug/deps, then:
 

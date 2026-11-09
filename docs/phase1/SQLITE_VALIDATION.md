@@ -34,7 +34,7 @@ From the repository root, using the existing Bun installation:
 bun --no-env-file --no-install run experiments/phase1/sqlite/validate.js
 ```
 
-The [runner](../../experiments/phase1/sqlite/validate.js), [worker](../../experiments/phase1/sqlite/worker.js), and [shared experiment helpers](../../experiments/phase1/sqlite/common.js) use only runtime built-ins. Each run creates a unique directory beneath `experiments/phase1/sqlite/artifacts/` and a separate JSON file beneath `experiments/phase1/sqlite/results/`. No existing database is accepted as input. Path confinement rejects traversal and symlink/junction redirection; there is no cleanup/deletion of unrelated files. Disposable databases and bundle outputs are ignored; raw result records are retained.
+The runner, worker, and shared experiment helpers use only runtime built-ins. Each run creates a unique directory beneath `experiments/phase1/sqlite/artifacts/` and a separate JSON file beneath `experiments/phase1/sqlite/results/`. No existing database is accepted as input. Path confinement rejects traversal and symlink/junction redirection; there is no cleanup/deletion of unrelated files. Disposable databases and bundle outputs are ignored; raw result records are retained.
 
 Workers receive only the selected Windows runtime/temp environment variables, not the parent's credential environment. They run synthetic SQL workloads, never analyzed target code. Their Bun invocations disable package auto-install and `.env` loading. Each result records source SHA-256 digests, SQLite version/source ID/compile options, PRAGMAs, observations, error codes, process IDs, termination/exit evidence and timings. This is not a complete OS network-isolation or worker-security assessment.
 
@@ -42,8 +42,8 @@ Two final runs use identical source digests and include the strengthened transac
 
 | Run | UTC interval | SQLite result counts |
 | --- | --- | --- |
-| [Final run A](../../experiments/phase1/sqlite/results/1793888306994-3852c6ae.json) | 14:18:27.370–14:18:30.433 | 18 Passed, 0 Failed, 1 Blocked, 3 Not Tested |
-| [Final run B](../../experiments/phase1/sqlite/results/1793888372059-15a304dd.json) | 14:19:32.448–14:19:34.822 | 18 Passed, 0 Failed, 1 Blocked, 3 Not Tested |
+| Final run A | 14:18:27.370–14:18:30.433 | 18 Passed, 0 Failed, 1 Blocked, 3 Not Tested |
+| Final run B | 14:19:32.448–14:19:34.822 | 18 Passed, 0 Failed, 1 Blocked, 3 Not Tested |
 
 Three earlier exploratory/revision runs are preserved in the same results directory. Their different source digests identify them as earlier harness versions; they are not substituted for final-source evidence. Each final run actually terminates ten owned SQLite writer/migration processes and also runs three normally exiting concurrent writers.
 
@@ -115,7 +115,7 @@ FULL synchronous mode and the observed process-crash outcomes do not prove survi
 
 ## Type checking and other quality checks
 
-The [completion quality record](../../experiments/phase1/sqlite/quality-completion.json) contains exact argument arrays, exit codes, full stdout/stderr, source digests and offline type-resolution probes. The [earlier quality record](../../experiments/phase1/sqlite/quality-results.json) is preserved separately.
+The completion quality record contains exact argument arrays, exit codes, full stdout/stderr, source digests and offline type-resolution probes. The earlier quality record is preserved separately.
 
 | Check | Status | Result |
 | --- | --- | --- |

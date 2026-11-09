@@ -43,10 +43,10 @@ This independent, verification-only security and reliability audit examined Phas
 ### 2.4 Tests and Validation Scripts
 - [crates/sentra-cli/tests/cli_tests.rs](file:///E:/MyProject/Mix/GitHub/Sentra/crates/sentra-cli/tests/cli_tests.rs) (18 integration tests)
 - [crates/sentra-core/tests/local_workspace_tests.rs](file:///E:/MyProject/Mix/GitHub/Sentra/crates/sentra-core/tests/local_workspace_tests.rs) (19 integration tests)
-- [experiments/phase1/cli/Validate.ps1](file:///E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/cli/Validate.ps1) (CLI validator harness)
-- [experiments/phase1/persistence/Validate.ps1](file:///E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/persistence/Validate.ps1)
-- [experiments/phase1/authorization/Validate.ps1](file:///E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/authorization/Validate.ps1)
-- [experiments/phase1/workspace/Validate.ps1](file:///E:/MyProject/Mix/GitHub/Sentra/experiments/phase1/workspace/Validate.ps1)
+- `experiments/phase1/cli/Validate.ps1` (CLI validator harness)
+- `experiments/phase1/persistence/Validate.ps1`
+- `experiments/phase1/authorization/Validate.ps1`
+- `experiments/phase1/workspace/Validate.ps1`
 
 ---
 

@@ -3,7 +3,7 @@
 **Date:** 2026-11-08  
 **Status:** **Validation & Threat-Model Contract Complete.** Phase 1 remains **NOT APPROVED**. Phase 2 remains **UNAUTHORIZED**.  
 **Reviewed Findings:** F-13-01, F-13-02, F-13-03, F-13-04 (from [INCREMENT_1_3_INDEPENDENT_REVIEW.md](INCREMENT_1_3_INDEPENDENT_REVIEW.md)).  
-**Dedicated Experiment Suite:** [`experiments/phase1/filesystem-publication/`](../../experiments/phase1/filesystem-publication/)
+**Dedicated Experiment Suite:** `experiments/phase1/filesystem-publication/`
 
 ---
 
@@ -37,7 +37,7 @@ The repository baseline was verified prior to experiment execution and documenta
 ## 3. Empirical Experiments and Windows API Validation
 
 ### 3.1 Approach A: `SetFileAttributesW` While Exclusive Handle is Open
-**Harness:** [`experiments/phase1/filesystem-publication/test_f13_01_approach_a.ps1`](../../experiments/phase1/filesystem-publication/test_f13_01_approach_a.ps1)
+**Harness:** `experiments/phase1/filesystem-publication/test_f13_01_approach_a.ps1`
 
 #### Test Procedure:
 1. Staging file created via `CreateFileW` with `CREATE_NEW`, `GENERIC_READ | GENERIC_WRITE`, and `share_mode = 0` (exclusive).
@@ -79,7 +79,7 @@ The repository baseline was verified prior to experiment execution and documenta
 ---
 
 ### 3.2 Approach B: `SetFileInformationByHandle` with `FileBasicInfo`
-**Harness:** [`experiments/phase1/filesystem-publication/test_f13_01_approach_b.ps1`](../../experiments/phase1/filesystem-publication/test_f13_01_approach_b.ps1)
+**Harness:** `experiments/phase1/filesystem-publication/test_f13_01_approach_b.ps1`
 
 #### Test Procedure:
 1. Staging file opened exclusively (`CREATE_NEW`, `GENERIC_READ | GENERIC_WRITE`, `share_mode = 0`).
@@ -120,8 +120,8 @@ The repository baseline was verified prior to experiment execution and documenta
 
 ### 3.3 Approach C: Adversarial Independent Process Synchronization
 **Harnesses:**
-- [`experiments/phase1/filesystem-publication/test_f13_01_approach_c_adversarial.ps1`](../../experiments/phase1/filesystem-publication/test_f13_01_approach_c_adversarial.ps1) (Publisher Controller)
-- [`experiments/phase1/filesystem-publication/f13_01_adversary_worker.ps1`](../../experiments/phase1/filesystem-publication/f13_01_adversary_worker.ps1) (Adversary Worker)
+- `experiments/phase1/filesystem-publication/test_f13_01_approach_c_adversarial.ps1` (Publisher Controller)
+- `experiments/phase1/filesystem-publication/f13_01_adversary_worker.ps1` (Adversary Worker)
 
 #### Test Procedure:
 Using named .NET `EventWaitHandle` synchronization objects (`LinkedHeld`, `AttackedHeld`, `Closed`):

@@ -75,9 +75,9 @@ ADR-0002 remains **Proposed** until its complete evidence gate passes. ADR-0007 
 
 ## Initial Rust/MSVC experiment
 
-The isolated [Cargo package](../../experiments/phase1/rust-msvc/Cargo.toml) uses only the Rust standard library. Its local workspace boundary prevents it from committing the future production workspace layout. It reads an operator-supplied UTF-8 fixture, counts lines, and returns explicit errors. It contains no networking, telemetry, vulnerability analysis, plugin loading, build script, or third-party dependency.
+The isolated Cargo package uses only the Rust standard library. Its local workspace boundary prevents it from committing the future production workspace layout. It reads an operator-supplied UTF-8 fixture, counts lines, and returns explicit errors. It contains no networking, telemetry, vulnerability analysis, plugin loading, build script, or third-party dependency.
 
-The [PowerShell runner](../../experiments/phase1/rust-msvc/Validate.ps1) captures exact commands, outputs, exit codes, timeout flags, durations, tool versions, installed targets, SDK inventory, and source/runner/manifest SHA-256 digests in [results.json](../../experiments/phase1/rust-msvc/results.json). Build and generated fixture directories are ignored locally; evidence JSON and the dependency-free lockfile are intentional review artifacts.
+The PowerShell runner captures exact commands, outputs, exit codes, timeout flags, durations, tool versions, installed targets, SDK inventory, and source/runner/manifest SHA-256 digests in `results.json`. Build and generated fixture directories are ignored locally; evidence JSON and the dependency-free lockfile are intentional review artifacts.
 
 Reproduce from the repository root:
 

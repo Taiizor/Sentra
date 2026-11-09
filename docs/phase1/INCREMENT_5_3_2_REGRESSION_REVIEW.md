@@ -31,7 +31,7 @@ All verification suites were executed offline from the repository root on Window
 ### A. Authorization Regression Suite
 
 - **Command:** `pwsh -NoProfile -File experiments/phase1/authorization/Validate.ps1`
-- **Raw Evidence:** [experiments/phase1/authorization/results/1793905912132.json](../../experiments/phase1/authorization/results/1793905912132.json)
+- **Raw Evidence:** `experiments/phase1/authorization/results/1793905912132.json`
 - **Result:** **13 Passed, 0 Failed, 0 Blocked.**
 - **Test Metrics:** 103 passed tests (101 runtime + 2 compile-fail doc-tests), 0 failed, 3 ignored (the 3 fixture tests executed in the workspace suite).
 - **Key Assertions Verified:**
@@ -42,7 +42,7 @@ All verification suites were executed offline from the repository root on Window
 ### B. Workspace Boundary & Scale Suite (Including 3 Previously Untested Cases)
 
 - **Command:** `pwsh -NoProfile -File experiments/phase1/workspace/Validate.ps1`
-- **Raw Evidence:** [experiments/phase1/workspace/results/1793905937841.json](../../experiments/phase1/workspace/results/1793905937841.json)
+- **Raw Evidence:** `experiments/phase1/workspace/results/1793905937841.json`
 - **Result:** **11 Passed, 0 Failed, 0 Not Tested.**
 - **Test Metrics:** 104 passed tests, 0 failed.
 - **Resolution of Previously Untested Workspace Cases:**

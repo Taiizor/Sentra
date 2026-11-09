@@ -27,8 +27,8 @@ Development of Core Engine Foundation (session management, project discovery, pa
 | Artifact | Location | Inspected Content & Purpose |
 | --- | --- | --- |
 | Milestone 4 Report | [`docs/phase1/SANDBOX_VALIDATION.md`](SANDBOX_VALIDATION.md) | Technical assessment report, environment findings, isolation architecture evaluation, and prototype results |
-| Validation Runner | [`experiments/phase1/sandbox/Validate.ps1`](../../experiments/phase1/sandbox/Validate.ps1) | PowerShell 7 validation script; Stage A CIM/WMI queries; Stage C 10-step container prototype |
-| Raw Evidence | [`experiments/phase1/sandbox/results.json`](../../experiments/phase1/sandbox/results.json) | Structured machine-readable test records, host metadata, individual statuses, and cryptographic hashes |
+| Validation Runner | `experiments/phase1/sandbox/Validate.ps1` | PowerShell 7 validation script; Stage A CIM/WMI queries; Stage C 10-step container prototype |
+| Raw Evidence | `experiments/phase1/sandbox/results.json` | Structured machine-readable test records, host metadata, individual statuses, and cryptographic hashes |
 | Isolation Decision | [`docs/adr/0004-vm-boundary-for-untrusted-execution.md`](../adr/0004-vm-boundary-for-untrusted-execution.md) | Accepted security invariant requiring dedicated disposable VM boundary for untrusted code |
 | Evidence Decision | [`docs/adr/0006-evidence-and-independent-verification.md`](../adr/0006-evidence-and-independent-verification.md) | Accepted requirement for independent verifier and cryptographic evidence admission |
 | Progress Record | [`PROGRESS.md`](../../PROGRESS.md) | Milestone status, completed milestones ledger, and pending implementation gates |

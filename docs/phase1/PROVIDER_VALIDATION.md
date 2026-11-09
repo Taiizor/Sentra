@@ -12,15 +12,15 @@ The real Core Engine is not implemented. T01 proves that the experimental bounda
 
 ## Scope and implementation
 
-The [standalone package](../../experiments/phase1/provider/Cargo.toml) has its own workspace boundary, `publish=false`, and **zero third-party direct/transitive crates**. It uses the installed Rust standard library and forbids unsafe code. There is no HTTP client, provider SDK, network transport, API-key field, telemetry, package download or cloud service. All request/response bodies are synthetic test fixtures; no repository source or findings are submitted to a provider.
+The standalone package has its own workspace boundary, `publish=false`, and **zero third-party direct/transitive crates**. It uses the installed Rust standard library and forbids unsafe code. There is no HTTP client, provider SDK, network transport, API-key field, telemetry, package download or cloud service. All request/response bodies are synthetic test fixtures; no repository source or findings are submitted to a provider.
 
 | Artifact | Responsibility |
 | --- | --- |
-| [contract.rs](../../experiments/phase1/provider/src/contract.rs) | Provider-neutral model/capability, request/response, classification, usage, error and diagnostic types; narrow typed structured-output validation |
-| [gateway.rs](../../experiments/phase1/provider/src/gateway.rs) | Explicit lifecycle/policy gates, optional provider, limits, virtual deadlines, bounded retry and in-memory accounting |
-| [mock.rs](../../experiments/phase1/provider/src/mock.rs) | Deterministic scripts, configurable model capabilities, mock-only vendor errors and operation/cancellation receipts |
-| [contract tests](../../experiments/phase1/provider/tests/contract.rs) | All 62 named test cases; no API keys or external services |
-| [Validate.ps1](../../experiments/phase1/provider/Validate.ps1) | Offline quality commands, two serial test runs, per-test status extraction, source hashes and raw evidence |
+| `contract.rs` | Provider-neutral model/capability, request/response, classification, usage, error and diagnostic types; narrow typed structured-output validation |
+| `gateway.rs` | Explicit lifecycle/policy gates, optional provider, limits, virtual deadlines, bounded retry and in-memory accounting |
+| `mock.rs` | Deterministic scripts, configurable model capabilities, mock-only vendor errors and operation/cancellation receipts |
+| contract tests | All 62 named test cases; no API keys or external services |
+| `Validate.ps1` | Offline quality commands, two serial test runs, per-test status extraction, source hashes and raw evidence |
 
 The Rust traits are an experimental behavior/payload seam. They do not implement or replace ADR-0005's versioned process/worker adapter boundary, establish a native plugin ABI, or commit the production public API. SDK/IPC and wire serialization remain future validation work. No additional orchestration layer was added.
 
@@ -32,7 +32,7 @@ From the repository root:
 pwsh -NoProfile -File experiments/phase1/provider/Validate.ps1
 ```
 
-The [final raw result](../../experiments/phase1/provider/results/1793891274912-7d40439b.json) records every executed command, stdout/stderr, exit code, timeout state, all 62 individual test statuses in each run, exact source/runner/manifest/lockfile SHA-256 digests, dependency metadata, matching repeat outcomes and ordinary-test-log canary checks. The [earlier 61-test result](../../experiments/phase1/provider/results/1793890630373-442a6479.json) is preserved as historical evidence for its recorded source hashes; the final source adds conservative handling of partial usage before confirmed cancellation. Ignored target files are generated build artifacts; the lockfile contains only this experiment package. The runner exits nonzero on a command failure, missing test cases, ignored/failed cases, mismatched repeated outcomes, dependencies or unexpected canary output.
+The final raw result records every executed command, stdout/stderr, exit code, timeout state, all 62 individual test statuses in each run, exact source/runner/manifest/lockfile SHA-256 digests, dependency metadata, matching repeat outcomes and ordinary-test-log canary checks. The earlier 61-test result is preserved as historical evidence for its recorded source hashes; the final source adds conservative handling of partial usage before confirmed cancellation. Ignored target files are generated build artifacts; the lockfile contains only this experiment package. The runner exits nonzero on a command failure, missing test cases, ignored/failed cases, mismatched repeated outcomes, dependencies or unexpected canary output.
 
 Observed environment: Windows 11 x64, build `10.0.26300`; PowerShell `7.6.9`; `rustc 1.99.0 (b940084d7 2026-09-28)`, LLVM `23.1.1`; Cargo `1.99.0 (5f94df478 2026-08-27)`. The tested target is `x86_64-pc-windows-msvc`. The existing MSVC installation was reused. ARM64 remains unverified, and no toolchain component was installed.
 

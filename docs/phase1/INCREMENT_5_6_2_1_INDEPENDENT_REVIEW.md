@@ -22,13 +22,13 @@ Context includes AGENTS.md and owner/global instructions, [Core Engine design](C
 
 Evidence labels below mean: **Runtime** = actually executed native synthetic fixture; **Code** = inspected control/data flow; **Not Tested** = no execution proof. Component interleaving is distinguished from an end-to-end CoreService race. Native SQL trigger injection and closing a managed fixture database are test-only operations, not production fault hooks or physical I/O fault simulation.
 
-New artifacts: [independent tests](../../crates/sentra-core/tests/independent_core_review_tests.rs), [offline review driver](../../experiments/phase1/core-review/Validate-5.6.2.1.ps1), raw results, this report and PROGRESS.md. Assertions are ignored by ordinary Cargo runs to keep the independent review separate, and **all 23 are explicitly executed** by the recorded review command. A normal workspace pass therefore does not imply they passed.
+New artifacts: [independent tests](../../crates/sentra-core/tests/independent_core_review_tests.rs), offline review driver, raw results, this report and PROGRESS.md. Assertions are ignored by ordinary Cargo runs to keep the independent review separate, and **all 23 are explicitly executed** by the recorded review command. A normal workspace pass therefore does not imply they passed.
 
 ## 3. Git safety and working-tree preservation
 
 Entry was clean `develop`, tracking local `origin/develop`, at `a4362f61750fb90374f13b02f11052ef8adf2c34` (`Harden core service authorization and budgets`), parent `c4ab5e74c27c28649a06b5fa05e4d186f4dbd14a`. No staged, unstaged or untracked repository files existed at entry. A before-snapshot captured all refs, visible history, staged entries, physical index SHA-256 and all **193 original tracked file hashes**. Original index SHA-256: `f75ed732d543da079bcabacd13335a579277746c05422ccc99ba165fef58224d`.
 
-Only PROGRESS.md may differ among original files; production Rust/SQL, existing tests, manifests, lockfile, previous raw records and all ADRs must remain byte-identical. New review/validator result files remain untracked/unstaged. Read-only Git commands use `--no-optional-locks`; no commit, tag, amend, reset, rebase, cherry-pick, checkout, staging/unstaging, stash, revert, fetch/pull/push or reference modification was issued. Final comparison is recorded in [repository review evidence](../../experiments/phase1/core-review/results/5621-final-review.json).
+Only PROGRESS.md may differ among original files; production Rust/SQL, existing tests, manifests, lockfile, previous raw records and all ADRs must remain byte-identical. New review/validator result files remain untracked/unstaged. Read-only Git commands use `--no-optional-locks`; no commit, tag, amend, reset, rebase, cherry-pick, checkout, staging/unstaging, stash, revert, fetch/pull/push or reference modification was issued. Final comparison is recorded in repository review evidence.
 
 Final read-only comparison: branch/HEAD/history/refs/index entries **and physical index bytes unchanged**; all 193 original file hashes match except the intended PROGRESS.md update. Local origin/develop remains at the same HEAD, ahead/behind **0/0**, with no remote refresh. Working tree: **1 modified tracked document, 12 untracked review/result artifacts, 0 staged files**. The two touched Markdown documents pass checks for 78 local file/fragment links, nine table blocks, 41 requirement references and all seven unchanged ADR status records. ADR-0002/0007 remain Proposed. Whitespace diff verification exits 0.
 
@@ -115,22 +115,22 @@ Windows x64, PowerShell **7.6.9**, Rust/Cargo **1.99.0**, existing MSVC/cached S
 
 | Command / record | Actual result |
 | --- | --- |
-| [Baseline before adversarial tests](../../experiments/phase1/core-review/results/5621-1793933555806.json) | fmt/check/Clippy/tests/list Passed; 205 Passed, 0 Failed, 4 ignored. |
+| Baseline before adversarial tests | fmt/check/Clippy/tests/list Passed; 205 Passed, 0 Failed, 4 ignored. |
 | `cargo fmt --all -- --check` | Passed, exit 0 on final sources. |
 | `cargo check --workspace --all-targets --all-features --offline` | Passed, exit 0. |
 | `cargo clippy --workspace --all-targets --all-features --offline -- -D warnings` | Passed, exit 0; no warning suppression. |
-| `cargo test --workspace --offline` in [final review run](../../experiments/phase1/core-review/results/5621-1793934349382.json) | **Failed**, exit 101: 199 runtime Passed, 1 existing workspace test Failed, 28 ignored. Five doctests were not reached in this invocation. Other full runs below pass; this failure is retained. |
+| `cargo test --workspace --offline` in final review run | **Failed**, exit 101: 199 runtime Passed, 1 existing workspace test Failed, 28 ignored. Five doctests were not reached in this invocation. Other full runs below pass; this failure is retained. |
 | Explicit `review_` assertions, same final review record | **Failed**, exit 101: **11 Passed / 12 Failed / 0 ignored / 1 filtered child helper**, 23 assertions executed. |
-| `./experiments/phase1/persistence/Validate.ps1` — [raw](../../experiments/phase1/persistence/results/1793934396412.json) | **13/13 Passed**, source hashes stable. Repeated checks overlap the main suite. |
-| `./experiments/phase1/authorization/Validate.ps1` — [raw](../../experiments/phase1/authorization/results/1793934396429.json) | **13/13 Passed**, original A-to-B probe and 64/32-round legacy races pass; its workspace run is 205 Passed / 28 ignored. |
-| `./experiments/phase1/workspace/Validate.ps1` — [raw](../../experiments/phase1/workspace/results/1793934396430.json) | **11/11 Passed**, including the three platform cases; fixture creation/restoration/cleanup Passed. |
-| Existing directory-change test, [20 isolated repeats](../../experiments/phase1/core-review/results/5621-directory-repeats.json) | **14 Passed / 6 Failed**, same failure as the full review run; no sleeps or production changes to mask it. |
+| `./experiments/phase1/persistence/Validate.ps1` — raw | **13/13 Passed**, source hashes stable. Repeated checks overlap the main suite. |
+| `./experiments/phase1/authorization/Validate.ps1` — raw | **13/13 Passed**, original A-to-B probe and 64/32-round legacy races pass; its workspace run is 205 Passed / 28 ignored. |
+| `./experiments/phase1/workspace/Validate.ps1` — raw | **11/11 Passed**, including the three platform cases; fixture creation/restoration/cleanup Passed. |
+| Existing directory-change test, 20 isolated repeats | **14 Passed / 6 Failed**, same failure as the full review run; no sleeps or production changes to mask it. |
 
 The three scale repeats complete 10,000 entries / 310,000 bytes, with discovery times 9610/8858/8659 ms and peak RSS 7,598,080/7,598,080/7,897,088 bytes. This is fixture metadata performance, not isolation or persistence production-load validation. ACL changes occur only on the two validator-owned disposable objects, are restored, and are not host configuration changes.
 
 Command execution has **0 Blocked and 0 timed-out checks** in these final records. A Failed assertion is not reclassified as an environmental blocker or as Passed. Untested engineering areas are listed separately in §10.
 
-Earlier [development review runs](../../experiments/phase1/core-review/results/5621-1793933908453.json) and [added two-process/preview run](../../experiments/phase1/core-review/results/5621-1793934123762.json) remain as raw history; their different test denominators are not added to the final count. Final review source hashes were unchanged during its execution. No production modification was made to make a failing assertion pass.
+Earlier development review runs and added two-process/preview run remain as raw history; their different test denominators are not added to the final count. Final review source hashes were unchanged during its execution. No production modification was made to make a failing assertion pass.
 
 ## 8. Reconciled test inventory
 

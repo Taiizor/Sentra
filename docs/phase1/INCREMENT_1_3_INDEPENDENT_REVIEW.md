@@ -8,7 +8,7 @@
 - [`PROGRESS.md`](../../PROGRESS.md)
 - [`docs/phase1/INCREMENT_1_1_INDEPENDENT_REVIEW.md`](INCREMENT_1_1_INDEPENDENT_REVIEW.md)
 - [`docs/phase1/FILESYSTEM_CAPABILITY_VALIDATION.md`](FILESYSTEM_CAPABILITY_VALIDATION.md)
-- Experiment source code and harnesses under [`experiments/phase1/filesystem-publication/`](../../experiments/phase1/filesystem-publication/):
+- Experiment source code and harnesses under `experiments/phase1/filesystem-publication/`:
   - `test_f11_01_mutability.ps1`
   - `test_exclusive_zero_window.ps1`
   - `test_path_containment.rs`

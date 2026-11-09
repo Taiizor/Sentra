@@ -15,13 +15,13 @@ Crucially, in accordance with ADR-0004 and the Sentra threat model:
 
 ## 2. Scope and implementation
 
-The validation runner [experiments/phase1/sandbox/Validate.ps1](../../experiments/phase1/sandbox/Validate.ps1) executes completely offline and introduces **zero third-party dependencies**. It inspects the host environment using read-only Windows CIM/WMI queries and executes a 10-stage harmless prototype exercising the isolated worker protocol.
+The validation runner `experiments/phase1/sandbox/Validate.ps1` executes completely offline and introduces **zero third-party dependencies**. It inspects the host environment using read-only Windows CIM/WMI queries and executes a 10-stage harmless prototype exercising the isolated worker protocol.
 
 | Artifact | Responsibility |
 | --- | --- |
-| [Validate.ps1](../../experiments/phase1/sandbox/Validate.ps1) | PowerShell 7 validation runner covering Stage A environment discovery, Stage B architectural evaluation, and Stage C safe prototype execution |
-| [results.json](../../experiments/phase1/sandbox/results.json) | Machine-readable evidence containing timestamps, host metadata, individual check outcomes, and aggregate counts |
-| [.gitignore](../../experiments/phase1/sandbox/.gitignore) | Workspace isolation ensuring temporary scratch artifacts and test buffers are never tracked in Git |
+| `Validate.ps1` | PowerShell 7 validation runner covering Stage A environment discovery, Stage B architectural evaluation, and Stage C safe prototype execution |
+| `results.json` | Machine-readable evidence containing timestamps, host metadata, individual check outcomes, and aggregate counts |
+| .gitignore | Workspace isolation ensuring temporary scratch artifacts and test buffers are never tracked in Git |
 
 ### Reproduce and inspect evidence
 

@@ -803,7 +803,7 @@ fn workspace_oversized_path_is_rejected_before_io() {
 }
 
 #[test]
-#[ignore = "requires owned junction fixture; run experiments/phase1/workspace/Validate.ps1"]
+#[ignore = "requires owned junction fixture"]
 fn workspace_windows_junction_is_quarantined_without_target_traversal() {
     let fixture = PathBuf::from(
         std::env::var_os("SENTRA_WORKSPACE_TEST_FIXTURE").expect("fixture runner is required"),
@@ -833,7 +833,7 @@ fn workspace_windows_junction_is_quarantined_without_target_traversal() {
 }
 
 #[test]
-#[ignore = "requires owned deny-ACL fixture; run experiments/phase1/workspace/Validate.ps1"]
+#[ignore = "requires owned deny-ACL fixture"]
 fn workspace_windows_permission_denied_is_not_accepted() {
     let fixture = PathBuf::from(
         std::env::var_os("SENTRA_WORKSPACE_TEST_FIXTURE").expect("fixture runner is required"),
@@ -863,7 +863,7 @@ fn workspace_windows_permission_denied_is_not_accepted() {
 }
 
 #[test]
-#[ignore = "explicit 10,000-file benchmark; run experiments/phase1/workspace/Validate.ps1"]
+#[ignore = "explicit 10,000-file benchmark"]
 fn workspace_scale_10000_file_measurement() {
     let f = Fixture::new();
     for n in 0..10_000 {

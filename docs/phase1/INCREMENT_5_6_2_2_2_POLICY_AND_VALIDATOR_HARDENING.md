@@ -90,13 +90,13 @@ The live dispatch test uses channels and the real CoreService/repository fence, 
 | `cargo check --workspace --all-targets --all-features --offline` | Passed, exit 0. |
 | `cargo clippy --workspace --all-targets --all-features --offline -- -D warnings` | Passed, exit 0; no warning suppression. |
 | `cargo test --workspace --offline` | Passed: **253 runtime + 7 compile-fail doctests**, 0 Failed, 5 directly ignored. |
-| [Final quality driver](../../experiments/phase1/core-review/results/562222-1793973059467.json) | **6/6 Passed**, including discovery and explicit **22/22** focused regressions; source hashes stable. |
-| [Persistence validator](../../experiments/phase1/persistence/results/1793973166611.json) | **13/13 Passed**, source stable; bundled/native MSVC build, rollback/WAL and process repeats executed. |
-| [Workspace validator](../../experiments/phase1/workspace/results/1793973372051.json) | **11/11 Passed**, source stable; actual junction/deny-ACL fixtures, restoration/cleanup and scale cases executed. |
-| [Final four-case portability runner](../../experiments/phase1/authorization/results/portability-1793973049250.json) | **4/4 Passed; each child 13/13 Passed**, driver/source stable, target correspondence and warm reuse verified. |
-| [First portability run](../../experiments/phase1/authorization/results/portability-1793972704246.json) | **3 Passed / 1 Failed** from the 60-second cold command deadline; preserved, not relabeled successful. |
+| Final quality driver | **6/6 Passed**, including discovery and explicit **22/22** focused regressions; source hashes stable. |
+| Persistence validator | **13/13 Passed**, source stable; bundled/native MSVC build, rollback/WAL and process repeats executed. |
+| Workspace validator | **11/11 Passed**, source stable; actual junction/deny-ACL fixtures, restoration/cleanup and scale cases executed. |
+| Final four-case portability runner | **4/4 Passed; each child 13/13 Passed**, driver/source stable, target correspondence and warm reuse verified. |
+| First portability run | **3 Passed / 1 Failed** from the 60-second cold command deadline; preserved, not relabeled successful. |
 
-Development records also preserve the [20-case pass](../../experiments/phase1/core-review/results/562222-1793972364213.json), [new test comparison compile error](../../experiments/phase1/core-review/results/562222-1793972560127.json), and [22-case pass before deadline adjustment](../../experiments/phase1/core-review/results/562222-1793972581360.json). The test used an unsupported whole-SessionRecord equality; comparison now checks all record fields explicitly. A development Clippy initializer warning was corrected without suppression. These intermediate snapshots are not the final inventory and are not counted as additional cases.
+Development records also preserve the 20-case pass, new test comparison compile error, and 22-case pass before deadline adjustment. The test used an unsupported whole-SessionRecord equality; comparison now checks all record fields explicitly. A development Clippy initializer warning was corrected without suppression. These intermediate snapshots are not the final inventory and are not counted as additional cases.
 
 ### Reconciled inventory
 
@@ -123,10 +123,10 @@ Three platform/scale cases are executed separately by the workspace validator. T
 
 | Portability invocation | Evidence | Actual result |
 | --- | --- | --- |
-| Default target, CARGO_TARGET_DIR unset | [raw](../../experiments/phase1/authorization/results/1793973049614.json) | 13/13 Passed; exit 0. |
-| Absolute alternative with spaces, called from a different working directory | [raw](../../experiments/phase1/authorization/results/1793973064148.json) | 13/13 Passed; initially empty; exit 0. |
-| Separate initially empty alternative target | [raw](../../experiments/phase1/authorization/results/1793973208064.json) | 13/13 Passed; pre-launch emptiness verified; exit 0. |
-| Second invocation reusing that same directory | [raw](../../experiments/phase1/authorization/results/1793973303912.json) | 13/13 Passed; nonempty before run, same archive/hash, different newly compiled probe path; exit 0. |
+| Default target, CARGO_TARGET_DIR unset | raw | 13/13 Passed; exit 0. |
+| Absolute alternative with spaces, called from a different working directory | raw | 13/13 Passed; initially empty; exit 0. |
+| Separate initially empty alternative target | raw | 13/13 Passed; pre-launch emptiness verified; exit 0. |
+| Second invocation reusing that same directory | raw | 13/13 Passed; nonempty before run, same archive/hash, different newly compiled probe path; exit 0. |
 
 Each child records resolved target/archive/dependency/executable paths and command arguments. The absolute-spaces run took about 144 seconds overall and the separate cold run about 96 seconds across all checks; these are cold fixture observations, not production performance guarantees. All final commands stayed within their bounded per-command deadlines. The first failed timeout remains part of the experiment history rather than being counted as a successful invocation.
 
@@ -151,6 +151,6 @@ The three requested findings are implemented and tested under the documented imm
 
 Final branch **develop**, HEAD **74debdd7e905992205885969a504317a648081e6**, local upstream **origin/develop**, ahead/behind **0/0**. The first read saw 1/0; the reflog records an external `update by push` at 2026-11-06T16:20:03+03:00 and the fingerprint baseline already contained the caught-up tracking target. A later `remote set-head` event at 16:50:32+03:00 is also present. Neither operation was issued by the agent. All reference targets, reachable history and index entries match that fingerprint baseline; there are **12 modified tracked files, 20 untracked implementation-report/validation artifacts and 0 staged files**. The 216 other original tracked files, including all previous reports/raw records, manifests/lockfile/schema and seven ADRs, remain byte-identical. ADR-0002/0007 remain Proposed.
 
-**Physical-index observation:** the `.git/index` SHA-256 changed from the entry value above; the observed file timestamp is 2026-11-06T14:00:57Z. Staged paths/blob IDs/modes did not change, but byte preservation cannot be claimed. The writer is not established; a stat/cache refresh is a possible explanation, not a verified attribution. The agent used read-only Git commands with optional locks disabled and issued no index/history/reference mutation. It did not restore or overwrite the changed index. The [complete final status, source hashes, Git metadata observations and documentation/inventory checks](../../experiments/phase1/core-review/results/562222-final-state.json) retain both checksums and the exact path list. Its physical-index equality observation is a detected difference, separate from successful Rust/validator results.
+**Physical-index observation:** the `.git/index` SHA-256 changed from the entry value above; the observed file timestamp is 2026-11-06T14:00:57Z. Staged paths/blob IDs/modes did not change, but byte preservation cannot be claimed. The writer is not established; a stat/cache refresh is a possible explanation, not a verified attribution. The agent used read-only Git commands with optional locks disabled and issued no index/history/reference mutation. It did not restore or overwrite the changed index. The complete final status, source hashes, Git metadata observations and documentation/inventory checks retain both checksums and the exact path list. Its physical-index equality observation is a detected difference, separate from successful Rust/validator results.
 
 No commit, amend, stage, stash, reset, rebase, cherry-pick, tag, branch change, push, fetch or pull was performed by the agent. All modifications remain in the working tree. **Stop at Increment 5.6.2.2.2; no subsequent increment or Phase 2 started.**
