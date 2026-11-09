@@ -252,12 +252,12 @@ export function AiPatchModal({
               {[
                 { id: 'builtin', label: 'Built-in Synthesizer', desc: 'Zero-latency offline AST' },
                 { id: 'opencode', label: 'OpenCode Zen', desc: 'opencode.ai/zen/v1' },
-                { id: 'deepseek', label: 'DeepSeek V3 / R1', desc: 'api.deepseek.com' },
-                { id: 'xai', label: 'xAI Grok', desc: 'api.x.ai (Grok 2)' },
+                { id: 'deepseek', label: 'DeepSeek V4 / R1', desc: 'deepseek-v4-pro / R1' },
+                { id: 'xai', label: 'xAI Grok', desc: 'grok-4.7 / grok-4.3' },
                 { id: 'openrouter', label: 'OpenRouter', desc: 'openrouter.ai (100+ models)' },
-                { id: 'gemini', label: 'Google Gemini', desc: 'gemini-2.5-pro / flash' },
+                { id: 'gemini', label: 'Google Gemini', desc: 'gemini-3.1-pro / flash' },
                 { id: 'anthropic', label: 'Anthropic Claude', desc: 'Claude 3.7 Sonnet' },
-                { id: 'openai', label: 'OpenAI', desc: 'GPT-4o / o1' },
+                { id: 'openai', label: 'OpenAI', desc: 'GPT-4o / o1 / o3-mini' },
                 { id: 'local', label: 'Local Ollama / vLLM', desc: 'http://localhost:11434' },
               ].map((p) => (
                 <button
@@ -296,7 +296,7 @@ export function AiPatchModal({
                 <Input
                   value={modelName}
                   onChange={(e) => setModelName(e.target.value)}
-                  placeholder="Custom model name (e.g. qwen2.5-coder:32b, gpt-4o)..."
+                  placeholder="Custom model name (e.g. grok-4.7, gemini-3.1-pro-preview, deepseek-v4-pro, claude-3-7-sonnet)..."
                   className="h-8 text-xs font-mono bg-zinc-950 border-zinc-800 sm:col-span-2"
                 />
               </div>

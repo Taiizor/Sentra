@@ -912,7 +912,7 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
                 externalSuccess = true;
               }
             } else if (providerCfg.provider === "gemini") {
-              const modelName = providerCfg.model || "gemini-2.5-pro";
+              const modelName = providerCfg.model || "gemini-3.1-pro-preview";
               const ep = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${providerCfg.apiKey}`;
               const resp = await fetch(ep, {
                 method: "POST",
@@ -976,7 +976,7 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
               }
             } else if (providerCfg.provider === "deepseek") {
               const ep = providerCfg.endpoint || "https://api.deepseek.com/chat/completions";
-              const modelName = providerCfg.model || "deepseek-chat";
+              const modelName = providerCfg.model || "deepseek-v4-pro";
               const resp = await fetch(ep, {
                 method: "POST",
                 headers: {
@@ -1014,7 +1014,7 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
               }
             } else if (providerCfg.provider === "xai") {
               const ep = providerCfg.endpoint || "https://api.x.ai/v1/chat/completions";
-              const modelName = providerCfg.model || "grok-2-latest";
+              const modelName = providerCfg.model || "grok-4.7";
               const resp = await fetch(ep, {
                 method: "POST",
                 headers: {
@@ -1050,7 +1050,7 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
               }
             } else if (providerCfg.provider === "openrouter") {
               const ep = providerCfg.endpoint || "https://openrouter.ai/api/v1/chat/completions";
-              const modelName = providerCfg.model || "deepseek/deepseek-r1";
+              const modelName = providerCfg.model || "anthropic/claude-3.7-sonnet";
               const resp = await fetch(ep, {
                 method: "POST",
                 headers: {
