@@ -4,3 +4,12 @@ members = [
     "crates/sentra-core",
     "crates/sentra-cli",
 ]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["Taiizor <https://github.com/Taiizor>"]
+license = "Apache-2.0"
+repository = "https://github.com/Taiizor/Sentra"
+homepage = "https://github.com/Taiizor/Sentra"
+readme = "README.md"
