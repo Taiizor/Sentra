@@ -18,7 +18,7 @@ export const DEFAULT_TENANTS: TenantView[] = [
     tenantId: 'sentra-internal',
     name: 'Sentra Core (Internal)',
     description: 'Core platform codebase and internal security services',
-    defaultWorkspace: 'E:/MyProject/Mix/GitHub/Sentra',
+    defaultWorkspace: '.',
     isolationLevel: 'single_operator',
     createdAt: '2026-11-01T08:00:00Z',
   },
@@ -26,7 +26,7 @@ export const DEFAULT_TENANTS: TenantView[] = [
     tenantId: 'tenant-alpha',
     name: 'Tenant Alpha (Isolated)',
     description: 'Isolated client cloud infrastructure and billing services',
-    defaultWorkspace: 'E:/MyProject/Mix/GitHub/Sentra/apps/tenant-alpha',
+    defaultWorkspace: 'apps/tenant-alpha',
     isolationLevel: 'multi_tenant_isolated',
     createdAt: '2026-11-03T10:30:00Z',
   },
@@ -34,7 +34,7 @@ export const DEFAULT_TENANTS: TenantView[] = [
     tenantId: 'acme-corp',
     name: 'Acme Corp (Enterprise)',
     description: 'Acme Enterprise fintech & payment pipelines',
-    defaultWorkspace: 'E:/MyProject/Mix/GitHub/Sentra/apps/acme-corp',
+    defaultWorkspace: 'apps/acme-corp',
     isolationLevel: 'multi_tenant_isolated',
     createdAt: '2026-11-05T14:15:00Z',
   },
@@ -202,7 +202,7 @@ export const INITIAL_FINDINGS: FindingView[] = [
     fingerprint: 'agents.memory.vector_store.py:110:memory_poisoning_hypothesis',
     rootCause: 'Speculative hypothesis that adversarial prompt injections could persist permanently into agent long-term memory store',
     rejectionReason:
-      'Refuted during Phase 3 hunting: Vector memory store implements cryptographic HMAC-SHA256 signatures per entry and epoch-based per-session ephemeral resets. Untrusted prompt memories are purged at session end.',
+      'Refuted during campaign hunting: Vector memory store implements cryptographic HMAC-SHA256 signatures per entry and epoch-based per-session ephemeral resets. Untrusted prompt memories are purged at session end.',
     auditTrace: [
       {
         kind: 'entrypoint',
@@ -801,7 +801,7 @@ export const INITIAL_SESSIONS: SessionSummaryView[] = [
   {
     sessionId: 'sess-53454ff5-0001',
     tenantId: 'sentra-internal',
-    workspaceRoot: 'E:/MyProject/Mix/GitHub/Sentra',
+    workspaceRoot: '.',
     state: 'SCOPED',
     fencingEpoch: 1,
     taskCount: 8,
@@ -811,7 +811,7 @@ export const INITIAL_SESSIONS: SessionSummaryView[] = [
   {
     sessionId: 'sess-53454ff5-0002',
     tenantId: 'sentra-internal',
-    workspaceRoot: 'E:/MyProject/Mix/GitHub/Sentra/crates/sentra-core',
+    workspaceRoot: 'crates/sentra-core',
     state: 'COMPLETED',
     fencingEpoch: 1,
     taskCount: 14,

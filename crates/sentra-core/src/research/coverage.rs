@@ -1,4 +1,4 @@
-//! Coverage ledger recording visited surfaces, audit coverage, and explicitly skipped regions (REQ-F04, Roadmap Phase 3).
+//! Coverage ledger recording visited surfaces, audit coverage, and explicitly skipped regions (REQ-F04, Autonomous Research Specification).
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{collections::HashMap, str::FromStr};

@@ -41,10 +41,10 @@ interface WorkspaceTargetBarProps {
 }
 
 const PRESETS = [
-  { id: 'root', label: 'Root (Sentra)', path: 'E:/MyProject/Mix/GitHub/Sentra' },
-  { id: 'tests', label: 'Core Tests', path: 'E:/MyProject/Mix/GitHub/Sentra/crates/sentra-core/tests' },
-  { id: 'crates', label: 'Crates Workspace', path: 'E:/MyProject/Mix/GitHub/Sentra/crates' },
-  { id: 'web', label: 'Web UI', path: 'E:/MyProject/Mix/GitHub/Sentra/web' },
+  { id: 'root', label: 'Root (Sentra)', path: '.' },
+  { id: 'tests', label: 'Core Tests', path: 'crates/sentra-core/tests' },
+  { id: 'crates', label: 'Crates Workspace', path: 'crates' },
+  { id: 'web', label: 'Web UI', path: 'web' },
 ]
 
 export function WorkspaceTargetBar({

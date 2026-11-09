@@ -1,8 +1,8 @@
-//! 20-case controlled change evaluation corpus and precision/recall metrics (Roadmap Phase 2 Acceptance Criteria).
+//! 20-case controlled change evaluation corpus and precision/recall metrics (Verification Evaluation Specification).
 
 use serde::{Deserialize, Serialize};
 
-/// Categorization of a labeled change case in the Phase 2 evaluation corpus.
+/// Categorization of a labeled change case in the controlled evaluation corpus.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ChangeCaseCategory {
@@ -155,7 +155,7 @@ pub fn evaluate_corpus(cases: &[ChangeCase]) -> Result<CorpusEvaluationReport, S
     })
 }
 
-/// Constructs the canonical 20-case labeled change evaluation corpus for Phase 2 validation.
+/// Constructs the canonical 20-case labeled change evaluation corpus for verification validation.
 pub fn reference_20_case_corpus() -> Vec<ChangeCase> {
     vec![
         // 8 Vulnerable Cases

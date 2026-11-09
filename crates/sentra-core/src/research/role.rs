@@ -1,4 +1,4 @@
-//! Agent research roles, capability contracts, and anti-collusion boundaries (REQ-F04, REQ-S08, Roadmap Phase 3).
+//! Agent research roles, capability contracts, and anti-collusion boundaries (REQ-F04, REQ-S08, Autonomous Research Specification).
 
 use serde::{Deserialize, Serialize};
 
@@ -143,7 +143,7 @@ pub fn assert_patch_verifier_independent(
     Ok(())
 }
 
-/// Enforces anti-collusion rule: Model-controlled roles cannot approve peer work (Roadmap Phase 3).
+/// Enforces anti-collusion rule: Model-controlled roles cannot approve peer work (Anti-Collusion Governance).
 ///
 /// Specifically:
 /// - A Scout cannot approve an Analyst.

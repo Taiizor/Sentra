@@ -1,5 +1,5 @@
 //! Comprehensive integration tests for Deep Security Research campaigns,
-//! Scout/Analyst task fanout, coverage ledgers, and anti-collusion boundaries (REQ-F04, REQ-S06, REQ-S08, Roadmap Phase 3).
+//! Scout/Analyst task fanout, coverage ledgers, and anti-collusion boundaries (REQ-F04, REQ-S06, REQ-S08, Autonomous Research Specification).
 
 use sentra_core::{
     Campaign, CampaignLimits, CampaignStatus, CampaignStopReason, Confidence, CoverageLedger,

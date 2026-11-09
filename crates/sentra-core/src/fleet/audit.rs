@@ -1,4 +1,4 @@
-//! Multi-user hosting security assessment and independent readiness audit (REQ-F19, ROADMAP Phase 6).
+//! Multi-user hosting security assessment and independent readiness audit (REQ-F19, Fleet Isolation Specification).
 
 use serde::{Deserialize, Serialize};
 

@@ -1,4 +1,4 @@
-//! Research campaign lifecycle, task fanout control, and anti-collusion orchestration (REQ-F04, REQ-S06, REQ-S08, Roadmap Phase 3).
+//! Research campaign lifecycle, task fanout control, and anti-collusion orchestration (REQ-F04, REQ-S06, REQ-S08, Autonomous Research Specification).
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::str::FromStr;
@@ -394,7 +394,7 @@ impl Campaign {
         self.deduplicator.register(&hypothesis)
     }
 
-    /// Verifies that secrets belonging to other tasks are not leaked in the observed text (Roadmap Phase 3).
+    /// Verifies that secrets belonging to other tasks are not leaked in the observed text (Security Isolation).
     ///
     /// Fails closed with `SecretIsolationBreach` if any peer task's canary token is present.
     pub fn verify_secret_isolation(
@@ -418,7 +418,7 @@ impl Campaign {
         Ok(())
     }
 
-    /// Validates anti-collusion rule: peer tasks cannot approve each other's work (Roadmap Phase 3).
+    /// Validates anti-collusion rule: peer tasks cannot approve each other's work (Anti-Collusion Specification).
     pub fn verify_no_peer_approval(
         &self,
         proposer_task_id: TaskId,

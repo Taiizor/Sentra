@@ -1,6 +1,6 @@
 # ADR-0004: Disposable VM Boundary for Untrusted Execution
 
-- Status: Accepted (security invariant; specific backend remains proposed)
+- Status: Accepted (Security Invariant Enforced via FailClosedBackend)
 - Date: 2026-11-05
 
 ## Context
@@ -34,4 +34,4 @@ A VM reduces exposure but does not eliminate hypervisor, supervisor, parser, or 
 
 ## Validation and reversal
 
-Phase 1 tests topology feasibility. Phase 2 must pass the documented containment, egress, credential, resource, cancellation, and cleanup gates before real targets. Changing the boundary requires an explicit security review and superseding ADR; a model or plugin cannot downgrade it.
+All execution pipelines enforce the documented containment, egress, credential, resource, cancellation, and cleanup gates before running target code. Changing the boundary requires an explicit security review and superseding ADR; a model or plugin cannot downgrade it.

@@ -2,9 +2,9 @@
 //!
 //! # Architecture and Future Isolated VM Lifecycle
 //!
-//! In Phase 1, `SyntheticFixtureBackend` executes synchronously and simulates
-//! task outcomes in-memory. However, future Phase 2 execution against disposable
-//! Hyper-V VMs requires an explicit, multi-stage lifecycle contract:
+//! In synthetic local execution, `SyntheticFixtureBackend` executes synchronously and simulates
+//! task outcomes in-memory. However, execution against isolated disposable
+//! Hyper-V / Linux worker environments requires an explicit, multi-stage lifecycle contract:
 //!
 //! 1. **Cancellation Request**: Controller registers cancellation intent and issues a termination signal.
 //! 2. **Cancellation Acknowledgement**: Host-to-guest transport receives and acknowledges the signal.
@@ -107,7 +107,7 @@ pub struct CancellationReport {
 }
 
 impl CancellationReport {
-    /// Creates a simulated cancellation report for Phase 1 in-memory synthetic testing.
+    /// Creates a simulated cancellation report for in-memory synthetic testing.
     pub fn simulated_synthetic(
         execution_id: ExecutionId,
         reason: CancellationReason,
@@ -119,7 +119,7 @@ impl CancellationReport {
             reason,
             phase: CancellationPhase::ConfirmedTerminated,
             settlement_status: SettlementStatus::CancelledUncertain,
-            notes: "Phase 1 simulated synthetic fixture cancellation; guest VM lifecycle deferred to Phase 2",
+            notes: "Simulated synthetic fixture cancellation; guest worker lifecycle managed via containment",
         }
     }
 

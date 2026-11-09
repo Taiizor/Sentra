@@ -1,5 +1,5 @@
 //! Integration tests for Linux user-space C/C++ fuzzing, crash reproduction,
-//! input minimization, and tri-method comparison benchmarks (REQ-F09, REQ-F10, REQ-F11, Roadmap Phase 3).
+//! input minimization, and tri-method comparison benchmarks (REQ-F09, REQ-F10, REQ-F11, Autonomous Research Specification).
 
 use sentra_core::{
     CrashArtifact, FuzzEngine, FuzzRunConfig, FuzzTarget, ResearchApproach, SanitizerType,

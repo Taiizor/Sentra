@@ -334,9 +334,9 @@ function initTenantsTable(dbPath: string = DEFAULT_STORAGE) {
     if (!count || count.c === 0) {
       const now = new Date().toISOString();
       const insert = db.prepare("INSERT INTO tenants (tenant_id, name, description, default_workspace, isolation_level, created_at) VALUES (?, ?, ?, ?, ?, ?)");
-      insert.run("sentra-internal", "Sentra Core (Internal)", "Core platform codebase and internal services", "E:/MyProject/Mix/GitHub/Sentra", "single_operator", now);
-      insert.run("tenant-alpha", "Tenant Alpha (Isolated)", "Isolated client cloud infrastructure", "E:/MyProject/Mix/GitHub/Sentra/apps/tenant-alpha", "multi_tenant_isolated", now);
-      insert.run("acme-corp", "Acme Corp (Enterprise)", "Acme Enterprise fintech & payment pipelines", "E:/MyProject/Mix/GitHub/Sentra/apps/acme-corp", "multi_tenant_isolated", now);
+      insert.run("sentra-internal", "Sentra Core (Internal)", "Core platform codebase and internal services", REPO_ROOT, "single_operator", now);
+      insert.run("tenant-alpha", "Tenant Alpha (Isolated)", "Isolated client cloud infrastructure", path.join(REPO_ROOT, "apps/tenant-alpha"), "multi_tenant_isolated", now);
+      insert.run("acme-corp", "Acme Corp (Enterprise)", "Acme Enterprise fintech & payment pipelines", path.join(REPO_ROOT, "apps/acme-corp"), "multi_tenant_isolated", now);
     }
     db.close();
   } catch (err) {
@@ -1941,7 +1941,7 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
       }
     }
 
-    // POST /api/webhook/github - Continuous Integration Webhook Intake (Phase 5)
+    // POST /api/webhook/github - Continuous Integration Webhook Intake
     if (url.pathname === "/api/webhook/github" && req.method === "POST") {
       try {
         const eventType = req.headers.get("x-github-event") || "push";
@@ -2450,7 +2450,7 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
       }
     }
 
-    // POST /api/audit/run-reconnaissance - LLM-Assisted Phase 1 4-Agent Autonomous Reconnaissance Engine
+    // POST /api/audit/run-reconnaissance - 4-Agent Autonomous Security Reconnaissance Engine
     if (url.pathname === "/api/audit/run-reconnaissance" && req.method === "POST") {
       try {
         const agentOutputs = [
@@ -2484,8 +2484,8 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
           },
         ];
 
-        const architectureSummaryMd = `# Sentra Phase 1 Security Reconnaissance Summary
-Generated under Cloudflare Security Audit Doctrine (RECONNAISSANCE.md Phase 1)
+        const architectureSummaryMd = `# Sentra Security Reconnaissance Summary
+Generated under Autonomous Security Audit Doctrine
 Target: Sentra (Pure-Rust Security Platform)
 
 ## 1. Product, Stack & Comparable Software
@@ -2511,7 +2511,7 @@ Target: Sentra (Pure-Rust Security Platform)
         await fs.mkdir(path.dirname(archPath), { recursive: true });
         await fs.writeFile(archPath, architectureSummaryMd, "utf8");
 
-        recordAuditEvent("PHASE1_RECONNAISSANCE_SYNTHESIZED", {
+        recordAuditEvent("RECONNAISSANCE_SYNTHESIZED", {
           totalAgents: agentOutputs.length,
           architectureSummaryLength: architectureSummaryMd.length,
           outputFile: ".sentra/architecture-recon.md",

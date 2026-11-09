@@ -8,7 +8,7 @@
 
 ## 1. Fail-Closed Target Execution Boundary
 
-1. **Untrusted Target Code Execution:** Under Phase 1 through Phase 6 architectural specifications (`ADR-0004`, `REQ-F12`), untrusted repository execution (including build scripts, procedural macros, unit tests, fuzz targets, and generated PoCs) remains **strictly disabled and fail-closed** by default on the host development machine (`FailClosedBackend`).
+1. **Untrusted Target Code Execution:** Under core architectural specifications (`ADR-0004`, `REQ-F12`), untrusted repository execution (including build scripts, procedural macros, unit tests, fuzz targets, and generated PoCs) remains **strictly disabled and fail-closed** by default on the host development machine (`FailClosedBackend`).
 2. **Dedicated Disposable VM Requirement:** Target execution requires an explicitly provisioned disposable Linux VM worker (`ContainmentLevel::DisposableVm`) with strictly denied outbound network egress (`EgressPolicy::StrictlyDenied`). Docker Desktop or WSL2 running directly on the host development workstation does NOT satisfy this boundary.
 3. **No Host Convenience Exceptions:** Sentra does not provide a convenience flag or option to run untrusted target code directly on the host machine.
 

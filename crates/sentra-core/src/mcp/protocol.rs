@@ -79,7 +79,7 @@ pub struct ToolDefinition {
 
 /// Verifies that the transport mechanism conforms to isolation boundaries (ADR-0005, EXTENSIONS.md).
 ///
-/// Local stdio is the sole permitted transport in Phase 4.
+/// Local stdio is the primary permitted transport.
 /// Remote HTTP remains strictly disabled until authentication, authorization, and SSRF gates pass.
 pub fn verify_transport_allowed(transport: &str) -> Result<(), McpErrorObject> {
     match transport.to_ascii_lowercase().as_str() {

@@ -1,4 +1,4 @@
-//! Verification bundle data models and attempt denominator accounting (REQ-F14, Roadmap Phase 2 Acceptance Criteria).
+//! Verification bundle data models and attempt denominator accounting (REQ-F14, Verification Specification).
 
 use std::str::FromStr;
 
@@ -142,7 +142,7 @@ impl TestRunEvidence {
     }
 }
 
-/// Strict attempt denominator accounting (Roadmap Phase 2 Acceptance Criteria).
+/// Strict attempt denominator accounting (Independent Verification Specification).
 ///
 /// Records every attempt, rejection, timeout, skipped check, and no-fix outcome
 /// so verification rates cannot be inflated by omitting failures.
@@ -411,7 +411,7 @@ impl VerificationBundle {
         }
     }
 
-    /// Whether this bundle achieves verified status under Phase 2 acceptance criteria.
+    /// Whether this bundle achieves verified status under verification acceptance criteria.
     pub fn is_verified(&self) -> bool {
         self.outcome == PatchVerificationOutcome::Verified
     }

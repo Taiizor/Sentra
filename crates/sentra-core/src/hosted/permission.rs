@@ -1,5 +1,5 @@
 //! Granular hosted integration permissions, fork isolation profiles, and credential fencing
-//! (REQ-F18, THREAT_MODEL T-11, S-10, Roadmap Phase 5 Acceptance Criteria).
+//! (REQ-F18, THREAT_MODEL T-11, S-10, Hosted Integration Specification).
 
 use std::collections::HashSet;
 
@@ -121,7 +121,7 @@ impl HostedCredentials {
 
     /// Filters credentials for worker consumption, ensuring credentials cannot reach target workers.
     ///
-    /// Per Roadmap Phase 5 acceptance criteria: "Credentials cannot reach target workers."
+    /// Under hosted integration security requirements: "Credentials cannot reach target workers."
     pub fn filter_for_worker(&self, profile: &ForkSecurityProfile) -> Self {
         if profile.is_fork || !profile.secrets_permitted {
             // Zero-secret guarantee for forks

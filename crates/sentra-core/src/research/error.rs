@@ -14,7 +14,7 @@ pub enum ResearchErrorKind {
     },
     /// Patch author attempted to independently verify or approve their own patch (REQ-S08).
     PatchAuthorCannotVerifySelf,
-    /// Model-controlled roles attempted to approve peer work (Roadmap Phase 3 Anti-Collusion).
+    /// Model-controlled roles attempted to approve peer work (Anti-Collusion Governance).
     PeerApprovalForbidden {
         /// Proposing role name.
         proposer_role: String,

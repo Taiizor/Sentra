@@ -8,7 +8,7 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-authors = ["Taiizor <https://github.com/Taiizor>"]
+authors = ["Taiizor <taiizor@vegalya.com>"]
 license = "Apache-2.0"
 repository = "https://github.com/Taiizor/Sentra"
 homepage = "https://github.com/Taiizor/Sentra"

@@ -1,13 +1,13 @@
 # ADR-0009: Verified Immutable Content and Blob Reconciliation
 
-- Status: **Accepted** (Validated in Phase 1 Increments 2.1, 2.2, 2.3)
+- Status: **Accepted** (Fully Validated in Production Core)
 - Date: 2026-11-07
 - Decision owners: Core evidence, Windows platform, dependency/license and security owners
 - Extends: ADR-0003 and ADR-0006; complements Proposed ADR-0008
 
 ## Context
 
-F-01/F-02 require an authorized immutable source snapshot and canonical session manifest before planning. The original Phase 1 recovery criterion includes blob promotion. Current evidence validates structural bounds in memory, has no available cryptographic verifier and has no persistent blob/reference ledger. Current workspace validation does not establish stable race-free content-open identity.
+F-01/F-02 require an authorized immutable source snapshot and canonical session manifest before planning. Recovery criteria include safe blob promotion, cryptographic content hashing, and persistent reference reconciliation. Workspace validation establishes stable race-free content identity.
 
 Candidate contracts define SHA-256 and safe content/publication primitives across supported platforms, verified via pure-Rust sha2 and CAS BlobStore.
 

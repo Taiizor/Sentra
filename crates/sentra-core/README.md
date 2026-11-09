@@ -1,9 +1,13 @@
-# sentra-core
+<div align="center">
+  <img src="https://raw.githubusercontent.com/Taiizor/Sentra/develop/assets/sentra-logo.svg" width="100" height="100" alt="Sentra Logo" />
+  <h1>sentra-core</h1>
+  <p><strong>Core Security Analysis & Verification Engine</strong></p>
 
-[![Crates.io](https://img.shields.io/crates/v/sentra-core.svg)](https://crates.io/crates/sentra-core)
-[![Documentation](https://docs.rs/sentra-core/badge.svg)](https://docs.rs/sentra-core)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Safety](https://img.shields.io/badge/Unsafe-Forbidden-success.svg)](https://github.com/Taiizor/Sentra)
+  [![Crates.io](https://img.shields.io/crates/v/sentra-core.svg)](https://crates.io/crates/sentra-core)
+  [![Documentation](https://docs.rs/sentra-core/badge.svg)](https://docs.rs/sentra-core)
+  [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+  [![Safety](https://img.shields.io/badge/Unsafe-Forbidden-success.svg)](https://github.com/Taiizor/Sentra)
+</div>
 
 Core security analysis, intra-procedural taint tracking, lockfile vulnerability auditing, and evidence verification engine for the [Sentra](https://github.com/Taiizor/Sentra) platform.
 

@@ -66,7 +66,7 @@ pub fn validate_patch_approval_invalidation(
 }
 
 /// Reconciles findings across consecutive scans, proving that the absence of a finding in a later
-/// scan cannot resolve it as fixed (REQ-F04, Roadmap Phase 2 Acceptance Criteria).
+/// scan cannot resolve it as fixed (REQ-F04, Anti-Regression & Verification Specification).
 ///
 /// Any finding from `previous_findings` that is missing in `current_findings` is preserved in
 /// an `Inconclusive` state with an explicit explanatory audit trail, unless positive verifier proof

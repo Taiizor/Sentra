@@ -149,8 +149,8 @@ impl EvidenceVerifier {
 
     /// Attempts transit integrity verification.
     ///
-    /// In accordance with ADR-0006 and Phase 1 constraints, fails closed with
-    /// `CryptographicVerificationUnavailable` because a verified SHA-256 crate is not available offline.
+    /// In accordance with ADR-0006, fails closed with
+    /// `CryptographicVerificationUnavailable` when transit cryptography is unconfigured.
     pub fn verify_transit_integrity(
         &self,
         envelope: &EvidenceEnvelope,

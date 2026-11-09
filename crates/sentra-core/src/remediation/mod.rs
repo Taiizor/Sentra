@@ -1,4 +1,4 @@
-//! Automated Remediation PR Proposer and Patch Packaging (REQ-F11, REQ-F18, Roadmap Phase 5).
+//! Automated Remediation PR Proposer and Patch Packaging (REQ-F11, REQ-F18, Remediation Specification).
 //!
 //! Generates cryptographically signed, immutable Pull Request proposal packages
 //! under strict human-in-the-loop governance without autonomous Git write mutations.

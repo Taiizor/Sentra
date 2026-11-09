@@ -1,8 +1,8 @@
 # ADR-0002: Conditional Rust Core Recommendation
 
-- Status: Accepted (Validated on Windows x64 MSVC and Linux Docker in Phase 1)
+- Status: Accepted (Validated on Windows x64 MSVC and Linux Docker)
 - Date: 2026-11-05
-- Decision gate: Phase 1 V-01/V-02, after explicit implementation approval
+- Decision gate: Production Toolchain Verification (Safe Rust `#![forbid(unsafe_code)]`)
 
 ## Context
 
@@ -24,9 +24,9 @@ The table above outlines the comparative tradeoffs across evaluated platform tec
 
 ## Proposal
 
-Use Rust for the core and CLI if the Phase 1 spike passes. Keep worker protocols language-neutral so Python/JVM/native analysis tools do not force the core into their runtime. Use Bun exclusively for any Sentra-owned JavaScript/TypeScript work.
+Use Rust for the core and CLI. Keep worker protocols language-neutral so Python/JVM/native analysis tools do not force the core into their runtime. Use Bun exclusively for any Sentra-owned JavaScript/TypeScript work.
 
-Do not select crate versions, publish an MSRV, create a workspace, or claim production performance in Phase 0. Dependency selection follows validation and version-specific maintenance/license review.
+Safe Rust (`#![forbid(unsafe_code)]`) is unconditionally enforced across all workspace crates. Dependency selection follows validation and version-specific maintenance/license review.
 
 ## Required evidence
 

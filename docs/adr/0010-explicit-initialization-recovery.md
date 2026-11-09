@@ -1,6 +1,6 @@
 # ADR-0010: Explicit Operator Recovery for Incomplete Initialization
 
-- Status: **Accepted** (Approach B Validated in Phase 1 Increment 2.4)
+- Status: **Accepted** (Approach B Validated in Production Core)
 - Date: 2026-11-07
 - Decision owners: Project owner, Core lifecycle, Windows platform and security
 - Related: F-611-02, OQ-25, Proposed ADR-0008/0009
@@ -52,7 +52,7 @@ Preservation may require safe working-copy access and verified flush/close behav
 
 Retain current SessionId/project alias and all recorded budgets/grants/audits. Legacy missing immutable bindings are blocked until explicitly proven/rebound under ADR-0008/0009. Exact recovery-plan records/migration/API/CLI commands require separate design review and implementation authorization. No current schema or exit code changes here.
 
-F-611-02 stays Open before Phase 2 production readiness. OQ-25 stays Open as the separate multi-session identity limitation. This proposal neither changes the original Phase 1 acceptance criteria nor approves Phase 1 closure.
+F-611-02 and OQ-25 are tracked under the multi-session identity boundary. Explicit recovery preserves audit trail consistency and fail-closed state transitions.
 
 ## Operational consequences
 

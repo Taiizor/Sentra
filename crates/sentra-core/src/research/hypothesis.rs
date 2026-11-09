@@ -1,4 +1,4 @@
-//! Vulnerability hypotheses, fingerprinting, and deduplication (REQ-F04, REQ-F05, Roadmap Phase 3).
+//! Vulnerability hypotheses, fingerprinting, and deduplication (REQ-F04, REQ-F05, Autonomous Research Specification).
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{collections::HashMap, str::FromStr};

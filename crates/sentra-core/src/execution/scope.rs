@@ -5,7 +5,7 @@ use std::fmt;
 /// Explicit execution security scope.
 ///
 /// This enum strictly separates repository-controlled test fixtures from untrusted
-/// target project workloads. In compliance with ADR-0004 and Phase 1 constraints,
+/// target project workloads. In compliance with ADR-0004,
 /// untrusted target code MUST NEVER execute directly on the host, via Docker, or via WSL2.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ExecutionScope {

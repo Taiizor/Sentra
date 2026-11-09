@@ -138,7 +138,7 @@ export function WebhookTab({ currentRole }: WebhookTabProps) {
               CI/CD & Webhook Intake
             </h2>
             <Badge variant="outline" className="text-[11px] px-2 py-0 border-violet-500/30 text-violet-400 bg-violet-500/5">
-              Phase 5 Automation
+              CI/CD Automation
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground">

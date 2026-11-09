@@ -1,4 +1,4 @@
-//! Verification bundle lifecycle, disposable worker containment, and benchmark evaluation (REQ-F12, REQ-F13, REQ-F14, Roadmap Phase 2).
+//! Verification bundle lifecycle, disposable worker containment, and benchmark evaluation (REQ-F12, REQ-F13, REQ-F14, Verification Specification).
 
 pub mod bundle;
 pub mod corpus;

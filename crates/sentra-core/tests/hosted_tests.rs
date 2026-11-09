@@ -1,5 +1,5 @@
 //! Conformance and integration tests for continuous hosted integrations and webhook intake
-//! (REQ-F18, THREAT_MODEL T-11, Roadmap Phase 5 Acceptance Criteria).
+//! (REQ-F18, THREAT_MODEL T-11, Hosted Integration Specification).
 
 use sentra_core::{
     DeliveryLedger, DraftPrProposal, EventKind, ForkSecurityProfile, HostedCredentials,
@@ -538,7 +538,7 @@ fn test_internal_branch_worker_credentials_filtering() {
         Some("write-token-456".to_string()),
     );
 
-    // Write tokens are NEVER passed to workers, even for internal branches (Roadmap Phase 5 acceptance criteria)
+    // Write tokens are NEVER passed to workers, even for internal branches (Hosted Security Criteria)
     let worker_creds = creds.filter_for_worker(&internal_profile);
     assert_eq!(worker_creds.read_token, Some("read-token-123".to_string()));
     assert!(worker_creds.write_token.is_none());
@@ -641,7 +641,7 @@ fn test_stale_verification_blocks_publication() {
 
 #[test]
 fn test_autonomous_merge_permanently_prohibited() {
-    // Attempting autonomous merge must fail closed (Roadmap Phase 5)
+    // Attempting autonomous merge must fail closed (Governance Policy)
     let err = StaleHeadGuard::assert_no_autonomous_merge(true).unwrap_err();
     assert_eq!(err.kind(), WebhookErrorKind::PolicyDenied);
 

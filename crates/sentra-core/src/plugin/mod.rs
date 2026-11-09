@@ -1,4 +1,4 @@
-//! Subprocess plugin SDK, versioned adapter protocols, and capability fencing (REQ-F16, Roadmap Phase 4).
+//! Subprocess plugin SDK, versioned adapter protocols, and capability fencing (REQ-F16, Plugin Architecture Specification).
 
 pub mod codeql;
 pub mod error;

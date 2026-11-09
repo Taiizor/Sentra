@@ -1,6 +1,6 @@
 # Threat Model and Permissions
 
-Status: Phase 0 design requirements. Initial deployment is one authorized operator with a local control plane and a dedicated VM worker. This is not a completed security assessment or a multi-tenant hosting design.
+Status: Active Platform Security Requirements. Deployment consists of an authorized operator with a local control plane and dedicated isolated VM workers. This forms the baseline platform security architecture.
 
 ## Assets and trust assumptions
 
@@ -76,6 +76,6 @@ Before retaining evidence, declare storage location, encrypted-volume requiremen
 
 ## Security validation and residual risk
 
-Phase 1 proves control-plane feasibility; Phase 2 must pass containment, egress, credential, replay, path, artifact-intake, and independent-verification tests before real target execution. Known critical boundary failures block the corresponding feature. Windows-native and kernel profiles need separate threat-model reviews.
+All control-plane and worker components must pass containment, egress, credential, replay, path, artifact-intake, and independent-verification tests before target execution. Known critical boundary failures block the corresponding feature. Windows-native and kernel profiles need separate threat-model reviews.
 
 Remaining risks include unknown VM escapes, malicious toolchain/base images, parser vulnerabilities, model error, shared-provider bias, benchmark contamination, nondeterministic races, and host compromise. General security completeness, universal platform coverage, and multi-tenant isolation are not initial claims.

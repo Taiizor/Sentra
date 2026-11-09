@@ -122,7 +122,7 @@ export function ResearchTab({ campaigns: _campaigns, currentRole }: ResearchTabP
   const [isValidating, setIsValidating] = useState(false)
   const [selectedUnit, setSelectedUnit] = useState<CoverageLedgerUnit | null>(null)
 
-  // Sub-views: 4D Matrix, Fast Topology, Phase 1 Recon
+  // Sub-views: 4D Matrix, Fast Topology, Architecture Recon
   const [activeView, setActiveView] = useState<'matrix' | 'topology' | 'recon'>('matrix')
   const [topologyReport, setTopologyReport] = useState<ReconTopologyReport | null>(null)
   const [reconReport, setReconReport] = useState<Phase1ReconReport | null>(null)
@@ -153,7 +153,7 @@ export function ResearchTab({ campaigns: _campaigns, currentRole }: ResearchTabP
       const data = await runPhase1Reconnaissance()
       if (data) {
         setReconReport(data)
-        toast.success('Phase 1 Reconnaissance Complete (4 Agents Finished)', {
+        toast.success('Autonomous Reconnaissance Complete (4 Agents Finished)', {
           description: `Synthesized architecture boundary map with ${data.derivedUnitsCount} derived canonical units.`,
         })
       }
@@ -257,7 +257,7 @@ export function ResearchTab({ campaigns: _campaigns, currentRole }: ResearchTabP
               Autonomous Deep Research & Coverage Ledger
             </h2>
             <Badge variant="outline" className="text-[11px] px-2 py-0 border-purple-500/30 text-purple-400 bg-purple-500/5">
-              Cloudflare 6-Phase
+              Continuous Matrix
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground">
@@ -355,7 +355,7 @@ export function ResearchTab({ campaigns: _campaigns, currentRole }: ResearchTabP
           }`}
         >
           <Sparkles className="size-3.5" />
-          <span>Phase 1 Recon</span>
+          <span>Architecture Recon</span>
           <span className="text-[10px] px-1 rounded-full bg-amber-500/10 text-amber-400 font-mono">
             4-Agent
           </span>
@@ -519,7 +519,7 @@ export function ResearchTab({ campaigns: _campaigns, currentRole }: ResearchTabP
             <div>
               <h3 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                 <Sparkles className="size-3.5 text-amber-400" />
-                Cloudflare Phase 1: 4-Agent Autonomous Reconnaissance Engine
+                4-Agent Autonomous Reconnaissance Engine
               </h3>
               <p className="text-[11px] text-muted-foreground mt-0.5">
                 Spawns 4 specialized read-only research agents to build source-grounded trust boundaries and architecture map.
@@ -532,7 +532,7 @@ export function ResearchTab({ campaigns: _campaigns, currentRole }: ResearchTabP
               className="h-7 text-xs font-medium bg-amber-500 hover:bg-amber-600 text-zinc-950 gap-1.5 self-start sm:self-auto"
             >
               <Sparkles className={`size-3 ${isRunningRecon ? 'animate-spin' : ''}`} />
-              <span>{isRunningRecon ? 'Reconnoitering...' : 'Run Phase 1 Recon'}</span>
+              <span>{isRunningRecon ? 'Reconnoitering...' : 'Run Recon'}</span>
             </Button>
           </div>
 
@@ -605,7 +605,7 @@ export function ResearchTab({ campaigns: _campaigns, currentRole }: ResearchTabP
                   </CardDescription>
                 </div>
                 <Badge variant="outline" className="text-[10px] font-mono text-emerald-400 border-emerald-500/30 bg-emerald-500/10">
-                  RECON PHASE 1 COMPLETE
+                  RECONNAISSANCE COMPLETE
                 </Badge>
               </CardHeader>
               <CardContent className="p-4 font-mono text-xs text-muted-foreground leading-relaxed overflow-x-auto whitespace-pre-wrap bg-background/40">
@@ -657,7 +657,7 @@ export function ResearchTab({ campaigns: _campaigns, currentRole }: ResearchTabP
             {/* Candidates Under Verification */}
             <Card className="border-border/60 bg-card/40 shadow-xs">
               <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between">
-                <CardTitle className="text-xs font-medium text-muted-foreground">Phase 3 Candidates</CardTitle>
+                <CardTitle className="text-xs font-medium text-muted-foreground">Research Candidates</CardTitle>
                 <Flame className="size-3.5 text-amber-400" />
               </CardHeader>
               <CardContent className="p-3 pt-0">

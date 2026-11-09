@@ -2,13 +2,13 @@
 
 ## Current project status
 
-Sentra has completed Phase 0 through Phase 6 technical foundation implementation and independent verification. The platform provides:
-- Core session lifecycle, default-deny policy engine, SQLite WAL persistence, content-addressed evidence storage, and source snapshots (Phase 1).
-- Differential base/head analysis, zero-dependency advisory auditing, capability-scoped model abstraction with synthetic and local endpoints, and disposable worker patch verification (Phase 2).
-- Deep security research campaign engine, Scout/Analyst task fanout, coverage ledgers, and Linux C/C++ user-space fuzzing integration (Phase 3).
-- Subprocess plugin SDK with capability fencing and local stdio Model Context Protocol (MCP) server (Phase 4).
-- Continuous hosted webhook intake with RFC 2104 / RFC 4231 HMAC-SHA256 authentication, delivery deduplication, replay attack prevention, and approval-gated PR proposals with zero-secret fork boundaries (Phase 5).
-- Enterprise dashboard API, multi-tenant session isolation, role-based access control (RBAC), supported-target matrices, remote worker fleet management, and 5-gate multi-user hosting security audits (Phase 6).
+Sentra provides a complete, independently verified security analysis platform implemented entirely in safe Rust (`#![forbid(unsafe_code)]`):
+- **Core Governance & Audit:** Strict session lifecycles, default-deny policy engine, SQLite WAL persistence, and content-addressed evidence storage with immutable source snapshots.
+- **Differential Review & Advisory Auditing:** Base/head differential analysis, offline zero-dependency advisory auditing, capability-scoped AI reasoning, and disposable worker patch verification.
+- **Autonomous Research Engine:** Deep security research campaigns, multi-agent Scout/Analyst task fanout, structured coverage ledgers, and Linux C/C++ user-space fuzzing integration with root-cause crash minimization.
+- **Extensibility & Agent Interoperability:** Subprocess plugin SDK with capability fencing and local Model Context Protocol (MCP) server for Claude Desktop, Cursor, and custom IDEs.
+- **Continuous Hosted Integrations:** Authenticated webhook intake with RFC 2104 / RFC 4231 HMAC-SHA256 signatures, replay defense, and approval-gated remediation proposals with zero-secret fork boundaries.
+- **Fleet Orchestration & Web Management:** Enterprise management dashboard, multi-tenant session isolation, role-based access control (RBAC), supported-target capability matrices, and remote worker fleet isolation audits.
 
 Untrusted target repository execution remains **strictly disabled and fail-closed** by default on the host development machine (`FailClosedBackend`). Target code execution requires an approved, isolated disposable Linux VM worker (`ADR-0004`).
 
@@ -22,7 +22,7 @@ The Sentra project takes the security of its platform and users seriously. We ma
 
 ### Private Reporting Channel
 - **Primary Reporting Channel:** Submit security advisories privately via **GitHub Security Advisories** on the official Sentra repository (`Security` tab -> `Report a vulnerability`).
-- **Alternative Email Channel:** If GitHub private reporting is unavailable, submit reports to `security@sentra.dev` encrypted with the published project PGP key.
+- **Alternative Email Channel:** If GitHub private reporting is unavailable, submit reports to `taiizor@vegalya.com` encrypted with the published project PGP key.
 
 ### Response & Triage SLA
 - **Initial Acknowledgment:** Within **48 hours** of report receipt.

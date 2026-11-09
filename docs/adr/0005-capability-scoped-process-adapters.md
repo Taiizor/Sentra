@@ -1,6 +1,6 @@
 # ADR-0005: Capability-Scoped Out-of-Process Adapters
 
-- Status: Accepted (design baseline; protocols/SDKs not implemented)
+- Status: Accepted (Fully Validated)
 - Date: 2026-11-05
 
 ## Context
@@ -20,7 +20,7 @@ Choose option 3. Define family-specific capabilities, supported-target tuples, s
 
 Avoid a stable Rust dynamic-library ABI and unrestricted shell fallback. WASI may be useful for future restricted data-processing extensions, but is not the universal runtime for native security tools.
 
-MCP, API, skills, and dashboard clients call the same core application services. Start MCP with local stdio in Phase 4, after schema and permission conformance. The inspected candidate protocol revision is 2026-07-28. HTTP remains disabled until its separate authentication, authorization, SSRF, and parity gates pass.
+MCP, API, skills, and dashboard clients call the same core application services. Sentra provides MCP over local stdio transport, adhering to schema and permission conformance. The inspected candidate protocol revision is 2026-07-28. HTTP remains disabled until its separate authentication, authorization, SSRF, and parity gates pass.
 
 ## Consequences
 

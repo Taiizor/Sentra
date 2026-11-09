@@ -1,4 +1,4 @@
-//! Deep security research campaigns, Scout/Analyst task fanout, coverage ledgers, and anti-collusion boundaries (REQ-F04, REQ-S06, REQ-S08, Roadmap Phase 3).
+//! Deep security research campaigns, Scout/Analyst task fanout, coverage ledgers, and anti-collusion boundaries (REQ-F04, REQ-S06, REQ-S08, Autonomous Research Specification).
 
 pub mod campaign;
 pub mod coverage;

@@ -65,13 +65,11 @@ impl Identifier {
 
     /// Attempts to generate a cryptographically secure random UUIDv4.
     ///
-    /// Under Phase 1 Increment 5.2 constraints (zero third-party dependencies and no unsafe code),
-    /// OS CSPRNG is not directly accessible through safe `std`. This method fails closed explicitly
-    /// rather than silently returning a predictable sequential value. Full CSPRNG UUIDv4 generation
-    /// is deferred to Increment 5.4 when the approved `uuid` / `getrandom` dependency is introduced.
+    /// Under safe Rust constraints without external OS random dependencies,
+    /// this method fails closed explicitly rather than silently returning a predictable value.
     pub fn generate_production_v4() -> Result<Self, DomainError> {
         Err(DomainError::EntropySourceUnavailable(
-            "cryptographically secure OS CSPRNG source is unavailable in safe std; production UUID generation is deferred to Increment 5.4".to_string(),
+            "cryptographically secure OS CSPRNG source is unavailable in safe std".to_string(),
         ))
     }
 

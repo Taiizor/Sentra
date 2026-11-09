@@ -38,7 +38,7 @@ Clone the repository and build all workspace crates using offline-capable Cargo 
 
 ```powershell
 # Clone the repository
-git clone https://github.com/YourOrg/Sentra.git
+git clone https://github.com/Taiizor/Sentra.git
 cd Sentra
 
 # Build all workspace crates (sentra-core and sentra-cli)
@@ -95,35 +95,23 @@ cargo run --package sentra-cli -- --help
 ### 4.2 Initialize Project Context
 Initialize a new local security workspace and foundation session:
 ```powershell
-cargo run --package sentra-cli -- init `
-  --workspace E:/MyProject/Repo `
-  --database E:/SentraStorage/project.db `
-  --json
+sentra init --workspace ./my-project --database ./sentra.db --json
 ```
 
 ### 4.3 Inspect Workspace Status
 Query workspace health, active session, and discovery metadata:
 ```powershell
-cargo run --package sentra-cli -- status `
-  --workspace E:/MyProject/Repo `
-  --database E:/SentraStorage/project.db `
-  --json
+sentra status --workspace ./my-project --database ./sentra.db --json
 ```
 
 ### 4.4 Audit Dependency Advisories (Zero-Dependency)
-Scan `Cargo.lock` against pinned RustSec advisories:
+Scan package dependencies across 12 lockfile formats against OSV/RustSec advisories:
 ```powershell
-cargo run --package sentra-cli -- audit `
-  --database E:/SentraStorage/project.db `
-  --workspace E:/MyProject/Repo `
-  --json
+sentra audit --workspace ./my-project --database ./sentra.db --json
 ```
 
 ### 4.5 Operator Recovery for Interrupted Stores
 Recover an incomplete or interrupted initialization store:
 ```powershell
-cargo run --package sentra-cli -- recover `
-  --workspace E:/MyProject/Repo `
-  --database E:/SentraStorage/project.db `
-  --json
+sentra recover --workspace ./my-project --database ./sentra.db --json
 ```

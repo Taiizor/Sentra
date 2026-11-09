@@ -1,5 +1,5 @@
 //! Comprehensive integration tests for Verification Bundles, Disposable Worker Containment,
-//! and 20-Case Change Corpus Evaluation (REQ-F12, REQ-F13, REQ-F14, Roadmap Phase 2).
+//! and 20-Case Change Corpus Evaluation (REQ-F12, REQ-F13, REQ-F14).
 
 use sentra_core::{
     AttemptDenominator, EgressPolicy, FindingId, PatchVerificationOutcome, SessionId, TaskId,
@@ -160,7 +160,7 @@ fn test_attempt_denominator_accounting() {
 
 #[test]
 fn test_worker_profile_readiness_checks() {
-    // Standard Phase 2 Linux Worker passes all 6 gates
+    // Standard Linux Worker profile passes all 6 gates
     let worker = WorkerProfile::standard_phase2_linux_worker();
     let report = worker.verify_readiness().expect("readiness");
     assert!(report.is_ready_for_untrusted_workload);
@@ -207,7 +207,7 @@ fn test_20_case_corpus_evaluation_precision_and_recall() {
     assert_eq!(report.confusion_matrix.false_negatives, 0);
     assert_eq!(report.confusion_matrix.true_negatives, 10);
 
-    // Phase 2 Acceptance Criteria: precision >= 90%, recall >= 60%
+    // Continuous Review Acceptance Criteria: precision >= 90%, recall >= 60%
     assert!(report.confusion_matrix.precision >= 0.90);
     assert!(report.confusion_matrix.recall >= 0.60);
     assert!(report.precision_target_met);

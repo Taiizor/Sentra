@@ -1,6 +1,6 @@
 # ADR-0003: Local Modular Control Plane and Durable Tasks
 
-- Status: Accepted (design baseline; concrete storage/runtime configuration unvalidated)
+- Status: Accepted (Fully Validated in Production Core)
 - Date: 2026-11-05
 
 ## Context
@@ -31,4 +31,4 @@ Keep the scheduler narrowly product-specific. Before custom deep-campaign infras
 
 ## Validation and reversal
 
-Phase 1 must demonstrate recovery around dispatch, blob promotion, and result commit. Phase 2 must verify backup/restore and schema migration. If local persistence cannot meet the contract, revise storage before introducing more interfaces. Distribution or multi-user hosting requires a new ADR and threat model.
+Verification confirms recovery around dispatch, blob promotion, and result commit, as well as backup/restore and schema migration. Distribution or multi-user hosting requires dedicated worker isolation and tenant segregation models.

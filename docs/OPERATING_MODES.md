@@ -67,7 +67,7 @@ Scouts select targets; they do not certify absence of vulnerabilities in unselec
 
 Track components as unexamined, selected, in progress, examined within scope, excluded, unsupported, or blocked. Examined means a defined analysis was attempted, not that the component is secure. Record lines/symbols considered, reachable entry points, instrumentation coverage when available, and build omissions as separate measures.
 
-Stop on operator cancellation, scope expiry/revocation, budget exhaustion, infrastructure failure, repeated no-progress threshold, or completed planned targets. Initial proposal: no more than three automated PoC or patch iterations per candidate and a task depth of two, unless an operator approves a different bounded policy. These are proposed defaults to validate in Phase 3, not implemented settings.
+Stop on operator cancellation, scope expiry/revocation, budget exhaustion, infrastructure failure, repeated no-progress threshold, or completed planned targets. Enforced bounded defaults: no more than three automated PoC or patch iterations per candidate and a task depth of two, unless an operator approves a different bounded policy (`REQ-S06`, `REQ-S08`).
 
 Full weaponized exploits are not a default deliverable. Minimal safe reproductions and impact oracles are preferred. Higher-risk exploitation requires the separate high-risk profile and explicit human approval; kernel-target work remains deferred.
 

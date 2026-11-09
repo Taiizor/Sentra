@@ -159,7 +159,7 @@ export function generateExecutiveReportHtml(
         <div><strong style="color: var(--text-muted);">Tenant Workspace:</strong> <br>${escapeHtml(tenantName)}</div>
         <div><strong style="color: var(--text-muted);">Tenant Identifier:</strong> <br><code style="color: var(--primary);">${escapeHtml(tenantId)}</code></div>
         <div><strong style="color: var(--text-muted);">Boundary Fencing:</strong> <br>${escapeHtml(isolationLevel)}</div>
-        <div><strong style="color: var(--text-muted);">Security Standard:</strong> <br>Cloudflare 6-Phase / OASIS SARIF v2.1.0</div>
+        <div><strong style="color: var(--text-muted);">Security Standard:</strong> <br>Continuous Verification / OASIS SARIF v2.1.0</div>
       </div>
     </div>
 

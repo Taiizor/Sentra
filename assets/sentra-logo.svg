@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- Outer Matte Obsidian Squircle Frame -->
+  <rect x="5" y="5" width="90" height="90" rx="22" fill="#09090b" stroke="#27272a" stroke-width="2" />
+
+  <!-- Top Hex Segment (Electric Cyan #00F0FF) -->
+  <polygon
+    points="50,20 76,35 76,47 62,40 50,33 38,40 38,52 24,44 24,35"
+    fill="#00f0ff"
+  />
+
+  <!-- Bottom Hex Segment (Pure Crisp White #FFFFFF - Exact 180° Rotation) -->
+  <polygon
+    points="50,80 24,65 24,53 38,60 50,67 62,60 62,48 76,56 76,65"
+    fill="#ffffff"
+  />
+
+  <!-- Center Verification Nexus Dot (Emerald Mint #10B981) -->
+  <circle cx="50" cy="50" r="4.5" fill="#10b981" />
+</svg>

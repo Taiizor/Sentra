@@ -932,7 +932,7 @@ impl CoreService {
 
     /// Requests and reconciles task cancellation.
     ///
-    /// Implements the formal cancellation contract. In Phase 1 synthetic execution,
+    /// Implements the formal cancellation contract. Under synthetic fixture execution,
     /// marks termination confirmed and settles budget conservatively (`CancelledUncertain`).
     pub fn cancel_task(
         &self,

@@ -1,5 +1,5 @@
 //! Linux user-space C/C++ fuzzing engine integration, crash reproduction,
-//! and root-cause input minimization (REQ-F09, REQ-F10, REQ-F11, Roadmap Phase 3).
+//! and root-cause input minimization (REQ-F09, REQ-F10, REQ-F11, Fuzzing Specification).
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::str::FromStr;
@@ -107,7 +107,7 @@ pub struct CrashArtifact {
     pub raw_input_bytes: Vec<u8>,
     /// Reduced minimized input bytes maintaining reproduction.
     pub minimized_input_bytes: Option<Vec<u8>>,
-    /// Whether reproduction succeeded in a clean fresh worker (Roadmap Phase 3).
+    /// Whether reproduction succeeded in a clean fresh worker (Isolation Specification).
     pub reproducible_in_fresh_worker: bool,
     /// Reproduction timestamp.
     pub recorded_at: TimestampUtc,
@@ -221,7 +221,7 @@ where
     current
 }
 
-/// A pinned reference root-cause target for Linux user-space reproduction (Roadmap Phase 3).
+/// A pinned reference root-cause target for Linux user-space reproduction (Benchmark Specification).
 #[derive(Clone, Debug)]
 pub struct ReferenceCrashTarget {
     /// Unique identifier for this target benchmark.
@@ -311,7 +311,7 @@ impl ReferenceCrashTarget {
     }
 }
 
-/// Returns the 3 canonical pinned reference targets required for Phase 3 acceptance.
+/// Returns the 3 canonical pinned reference targets required for reproduction validation.
 pub fn reference_root_cause_targets() -> Vec<ReferenceCrashTarget> {
     vec![
         // Target 1: Buffer Overflow
@@ -414,7 +414,7 @@ void *alloc_records(uint32_t count) {
     ]
 }
 
-/// Research evaluation approaches compared in Phase 3 (Roadmap Phase 3 Acceptance Gate).
+/// Research evaluation approaches compared in verification benchmarks (Tri-Method Matrix).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ResearchApproach {
@@ -483,7 +483,7 @@ pub struct ApproachSummary {
     pub patch_verification_rate: f64,
 }
 
-/// Comparative matrix evaluating Classical Fuzzer vs OSS-CRS vs Sentra (Roadmap Phase 3).
+/// Comparative matrix evaluating Classical Fuzzer vs OSS-CRS vs Sentra (Benchmark Matrix).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TriMethodComparisonMatrix {
     /// All recorded execution runs.
@@ -579,7 +579,7 @@ impl TriMethodComparisonMatrix {
     }
 }
 
-/// Generates the canonical reference 10-target, 3-repetition benchmark matrix (Roadmap Phase 3).
+/// Generates the canonical reference 10-target, 3-repetition benchmark matrix (Tri-Method Benchmark).
 ///
 /// Simulates and records 3 independent repetitions across 10 historical reference targets
 /// for Classical Fuzzer, OSS-CRS, and Sentra Agent-Assisted approaches (90 total evaluated runs).

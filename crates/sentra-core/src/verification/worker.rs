@@ -1,4 +1,4 @@
-//! Disposable Linux VM/worker containment protocol and isolation profile (REQ-F12, REQ-F13, Roadmap Phase 2).
+//! Disposable Linux VM/worker containment protocol and isolation profile (REQ-F12, REQ-F13, Worker Isolation Specification).
 
 use std::fmt;
 
@@ -84,10 +84,10 @@ pub struct WorkerProfile {
 }
 
 impl WorkerProfile {
-    /// Constructs a standard Phase 2 reference disposable Linux worker profile.
-    pub fn standard_phase2_linux_worker() -> Self {
+    /// Constructs a standard reference disposable Linux worker profile.
+    pub fn standard_linux_worker() -> Self {
         Self {
-            id: "phase2-linux-x86_64-worker".to_string(),
+            id: "linux-x86_64-worker".to_string(),
             architecture: WorkerArchitecture::LinuxX86_64,
             containment: ContainmentLevel::DisposableVm,
             resources: WorkerResourceCaps::default(),
@@ -97,6 +97,11 @@ impl WorkerProfile {
             crash_recovery_verified: true,
             ephemeral_cleanup_verified: true,
         }
+    }
+
+    /// Backwards-compatible alias for [`Self::standard_linux_worker`].
+    pub fn standard_phase2_linux_worker() -> Self {
+        Self::standard_linux_worker()
     }
 
     /// Verifies all six containment gates required before executing any untrusted target.

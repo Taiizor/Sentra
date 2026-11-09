@@ -27,10 +27,10 @@ interface ScannerConsoleProps {
 
 export function ScannerConsole({ currentRole, onTriggerScanAction }: ScannerConsoleProps) {
   const [selectedAction, setSelectedAction] = useState<string>('scan')
-  const [workspacePath, setWorkspacePath] = useState<string>('E:/MyProject/Mix/GitHub/Sentra')
+  const [workspacePath, setWorkspacePath] = useState<string>('.')
   const [isRunning, setIsRunning] = useState<boolean>(false)
   const [consoleOutput, setConsoleOutput] = useState<string[]>(() => [
-    'Sentra Security Terminal v0.1.0-Phase6 initialized.',
+    'Sentra Security Terminal v0.1.0 initialized.',
     'Untrusted target execution: DISABLED (FailClosedBackend active).',
     'Ready for deterministic static analysis and dependency auditing.',
   ])

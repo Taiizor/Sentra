@@ -50,10 +50,10 @@ interface LiveStreamModalProps {
 }
 
 const PRESETS = [
-  { label: 'Sentra Root', path: 'E:/MyProject/Mix/GitHub/Sentra' },
-  { label: 'Core Tests', path: 'E:/MyProject/Mix/GitHub/Sentra/crates/sentra-core/tests' },
-  { label: 'Crates Workspace', path: 'E:/MyProject/Mix/GitHub/Sentra/crates' },
-  { label: 'Web Dashboard', path: 'E:/MyProject/Mix/GitHub/Sentra/web' },
+  { label: 'Sentra Root', path: '.' },
+  { label: 'Core Tests', path: 'crates/sentra-core/tests' },
+  { label: 'Crates Workspace', path: 'crates' },
+  { label: 'Web Dashboard', path: 'web' },
 ]
 
 export function LiveStreamModal({

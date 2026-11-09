@@ -846,7 +846,7 @@ export function FindingsTab({
                   <div className="p-3.5 rounded-lg border border-amber-500/30 bg-amber-500/5 flex flex-col gap-2.5 text-xs">
                     <div className="flex items-center gap-1.5 text-amber-400 font-semibold tracking-wider uppercase text-[11px]">
                       <HelpCircle className="size-3.5 shrink-0" />
-                      <span>Decisive Validation Blocked (Phase 4 Candidate)</span>
+                      <span>Decisive Validation Blocked (Candidate Finding)</span>
                     </div>
                     <p className="text-muted-foreground leading-relaxed">
                       This finding is a source-grounded candidate whose confirmation requires live environment access or operational telemetry.

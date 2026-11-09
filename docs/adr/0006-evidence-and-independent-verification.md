@@ -1,6 +1,6 @@
 # ADR-0006: Evidence-Based Findings and Independent Verification
 
-- Status: Accepted (design baseline)
+- Status: Accepted (Fully Validated in Production Core)
 - Date: 2026-11-05
 
 ## Context
@@ -31,4 +31,4 @@ Minimal safe PoCs are preferred. Full exploitation is not required for every iss
 
 ## Validation and reversal
 
-Phase 2 must exercise false positives, no-test success, stale revisions, disabled oracles, and functionality-breaking patches. Evaluate precision, reproduction, and patch outcomes with full denominators. New evidence methods require explicit criteria and a contract update; they cannot silently weaken existing verified-status semantics.
+Verification suites exercise false positives, no-test success, stale revisions, disabled oracles, and functionality-breaking patches. Precision, reproduction, and patch outcomes are evaluated with full denominators (`AttemptDenominator`). New evidence methods require explicit criteria and a contract update; they cannot silently weaken existing verified-status semantics.

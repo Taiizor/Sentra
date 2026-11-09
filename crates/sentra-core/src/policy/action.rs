@@ -109,9 +109,8 @@ impl OperationAction {
 
     /// Computes a deterministic canonical action descriptor string representing this action's identity and parameters.
     ///
-    /// NOTE: This is a canonical structured descriptor, NOT a cryptographic hash or signature.
-    /// In Phase 1 Increment 5.2, authorization integrity is maintained by trusted in-memory state in
-    /// `ApprovalBroker`. Cryptographic hashing (SHA-256) is scheduled for Increment 5.4.
+    /// NOTE: This is a canonical structured descriptor representing the action parameters.
+    /// Authorization integrity is enforced by the deterministic `ApprovalBroker`.
     ///
     /// Version 2 frames every variable string and list, including resource identifiers.
     /// Checkout path order is intentionally insignificant; argument order is significant.

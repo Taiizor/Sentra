@@ -194,7 +194,7 @@ impl SupportedTargetTuple {
             ));
         }
 
-        // Validate wildcard prohibition (ROADMAP Phase 6 / EXTENSIONS.md)
+        // Validate wildcard prohibition (Fleet Security Specification / EXTENSIONS.md)
         for val in &[fw_trimmed, tool_trimmed] {
             if val.contains('*')
                 || val.contains('%')

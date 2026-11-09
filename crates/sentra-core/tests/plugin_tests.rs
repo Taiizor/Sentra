@@ -1,5 +1,5 @@
 //! Integration and conformance tests for the Subprocess Plugin SDK and Adapter Protocol
-//! (REQ-F16, Roadmap Phase 4 Acceptance Criteria).
+//! (REQ-F16, Plugin Architecture Specification).
 
 use sentra_core::{
     AdapterFamily, EgressPolicy, HostStatus, PluginCapability, PluginErrorKind, PluginHost,

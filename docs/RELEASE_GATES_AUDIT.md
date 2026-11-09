@@ -22,7 +22,7 @@ This report performs the formal audit of the **Release-wide gates** mandated by 
 | **Gate 3: Zero Critical Containment Defects** | No unresolved critical containment defect | `FailClosedBackend` permanently enforced on host; zero target code executed on host; disposable VM profile verified; 23/23 test suites pass | **PASS** |
 | **Gate 4: Progress Ledger Currency** | Complete and factual progress tracking | `PROGRESS.md` maintained and synchronized with all completed increments across Phases 0 through 6 | **PASS** |
 | **Gate 5: OSI-Approved License Selection** | Permissive OSI license proposed and notice prepared | `ADR-0007` recommends Apache-2.0; `NOTICE` file created with third-party acknowledgments; ready for owner selection | **PASS** |
-| **Gate 6: Private Security Disclosure Channel** | Tested private vulnerability reporting mechanism | `SECURITY.md` updated with GitHub Security Advisories and `security@sentra.dev` channels; 48h initial response SLA defined | **PASS** |
+| **Gate 6: Private Security Disclosure Channel** | Tested private vulnerability reporting mechanism | `SECURITY.md` updated with GitHub Security Advisories and `taiizor@vegalya.com` channels; 48h initial response SLA defined | **PASS** |
 | **Gate 7: Bundled Rules & Datasets Audit** | Audit bundled rules, models, and advisory data | Zero proprietary or restricted rules bundled; advisory database uses pinned safe RustSec entries; zero unredacted secrets | **PASS** |
 | **Gate 8: Installation & Security Limitations** | Published installation and operational limits | `docs/INSTALLATION.md` and `docs/LIMITATIONS.md` published and cross-referenced | **PASS** |
 

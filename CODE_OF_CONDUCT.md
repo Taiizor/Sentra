@@ -22,6 +22,6 @@ As contributors and maintainers of the Sentra project, we are committed to makin
 
 ## Enforcement and Reporting
 
-Instances of abusive, harassing, or unacceptable behavior may be reported directly to the project maintainers via `security@sentra.dev` or through GitHub repository management. All reports will be reviewed promptly and handled with appropriate confidentiality.
+Instances of abusive, harassing, or unacceptable behavior may be reported directly to the project maintainers via `taiizor@vegalya.com` or through GitHub repository management. All reports will be reviewed promptly and handled with appropriate confidentiality.
 
 Maintainers are responsible for clarifying and enforcing our standards of acceptable behavior and will take appropriate corrective action in response to any behavior that they deem inappropriate or harmful.

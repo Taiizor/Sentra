@@ -85,7 +85,7 @@ export function WorkerFleetTab({ workers }: WorkerFleetTabProps) {
               Worker Fleet & Sandboxes
             </h2>
             <Badge variant="outline" className="text-[11px] px-2 py-0 border-amber-500/30 text-amber-400 bg-amber-500/5">
-              Phase 6 Enclaves
+              Worker Enclaves
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground">

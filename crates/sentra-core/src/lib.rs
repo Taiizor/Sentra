@@ -7,7 +7,7 @@
 //! immutable audit trail event types, security classification lattices, and default-deny
 //! policy authorization engine.
 //!
-//! In accordance with Phase 1 constraints and ADR-0004, untrusted code execution is strictly
+//! In accordance with ADR-0004, untrusted code execution is strictly
 //! disabled and fail-closed by default.
 
 #![forbid(unsafe_code)]

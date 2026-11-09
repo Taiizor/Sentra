@@ -1,9 +1,13 @@
-# sentra-cli
+<div align="center">
+  <img src="https://raw.githubusercontent.com/Taiizor/Sentra/develop/assets/sentra-logo.svg" width="100" height="100" alt="Sentra Logo" />
+  <h1>sentra-cli</h1>
+  <p><strong>Command-Line Interface for Autonomous Security Research</strong></p>
 
-[![Crates.io](https://img.shields.io/crates/v/sentra-cli.svg)](https://crates.io/crates/sentra-cli)
-[![Documentation](https://docs.rs/sentra-cli/badge.svg)](https://docs.rs/sentra-cli)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Safety](https://img.shields.io/badge/Unsafe-Forbidden-success.svg)](https://github.com/Taiizor/Sentra)
+  [![Crates.io](https://img.shields.io/crates/v/sentra-cli.svg)](https://crates.io/crates/sentra-cli)
+  [![Documentation](https://docs.rs/sentra-cli/badge.svg)](https://docs.rs/sentra-cli)
+  [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+  [![Safety](https://img.shields.io/badge/Unsafe-Forbidden-success.svg)](https://github.com/Taiizor/Sentra)
+</div>
 
 Command-line interface and terminal tools for [Sentra](https://github.com/Taiizor/Sentra) — an autonomous AI security research and independently verified remediation platform.
 

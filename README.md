@@ -1,12 +1,14 @@
-# Sentra
+<div align="center">
+  <img src="assets/sentra-logo.svg" width="120" height="120" alt="Sentra Logo" />
+  <h1>Sentra</h1>
+  <p><strong>Autonomous AI Security Research & Independently Verified Remediation Platform</strong></p>
 
-**Autonomous AI Security Research & Independently Verified Remediation Platform**
-
-[![CI](https://github.com/Taiizor/Sentra/actions/workflows/ci.yml/badge.svg)](https://github.com/Taiizor/Sentra/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/Taiizor/Sentra/actions/workflows/codeql.yml/badge.svg)](https://github.com/Taiizor/Sentra/actions/workflows/codeql.yml)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Safety](https://img.shields.io/badge/Unsafe-Forbidden-success.svg)](#architectural-boundaries--key-invariants)
-[![Platforms](https://img.shields.io/badge/Platforms-Windows%20%7C%20Linux%20%7C%20macOS-informational)](#installation--quick-start)
+  [![CI](https://github.com/Taiizor/Sentra/actions/workflows/ci.yml/badge.svg)](https://github.com/Taiizor/Sentra/actions/workflows/ci.yml)
+  [![CodeQL](https://github.com/Taiizor/Sentra/actions/workflows/codeql.yml/badge.svg)](https://github.com/Taiizor/Sentra/actions/workflows/codeql.yml)
+  [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+  [![Safety](https://img.shields.io/badge/Unsafe-Forbidden-success.svg)](#architectural-boundaries--key-invariants)
+  [![Platforms](https://img.shields.io/badge/Platforms-Windows%20%7C%20Linux%20%7C%20macOS-informational)](#installation--quick-start)
+</div>
 
 Sentra is an open-source, extensible, dual-mode security research platform for autonomous repository vulnerability discovery, differential code review, and independently verified patch generation across open-source and proprietary software.
 

@@ -1,5 +1,5 @@
 //! Draft PR proposals, immutable revision binding, stale-head defense, and publication guards
-//! (REQ-F18, THREAT_MODEL T-11, S-10, Roadmap Phase 5 Acceptance Criteria).
+//! (REQ-F18, THREAT_MODEL T-11, S-10, Hosted Integration Specification).
 
 use crate::{
     common::crypto::sha256_digest,
@@ -154,7 +154,7 @@ impl StaleHeadGuard {
 
     /// Asserts that a patch verification bundle was computed against the exact current head revision.
     ///
-    /// Per Roadmap Phase 5: "Stale verification blocks publication."
+    /// Under hosted integration requirements: "Stale verification blocks publication."
     pub fn verify_verification_bundle_freshness(
         bundle_target_sha: &str,
         current_head_sha: &str,
@@ -177,7 +177,7 @@ impl StaleHeadGuard {
         if requested_merge {
             return Err(WebhookError::new(
                 WebhookErrorKind::PolicyDenied,
-                "Autonomous merge or automated deployment is permanently disallowed (Roadmap Phase 5)",
+                "Autonomous merge or automated deployment is permanently disallowed (Governance Policy)",
             ));
         }
         Ok(())

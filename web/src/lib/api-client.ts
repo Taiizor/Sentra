@@ -534,7 +534,7 @@ export async function runPhase1Reconnaissance(): Promise<import('@/types/sentra'
     if (!res.ok) return null
     return await res.json()
   } catch (err) {
-    console.error('Failed to run Phase 1 reconnaissance:', err)
+    console.error('Failed to run reconnaissance:', err)
     return null
   }
 }

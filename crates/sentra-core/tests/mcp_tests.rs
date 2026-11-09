@@ -104,7 +104,7 @@ fn test_tool_execution_discover_workspace() {
         params: Some(serde_json::json!({
             "name": "sentra_discover_workspace",
             "arguments": {
-                "workspace_root": "E:/MyProject/Mix/GitHub/Sentra"
+                "workspace_root": "."
             }
         })),
     };
@@ -287,7 +287,7 @@ fn test_sensitive_action_requires_human_admission() {
 
 #[test]
 fn test_transport_policy_gating() {
-    // stdio is the sole authorized transport in Phase 4 (ADR-0005)
+    // stdio is the authorized local transport (ADR-0005)
     assert!(verify_transport_allowed("stdio").is_ok());
 
     // Remote HTTP / HTTPS / TCP is strictly denied

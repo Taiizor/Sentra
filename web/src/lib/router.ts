@@ -129,7 +129,7 @@ function parseUrlState(): RouterState {
   const activeTab: TabId = detectedTab || 'overview'
 
   const savedWorkspace = localStorage.getItem('sentra_workspace')
-  const currentWorkspace = searchParams.get('workspace') || savedWorkspace || 'E:/MyProject/Mix/GitHub/Sentra'
+  const currentWorkspace = searchParams.get('workspace') || savedWorkspace || '.'
 
   const selectedFindingId = searchParams.get('finding') || searchParams.get('id') || null
 
