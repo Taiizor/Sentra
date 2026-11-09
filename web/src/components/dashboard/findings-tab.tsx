@@ -20,6 +20,7 @@ import {
   Code2,
   FileCode2,
   Sparkles,
+  ChevronDown,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { copyText } from '@/lib/clipboard'
@@ -31,6 +32,12 @@ import { Input } from '@/components/ui/input'
 import { SourceViewer } from '@/components/dashboard/source-viewer'
 import { SurgicalDiffView } from '@/components/dashboard/surgical-diff-view'
 import { MarkdownView, InlineFormattedText } from '@/components/ui/markdown-view'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   Select,
   SelectContent,
@@ -346,259 +353,220 @@ export function FindingsTab({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Quick Interactive Filter Chips */}
-      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 max-w-full">
-        <Button
-          variant={verdictFilter === 'ALL' && severityFilter === 'ALL' && reachabilityFilter === 'ALL' ? 'default' : 'outline'}
-          size="sm"
-          className="h-7 text-xs rounded-full px-3 shrink-0"
-          onClick={() => {
-            setVerdictFilter('ALL')
-            setSeverityFilter('ALL')
-            setReachabilityFilter('ALL')
-            setCurrentPage(1)
-          }}
-        >
-          All ({counts.all})
-        </Button>
+      {/* Top Controls: Verdict Tabs & Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        {/* Left: Verdict Filter Tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 max-w-full">
+          <Button
+            variant={verdictFilter === 'ALL' ? 'default' : 'outline'}
+            size="sm"
+            className={`h-7.5 text-xs rounded-lg px-3 shrink-0 ${
+              verdictFilter === 'ALL'
+                ? 'font-bold shadow-xs'
+                : 'bg-zinc-950/70 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+            }`}
+            onClick={() => {
+              setVerdictFilter('ALL')
+              setCurrentPage(1)
+            }}
+          >
+            All ({counts.all})
+          </Button>
 
-        {/* Cloudflare Three-Verdict Filter Chips */}
-        <Button
-          variant={verdictFilter === 'confirmed' ? 'destructive' : 'outline'}
-          size="sm"
-          className="h-7 text-xs rounded-full px-3 border-rose-500/30 hover:border-rose-500/80 bg-rose-500/10 text-rose-300 shrink-0"
-          onClick={() => {
-            setVerdictFilter(verdictFilter === 'confirmed' ? 'ALL' : 'confirmed')
-            setCurrentPage(1)
-          }}
-        >
-          <CheckCircle2 className="size-3 mr-1.5 text-rose-400" />
-          Confirmed ({counts.confirmed})
-        </Button>
+          <Button
+            variant={verdictFilter === 'confirmed' ? 'destructive' : 'outline'}
+            size="sm"
+            className={`h-7.5 text-xs rounded-lg px-3 shrink-0 ${
+              verdictFilter === 'confirmed'
+                ? 'font-bold shadow-xs'
+                : 'border-rose-500/30 hover:border-rose-500/60 bg-rose-500/10 text-rose-300'
+            }`}
+            onClick={() => {
+              setVerdictFilter(verdictFilter === 'confirmed' ? 'ALL' : 'confirmed')
+              setCurrentPage(1)
+            }}
+          >
+            <CheckCircle2 className="size-3 mr-1.5 text-rose-400" />
+            Confirmed ({counts.confirmed})
+          </Button>
 
-        <Button
-          variant={verdictFilter === 'needs_validation' ? 'secondary' : 'outline'}
-          size="sm"
-          className="h-7 text-xs rounded-full px-3 border-amber-500/40 hover:border-amber-500/80 bg-amber-500/10 text-amber-300 shrink-0"
-          onClick={() => {
-            setVerdictFilter(verdictFilter === 'needs_validation' ? 'ALL' : 'needs_validation')
-            setCurrentPage(1)
-          }}
-        >
-          <HelpCircle className="size-3 mr-1.5 text-amber-400" />
-          Needs Validation ({counts.needsValidation})
-        </Button>
+          <Button
+            variant={verdictFilter === 'needs_validation' ? 'secondary' : 'outline'}
+            size="sm"
+            className={`h-7.5 text-xs rounded-lg px-3 shrink-0 ${
+              verdictFilter === 'needs_validation'
+                ? 'font-bold shadow-xs'
+                : 'border-amber-500/30 hover:border-amber-500/60 bg-amber-500/10 text-amber-300'
+            }`}
+            onClick={() => {
+              setVerdictFilter(verdictFilter === 'needs_validation' ? 'ALL' : 'needs_validation')
+              setCurrentPage(1)
+            }}
+          >
+            <HelpCircle className="size-3 mr-1.5 text-amber-400" />
+            Needs Validation ({counts.needsValidation})
+          </Button>
 
-        <Button
-          variant={verdictFilter === 'rejected' ? 'secondary' : 'outline'}
-          size="sm"
-          className="h-7 text-xs rounded-full px-3 border-zinc-700 hover:border-zinc-500 bg-zinc-800/40 text-zinc-400 shrink-0"
-          onClick={() => {
-            setVerdictFilter(verdictFilter === 'rejected' ? 'ALL' : 'rejected')
-            setCurrentPage(1)
-          }}
-        >
-          <XCircle className="size-3 mr-1.5 text-zinc-400" />
-          Rejected ({counts.rejected})
-        </Button>
+          <Button
+            variant={verdictFilter === 'rejected' ? 'secondary' : 'outline'}
+            size="sm"
+            className={`h-7.5 text-xs rounded-lg px-3 shrink-0 ${
+              verdictFilter === 'rejected'
+                ? 'font-bold shadow-xs'
+                : 'border-zinc-800 hover:border-zinc-700 bg-zinc-900/60 text-zinc-400'
+            }`}
+            onClick={() => {
+              setVerdictFilter(verdictFilter === 'rejected' ? 'ALL' : 'rejected')
+              setCurrentPage(1)
+            }}
+          >
+            <XCircle className="size-3 mr-1.5 text-zinc-400" />
+            Rejected ({counts.rejected})
+          </Button>
+        </div>
 
-        <div className="h-4 w-px bg-zinc-800 mx-1 hidden sm:block shrink-0" />
+        {/* Right: Validate Schema & Consolidated Export */}
+        <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7.5 text-xs border-zinc-800 bg-zinc-900/60 text-primary hover:bg-primary/10 px-2.5 cursor-pointer"
+            onClick={handleValidateSchema}
+            disabled={isValidatingSchema}
+          >
+            <ShieldCheck className="size-3.5 mr-1" />
+            {isValidatingSchema ? 'Validating...' : 'Validate Schema'}
+          </Button>
 
-        <Button
-          variant={severityFilter === 'Critical' ? 'destructive' : 'outline'}
-          size="sm"
-          className="h-7 text-xs rounded-full px-3 border-rose-500/30 hover:border-rose-500/80 shrink-0"
-          onClick={() => {
-            setSeverityFilter(severityFilter === 'Critical' ? 'ALL' : 'Critical')
-            setCurrentPage(1)
-          }}
-        >
-          <span className="size-1.5 rounded-full bg-rose-400 mr-1.5" />
-          Critical ({counts.critical})
-        </Button>
-
-        <Button
-          variant={severityFilter === 'High' ? 'secondary' : 'outline'}
-          size="sm"
-          className="h-7 text-xs rounded-full px-3 border-amber-500/30 hover:border-amber-500/80 shrink-0"
-          onClick={() => {
-            setSeverityFilter(severityFilter === 'High' ? 'ALL' : 'High')
-            setCurrentPage(1)
-          }}
-        >
-          <span className="size-1.5 rounded-full bg-amber-400 mr-1.5" />
-          High ({counts.high})
-        </Button>
-
-        <Button
-          variant={reachabilityFilter === 'ReachableCallPath' ? 'default' : 'outline'}
-          size="sm"
-          className="h-7 text-xs rounded-full px-3 border-primary/40 hover:border-primary shrink-0"
-          onClick={() => {
-            setReachabilityFilter(reachabilityFilter === 'ReachableCallPath' ? 'ALL' : 'ReachableCallPath')
-            setCurrentPage(1)
-          }}
-        >
-          <GitBranch className="size-3 mr-1 text-primary" />
-          Reachable Flows ({counts.reachable})
-        </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="inline-flex items-center justify-center h-7.5 text-xs font-medium rounded-md border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800 text-zinc-300 px-2.5 gap-1.5 cursor-pointer transition-colors outline-none"
+              title="Export findings as CSV or JSON"
+            >
+              <Download className="size-3.5" />
+              <span>Export</span>
+              <ChevronDown className="size-3 text-zinc-400" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 bg-zinc-950 border border-zinc-800 p-1.5 text-zinc-200">
+              <DropdownMenuItem onClick={handleExportCsv} className="cursor-pointer text-xs flex items-center gap-2 py-1.5">
+                <Download className="size-3.5 text-primary" />
+                <span>Export as CSV</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportJson} className="cursor-pointer text-xs flex items-center gap-2 py-1.5">
+                <FileCode2 className="size-3.5 text-cyan-400" />
+                <span>Export as JSON (SARIF)</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
-      {/* Search & Filter Controls */}
-      <Card className="border-zinc-800 bg-zinc-900/60 shadow-md">
-        <CardContent className="pt-4 pb-4">
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Search Input */}
-            <div className="relative flex-1 min-w-[260px]">
-              <Search className="size-4 absolute left-3 top-2.5 text-zinc-400" />
-              <Input
-                placeholder="Instant filter by rule ID, CWE-89, file path, or payload title..."
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value)
-                  setCurrentPage(1)
+      {/* Unified Search & Filter Toolbar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 p-2 sm:px-3 sm:py-2 rounded-xl border border-zinc-800/80 bg-zinc-900/40 shadow-xs">
+        {/* Search Input */}
+        <div className="relative flex-1 min-w-[200px] max-w-[420px]">
+          <Search className="size-3.5 absolute left-2.5 top-2 text-zinc-400" />
+          <Input
+            placeholder="Search rule ID, CWE, path, or title..."
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value)
+              setCurrentPage(1)
+            }}
+            className="pl-8 h-7.5 text-xs bg-zinc-950/70 border-zinc-800 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-primary/30"
+          />
+        </div>
+
+        {/* Severity, Reachability & Quick Severity Chips */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Severity Dropdown */}
+          <Select
+            value={severityFilter}
+            onValueChange={(val) => {
+              setSeverityFilter(val ?? 'ALL')
+              setCurrentPage(1)
+            }}
+          >
+            <SelectTrigger className="w-[125px] h-7.5 text-xs bg-zinc-950/80 border-zinc-800 text-zinc-200">
+              <SelectValue placeholder="Severity">
+                {(val: string | null) => (val === 'ALL' || !val ? 'All Severities' : val)}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="ALL">All Severities</SelectItem>
+                <SelectItem value="Critical">Critical</SelectItem>
+                <SelectItem value="High">High</SelectItem>
+                <SelectItem value="Medium">Medium</SelectItem>
+                <SelectItem value="Low">Low</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+
+          {/* Reachability Dropdown */}
+          <Select
+            value={reachabilityFilter}
+            onValueChange={(val) => {
+              setReachabilityFilter(val ?? 'ALL')
+              setCurrentPage(1)
+            }}
+          >
+            <SelectTrigger className="w-[145px] h-7.5 text-xs bg-zinc-950/80 border-zinc-800 text-zinc-200">
+              <SelectValue placeholder="Reachability">
+                {(val: string | null) => {
+                  if (val === 'ALL' || !val) return 'All Reachability'
+                  if (val === 'ReachableCallPath') return 'Reachable Flow'
+                  if (val === 'SinkOnly') return 'Sink Only'
+                  if (val === 'Unreachable') return 'Unreachable'
+                  return val
                 }}
-                className="pl-9 h-9 text-xs bg-zinc-950/70 border-zinc-800 text-zinc-100 placeholder:text-zinc-500"
-              />
-            </div>
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="ALL">All Reachability</SelectItem>
+                <SelectItem value="ReachableCallPath">Reachable Flow</SelectItem>
+                <SelectItem value="SinkOnly">Sink Only</SelectItem>
+                <SelectItem value="Unreachable">Unreachable</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
 
-            {/* Verdict Select (Cloudflare Three-Verdict Model) */}
-            <Select
-              value={verdictFilter}
-              onValueChange={(val) => {
-                setVerdictFilter(val ?? 'ALL')
+          {/* Quick Active Filter Badges */}
+          {(severityFilter !== 'ALL' || reachabilityFilter !== 'ALL' || searchTerm.trim()) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSeverityFilter('ALL')
+                setReachabilityFilter('ALL')
+                setSearchTerm('')
                 setCurrentPage(1)
               }}
+              className="h-7 text-[11px] text-zinc-400 hover:text-zinc-200 px-2"
             >
-              <SelectTrigger className="w-full sm:w-[150px] h-9 text-xs bg-zinc-950/70 border-zinc-800">
-                <SelectValue placeholder="Verdict">
-                  {(val: string | null) => {
-                    if (val === 'ALL' || !val) return 'All Verdicts'
-                    if (val === 'confirmed') return 'Confirmed'
-                    if (val === 'needs_validation') return 'Needs Validation'
-                    if (val === 'rejected') return 'Rejected'
-                    return val
-                  }}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="ALL">All Verdicts</SelectItem>
-                  <SelectItem value="confirmed">Confirmed</SelectItem>
-                  <SelectItem value="needs_validation">Needs Validation</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-
-            {/* Severity Select */}
-            <Select
-              value={severityFilter}
-              onValueChange={(val) => {
-                setSeverityFilter(val ?? 'ALL')
-                setCurrentPage(1)
-              }}
-            >
-              <SelectTrigger className="w-full sm:w-[130px] h-9 text-xs bg-zinc-950/70 border-zinc-800">
-                <SelectValue placeholder="Severity">
-                  {(val: string | null) => (val === 'ALL' || !val ? 'All Severities' : val)}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="ALL">All Severities</SelectItem>
-                  <SelectItem value="Critical">Critical</SelectItem>
-                  <SelectItem value="High">High</SelectItem>
-                  <SelectItem value="Medium">Medium</SelectItem>
-                  <SelectItem value="Low">Low</SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-
-            {/* Reachability Select */}
-            <Select
-              value={reachabilityFilter}
-              onValueChange={(val) => {
-                setReachabilityFilter(val ?? 'ALL')
-                setCurrentPage(1)
-              }}
-            >
-              <SelectTrigger className="w-full sm:w-[160px] h-9 text-xs bg-zinc-950/70 border-zinc-800">
-                <SelectValue placeholder="Reachability">
-                  {(val: string | null) => {
-                    if (val === 'ALL' || !val) return 'All Reachability'
-                    if (val === 'ReachableCallPath') return 'Reachable Call Path'
-                    if (val === 'SinkOnly') return 'Sink Only'
-                    if (val === 'Unreachable') return 'Unreachable'
-                    return val
-                  }}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="ALL">All Reachability</SelectItem>
-                  <SelectItem value="ReachableCallPath">Reachable Call Path</SelectItem>
-                  <SelectItem value="SinkOnly">Sink Only</SelectItem>
-                  <SelectItem value="Unreachable">Unreachable</SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-
-            {/* Export & Invariant Actions */}
-            <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto sm:ml-auto">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 text-xs bg-zinc-950/70 border-zinc-800 text-primary hover:text-primary hover:bg-primary/10"
-                onClick={handleValidateSchema}
-                disabled={isValidatingSchema}
-              >
-                <ShieldCheck className="size-3.5 mr-1" />
-                {isValidatingSchema ? 'Validating...' : 'Validate Schema'}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 text-xs bg-zinc-950/70 border-zinc-800 hover:text-zinc-100"
-                onClick={handleExportCsv}
-              >
-                <Download className="size-3.5 mr-1" />
-                CSV
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 text-xs bg-zinc-950/70 border-zinc-800 hover:text-zinc-100"
-                onClick={handleExportJson}
-              >
-                <Download className="size-3.5 mr-1" />
-                JSON
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+              Reset Filters
+            </Button>
+          )}
+        </div>
+      </div>
 
       {/* Findings Table Card */}
-      <Card className="border-zinc-800 bg-zinc-900/60 shadow-md">
-        <CardHeader className="py-3.5 px-5 border-b border-zinc-800/80">
+      <Card className="border-zinc-800/80 bg-zinc-900/40 shadow-xs">
+        <CardHeader className="py-2.5 px-4 border-b border-zinc-800/80 bg-zinc-950/40">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-col">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <span>Normalized Security Findings</span>
-                <Badge variant="outline" className="text-[10px] font-mono">
-                  Pure-Rust AST &amp; Taint Engine
-                </Badge>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-xs font-semibold text-zinc-200">
+                Security Findings
               </CardTitle>
-              <CardDescription className="text-xs text-zinc-400 mt-0.5">
-                Showing {sortedFindings.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}-
-                {Math.min(currentPage * pageSize, sortedFindings.length)} of {sortedFindings.length} filtered findings ({findings.length} total across workspace)
-              </CardDescription>
+              <Badge variant="outline" className="text-[10px] font-mono border-zinc-800 text-zinc-400">
+                {sortedFindings.length} Items
+              </Badge>
             </div>
 
             {/* Page Size Selector */}
             <div className="flex items-center gap-2 text-xs text-zinc-400">
-              <span>Show:</span>
+              <span className="text-[11px]">Rows:</span>
               <Select
                 value={pageSize.toString()}
                 onValueChange={(val) => {
@@ -606,7 +574,7 @@ export function FindingsTab({
                   setCurrentPage(1)
                 }}
               >
-                <SelectTrigger className="w-[75px] h-7 text-xs bg-zinc-950/70 border-zinc-800">
+                <SelectTrigger className="w-[65px] h-7 text-xs bg-zinc-950/80 border-zinc-800">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
