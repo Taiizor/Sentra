@@ -209,14 +209,14 @@ export function AiPatchModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[92vh] flex flex-col p-0 overflow-hidden bg-zinc-950 border-zinc-800 text-zinc-100 shadow-2xl">
         {/* Sticky Header */}
-        <DialogHeader className="px-6 py-4 border-b border-zinc-800 bg-zinc-900/50 flex flex-row items-center justify-between">
-          <div className="flex flex-col gap-0.5">
-            <div className="flex items-center gap-2">
-              <Sparkles className="size-5 text-primary animate-pulse" />
+        <DialogHeader className="px-4 sm:px-6 py-4 border-b border-zinc-800 bg-zinc-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pr-10">
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Sparkles className="size-5 text-primary animate-pulse shrink-0" />
               <DialogTitle className="text-base font-bold tracking-tight text-zinc-100">
                 Autonomous AI Remediation &amp; Three-Tier Patch Synthesizer
               </DialogTitle>
-              <Badge variant="outline" className="text-[10px] font-mono border-primary/30 text-primary">
+              <Badge variant="outline" className="text-[10px] font-mono border-primary/30 text-primary shrink-0">
                 ADR-0004 Verified
               </Badge>
             </div>
@@ -225,7 +225,7 @@ export function AiPatchModal({
             </DialogDescription>
           </div>
 
-          <div className="flex items-center gap-2 pr-8">
+          <div className="flex items-center gap-2 shrink-0">
             <Button
               variant="outline"
               size="sm"

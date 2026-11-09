@@ -1107,7 +1107,8 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
             title={currentRole === 'Viewer' ? "Viewer role is read-only. Switch to Operator or Admin to execute scans." : undefined}
           >
             <Play className="size-3.5 mr-1.5 fill-current" />
-            {isScanning ? 'Executing sentra.exe...' : 'Run Engine Scan (Live sentra.exe)'}
+            <span>{isScanning ? 'Executing sentra.exe...' : 'Run Engine Scan'}</span>
+            <span className="hidden sm:inline">{!isScanning ? ' (Live sentra.exe)' : ''}</span>
           </Button>
         </div>
       </div>
@@ -1115,8 +1116,8 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
       {/* Category Tabs & Quick Scenario Pills */}
       <div className="flex flex-col gap-3 p-3.5 rounded-xl border border-zinc-800 bg-zinc-900/60 shadow-md">
         {/* Category Selector */}
-        <div className="flex flex-wrap items-center gap-1.5 border-b border-zinc-800/80 pb-2.5">
-          <span className="text-xs font-medium text-zinc-400 mr-2 flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 border-b border-zinc-800/80 pb-2.5 overflow-x-auto no-scrollbar max-w-full">
+          <span className="text-xs font-medium text-zinc-400 mr-2 flex items-center gap-1.5 shrink-0">
             <Sparkles className="size-3.5 text-primary" />
             Category:
           </span>
@@ -1127,7 +1128,7 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
                 key={cat}
                 variant={isCatActive ? 'default' : 'outline'}
                 size="sm"
-                className={`h-7 text-xs rounded-full px-3 transition-all ${
+                className={`h-7 text-xs rounded-full px-3 transition-all shrink-0 ${
                   isCatActive
                     ? 'font-bold shadow-sm'
                     : 'bg-zinc-950/70 border-zinc-800 text-zinc-400 hover:text-zinc-200'
@@ -1141,7 +1142,7 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
         </div>
 
         {/* Individual Scenario Buttons */}
-        <div className="flex flex-wrap items-center gap-2 pt-1">
+        <div className="flex items-center gap-2 pt-1 overflow-x-auto no-scrollbar max-w-full">
           {visiblePresets.map((p) => {
             const isSelected = selectedPreset === p.id
             return (
@@ -1149,7 +1150,7 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
                 key={p.id}
                 variant={isSelected ? 'default' : 'outline'}
                 size="sm"
-                className={`h-7 text-xs rounded-lg px-2.5 transition-all flex items-center gap-1.5 ${
+                className={`h-7 text-xs rounded-lg px-2.5 transition-all flex items-center gap-1.5 shrink-0 ${
                   isSelected
                     ? 'font-bold shadow-md'
                     : 'bg-zinc-950/60 border-zinc-800 hover:border-zinc-700 text-zinc-300'

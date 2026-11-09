@@ -138,9 +138,9 @@ export function WebhookTab({ currentRole }: WebhookTabProps) {
       {/* Phase 5 Header Banner */}
       <Alert className="border-primary/30 bg-primary/5">
         <Webhook className="size-5 text-primary" />
-        <AlertTitle className="text-sm font-semibold flex items-center justify-between">
+        <AlertTitle className="text-sm font-semibold flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <span>Continuous Integration Webhook Intake &amp; Hosted Automations</span>
-          <Badge variant="outline" className="text-xs font-mono">
+          <Badge variant="outline" className="text-xs font-mono shrink-0">
             Roadmap Phase 5
           </Badge>
         </AlertTitle>
@@ -237,7 +237,8 @@ export function WebhookTab({ currentRole }: WebhookTabProps) {
         </CardHeader>
 
         <CardContent className="p-0">
-          <Table>
+          <div className="overflow-x-auto">
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="text-xs">Delivery ID</TableHead>
@@ -308,7 +309,8 @@ export function WebhookTab({ currentRole }: WebhookTabProps) {
               )}
             </TableBody>
           </Table>
-        </CardContent>
+        </div>
+      </CardContent>
       </Card>
 
       {/* CI/CD Template Generator Card */}

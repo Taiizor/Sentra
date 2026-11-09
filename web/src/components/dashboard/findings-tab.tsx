@@ -347,11 +347,11 @@ export function FindingsTab({
   return (
     <div className="flex flex-col gap-4">
       {/* Quick Interactive Filter Chips */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 max-w-full">
         <Button
           variant={verdictFilter === 'ALL' && severityFilter === 'ALL' && reachabilityFilter === 'ALL' ? 'default' : 'outline'}
           size="sm"
-          className="h-7 text-xs rounded-full px-3"
+          className="h-7 text-xs rounded-full px-3 shrink-0"
           onClick={() => {
             setVerdictFilter('ALL')
             setSeverityFilter('ALL')
@@ -366,7 +366,7 @@ export function FindingsTab({
         <Button
           variant={verdictFilter === 'confirmed' ? 'destructive' : 'outline'}
           size="sm"
-          className="h-7 text-xs rounded-full px-3 border-rose-500/30 hover:border-rose-500/80 bg-rose-500/10 text-rose-300"
+          className="h-7 text-xs rounded-full px-3 border-rose-500/30 hover:border-rose-500/80 bg-rose-500/10 text-rose-300 shrink-0"
           onClick={() => {
             setVerdictFilter(verdictFilter === 'confirmed' ? 'ALL' : 'confirmed')
             setCurrentPage(1)
@@ -379,7 +379,7 @@ export function FindingsTab({
         <Button
           variant={verdictFilter === 'needs_validation' ? 'secondary' : 'outline'}
           size="sm"
-          className="h-7 text-xs rounded-full px-3 border-amber-500/40 hover:border-amber-500/80 bg-amber-500/10 text-amber-300"
+          className="h-7 text-xs rounded-full px-3 border-amber-500/40 hover:border-amber-500/80 bg-amber-500/10 text-amber-300 shrink-0"
           onClick={() => {
             setVerdictFilter(verdictFilter === 'needs_validation' ? 'ALL' : 'needs_validation')
             setCurrentPage(1)
@@ -392,7 +392,7 @@ export function FindingsTab({
         <Button
           variant={verdictFilter === 'rejected' ? 'secondary' : 'outline'}
           size="sm"
-          className="h-7 text-xs rounded-full px-3 border-zinc-700 hover:border-zinc-500 bg-zinc-800/40 text-zinc-400"
+          className="h-7 text-xs rounded-full px-3 border-zinc-700 hover:border-zinc-500 bg-zinc-800/40 text-zinc-400 shrink-0"
           onClick={() => {
             setVerdictFilter(verdictFilter === 'rejected' ? 'ALL' : 'rejected')
             setCurrentPage(1)
@@ -402,12 +402,12 @@ export function FindingsTab({
           Rejected ({counts.rejected})
         </Button>
 
-        <div className="h-4 w-px bg-zinc-800 mx-1 hidden sm:block" />
+        <div className="h-4 w-px bg-zinc-800 mx-1 hidden sm:block shrink-0" />
 
         <Button
           variant={severityFilter === 'Critical' ? 'destructive' : 'outline'}
           size="sm"
-          className="h-7 text-xs rounded-full px-3 border-rose-500/30 hover:border-rose-500/80"
+          className="h-7 text-xs rounded-full px-3 border-rose-500/30 hover:border-rose-500/80 shrink-0"
           onClick={() => {
             setSeverityFilter(severityFilter === 'Critical' ? 'ALL' : 'Critical')
             setCurrentPage(1)
@@ -420,7 +420,7 @@ export function FindingsTab({
         <Button
           variant={severityFilter === 'High' ? 'secondary' : 'outline'}
           size="sm"
-          className="h-7 text-xs rounded-full px-3 border-amber-500/30 hover:border-amber-500/80"
+          className="h-7 text-xs rounded-full px-3 border-amber-500/30 hover:border-amber-500/80 shrink-0"
           onClick={() => {
             setSeverityFilter(severityFilter === 'High' ? 'ALL' : 'High')
             setCurrentPage(1)
@@ -433,7 +433,7 @@ export function FindingsTab({
         <Button
           variant={reachabilityFilter === 'ReachableCallPath' ? 'default' : 'outline'}
           size="sm"
-          className="h-7 text-xs rounded-full px-3 border-primary/40 hover:border-primary"
+          className="h-7 text-xs rounded-full px-3 border-primary/40 hover:border-primary shrink-0"
           onClick={() => {
             setReachabilityFilter(reachabilityFilter === 'ReachableCallPath' ? 'ALL' : 'ReachableCallPath')
             setCurrentPage(1)
@@ -767,7 +767,7 @@ export function FindingsTab({
 
           {/* Pagination Navigation Footer */}
           {sortedFindings.length > 0 && (
-            <div className="flex items-center justify-between px-5 py-3 border-t border-zinc-800/80 bg-zinc-950/30">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 sm:px-5 py-3 border-t border-zinc-800/80 bg-zinc-950/30">
               <span className="text-xs text-zinc-400">
                 Page <span className="font-semibold text-zinc-200">{currentPage}</span> of{' '}
                 <span className="font-semibold text-zinc-200">{totalPages}</span>
@@ -785,29 +785,31 @@ export function FindingsTab({
                   Previous
                 </Button>
 
-                {/* Quick Page Jump Pills */}
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  let p = i + 1
-                  if (totalPages > 5 && currentPage > 3) {
-                    p = Math.min(totalPages - 4 + i, currentPage - 2 + i)
-                  }
-                  return (
-                    <Button
-                      key={p}
-                      variant={currentPage === p ? 'default' : 'outline'}
-                      size="sm"
-                      className={cn(
-                        "h-8 w-8 text-xs p-0 font-medium transition-colors",
-                        currentPage === p
-                          ? "bg-zinc-100 text-zinc-950 font-bold border-zinc-100 shadow-sm hover:bg-white hover:text-black"
-                          : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
-                      )}
-                      onClick={() => setCurrentPage(p)}
-                    >
-                      {p}
-                    </Button>
-                  )
-                })}
+                {/* Quick Page Jump Pills (hidden on mobile, visible on sm:) */}
+                <div className="hidden sm:flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let p = i + 1
+                    if (totalPages > 5 && currentPage > 3) {
+                      p = Math.min(totalPages - 4 + i, currentPage - 2 + i)
+                    }
+                    return (
+                      <Button
+                        key={p}
+                        variant={currentPage === p ? 'default' : 'outline'}
+                        size="sm"
+                        className={cn(
+                          "h-8 w-8 text-xs p-0 font-medium transition-colors",
+                          currentPage === p
+                            ? "bg-zinc-100 text-zinc-950 font-bold border-zinc-100 shadow-sm hover:bg-white hover:text-black"
+                            : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
+                        )}
+                        onClick={() => setCurrentPage(p)}
+                      >
+                        {p}
+                      </Button>
+                    )
+                  })}
+                </div>
 
                 <Button
                   variant="outline"

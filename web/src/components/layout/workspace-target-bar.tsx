@@ -72,7 +72,7 @@ export function WorkspaceTargetBar({
 
   return (
     <div className="border border-zinc-800 bg-zinc-900/60 rounded-xl p-3 sm:p-3.5 backdrop-blur flex flex-col gap-3 shadow-md">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         {/* Left: Target Path & Status */}
         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           <div className="size-8 rounded-md bg-primary/10 border border-primary/30 text-primary flex items-center justify-center shrink-0">
@@ -91,15 +91,15 @@ export function WorkspaceTargetBar({
                 {backendConnected ? 'sentra.exe Live' : 'Disconnected'}
               </Badge>
             </div>
-            <span className="text-[11px] text-zinc-400 font-mono truncate max-w-[280px] sm:max-w-[450px]">
+            <span className="text-[11px] text-zinc-400 font-mono truncate max-w-[240px] sm:max-w-[450px]">
               {binaryPath ? binaryPath : 'Checking sentra.exe...'}
             </span>
           </div>
         </div>
 
-        {/* Right: Quick Target Presets Pills */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-xs text-zinc-400 font-medium mr-1 hidden sm:inline">Target Presets:</span>
+        {/* Right: Quick Target Presets Pills (Horizontal scroll on mobile, no breaking) */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 max-w-full">
+          <span className="text-xs text-zinc-400 font-medium mr-1 hidden md:inline shrink-0">Target Presets:</span>
           {PRESETS.map((p) => {
             const isSelected = currentWorkspace === p.path
             return (
@@ -107,7 +107,7 @@ export function WorkspaceTargetBar({
                 key={p.id}
                 variant={isSelected ? 'default' : 'outline'}
                 size="sm"
-                className={`h-7 text-xs rounded-lg px-2 sm:px-2.5 ${
+                className={`h-7 text-xs rounded-lg px-2.5 shrink-0 ${
                   isSelected
                     ? 'font-bold shadow-sm'
                     : 'bg-zinc-950/70 border-zinc-800 hover:border-zinc-700 text-zinc-300'
@@ -122,8 +122,8 @@ export function WorkspaceTargetBar({
       </div>
 
       {/* Target Directory Path Input Bar & Actions */}
-      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-800/60">
-        <div className="flex-1 min-w-[200px] sm:min-w-[280px] flex items-center gap-2">
+      <div className="flex flex-col md:flex-row md:items-center gap-2 pt-2 border-t border-zinc-800/60">
+        <div className="flex-1 min-w-0">
           <Input
             value={inputVal}
             onChange={(e) => setInputVal(e.target.value)}
@@ -132,68 +132,70 @@ export function WorkspaceTargetBar({
               if (e.key === 'Enter') handleCommit()
             }}
             placeholder="Type absolute folder path (e.g. D:/MyProject)..."
-            className="h-8 text-xs font-mono bg-zinc-950 border-zinc-800 focus-visible:ring-primary/40 text-zinc-200"
+            className="h-8 text-xs font-mono bg-zinc-950 border-zinc-800 focus-visible:ring-primary/40 text-zinc-200 w-full"
           />
         </div>
 
-        {/* Actions triggering the real sentra.exe binary */}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 flex-wrap">
+        {/* Actions triggering sentra.exe */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
           {currentRole === 'Viewer' && (
-            <span className="text-[11px] text-amber-400 font-medium mr-1 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+            <div className="text-[11px] text-amber-400 font-medium bg-amber-500/10 px-2.5 py-1 rounded border border-amber-500/20 text-center shrink-0">
               Viewer: Read Only
-            </span>
+            </div>
           )}
 
-          <Button
-            size="sm"
-            disabled={currentRole === 'Viewer'}
-            onClick={onOpenLiveStream}
-            className="h-8 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-md flex items-center gap-1.5 disabled:opacity-40 px-2.5 sm:px-3"
-            title={currentRole === 'Viewer' ? "Viewer role is read-only. Switch to Operator or Admin to execute scans." : undefined}
-          >
-            <Radio className="size-3.5 text-primary-foreground animate-pulse" />
-            <span className="hidden sm:inline">Live SSE Stream Scan</span>
-            <span className="sm:hidden">Live SSE</span>
-          </Button>
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5 sm:gap-2">
+            <Button
+              size="sm"
+              disabled={currentRole === 'Viewer'}
+              onClick={onOpenLiveStream}
+              className="h-8 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-md flex items-center justify-center gap-1.5 disabled:opacity-40 px-2.5 sm:px-3"
+              title={currentRole === 'Viewer' ? "Viewer role is read-only. Switch to Operator or Admin to execute scans." : undefined}
+            >
+              <Radio className="size-3.5 text-primary-foreground animate-pulse" />
+              <span className="hidden sm:inline">Live SSE Stream Scan</span>
+              <span className="sm:hidden">Live SSE</span>
+            </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={isScanning || !backendConnected || currentRole === 'Viewer'}
-            onClick={onRunScan}
-            className="h-8 text-xs font-medium border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-200 disabled:opacity-40 px-2 sm:px-2.5"
-            title={currentRole === 'Viewer' ? "Viewer role is read-only. Switch to Operator or Admin to execute scans." : undefined}
-          >
-            <Play className={`size-3.5 mr-1 fill-current ${isScanning ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">{isScanning ? 'Scanning...' : 'Direct SAST'}</span>
-            <span className="sm:hidden">SAST</span>
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isScanning || !backendConnected || currentRole === 'Viewer'}
+              onClick={onRunScan}
+              className="h-8 text-xs font-medium border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-200 disabled:opacity-40 px-2 sm:px-2.5 flex items-center justify-center"
+              title={currentRole === 'Viewer' ? "Viewer role is read-only. Switch to Operator or Admin to execute scans." : undefined}
+            >
+              <Play className={`size-3.5 mr-1 fill-current ${isScanning ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">{isScanning ? 'Scanning...' : 'Direct SAST'}</span>
+              <span className="sm:hidden">SAST</span>
+            </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={isAuditing || !backendConnected || currentRole === 'Viewer'}
-            onClick={onRunAudit}
-            className="h-8 text-xs font-medium border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-200 disabled:opacity-40 px-2 sm:px-2.5"
-            title={currentRole === 'Viewer' ? "Viewer role is read-only. Switch to Operator or Admin to execute scans." : undefined}
-          >
-            <ShieldCheck className={`size-3.5 mr-1 ${isAuditing ? 'animate-spin text-primary' : ''}`} />
-            <span className="hidden sm:inline">{isAuditing ? 'Auditing...' : 'Audit Lockfiles'}</span>
-            <span className="sm:hidden">Audit</span>
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isAuditing || !backendConnected || currentRole === 'Viewer'}
+              onClick={onRunAudit}
+              className="h-8 text-xs font-medium border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-200 disabled:opacity-40 px-2 sm:px-2.5 flex items-center justify-center"
+              title={currentRole === 'Viewer' ? "Viewer role is read-only. Switch to Operator or Admin to execute scans." : undefined}
+            >
+              <ShieldCheck className={`size-3.5 mr-1 ${isAuditing ? 'animate-spin text-primary' : ''}`} />
+              <span className="hidden sm:inline">{isAuditing ? 'Auditing...' : 'Audit Lockfiles'}</span>
+              <span className="sm:hidden">Audit</span>
+            </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={isCodeQlProbing || !backendConnected || currentRole === 'Viewer'}
-            onClick={onRunCodeQl}
-            className="h-8 text-xs font-medium border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-200 disabled:opacity-40 px-2 sm:px-2.5"
-            title={currentRole === 'Viewer' ? "Viewer role is read-only. Switch to Operator or Admin to execute scans." : undefined}
-          >
-            <SearchCode className={`size-3.5 mr-1 ${isCodeQlProbing ? 'animate-spin text-primary' : ''}`} />
-            <span className="hidden sm:inline">{isCodeQlProbing ? 'Probing...' : 'Probe CodeQL'}</span>
-            <span className="sm:hidden">CodeQL</span>
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isCodeQlProbing || !backendConnected || currentRole === 'Viewer'}
+              onClick={onRunCodeQl}
+              className="h-8 text-xs font-medium border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-200 disabled:opacity-40 px-2 sm:px-2.5 flex items-center justify-center"
+              title={currentRole === 'Viewer' ? "Viewer role is read-only. Switch to Operator or Admin to execute scans." : undefined}
+            >
+              <SearchCode className={`size-3.5 mr-1 ${isCodeQlProbing ? 'animate-spin text-primary' : ''}`} />
+              <span className="hidden sm:inline">{isCodeQlProbing ? 'Probing...' : 'Probe CodeQL'}</span>
+              <span className="sm:hidden">CodeQL</span>
+            </Button>
+          </div>
         </div>
       </div>
     </div>

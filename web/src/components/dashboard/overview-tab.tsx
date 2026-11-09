@@ -76,9 +76,9 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab, onOpenLiv
       {/* Fail-Closed Platform Security Banner */}
       <Alert className="border-primary/30 bg-primary/5">
         <SentraLogoIcon size={20} className="shrink-0" />
-        <AlertTitle className="text-sm font-semibold flex items-center justify-between">
-          <span>Fail-Closed Host Boundary & Zero Untrusted Target Execution Active</span>
-          <div className="flex items-center gap-2">
+        <AlertTitle className="text-sm font-semibold flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+          <span className="leading-snug">Fail-Closed Host Boundary &amp; Zero Untrusted Target Execution Active</span>
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
             {onOpenLiveStream && (
               <Button
                 size="sm"
@@ -378,43 +378,45 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab, onOpenLiv
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs">Session ID</TableHead>
-                <TableHead className="text-xs">Canonical Workspace Path</TableHead>
-                <TableHead className="text-xs">Lifecycle State</TableHead>
-                <TableHead className="text-xs">Task Count</TableHead>
-                <TableHead className="text-xs">Fencing Epoch</TableHead>
-                <TableHead className="text-xs text-right">Created Timestamp (UTC)</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sessions.map((session) => (
-                <TableRow key={session.sessionId}>
-                  <TableCell className="font-mono text-xs font-semibold">
-                    {session.sessionId}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground truncate max-w-[320px]">
-                    {session.workspaceRoot}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={session.state === 'SCOPED' ? 'secondary' : 'outline'}
-                      className="text-xs font-mono"
-                    >
-                      {session.state}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-xs font-mono">{session.taskCount}</TableCell>
-                  <TableCell className="text-xs font-mono">#{session.fencingEpoch}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground font-mono text-right">
-                    {new Date(session.createdAt).toLocaleTimeString()}
-                  </TableCell>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">Session ID</TableHead>
+                  <TableHead className="text-xs">Canonical Workspace Path</TableHead>
+                  <TableHead className="text-xs">Lifecycle State</TableHead>
+                  <TableHead className="text-xs">Task Count</TableHead>
+                  <TableHead className="text-xs">Fencing Epoch</TableHead>
+                  <TableHead className="text-xs text-right">Created Timestamp (UTC)</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {sessions.map((session) => (
+                  <TableRow key={session.sessionId}>
+                    <TableCell className="font-mono text-xs font-semibold">
+                      {session.sessionId}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground truncate max-w-[320px]">
+                      {session.workspaceRoot}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={session.state === 'SCOPED' ? 'secondary' : 'outline'}
+                        className="text-xs font-mono"
+                      >
+                        {session.state}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs font-mono">{session.taskCount}</TableCell>
+                    <TableCell className="text-xs font-mono">#{session.fencingEpoch}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground font-mono text-right">
+                      {new Date(session.createdAt).toLocaleTimeString()}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
