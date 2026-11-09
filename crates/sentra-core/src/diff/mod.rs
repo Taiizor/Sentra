@@ -8,6 +8,8 @@ pub mod error;
 pub mod invalidation;
 /// Data models for file deltas, diff summaries, and unified line hunks.
 pub mod model;
+/// Unified diff hunk application and atomic backup rollback engine.
+pub mod patch;
 
 pub use algorithm::{compare_snapshots, compute_line_diff};
 pub use error::{DiffError, DiffErrorKind};
@@ -17,4 +19,7 @@ pub use invalidation::{
 pub use model::{
     DiffHunk, DiffLine, DiffSummary, FileContentDiff, FileDelta, FileDeltaKind, HunkLimits,
     SnapshotDiff,
+};
+pub use patch::{
+    PatchFileResult, PatchOutcome, apply_hunk_to_content, apply_patch_file, rollback_patch_file,
 };

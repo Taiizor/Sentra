@@ -158,6 +158,23 @@ pub struct LocalScanReport {
     pub candidate_findings: Vec<Finding>,
 }
 
+/// Persistent organization or tenant record.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct TenantRecord {
+    /// Unique tenant identifier (1-64 chars ASCII alphanumeric, -, _).
+    pub tenant_id: String,
+    /// Display name of the organization.
+    pub name: String,
+    /// Detailed description.
+    pub description: String,
+    /// Default workspace directory.
+    pub default_workspace: String,
+    /// Isolation level (e.g. single_operator, multi_tenant_isolated).
+    pub isolation_level: String,
+    /// Registration ISO 8601 timestamp.
+    pub created_at: String,
+}
+
 enum Operation {
     Initialize,
     Status,
@@ -691,6 +708,327 @@ impl LocalWorkspace {
             )
             .map_err(|_| LocalWorkspaceError::new(Kind::Service))
         }
+    }
+
+    /// Scans a source code snippet directly in-memory without creating files on disk.
+    pub fn scan_snippet(snippet: &str, file_name: Option<&str>) -> SastReport {
+        let scanner = SastScanner::new();
+        let matches = scanner.scan_content(file_name.unwrap_or("sample.ts"), snippet);
+        SastReport {
+            files_scanned: 1,
+            directories_scanned: 0,
+            matches,
+        }
+    }
+
+    /// Applies a unified diff patch to a target file within workspace boundary with safety backups.
+    pub fn apply_patch(
+        workspace: &Path,
+        patch_file: &Path,
+        target_rel: Option<&Path>,
+        backup_dir: Option<&Path>,
+        database: Option<&Path>,
+    ) -> Result<crate::diff::PatchFileResult, LocalWorkspaceError> {
+        use LocalWorkspaceErrorKind as Kind;
+        let diff_text = fs::read_to_string(patch_file)
+            .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
+
+        let resolved_rel = if let Some(t) = target_rel {
+            t.to_path_buf()
+        } else {
+            let mut found = None;
+            for line in diff_text.lines() {
+                if let Some(rest) = line.strip_prefix("+++ ") {
+                    let clean = rest.trim().trim_start_matches("b/").trim_start_matches("a/");
+                    found = Some(std::path::PathBuf::from(clean));
+                    break;
+                }
+            }
+            found.ok_or_else(|| LocalWorkspaceError::new(Kind::Workspace))?
+        };
+
+        let result = crate::diff::apply_patch_file(workspace, &resolved_rel, &diff_text, backup_dir)
+            .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
+
+        if let Some(db_path) = database {
+            if let Ok(conn) = rusqlite::Connection::open(db_path) {
+                let event_id = EventId::new().to_string();
+                let now = TimestampUtc::now().to_string();
+                let payload = serde_json::json!({
+                    "patch_path": patch_file.to_string_lossy(),
+                    "target_path": result.target_path,
+                    "backup_path": result.backup_path,
+                    "already_patched": result.already_patched,
+                })
+                .to_string();
+                let _ = conn.execute(
+                    "INSERT INTO audit_events (event_id, event_type, details_json, created_at) VALUES (?1, ?2, ?3, ?4)",
+                    rusqlite::params![event_id, "patch_applied_to_workspace", payload, now],
+                );
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// Rolls back a patched target file from a previously preserved safety backup file.
+    pub fn rollback_patch(
+        workspace: &Path,
+        backup_file: &Path,
+        target_rel: &Path,
+        database: Option<&Path>,
+    ) -> Result<(), LocalWorkspaceError> {
+        use LocalWorkspaceErrorKind as Kind;
+        crate::diff::rollback_patch_file(workspace, target_rel, backup_file)
+            .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
+
+        if let Some(db_path) = database {
+            if let Ok(conn) = rusqlite::Connection::open(db_path) {
+                let event_id = EventId::new().to_string();
+                let now = TimestampUtc::now().to_string();
+                let payload = serde_json::json!({
+                    "backup_path": backup_file.to_string_lossy(),
+                    "target_path": target_rel.to_string_lossy(),
+                })
+                .to_string();
+                let _ = conn.execute(
+                    "INSERT INTO audit_events (event_id, event_type, details_json, created_at) VALUES (?1, ?2, ?3, ?4)",
+                    rusqlite::params![event_id, "patch_rolled_back", payload, now],
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Lists all registered tenant organizations from the SQLite database.
+    pub fn list_tenants(database: &Path) -> Result<Vec<TenantRecord>, LocalWorkspaceError> {
+        use LocalWorkspaceErrorKind as Kind;
+        let conn = rusqlite::Connection::open(database)
+            .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?;
+
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS tenants (
+                tenant_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT,
+                default_workspace TEXT,
+                isolation_level TEXT DEFAULT 'multi_tenant_isolated',
+                created_at TEXT NOT NULL
+            );",
+        )
+        .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?;
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM tenants", [], |r| r.get(0))
+            .unwrap_or(0);
+
+        if count == 0 {
+            let now = TimestampUtc::now().to_string();
+            let _ = conn.execute(
+                "INSERT INTO tenants (tenant_id, name, description, default_workspace, isolation_level, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                rusqlite::params!["sentra-internal", "Sentra Core (Internal)", "Core platform codebase and internal services", ".", "single_operator", now],
+            );
+            let _ = conn.execute(
+                "INSERT INTO tenants (tenant_id, name, description, default_workspace, isolation_level, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                rusqlite::params!["tenant-alpha", "Tenant Alpha (Isolated)", "Isolated client cloud infrastructure", "apps/tenant-alpha", "multi_tenant_isolated", now],
+            );
+            let _ = conn.execute(
+                "INSERT INTO tenants (tenant_id, name, description, default_workspace, isolation_level, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                rusqlite::params!["acme-corp", "Acme Corp (Enterprise)", "Acme Enterprise fintech & payment pipelines", "apps/acme-corp", "multi_tenant_isolated", now],
+            );
+        }
+
+        let mut stmt = conn
+            .prepare("SELECT tenant_id, name, description, default_workspace, isolation_level, created_at FROM tenants ORDER BY created_at ASC")
+            .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?;
+
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(TenantRecord {
+                    tenant_id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
+                    default_workspace: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
+                    isolation_level: row
+                        .get::<_, Option<String>>(4)?
+                        .unwrap_or_else(|| "multi_tenant_isolated".to_string()),
+                    created_at: row.get(5)?,
+                })
+            })
+            .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?;
+
+        let mut tenants = Vec::new();
+        for r in rows {
+            if let Ok(t) = r {
+                tenants.push(t);
+            }
+        }
+        Ok(tenants)
+    }
+
+    /// Registers a new tenant organization into the SQLite database.
+    pub fn add_tenant(
+        database: &Path,
+        id: &str,
+        name: &str,
+        description: Option<&str>,
+        default_workspace: Option<&str>,
+        isolation_level: Option<&str>,
+    ) -> Result<TenantRecord, LocalWorkspaceError> {
+        use LocalWorkspaceErrorKind as Kind;
+        let _valid_id = crate::dashboard::TenantId::new(id)
+            .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
+
+        if name.trim().is_empty() {
+            return Err(LocalWorkspaceError::new(Kind::Workspace));
+        }
+
+        let conn = rusqlite::Connection::open(database)
+            .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?;
+
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS tenants (
+                tenant_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT,
+                default_workspace TEXT,
+                isolation_level TEXT DEFAULT 'multi_tenant_isolated',
+                created_at TEXT NOT NULL
+            );",
+        )
+        .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?;
+
+        let clean_id = id.trim().to_lowercase();
+        let exists: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tenants WHERE tenant_id = ?1",
+                [&clean_id],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
+        if exists > 0 {
+            return Err(LocalWorkspaceError::new(Kind::Workspace));
+        }
+
+        let now = TimestampUtc::now().to_string();
+        let clean_name = name.trim().to_string();
+        let clean_desc = description.unwrap_or("").trim().to_string();
+        let clean_ws = default_workspace.unwrap_or(".").trim().to_string();
+        let clean_iso = if isolation_level == Some("single_operator") {
+            "single_operator"
+        } else {
+            "multi_tenant_isolated"
+        }
+        .to_string();
+
+        conn.execute(
+            "INSERT INTO tenants (tenant_id, name, description, default_workspace, isolation_level, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![clean_id, clean_name, clean_desc, clean_ws, clean_iso, now],
+        )
+        .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?;
+
+        Ok(TenantRecord {
+            tenant_id: clean_id,
+            name: clean_name,
+            description: clean_desc,
+            default_workspace: clean_ws,
+            isolation_level: clean_iso,
+            created_at: now,
+        })
+    }
+
+    /// Reads system settings or configuration keys from the database.
+    pub fn get_config(
+        database: &Path,
+        key: Option<&str>,
+    ) -> Result<Vec<(String, String)>, LocalWorkspaceError> {
+        use LocalWorkspaceErrorKind as Kind;
+        let conn = rusqlite::Connection::open(database)
+            .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?;
+
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );",
+        )
+        .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?;
+
+        let mut results = Vec::new();
+        if let Some(k) = key {
+            let mut stmt = conn
+                .prepare("SELECT key, value FROM system_settings WHERE key = ?1")
+                .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?;
+            let mut rows = stmt
+                .query([k])
+                .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?;
+            while let Some(row) = rows
+                .next()
+                .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?
+            {
+                results.push((
+                    row.get(0).unwrap_or_default(),
+                    row.get(1).unwrap_or_default(),
+                ));
+            }
+        } else {
+            let mut stmt = conn
+                .prepare("SELECT key, value FROM system_settings ORDER BY key ASC")
+                .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?;
+            let mut rows = stmt
+                .query([])
+                .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?;
+            while let Some(row) = rows
+                .next()
+                .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?
+            {
+                results.push((
+                    row.get(0).unwrap_or_default(),
+                    row.get(1).unwrap_or_default(),
+                ));
+            }
+        }
+        Ok(results)
+    }
+
+    /// Sets or updates a system configuration key-value pair in the database.
+    pub fn set_config(
+        database: &Path,
+        key: &str,
+        value: &str,
+    ) -> Result<(), LocalWorkspaceError> {
+        use LocalWorkspaceErrorKind as Kind;
+        if key.trim().is_empty() {
+            return Err(LocalWorkspaceError::new(Kind::Workspace));
+        }
+        let conn = rusqlite::Connection::open(database)
+            .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?;
+
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );",
+        )
+        .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?;
+
+        let now = TimestampUtc::now().to_string();
+        conn.execute(
+            "INSERT INTO system_settings (key, value, updated_at) VALUES (?1, ?2, ?3)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+            rusqlite::params![key.trim(), value, now],
+        )
+        .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?;
+
+        Ok(())
+    }
+
+    /// Returns a pre-configured local development worker fleet manager.
+    pub fn fleet_manager() -> crate::fleet::WorkerFleetManager {
+        crate::fleet::WorkerFleetManager::new_local_development()
     }
 
     fn run(
