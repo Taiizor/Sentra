@@ -6,7 +6,7 @@ Date: 2026-11-08. Status: **Implemented and empirically verified via Docker cont
 
 ## 1. Executive Summary
 
-Continuing the product-focused Phase 1 roadmap ([DEVELOPMENT_DIRECTION_REVIEW.md](../../DEVELOPMENT_DIRECTION_REVIEW.md), [ROADMAP.md](../../ROADMAP.md)), Increment 2.1 implements **Input Manifests and Source Content Hashing** (`REQ-F01/F02`, `DG-4`, `OQ-24`).
+Continuing the product-focused Phase 1 roadmap ([DEVELOPMENT_DIRECTION_REVIEW.md](DEVELOPMENT_DIRECTION_REVIEW.md), [ROADMAP.md](../../ROADMAP.md)), Increment 2.1 implements **Input Manifests and Source Content Hashing** (`REQ-F01/F02`, `DG-4`, `OQ-24`).
 
 This increment establishes:
 
@@ -30,7 +30,7 @@ This increment establishes:
 
 ### Architectural References
 - [ROADMAP.md](../../ROADMAP.md): Phase 1 Acceptance Invariant: *"Capture and freeze input manifest with source content hashing before execution"*.
-- [DEVELOPMENT_DIRECTION_REVIEW.md](../../DEVELOPMENT_DIRECTION_REVIEW.md): Refocused priorities on durable dispatch, manifest capture, and verification contracts.
+- [DEVELOPMENT_DIRECTION_REVIEW.md](DEVELOPMENT_DIRECTION_REVIEW.md): Refocused priorities on durable dispatch, manifest capture, and verification contracts.
 - [REMEDIATION_ARCHITECTURE.md](REMEDIATION_ARCHITECTURE.md): Manifest table schema and context generation fencing integration.
 - [OPEN_QUESTIONS.md](../OPEN_QUESTIONS.md): OQ-24 (Source capture determinism and path normalization).
 

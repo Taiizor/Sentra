@@ -1,7 +1,10 @@
 # Sentra — Development Direction Review & Product Refocus
 
+> [!NOTE]
+> **Archival Historical Record:** This document records the strategic direction realignment conducted during early Phase 1 (2026-11-08). For current platform status, roadmap phases, and verification records, refer to [ROADMAP.md](../../ROADMAP.md) and [docs/phase2/README.md](../phase2/README.md).
+
 **Date:** 2026-11-08  
-**Status:** **Direction Review & Strategic Realignment. Phase 1 remains NOT APPROVED. Phase 2 remains unauthorized.**  
+**Status:** **Direction Review & Strategic Realignment (Historical Milestone Record)**  
 **Authority:** Project Owner Direction Instruction (2026-11-08)  
 **Preceding Evidence:** [PHASE1_GAP_ANALYSIS.md](docs/phase1/PHASE1_GAP_ANALYSIS.md), [REMEDIATION_ARCHITECTURE.md](docs/phase1/REMEDIATION_ARCHITECTURE.md), [FILESYSTEM_CAPABILITY_CONTRACT.md](docs/phase1/FILESYSTEM_CAPABILITY_CONTRACT.md), [INCREMENT_1_4_VALIDATION.md](docs/phase1/INCREMENT_1_4_VALIDATION.md)
 

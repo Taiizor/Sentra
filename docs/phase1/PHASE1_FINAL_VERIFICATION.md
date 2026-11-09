@@ -6,7 +6,7 @@ Date: 2026-11-08. **Final decision: APPROVED.** Phase 1 Technical Validation and
 
 ## 1. Executive Summary and Closure Decision
 
-Following the strategic realignment ([DEVELOPMENT_DIRECTION_REVIEW.md](../../DEVELOPMENT_DIRECTION_REVIEW.md)) and the successful delivery of Increments 2.0 through 2.4, this assessment re-evaluates Sentra against the full Phase 1 acceptance contract established in [ROADMAP.md](../../ROADMAP.md#phase-1--technical-validation-and-local-foundation) and [REQUIREMENTS.md](../../REQUIREMENTS.md).
+Following the strategic realignment ([DEVELOPMENT_DIRECTION_REVIEW.md](DEVELOPMENT_DIRECTION_REVIEW.md)) and the successful delivery of Increments 2.0 through 2.4, this assessment re-evaluates Sentra against the full Phase 1 acceptance contract established in [ROADMAP.md](../../ROADMAP.md#phase-1--technical-validation-and-local-foundation) and [REQUIREMENTS.md](../../REQUIREMENTS.md).
 
 The previous assessment on 2026-11-07 gave a "NOT APPROVED" verdict due to specific gaps: absence of persisted session resumption, lack of a durable task/attempt outbox ledger, unverified source acquisition manifests with cryptographic content digests, missing content-addressed evidence storage, and unclosed finding `F-611-02` (interrupted initialization recovery).
 

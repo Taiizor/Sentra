@@ -6,7 +6,7 @@ Date: 2026-11-08. Status: **Implemented and empirically verified via Docker cont
 
 ## 1. Executive Summary
 
-Continuing the product-focused Phase 1 roadmap ([DEVELOPMENT_DIRECTION_REVIEW.md](../../DEVELOPMENT_DIRECTION_REVIEW.md), [ROADMAP.md](../../ROADMAP.md)), Increment 2.4 resolves security review finding **F-611-02** and formally establishes **Operator Recovery for Incomplete Initialization** (`F-611-02`, `OQ-25`, `RM-1`, `ADR-0010` Approach B).
+Continuing the product-focused Phase 1 roadmap ([DEVELOPMENT_DIRECTION_REVIEW.md](DEVELOPMENT_DIRECTION_REVIEW.md), [ROADMAP.md](../../ROADMAP.md)), Increment 2.4 resolves security review finding **F-611-02** and formally establishes **Operator Recovery for Incomplete Initialization** (`F-611-02`, `OQ-25`, `RM-1`, `ADR-0010` Approach B).
 
 ### 1.1 Problem Statement (F-611-02)
 During Phase 1 security reviews (`INDEPENDENT_SECURITY_REVIEW_BATCH_611.md`), finding `F-611-02` observed that when a bootstrap process is interrupted after database creation or schema migration but before completing session foundation setup (or leaving a session in `Created` state), subsequent executions of `sentra init` and `sentra status` correctly refuse to silently adopt or modify the incomplete store (failing closed with `Incomplete` / exit code 6). However, the system lacked an authoritative, explicit recovery mechanism for operators to repair and complete the bootstrap without wiping the database or manually manipulating SQLite state:

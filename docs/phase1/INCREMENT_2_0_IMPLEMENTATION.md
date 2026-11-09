@@ -6,7 +6,7 @@ Date: 2026-11-08. Status: **Implemented and empirically verified via Docker cont
 
 ## 1. Executive Summary
 
-Following the development direction refocus ([DEVELOPMENT_DIRECTION_REVIEW.md](../../DEVELOPMENT_DIRECTION_REVIEW.md)), Increment 2.0 resumes implementation of core Sentra product capabilities. This increment establishes:
+Following the development direction refocus ([DEVELOPMENT_DIRECTION_REVIEW.md](DEVELOPMENT_DIRECTION_REVIEW.md)), Increment 2.0 resumes implementation of core Sentra product capabilities. This increment establishes:
 
 1. **Reproducible Docker Test Infrastructure**: Pinned Linux container environment (`Dockerfile.test`, `scripts/docker-test.ps1`) providing clean, host-isolated Rust test execution. Named volume overlays (`sentra_cargo_target`, `sentra_cargo_cache`) prevent build artifacts from accumulating in the Windows host repository tree, eliminating false-positive antivirus interventions (e.g. Kaspersky) while maintaining strict read-only mounting of host source code.
 2. **SQLite Schema V2 Foundation**: Extends the SQLite persistence layer with `tasks`, `manifests`, and `attempts` tables ([schema_v2.sql](../../crates/sentra-core/src/persistence/schema_v2.sql)), introducing transactional migration from V1 ([migration.rs](../../crates/sentra-core/src/persistence/migration.rs)), foreign-key integrity, check constraints, JSON validation, and down-level / older-writer rejection (`NewerSchema`).
@@ -25,7 +25,7 @@ Following the development direction refocus ([DEVELOPMENT_DIRECTION_REVIEW.md](.
 - **Antivirus & Host Safety**: Test binaries and intermediate build artifacts do not touch the host repository `target/` directory during Docker execution.
 
 ### Architectural References
-- [DEVELOPMENT_DIRECTION_REVIEW.md](../../DEVELOPMENT_DIRECTION_REVIEW.md): Direction correction refocusing effort on product persistence and session continuation.
+- [DEVELOPMENT_DIRECTION_REVIEW.md](DEVELOPMENT_DIRECTION_REVIEW.md): Direction correction refocusing effort on product persistence and session continuation.
 - [REMEDIATION_ARCHITECTURE.md](REMEDIATION_ARCHITECTURE.md): Durable outbox, task lifecycle, and session resumption architecture.
 - [ROADMAP.md](../../ROADMAP.md): Phase 1 acceptance requirement: *"Persist and resume a session; interrupt at task dispatch, blob promotion, and result commit; show no lost committed events and no repeated sensitive side effects."*
 - [OPEN_QUESTIONS.md](../OPEN_QUESTIONS.md): OQ-09 (SQLite crash durability), OQ-23 (Approval & context generation fencing), OQ-25 (Project identity & session recovery).

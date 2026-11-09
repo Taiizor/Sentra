@@ -6,7 +6,7 @@ Date: 2026-11-08. Status: **Implemented and empirically verified via Docker cont
 
 ## 1. Executive Summary
 
-Continuing the product-focused Phase 1 roadmap ([DEVELOPMENT_DIRECTION_REVIEW.md](../../DEVELOPMENT_DIRECTION_REVIEW.md), [ROADMAP.md](../../ROADMAP.md)), Increment 2.3 implements **Result Admission and Settlement** (`RM-3`, `F-14`, `R1–R7`).
+Continuing the product-focused Phase 1 roadmap ([DEVELOPMENT_DIRECTION_REVIEW.md](DEVELOPMENT_DIRECTION_REVIEW.md), [ROADMAP.md](../../ROADMAP.md)), Increment 2.3 implements **Result Admission and Settlement** (`RM-3`, `F-14`, `R1–R7`).
 
 Following the completion of Increment 2.0 (Schema V2 and continuation state machine), Increment 2.1 (Input manifests and SHA-256 content hashing), and Increment 2.2 (Bounded evidence storage and CAS `BlobStore`), Increment 2.3 bridges execution attempts with authoritative task state and budget settlement:
 
