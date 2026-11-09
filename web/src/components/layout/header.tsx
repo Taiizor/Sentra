@@ -5,7 +5,6 @@ import {
   Code2,
   Plus,
   FileText,
-  Settings,
   Menu,
   MoreVertical,
   ChevronDown,
@@ -35,7 +34,6 @@ interface HeaderProps {
   tenants: TenantView[]
   onTenantChange: (tenant: TenantId) => void
   onOpenAddTenant: () => void
-  onOpenSettings: () => void
   onExportReport: () => void
   currentRole: UserRole
   onRoleChange: (role: UserRole) => void
@@ -52,7 +50,6 @@ export function Header({
   tenants,
   onTenantChange,
   onOpenAddTenant,
-  onOpenSettings,
   onExportReport,
   currentRole,
   onRoleChange,
@@ -277,28 +274,9 @@ export function Header({
                   <Plus className="size-3.5 text-primary" />
                   Register New Tenant...
                 </DropdownMenuItem>
-                <DropdownMenuSeparator className="my-1.5 border-zinc-800" />
-                <DropdownMenuItem
-                  onClick={onOpenSettings}
-                  className="cursor-pointer text-xs flex items-center gap-2 py-1.5 px-2 hover:bg-zinc-900 rounded"
-                >
-                  <Settings className="size-3.5 text-zinc-400" />
-                  Platform Settings & AI Models
-                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-
-          {/* Desktop Platform Settings Button (lg:flex) */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onOpenSettings}
-            title="Platform Settings & AI Model Providers"
-            className="hidden lg:flex size-8 p-0 border-zinc-800 bg-zinc-900/60 text-zinc-300 hover:text-zinc-100 shrink-0"
-          >
-            <Settings className="size-3.5" />
-          </Button>
         </div>
       </div>
     </header>
