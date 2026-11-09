@@ -2,21 +2,21 @@ import { useState, useEffect, useMemo } from 'react'
 import {
   Brain,
   ShieldCheck,
-  AlertTriangle,
-  Coins,
   Play,
   RotateCw,
   Search,
   CheckCircle2,
   Clock,
-  ExternalLink,
   Layers,
   FileCheck2,
-  Filter,
   Sparkles,
-  ChevronRight,
   ShieldAlert,
   Flame,
+  Coins,
+  X,
+  FilterX,
+  Code2,
+  FolderGit2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
@@ -24,6 +24,13 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Table,
   TableBody,
@@ -107,15 +114,15 @@ const STATUS_BADGES: Record<
   },
 }
 
-export function ResearchTab({ campaigns, currentRole }: ResearchTabProps) {
+export function ResearchTab({ campaigns: _campaigns, currentRole }: ResearchTabProps) {
   const [report, setReport] = useState<CoverageLedgerReport | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [_isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<'ALL' | LedgerStatus>('ALL')
   const [isValidating, setIsValidating] = useState(false)
   const [selectedUnit, setSelectedUnit] = useState<CoverageLedgerUnit | null>(null)
-  
-  // Phase 1 Reconnaissance and Topology States
+
+  // Sub-views: 4D Matrix, Fast Topology, Phase 1 Recon
   const [activeView, setActiveView] = useState<'matrix' | 'topology' | 'recon'>('matrix')
   const [topologyReport, setTopologyReport] = useState<ReconTopologyReport | null>(null)
   const [reconReport, setReconReport] = useState<Phase1ReconReport | null>(null)
@@ -150,8 +157,9 @@ export function ResearchTab({ campaigns, currentRole }: ResearchTabProps) {
           description: `Synthesized architecture boundary map with ${data.derivedUnitsCount} derived canonical units.`,
         })
       }
-    } catch (err: any) {
-      toast.error('Reconnaissance Error', { description: err.message })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      toast.error('Reconnaissance Error', { description: msg })
     } finally {
       setIsRunningRecon(false)
     }
@@ -175,7 +183,7 @@ export function ResearchTab({ campaigns, currentRole }: ResearchTabProps) {
     }
     const success = await setAuditProfile(newProfile)
     if (success) {
-      toast.success(`Audit Run Profile Switched to ${newProfile.toUpperCase()}`, {
+      toast.success(`Audit Profile Switched: ${newProfile.toUpperCase()}`, {
         description:
           newProfile === 'quick'
             ? 'Coarsened ledger units with single-wave hunter and deferred critic.'
@@ -192,8 +200,8 @@ export function ResearchTab({ campaigns, currentRole }: ResearchTabProps) {
     const result = await validateLedgerInvariants()
     setIsValidating(false)
     if (result && result.valid) {
-      toast.success('Coverage Ledger Invariants Validated (100% Sound)', {
-        description: `Verified ${result.checkedUnits} canonical units across 4 dimensions. Zero schema or transition violations.`,
+      toast.success('Ledger Invariants Validated (100% Sound)', {
+        description: `Verified ${result.checkedUnits} canonical units across 4 dimensions. Zero violations.`,
       })
     } else {
       toast.error('Ledger Validation Warning', {
@@ -220,12 +228,14 @@ export function ResearchTab({ campaigns, currentRole }: ResearchTabProps) {
 
   const filteredUnits = useMemo(() => {
     if (!report?.units) return []
+    const q = searchTerm.trim().toLowerCase()
     return report.units.filter((u) => {
       const matchSearch =
-        u.coverageId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        u.attackClass.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        u.subsystem.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        u.surface.toLowerCase().includes(searchTerm.toLowerCase())
+        !q ||
+        u.coverageId.toLowerCase().includes(q) ||
+        u.attackClass.toLowerCase().includes(q) ||
+        u.subsystem.toLowerCase().includes(q) ||
+        u.surface.toLowerCase().includes(q)
 
       const matchStatus = statusFilter === 'ALL' || u.status === statusFilter
       return matchSearch && matchStatus
@@ -237,41 +247,38 @@ export function ResearchTab({ campaigns, currentRole }: ResearchTabProps) {
     : 0
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Cloudflare Audit Specification Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-5">
+    <div className="flex flex-col gap-5">
+      {/* Sleek Page Header */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-2 border-b border-border/40">
         <div className="flex flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="size-8 rounded-lg bg-primary/10 border border-primary/20 text-primary flex items-center justify-center font-bold">
-              <Brain className="size-4" />
-            </div>
-            <h2 className="text-lg font-bold text-zinc-100 flex items-center gap-2">
-              Autonomous Deep Research &amp; Coverage Ledger
+          <div className="flex items-center gap-2">
+            <Brain className="size-4 text-purple-400" />
+            <h2 className="text-base font-semibold tracking-tight text-foreground">
+              Autonomous Deep Research & Coverage Ledger
             </h2>
-            <Badge variant="outline" className="font-mono text-xs border-primary/30 text-primary">
-              Cloudflare 6-Phase Standard
+            <Badge variant="outline" className="text-[11px] px-2 py-0 border-purple-500/30 text-purple-400 bg-purple-500/5">
+              Cloudflare 6-Phase
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground">
-            Deterministic 4-dimensional security audit matrix (<code className="font-mono">Surface × Boundary × Subsystem × Attack Class</code>).
-            Zero false claims: untracked areas remain planned; no single pass implies full safety.
+            Deterministic 4D security audit matrix (<span className="font-mono text-foreground/80">Surface × Boundary × Subsystem × Attack Class</span>).
           </p>
         </div>
 
         {/* Profile Selector & Wave Controls */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Run Profile Group */}
-          <div className="flex items-center p-1 rounded-lg border border-zinc-800 bg-zinc-950 text-xs">
-            <span className="text-[11px] text-zinc-400 font-semibold px-2">Profile:</span>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {/* Profile Segmented Group */}
+          <div className="flex items-center bg-card/80 border border-border/70 rounded-md p-0.5 text-xs">
+            <span className="text-[11px] text-muted-foreground font-medium px-2 hidden sm:inline">Profile:</span>
             {(['quick', 'standard', 'deep'] as AuditProfile[]).map((p) => (
               <button
                 key={p}
                 type="button"
                 onClick={() => handleProfileChange(p)}
-                className={`px-2.5 py-1 rounded-md text-xs font-semibold capitalize transition-colors ${
+                className={`px-2 py-0.5 rounded text-xs font-medium capitalize transition-colors ${
                   report?.profile === p
-                    ? 'bg-zinc-800 text-zinc-100 font-bold shadow-xs'
-                    : 'text-zinc-400 hover:text-zinc-200'
+                    ? 'bg-primary text-primary-foreground shadow-xs font-semibold'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {p}
@@ -284,69 +291,89 @@ export function ResearchTab({ campaigns, currentRole }: ResearchTabProps) {
             size="sm"
             onClick={handleValidateLedger}
             disabled={isValidating}
-            className="h-8 text-xs border-primary/40 text-primary bg-primary/5 hover:bg-primary/15 font-semibold"
+            className="h-7 text-xs border-border/80 text-foreground hover:bg-accent font-medium gap-1.5"
           >
-            <ShieldCheck className="size-3.5 mr-1.5" />
-            Validate Invariants
+            <ShieldCheck className="size-3.5 text-primary" />
+            <span>Validate Invariants</span>
           </Button>
 
           <Button
             size="sm"
             onClick={handleRunWave}
-            className="h-8 text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90"
+            disabled={currentRole === 'Viewer'}
+            className="h-7 text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5"
           >
-            <Play className="size-3 mr-1.5" />
-            Dispatch Wave 3
+            <Play className="size-3" />
+            <span>Dispatch Wave 3</span>
           </Button>
         </div>
       </div>
 
-      {/* 3-Way Sub-Navigation: Matrix, Fast Topology, Phase 1 Recon */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800 pb-3">
-        <Button
-          variant={activeView === 'matrix' ? 'default' : 'outline'}
-          size="sm"
-          className="h-8 text-xs font-semibold rounded-lg"
+      {/* 3-Way Sub-Navigation Tabs */}
+      <div className="flex items-center gap-1.5 bg-card/60 border border-border/60 rounded-lg p-1 w-fit">
+        <button
           onClick={() => setActiveView('matrix')}
+          className={`h-7 px-3 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
+            activeView === 'matrix'
+              ? 'bg-primary text-primary-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
+          }`}
         >
-          <Layers className="size-3.5 mr-1.5" />
-          4D Coverage Ledger ({report?.units.length || 0})
-        </Button>
-        <Button
-          variant={activeView === 'topology' ? 'default' : 'outline'}
-          size="sm"
-          className="h-8 text-xs font-semibold rounded-lg border-zinc-750"
+          <Layers className="size-3.5" />
+          <span>4D Coverage Ledger</span>
+          <span className={`text-[10px] px-1 rounded-full font-mono ${
+            activeView === 'matrix' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-muted-foreground'
+          }`}>
+            {report?.units.length || 0}
+          </span>
+        </button>
+
+        <button
           onClick={() => {
             setActiveView('topology')
             loadTopology()
           }}
+          className={`h-7 px-3 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
+            activeView === 'topology'
+              ? 'bg-primary text-primary-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
+          }`}
         >
-          <FileCheck2 className="size-3.5 mr-1.5 text-sky-400" />
-          Fast Topology Map (LLM-Free)
-        </Button>
-        <Button
-          variant={activeView === 'recon' ? 'default' : 'outline'}
-          size="sm"
-          className="h-8 text-xs font-semibold rounded-lg border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+          <FileCheck2 className="size-3.5" />
+          <span>Fast Topology Map</span>
+          <span className="text-[10px] px-1 rounded-full bg-sky-500/10 text-sky-400 font-mono">
+            Zero-LLM
+          </span>
+        </button>
+
+        <button
           onClick={() => setActiveView('recon')}
+          className={`h-7 px-3 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
+            activeView === 'recon'
+              ? 'bg-primary text-primary-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
+          }`}
         >
-          <Sparkles className="size-3.5 mr-1.5 text-amber-400" />
-          Phase 1: 4-Agent Recon (LLM-Assisted)
-        </Button>
+          <Sparkles className="size-3.5" />
+          <span>Phase 1 Recon</span>
+          <span className="text-[10px] px-1 rounded-full bg-amber-500/10 text-amber-400 font-mono">
+            4-Agent
+          </span>
+        </button>
       </div>
 
       {/* ================================================================= */}
-      {/* VIEW 1: LLM-FREE FAST TOPOLOGY MAP */}
+      {/* VIEW 1: FAST STATIC TOPOLOGY MAP (ZERO-LLM) */}
       {/* ================================================================= */}
       {activeView === 'topology' && (
-        <div className="flex flex-col gap-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
-                <FileCheck2 className="size-4 text-sky-400" />
+              <h3 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <FileCheck2 className="size-3.5 text-sky-400" />
                 Deterministic Workspace Static Topology (Zero-LLM Fast Mapper)
               </h3>
-              <p className="text-xs text-zinc-400 mt-0.5">
+              <p className="text-[11px] text-muted-foreground mt-0.5">
                 Computed via pure-Rust AST directory traversal in &lt;100ms. Invariant baseline for hunting assignments.
               </p>
             </div>
@@ -355,41 +382,41 @@ export function ResearchTab({ campaigns, currentRole }: ResearchTabProps) {
               size="sm"
               onClick={loadTopology}
               disabled={isLoadingTopology}
-              className="h-7 text-xs border-zinc-800 bg-zinc-900"
+              className="h-7 text-xs border-border/80 self-start sm:self-auto gap-1.5"
             >
-              <RotateCw className={`size-3 mr-1 ${isLoadingTopology ? 'animate-spin' : ''}`} />
-              Refresh
+              <RotateCw className={`size-3 ${isLoadingTopology ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
             </Button>
           </div>
 
           {/* Subsystems & Trust Boundaries */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
             {topologyReport?.subsystems.map((sub) => (
-              <Card key={sub.name} className="border-zinc-800 bg-zinc-950/70 shadow-sm">
-                <CardHeader className="pb-2 pt-3 px-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <Badge variant="outline" className="text-[10px] font-mono">
+              <Card key={sub.name} className="border-border/60 bg-card/40 shadow-xs">
+                <CardHeader className="p-3 pb-2">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0">
                       {sub.language}
                     </Badge>
                     <Badge
                       variant={sub.trustLevel === 'untrusted_input' ? 'destructive' : 'secondary'}
-                      className="text-[10px] font-mono uppercase"
+                      className="text-[10px] font-mono uppercase px-1.5 py-0"
                     >
                       {sub.trustLevel.replace('_', ' ')}
                     </Badge>
                   </div>
-                  <CardTitle className="text-xs font-bold font-mono text-zinc-200 mt-2">
+                  <CardTitle className="text-xs font-bold font-mono text-foreground mt-2">
                     {sub.name}
                   </CardTitle>
-                  <CardDescription className="text-[11px] font-mono text-zinc-400">
+                  <CardDescription className="text-[11px] font-mono text-muted-foreground truncate">
                     {sub.path}
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="px-4 pb-3">
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+                <CardContent className="p-3 pt-0">
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1">
                     Source Controls:
                   </span>
-                  <ul className="list-disc list-inside text-[11px] text-zinc-300 space-y-0.5">
+                  <ul className="list-disc list-inside text-[11px] text-muted-foreground space-y-0.5">
                     {sub.controls.map((c, i) => (
                       <li key={i} className="truncate">{c}</li>
                     ))}
@@ -400,38 +427,46 @@ export function ResearchTab({ campaigns, currentRole }: ResearchTabProps) {
           </div>
 
           {/* Entrypoints Table */}
-          <Card className="border-zinc-800 bg-zinc-950/60 shadow-md">
-            <CardHeader className="py-3 px-5 border-b border-zinc-800">
-              <CardTitle className="text-xs font-semibold text-zinc-200 flex items-center justify-between">
-                <span>Identified Entry Surfaces &amp; Execution Gates ({topologyReport?.entrypoints.length || 0})</span>
-                <span className="text-[11px] font-mono text-zinc-400 font-normal">Deterministic Static Inventory</span>
-              </CardTitle>
+          <Card className="border-border/60 bg-card/40">
+            <CardHeader className="py-2.5 px-4 border-b border-border/40">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-xs font-medium text-foreground">
+                  Identified Entry Surfaces ({topologyReport?.entrypoints.length || 0})
+                </CardTitle>
+                <span className="text-[11px] font-mono text-muted-foreground">
+                  Deterministic Static Inventory
+                </span>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <Table>
-                  <TableHeader className="bg-zinc-900/60 text-xs">
-                    <TableRow className="border-zinc-800 hover:bg-transparent">
-                      <TableHead className="text-zinc-400">Type</TableHead>
-                      <TableHead className="text-zinc-400">Surface</TableHead>
-                      <TableHead className="text-zinc-400">Location</TableHead>
-                      <TableHead className="text-zinc-400">Handler Scope</TableHead>
-                      <TableHead className="text-zinc-400 text-right">Auth Required</TableHead>
+                  <TableHeader>
+                    <TableRow className="border-border/40 hover:bg-transparent">
+                      <TableHead className="text-xs font-medium h-8">Type</TableHead>
+                      <TableHead className="text-xs font-medium h-8">Surface</TableHead>
+                      <TableHead className="text-xs font-medium h-8">Location</TableHead>
+                      <TableHead className="text-xs font-medium h-8">Handler Scope</TableHead>
+                      <TableHead className="text-xs font-medium h-8 text-right pr-4">Auth Required</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody className="text-xs font-mono">
                     {topologyReport?.entrypoints.map((ep, i) => (
-                      <TableRow key={i} className="hover:bg-zinc-900/40 border-zinc-800/60">
-                        <TableCell>
-                          <Badge variant="outline" className="text-[10px] font-mono">
+                      <TableRow key={i} className="border-border/40 hover:bg-muted/30">
+                        <TableCell className="py-2">
+                          <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0">
                             {ep.type}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-zinc-300">{ep.surface}</TableCell>
-                        <TableCell className="text-zinc-400">{ep.path}:{ep.line}</TableCell>
-                        <TableCell className="text-primary truncate max-w-[280px]">{ep.handler}</TableCell>
-                        <TableCell className="text-right">
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${ep.authRequired ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
+                        <TableCell className="text-foreground/90 py-2">{ep.surface}</TableCell>
+                        <TableCell className="text-muted-foreground py-2">{ep.path}:{ep.line}</TableCell>
+                        <TableCell className="text-sky-400 truncate max-w-[280px] py-2">{ep.handler}</TableCell>
+                        <TableCell className="text-right py-2 pr-4">
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                            ep.authRequired
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                              : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                          }`}>
                             {ep.authRequired ? 'ENFORCED' : 'UNAUTHENTICATED'}
                           </span>
                         </TableCell>
@@ -444,28 +479,28 @@ export function ResearchTab({ campaigns, currentRole }: ResearchTabProps) {
           </Card>
 
           {/* Testability & Prohibited Actions */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/40 flex flex-col gap-2">
-              <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="p-3 rounded-lg border border-border/60 bg-card/40 flex flex-col gap-2">
+              <span className="text-xs font-semibold text-foreground uppercase tracking-wider flex items-center gap-1.5">
                 <CheckCircle2 className="size-3.5 text-emerald-400" />
                 Validated Offline Test Commands
               </span>
-              <ul className="space-y-1 text-xs font-mono text-emerald-300/90">
+              <ul className="space-y-1 text-xs font-mono text-emerald-400/90">
                 {topologyReport?.offlineTestCommands.map((cmd, i) => (
-                  <li key={i} className="bg-zinc-950 p-2 rounded border border-zinc-800/80">
+                  <li key={i} className="bg-background/60 p-2 rounded border border-border/50">
                     $ {cmd}
                   </li>
                 ))}
               </ul>
             </div>
-            <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/40 flex flex-col gap-2">
-              <span className="text-xs font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
+            <div className="p-3 rounded-lg border border-border/60 bg-card/40 flex flex-col gap-2">
+              <span className="text-xs font-semibold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
                 <ShieldAlert className="size-3.5" />
                 Permanently Prohibited Actions (Fail-Closed)
               </span>
-              <ul className="space-y-1 text-xs text-zinc-400">
+              <ul className="space-y-1 text-xs text-muted-foreground">
                 {topologyReport?.prohibitedActions.map((act, i) => (
-                  <li key={i} className="bg-zinc-950 p-2 rounded border border-zinc-800/80 flex items-center gap-2">
+                  <li key={i} className="bg-background/60 p-2 rounded border border-border/50 flex items-center gap-2">
                     <span className="text-rose-400 font-bold">✕</span> {act}
                   </li>
                 ))}
@@ -476,33 +511,33 @@ export function ResearchTab({ campaigns, currentRole }: ResearchTabProps) {
       )}
 
       {/* ================================================================= */}
-      {/* VIEW 2: LLM-ASSISTED PHASE 1 RECONNAISSANCE ENGINE */}
+      {/* VIEW 2: 4-AGENT RECONNAISSANCE ENGINE */}
       {/* ================================================================= */}
       {activeView === 'recon' && (
-        <div className="flex flex-col gap-5">
-          <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
-                <Sparkles className="size-4 text-amber-400" />
+              <h3 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Sparkles className="size-3.5 text-amber-400" />
                 Cloudflare Phase 1: 4-Agent Autonomous Reconnaissance Engine
               </h3>
-              <p className="text-xs text-zinc-400 mt-0.5">
+              <p className="text-[11px] text-muted-foreground mt-0.5">
                 Spawns 4 specialized read-only research agents to build source-grounded trust boundaries and architecture map.
               </p>
             </div>
             <Button
               size="sm"
               onClick={handleRunPhase1Recon}
-              disabled={isRunningRecon}
-              className="h-8 text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-zinc-950 shadow-md"
+              disabled={isRunningRecon || currentRole === 'Viewer'}
+              className="h-7 text-xs font-medium bg-amber-500 hover:bg-amber-600 text-zinc-950 gap-1.5 self-start sm:self-auto"
             >
-              <Sparkles className={`size-3.5 mr-1.5 ${isRunningRecon ? 'animate-spin' : ''}`} />
-              {isRunningRecon ? '4 Agents Reconnoitering...' : 'Run Phase 1 Recon'}
+              <Sparkles className={`size-3 ${isRunningRecon ? 'animate-spin' : ''}`} />
+              <span>{isRunningRecon ? 'Reconnoitering...' : 'Run Phase 1 Recon'}</span>
             </Button>
           </div>
 
           {/* 4 Agent Output Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {(reconReport?.agents || [
               {
                 agentId: '1a_product_stack' as const,
@@ -533,22 +568,22 @@ export function ResearchTab({ campaigns, currentRole }: ResearchTabProps) {
                 sourceRefs: ['crates/sentra-core/src/backend/fail_closed.rs'],
               },
             ]).map((agent) => (
-              <div key={agent.agentId} className="p-4 rounded-xl border border-zinc-800 bg-zinc-950/80 shadow-sm flex flex-col gap-2">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+              <div key={agent.agentId} className="p-3 rounded-lg border border-border/60 bg-card/40 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
                     <Brain className="size-3.5 text-amber-400" />
                     {agent.agentName}
                   </span>
-                  <Badge variant="outline" className="text-[10px] font-mono border-amber-500/30 text-amber-300">
+                  <Badge variant="outline" className="text-[10px] font-mono border-amber-500/30 text-amber-300 px-1.5 py-0">
                     {agent.findingsCount} Facts Mapped
                   </Badge>
                 </div>
-                <p className="text-xs text-zinc-300 leading-relaxed">
+                <p className="text-xs text-muted-foreground leading-relaxed">
                   {agent.summary}
                 </p>
                 <div className="flex flex-wrap gap-1 mt-1">
                   {agent.sourceRefs.map((ref, idx) => (
-                    <span key={idx} className="text-[10px] font-mono bg-zinc-900 border border-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded">
+                    <span key={idx} className="text-[10px] font-mono bg-background/60 border border-border/50 text-muted-foreground px-1.5 py-0.5 rounded">
                       {ref}
                     </span>
                   ))}
@@ -559,13 +594,13 @@ export function ResearchTab({ campaigns, currentRole }: ResearchTabProps) {
 
           {/* Synthesized Architecture Boundary Map */}
           {reconReport?.architectureSummaryMd && (
-            <Card className="border-zinc-800 bg-zinc-950/80 shadow-md">
-              <CardHeader className="py-3 px-5 border-b border-zinc-800 flex flex-row items-center justify-between">
+            <Card className="border-border/60 bg-card/40">
+              <CardHeader className="py-2.5 px-4 border-b border-border/40 flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle className="text-xs font-bold text-zinc-200">
+                  <CardTitle className="text-xs font-semibold text-foreground">
                     Synthesized Architecture Boundary Map (&lt;1,000 Words Cap)
                   </CardTitle>
-                  <CardDescription className="text-[11px] font-mono text-zinc-400">
+                  <CardDescription className="text-[11px] font-mono text-muted-foreground">
                     Saved to docs/architecture-recon.md • Mapped to {reconReport.derivedUnitsCount} Canonical Ledger Units
                   </CardDescription>
                 </div>
@@ -573,7 +608,7 @@ export function ResearchTab({ campaigns, currentRole }: ResearchTabProps) {
                   RECON PHASE 1 COMPLETE
                 </Badge>
               </CardHeader>
-              <CardContent className="p-5 font-mono text-xs text-zinc-300 leading-relaxed overflow-x-auto whitespace-pre-wrap bg-zinc-900/50">
+              <CardContent className="p-4 font-mono text-xs text-muted-foreground leading-relaxed overflow-x-auto whitespace-pre-wrap bg-background/40">
                 {reconReport.architectureSummaryMd}
               </CardContent>
             </Card>
@@ -586,246 +621,371 @@ export function ResearchTab({ campaigns, currentRole }: ResearchTabProps) {
       {/* ================================================================= */}
       {activeView === 'matrix' && (
         <>
-          {/* Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Ledger Units */}
-        <Card className="border-zinc-800 bg-zinc-950/60 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-medium text-zinc-400">Total Canonical Units</CardTitle>
-            <Layers className="size-4 text-cyan-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold font-mono text-zinc-100">
-              {report?.stats.totalUnits || 0}
-            </div>
-            <p className="text-[11px] text-zinc-400 mt-1">
-              Deterministic 4D matrix cells mapped
-            </p>
-          </CardContent>
-        </Card>
+          {/* KPI Metrics Row */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Total Ledger Units */}
+            <Card className="border-border/60 bg-card/40 shadow-xs">
+              <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between">
+                <CardTitle className="text-xs font-medium text-muted-foreground">Canonical Units</CardTitle>
+                <Layers className="size-3.5 text-cyan-400" />
+              </CardHeader>
+              <CardContent className="p-3 pt-0">
+                <div className="text-xl font-bold font-mono text-foreground">
+                  {report?.stats.totalUnits || 0}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  Deterministic 4D matrix cells
+                </p>
+              </CardContent>
+            </Card>
 
-        {/* Covered & Verified */}
-        <Card className="border-zinc-800 bg-zinc-950/60 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-medium text-zinc-400">Covered &amp; Verified</CardTitle>
-            <CheckCircle2 className="size-4 text-emerald-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold font-mono text-emerald-400">
-              {report?.stats.covered || 0}{' '}
-              <span className="text-xs text-zinc-400 font-normal">({coveredPercent}%)</span>
-            </div>
-            <Progress value={coveredPercent} className="h-1.5 mt-2 bg-zinc-800" />
-          </CardContent>
-        </Card>
+            {/* Covered & Verified */}
+            <Card className="border-border/60 bg-card/40 shadow-xs">
+              <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between">
+                <CardTitle className="text-xs font-medium text-muted-foreground">Covered & Verified</CardTitle>
+                <CheckCircle2 className="size-3.5 text-emerald-400" />
+              </CardHeader>
+              <CardContent className="p-3 pt-0">
+                <div className="text-xl font-bold font-mono text-emerald-400">
+                  {report?.stats.covered || 0}{' '}
+                  <span className="text-xs text-muted-foreground font-normal">({coveredPercent}%)</span>
+                </div>
+                <Progress value={coveredPercent} className="h-1 mt-1.5 bg-muted" />
+              </CardContent>
+            </Card>
 
-        {/* Candidates Under Verification */}
-        <Card className="border-zinc-800 bg-zinc-950/60 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-medium text-zinc-400">Candidates (Phase 3)</CardTitle>
-            <Flame className="size-4 text-amber-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold font-mono text-amber-400">
-              {report?.stats.candidate || 0}
-            </div>
-            <p className="text-[11px] text-zinc-400 mt-1">
-              Active boundary violation claims
-            </p>
-          </CardContent>
-        </Card>
+            {/* Candidates Under Verification */}
+            <Card className="border-border/60 bg-card/40 shadow-xs">
+              <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between">
+                <CardTitle className="text-xs font-medium text-muted-foreground">Phase 3 Candidates</CardTitle>
+                <Flame className="size-3.5 text-amber-400" />
+              </CardHeader>
+              <CardContent className="p-3 pt-0">
+                <div className="text-xl font-bold font-mono text-amber-400">
+                  {report?.stats.candidate || 0}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  Active violation claims
+                </p>
+              </CardContent>
+            </Card>
 
-        {/* Needs Validation Blockers */}
-        <Card className="border-zinc-800 bg-zinc-950/60 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-medium text-zinc-400">Needs Validation / Blocked</CardTitle>
-            <Clock className="size-4 text-purple-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold font-mono text-purple-400">
-              {(report?.stats.needsValidation || 0) + (report?.stats.blocked || 0)}
-            </div>
-            <p className="text-[11px] text-zinc-400 mt-1">
-              Blocked on runtime or host observation
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+            {/* Needs Validation Blockers */}
+            <Card className="border-border/60 bg-card/40 shadow-xs">
+              <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between">
+                <CardTitle className="text-xs font-medium text-muted-foreground">Validation Blockers</CardTitle>
+                <Clock className="size-3.5 text-purple-400" />
+              </CardHeader>
+              <CardContent className="p-3 pt-0">
+                <div className="text-xl font-bold font-mono text-purple-400">
+                  {(report?.stats.needsValidation || 0) + (report?.stats.blocked || 0)}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  Blocked on host observation
+                </p>
+              </CardContent>
+            </Card>
+          </div>
 
-      {/* Budget & Agent Reservation Bar */}
-      {report?.budget && (
-        <Card className="border-zinc-800/80 bg-zinc-900/30 shadow-xs">
-          <CardContent className="p-4 flex flex-wrap items-center justify-between gap-4 text-xs">
-            <div className="flex items-center gap-3">
-              <Coins className="size-4 text-amber-400" />
-              <div className="flex flex-col">
-                <span className="font-semibold text-zinc-200">
-                  Agent Call Budget Discipline ({report.budget.spentAgentCalls} / {report.budget.maxAgentCalls} Calls)
+          {/* Budget & Agent Reservation Bar */}
+          {report?.budget && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3 py-2 rounded-lg border border-border/60 bg-card/40 text-xs">
+              <div className="flex items-center gap-2">
+                <Coins className="size-3.5 text-amber-400 shrink-0" />
+                <span className="font-medium text-foreground">
+                  Budget Discipline: {report.budget.spentAgentCalls} / {report.budget.maxAgentCalls} Calls
                 </span>
-                <span className="text-[11px] text-zinc-400">
-                  Mandatory reserve protected before hunting waves: never scaled away.
+                <span className="text-[11px] text-muted-foreground hidden md:inline">
+                  (Mandatory reserve protected before waves)
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3 text-[11px] font-mono text-muted-foreground">
+                <span>
+                  Critics: <strong className="text-cyan-400">{report.budget.reservedCritics}</strong>
+                </span>
+                <span>•</span>
+                <span>
+                  Verifiers: <strong className="text-emerald-400">{report.budget.reservedVerifiers}</strong>
                 </span>
               </div>
             </div>
+          )}
 
-            <div className="flex items-center gap-4 text-xs font-mono">
-              <span className="text-zinc-400">
-                Reserved Critics:{' '}
-                <span className="text-cyan-400 font-bold">{report.budget.reservedCritics} Calls</span>
-              </span>
-              <span>•</span>
-              <span className="text-zinc-400">
-                Reserved Verifiers:{' '}
-                <span className="text-emerald-400 font-bold">{report.budget.reservedVerifiers} Calls</span>
-              </span>
+          {/* Unified Filter & Search Toolbar */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-card/60 border border-border/60 rounded-lg p-2.5">
+            {/* Status Filter Tabs */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+              <button
+                type="button"
+                onClick={() => setStatusFilter('ALL')}
+                className={`h-7 px-2.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 shrink-0 ${
+                  statusFilter === 'ALL'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
+                }`}
+              >
+                <span>All</span>
+                <span className={`text-[10px] px-1 py-0.2 rounded-full font-mono ${
+                  statusFilter === 'ALL' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-muted-foreground'
+                }`}>
+                  {report?.units.length || 0}
+                </span>
+              </button>
+              {(['covered', 'candidate', 'needs_validation', 'planned'] as LedgerStatus[]).map((st) => {
+                const count = report?.units.filter((u) => u.status === st).length || 0
+                const isActive = statusFilter === st
+                return (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => setStatusFilter(st)}
+                    className={`h-7 px-2.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 shrink-0 ${
+                      isActive
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
+                    }`}
+                  >
+                    <span>{STATUS_BADGES[st].label}</span>
+                    <span className={`text-[10px] px-1 py-0.2 rounded-full font-mono ${
+                      isActive ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-muted-foreground'
+                    }`}>
+                      {count}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
-          </CardContent>
-        </Card>
-      )}
 
-      {/* 4D Coverage Ledger Matrix Table */}
-      <Card className="border-zinc-800 bg-zinc-950/60 shadow-lg overflow-hidden">
-        <CardHeader className="px-6 py-4 border-b border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="relative w-64">
-              <Search className="size-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+            {/* Search Input */}
+            <div className="relative w-full md:w-72 shrink-0">
+              <Search className="size-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
               <Input
                 placeholder="Search coverage ID, subsystem..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="h-8 pl-8 text-xs bg-zinc-900 border-zinc-800 text-zinc-100 placeholder:text-zinc-500"
+                className="pl-8 pr-7 h-7 text-xs bg-background/50 border-border/60 focus-visible:ring-1"
               />
-            </div>
-
-            {/* Status Filter Badges */}
-            <div className="flex items-center gap-1 overflow-x-auto text-xs">
-              <button
-                type="button"
-                onClick={() => setStatusFilter('ALL')}
-                className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
-                  statusFilter === 'ALL'
-                    ? 'bg-zinc-800 text-zinc-100'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                All ({report?.units.length || 0})
-              </button>
-              {(['covered', 'candidate', 'needs_validation', 'planned'] as LedgerStatus[]).map((st) => (
+              {searchTerm && (
                 <button
-                  key={st}
-                  type="button"
-                  onClick={() => setStatusFilter(st)}
-                  className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
-                    statusFilter === st
-                      ? 'bg-zinc-800 text-zinc-100 font-bold'
-                      : 'text-zinc-400 hover:text-zinc-200'
-                  }`}
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded"
                 >
-                  {STATUS_BADGES[st].label} (
-                  {report?.units.filter((u) => u.status === st).length || 0})
+                  <X className="size-3" />
                 </button>
-              ))}
+              )}
             </div>
           </div>
 
-          <span className="text-xs text-zinc-400 font-mono">
-            Showing <span className="font-bold text-zinc-200">{filteredUnits.length}</span> of{' '}
-            {report?.units.length || 0} Units
-          </span>
-        </CardHeader>
+          {/* 4D Coverage Ledger Matrix Table Card */}
+          <Card className="border-border/60 bg-card/40">
+            <CardHeader className="py-2.5 px-4 border-b border-border/40">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Layers className="size-3.5 text-muted-foreground" />
+                  <CardTitle className="text-xs font-medium text-foreground">
+                    Canonical 4D Cells
+                  </CardTitle>
+                  <span className="text-[11px] text-muted-foreground">
+                    ({filteredUnits.length} of {report?.units.length || 0})
+                  </span>
+                </div>
+                <span className="text-[11px] text-muted-foreground hidden sm:inline">
+                  Click any row to inspect cell invariant
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {filteredUnits.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                  <FilterX className="size-8 text-muted-foreground/50 mb-3" />
+                  <p className="text-xs font-medium text-foreground">No matching coverage cells</p>
+                  <p className="text-[11px] text-muted-foreground mt-1 max-w-sm">
+                    No cells matched your query. Adjust search or status filter.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-4 h-7 text-xs"
+                    onClick={() => {
+                      setSearchTerm('')
+                      setStatusFilter('ALL')
+                    }}
+                  >
+                    Reset Filters
+                  </Button>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-border/40 hover:bg-transparent">
+                        <TableHead className="text-xs font-medium h-9 pl-4">Coverage Unit ID (4D)</TableHead>
+                        <TableHead className="text-xs font-medium h-9">Attack Class</TableHead>
+                        <TableHead className="text-xs font-medium h-9">Subsystem</TableHead>
+                        <TableHead className="text-xs font-medium h-9">Status</TableHead>
+                        <TableHead className="text-xs font-medium h-9">Wave & Agent</TableHead>
+                        <TableHead className="text-xs font-medium h-9">Paths</TableHead>
+                        <TableHead className="text-xs font-medium h-9 text-right pr-4">Findings</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody className="text-xs font-mono">
+                      {filteredUnits.map((unit) => {
+                        const badgeInfo = STATUS_BADGES[unit.status] || STATUS_BADGES.planned
+                        return (
+                          <TableRow
+                            key={unit.coverageId}
+                            onClick={() => setSelectedUnit(unit)}
+                            className="border-border/40 hover:bg-muted/30 cursor-pointer transition-colors"
+                          >
+                            {/* Canonical Coverage ID */}
+                            <TableCell className="font-semibold text-foreground pl-4 py-2.5">
+                              <div className="flex items-center gap-1.5">
+                                <span className="size-1.5 rounded-full bg-primary shrink-0" />
+                                <span className="truncate max-w-[280px]" title={unit.coverageId}>
+                                  {unit.coverageId}
+                                </span>
+                              </div>
+                            </TableCell>
 
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader className="bg-zinc-900/60 text-xs">
-                <TableRow className="border-zinc-800/80 hover:bg-transparent">
-                  <TableHead className="font-semibold text-zinc-400 pl-6">Coverage Unit ID (4D)</TableHead>
-                  <TableHead className="font-semibold text-zinc-400">Attack Class</TableHead>
-                  <TableHead className="font-semibold text-zinc-400">Subsystem</TableHead>
-                  <TableHead className="font-semibold text-zinc-400">Status</TableHead>
-                  <TableHead className="font-semibold text-zinc-400">Wave &amp; Agent</TableHead>
-                  <TableHead className="font-semibold text-zinc-400">Reviewed Paths</TableHead>
-                  <TableHead className="text-right font-semibold text-zinc-400 pr-6">Findings</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody className="text-xs divide-y divide-zinc-800/60 font-mono">
-                {filteredUnits.map((unit) => {
-                  const badgeInfo = STATUS_BADGES[unit.status] || STATUS_BADGES.planned
-                  return (
-                    <TableRow
-                      key={unit.coverageId}
-                      onClick={() => setSelectedUnit(unit)}
-                      className="hover:bg-zinc-900/50 cursor-pointer transition-colors"
-                    >
-                      {/* Canonical Coverage ID */}
-                      <TableCell className="font-bold text-zinc-200 pl-6">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-primary">•</span>
-                          <span className="truncate max-w-[280px]">{unit.coverageId}</span>
-                        </div>
-                      </TableCell>
+                            {/* Attack Class */}
+                            <TableCell className="py-2.5">
+                              <Badge variant="outline" className="text-[10px] font-sans px-1.5 py-0">
+                                {unit.attackClass}
+                              </Badge>
+                            </TableCell>
 
-                      {/* Attack Class */}
-                      <TableCell>
-                        <Badge variant="outline" className="text-[11px] border-zinc-700 bg-zinc-900 text-zinc-300 font-sans">
-                          {unit.attackClass}
-                        </Badge>
-                      </TableCell>
+                            {/* Subsystem */}
+                            <TableCell className="text-muted-foreground py-2.5">
+                              {unit.subsystem}
+                            </TableCell>
 
-                      {/* Subsystem */}
-                      <TableCell className="text-zinc-400">
-                        {unit.subsystem}
-                      </TableCell>
+                            {/* Status Badge */}
+                            <TableCell className="py-2.5">
+                              <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-bold border ${badgeInfo.color}`}>
+                                {badgeInfo.label}
+                              </span>
+                            </TableCell>
 
-                      {/* Status Badge */}
-                      <TableCell>
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${badgeInfo.color}`}
-                        >
-                          {badgeInfo.label}
-                        </span>
-                      </TableCell>
+                            {/* Wave & Hunter Agent */}
+                            <TableCell className="text-muted-foreground py-2.5">
+                              {unit.wave > 0 ? (
+                                <span>
+                                  W{unit.wave} {unit.agentId && <span className="text-muted-foreground/70">({unit.agentId})</span>}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground/50">—</span>
+                              )}
+                            </TableCell>
 
-                      {/* Wave & Hunter Agent */}
-                      <TableCell className="text-zinc-400">
-                        {unit.wave > 0 ? (
-                          <span>
-                            Wave {unit.wave} {unit.agentId && <span className="text-zinc-500">({unit.agentId})</span>}
-                          </span>
-                        ) : (
-                          <span className="text-zinc-600">—</span>
-                        )}
-                      </TableCell>
+                            {/* Reviewed Paths */}
+                            <TableCell className="text-muted-foreground py-2.5">
+                              {unit.reviewedPaths?.length > 0 ? (
+                                <span>{unit.reviewedPaths.length} path(s)</span>
+                              ) : (
+                                <span className="text-muted-foreground/50">0</span>
+                              )}
+                            </TableCell>
 
-                      {/* Reviewed Paths */}
-                      <TableCell className="text-zinc-400">
-                        {unit.reviewedPaths?.length > 0 ? (
-                          <span>{unit.reviewedPaths.length} path(s)</span>
-                        ) : (
-                          <span className="text-zinc-600">0</span>
-                        )}
-                      </TableCell>
-
-                      {/* Result Fingerprints */}
-                      <TableCell className="text-right pr-6 font-bold">
-                        {unit.resultFingerprints?.length > 0 ? (
-                          <span className="text-emerald-400">
-                            {unit.resultFingerprints.length} finding(s)
-                          </span>
-                        ) : (
-                          <span className="text-zinc-600">—</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-      </>
+                            {/* Result Fingerprints */}
+                            <TableCell className="text-right pr-4 font-bold py-2.5">
+                              {unit.resultFingerprints?.length > 0 ? (
+                                <span className="text-emerald-400">
+                                  {unit.resultFingerprints.length} finding(s)
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground/50">—</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
       )}
+
+      {/* Selected Unit Inspection Dialog */}
+      <Dialog open={!!selectedUnit} onOpenChange={(open) => !open && setSelectedUnit(null)}>
+        <DialogContent className="sm:max-w-xl bg-card border-border/80">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <Layers className="size-4 text-primary" />
+              <DialogTitle className="text-sm font-semibold font-mono text-foreground">
+                {selectedUnit?.coverageId}
+              </DialogTitle>
+            </div>
+            <DialogDescription className="text-xs text-muted-foreground">
+              4D Matrix canonical coordinate specification and hunting invariants.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedUnit && (
+            <div className="flex flex-col gap-3 py-2 text-xs">
+              <div className="grid grid-cols-2 gap-2 p-3 rounded-lg border border-border/60 bg-muted/20">
+                <div>
+                  <span className="text-[10px] text-muted-foreground font-semibold uppercase">Attack Class</span>
+                  <p className="font-medium text-foreground mt-0.5">{selectedUnit.attackClass}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground font-semibold uppercase">Subsystem</span>
+                  <p className="font-mono text-foreground mt-0.5">{selectedUnit.subsystem}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground font-semibold uppercase">Surface</span>
+                  <p className="font-mono text-foreground mt-0.5">{selectedUnit.surface}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground font-semibold uppercase">Status</span>
+                  <p className="mt-0.5">
+                    <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-bold border ${STATUS_BADGES[selectedUnit.status]?.color}`}>
+                      {STATUS_BADGES[selectedUnit.status]?.label}
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <span className="text-[10px] text-muted-foreground font-semibold uppercase block mb-1.5">
+                  Reviewed Paths ({selectedUnit.reviewedPaths?.length || 0}):
+                </span>
+                {selectedUnit.reviewedPaths?.length > 0 ? (
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {selectedUnit.reviewedPaths.map((p, i) => (
+                      <div key={i} className="flex items-center gap-2 font-mono text-[11px] p-1.5 rounded bg-background/60 border border-border/50 text-foreground">
+                        <FolderGit2 className="size-3 text-muted-foreground" />
+                        <span className="truncate">{p}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-[11px] italic">No paths reviewed yet for this unit.</p>
+                )}
+              </div>
+
+              {selectedUnit.resultFingerprints?.length > 0 && (
+                <div>
+                  <span className="text-[10px] text-muted-foreground font-semibold uppercase block mb-1.5">
+                    Result Fingerprints ({selectedUnit.resultFingerprints.length}):
+                  </span>
+                  <div className="space-y-1">
+                    {selectedUnit.resultFingerprints.map((fp, i) => (
+                      <div key={i} className="flex items-center gap-2 font-mono text-[11px] p-1.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                        <Code2 className="size-3" />
+                        <span className="truncate">{fp}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
