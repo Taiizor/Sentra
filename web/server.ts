@@ -159,7 +159,17 @@ const server = Bun.serve({
     if (url.pathname === "/api/scan-snippet" && req.method === "POST") {
       try {
         const body = (await req.json()) as { code: string; language?: string };
-        const ext = body.language === "rust" ? "rs" : body.language === "json" ? "json" : "ts";
+        const extMap: Record<string, string> = {
+          rust: "rs",
+          python: "py",
+          javascript: "js",
+          typescript: "ts",
+          json: "json",
+          yaml: "yaml",
+          yml: "yml",
+          text: "txt",
+        };
+        const ext = extMap[body.language || ""] || "ts";
         const tempDir = path.resolve(REPO_ROOT, "target/tmp_studio_" + Date.now());
         await fs.mkdir(tempDir, { recursive: true });
         const filePath = path.resolve(tempDir, `sample.${ext}`);
