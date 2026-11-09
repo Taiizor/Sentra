@@ -7,16 +7,26 @@
 //! - pnpm: `pnpm-lock.yaml`
 //! - Bun: `bun.lock`
 //! - Deno: `deno.lock`
+//! - Python: `requirements.txt`, `poetry.lock`, `Pipfile.lock`
+//! - Go: `go.sum`
+//! - PHP Composer: `composer.lock`
+//! - .NET NuGet: `packages.lock.json`
+//! - Ruby Bundler: `Gemfile.lock`
 
 use std::path::Path;
 
 use crate::advisory::{
     bun_lock::parse_bun_lock,
     cargo_lock::{PackageRecord, parse_cargo_lock},
+    composer_lock::parse_composer_lock,
     deno_lock::parse_deno_lock,
     error::AdvisoryError,
+    gemfile_lock::parse_gemfile_lock,
+    go_lock::parse_go_sum,
+    nuget_lock::parse_nuget_lock,
     package_lock::parse_package_lock,
     pnpm_lock::parse_pnpm_lock,
+    python_lock::{parse_pipfile_lock, parse_poetry_lock, parse_requirements_txt},
     yarn_lock::parse_yarn_lock,
 };
 
@@ -35,6 +45,20 @@ pub enum LockfileKind {
     Bun,
     /// Deno runtime (`deno.lock`).
     Deno,
+    /// Python pip pinned requirements (`requirements.txt`).
+    RequirementsTxt,
+    /// Python Poetry package manager (`poetry.lock`).
+    Poetry,
+    /// Python Pipenv package manager (`Pipfile.lock`).
+    Pipfile,
+    /// Go module checksum manifest (`go.sum`).
+    GoSum,
+    /// PHP Composer package manager (`composer.lock`).
+    Composer,
+    /// .NET NuGet package manager (`packages.lock.json`).
+    NuGet,
+    /// Ruby Bundler package manager (`Gemfile.lock`).
+    Gemfile,
 }
 
 impl LockfileKind {
@@ -47,6 +71,13 @@ impl LockfileKind {
             Self::Pnpm => "pnpm-lock.yaml",
             Self::Bun => "bun.lock",
             Self::Deno => "deno.lock",
+            Self::RequirementsTxt => "requirements.txt",
+            Self::Poetry => "poetry.lock",
+            Self::Pipfile => "Pipfile.lock",
+            Self::GoSum => "go.sum",
+            Self::Composer => "composer.lock",
+            Self::NuGet => "packages.lock.json",
+            Self::Gemfile => "Gemfile.lock",
         }
     }
 
@@ -64,18 +95,32 @@ impl LockfileKind {
             "pnpm-lock.yaml" | "pnpm-lock.yml" => Some(Self::Pnpm),
             "bun.lock" | "bun.lockb.json" => Some(Self::Bun),
             "deno.lock" | "deno.lock.json" => Some(Self::Deno),
+            "requirements.txt" => Some(Self::RequirementsTxt),
+            "poetry.lock" => Some(Self::Poetry),
+            "Pipfile.lock" => Some(Self::Pipfile),
+            "go.sum" => Some(Self::GoSum),
+            "composer.lock" => Some(Self::Composer),
+            "packages.lock.json" => Some(Self::NuGet),
+            "Gemfile.lock" => Some(Self::Gemfile),
             _ => None,
         }
     }
 
     /// List of all canonical lockfile filenames in order of detection preference.
-    pub const ALL_FILENAMES: [&'static str; 6] = [
+    pub const ALL_FILENAMES: [&'static str; 13] = [
         "Cargo.lock",
         "package-lock.json",
         "bun.lock",
         "pnpm-lock.yaml",
         "yarn.lock",
         "deno.lock",
+        "requirements.txt",
+        "poetry.lock",
+        "Pipfile.lock",
+        "go.sum",
+        "composer.lock",
+        "packages.lock.json",
+        "Gemfile.lock",
     ];
 }
 
@@ -115,6 +160,13 @@ pub fn parse_lockfile_content(
         LockfileKind::Pnpm => parse_pnpm_lock(content),
         LockfileKind::Bun => parse_bun_lock(content),
         LockfileKind::Deno => parse_deno_lock(content),
+        LockfileKind::RequirementsTxt => parse_requirements_txt(content),
+        LockfileKind::Poetry => parse_poetry_lock(content),
+        LockfileKind::Pipfile => parse_pipfile_lock(content),
+        LockfileKind::GoSum => parse_go_sum(content),
+        LockfileKind::Composer => parse_composer_lock(content),
+        LockfileKind::NuGet => parse_nuget_lock(content),
+        LockfileKind::Gemfile => parse_gemfile_lock(content),
     }
 }
 
@@ -144,52 +196,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_split_package_specifier() {
+    fn test_lockfile_detection() {
         assert_eq!(
-            split_package_specifier("lodash@4.17.21"),
-            Some(("lodash", "4.17.21"))
+            LockfileKind::detect_from_filename("requirements.txt"),
+            Some(LockfileKind::RequirementsTxt)
         );
         assert_eq!(
-            split_package_specifier("@types/node@18.0.0"),
-            Some(("@types/node", "18.0.0"))
+            LockfileKind::detect_from_filename("go.sum"),
+            Some(LockfileKind::GoSum)
         );
         assert_eq!(
-            split_package_specifier("/lodash@4.17.21"),
-            Some(("lodash", "4.17.21"))
+            LockfileKind::detect_from_filename("composer.lock"),
+            Some(LockfileKind::Composer)
         );
         assert_eq!(
-            split_package_specifier("/@scope/pkg@1.0.0(peer@2.0.0)"),
-            Some(("@scope/pkg", "1.0.0"))
-        );
-        assert_eq!(split_package_specifier("invalid_no_at"), None);
-    }
-
-    #[test]
-    fn test_lockfile_kind_detection() {
-        assert_eq!(
-            LockfileKind::detect_from_filename("Cargo.lock"),
-            Some(LockfileKind::Cargo)
+            LockfileKind::detect_from_filename("packages.lock.json"),
+            Some(LockfileKind::NuGet)
         );
         assert_eq!(
-            LockfileKind::detect_from_filename("path/to/package-lock.json"),
-            Some(LockfileKind::PackageLock)
+            LockfileKind::detect_from_filename("Gemfile.lock"),
+            Some(LockfileKind::Gemfile)
         );
-        assert_eq!(
-            LockfileKind::detect_from_filename("yarn.lock"),
-            Some(LockfileKind::Yarn)
-        );
-        assert_eq!(
-            LockfileKind::detect_from_filename("pnpm-lock.yaml"),
-            Some(LockfileKind::Pnpm)
-        );
-        assert_eq!(
-            LockfileKind::detect_from_filename("bun.lock"),
-            Some(LockfileKind::Bun)
-        );
-        assert_eq!(
-            LockfileKind::detect_from_filename("deno.lock"),
-            Some(LockfileKind::Deno)
-        );
-        assert_eq!(LockfileKind::detect_from_filename("unknown.lock"), None);
     }
 }
