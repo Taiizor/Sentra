@@ -195,7 +195,7 @@ export async function triggerScanSnippet(code: string, language: string): Promis
 export async function generateAiPatch(
   finding: FindingView,
   providerConfig?: {
-    provider?: 'local' | 'openai' | 'anthropic' | 'gemini'
+    provider?: 'local' | 'openai' | 'anthropic' | 'gemini' | 'deepseek' | 'xai' | 'openrouter'
     endpoint?: string
     apiKey?: string
     model?: string
