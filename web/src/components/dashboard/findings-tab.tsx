@@ -1144,11 +1144,11 @@ export function FindingsTab({
               </div>
 
               {/* Sticky Bottom Actions & Governance Footer */}
-              <div className="border-t border-zinc-800/80 px-6 py-4 bg-zinc-950/95 backdrop-blur sticky bottom-0 z-20 flex flex-col gap-3 mt-auto">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex flex-col">
+              <div className="border-t border-zinc-800/80 px-4 sm:px-6 py-3 sm:py-4 bg-zinc-950/95 backdrop-blur sticky bottom-0 z-20 flex flex-col gap-3 mt-auto">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex flex-col min-w-0">
                     <span className="text-xs font-bold text-zinc-100 flex items-center gap-1.5">
-                      <ShieldCheck className="size-3.5 text-primary" />
+                      <ShieldCheck className="size-3.5 text-primary shrink-0" />
                       Three-Tier Verified Patch Generation
                     </span>
                     <span className="text-[11px] text-zinc-400">
@@ -1162,7 +1162,7 @@ export function FindingsTab({
                       onOpenAiPatchModal(selectedFinding)
                       handleSelectFinding(null)
                     }}
-                    className="font-semibold shadow-md bg-primary text-primary-foreground hover:bg-primary/90 shrink-0 flex items-center gap-1.5"
+                    className="font-semibold shadow-md bg-primary text-primary-foreground hover:bg-primary/90 shrink-0 flex items-center justify-center gap-1.5 w-full sm:w-auto h-8 text-xs"
                   >
                     <Sparkles className="size-3.5" />
                     Synthesize AI Patch &amp; Tests

@@ -224,7 +224,7 @@ export function AddTenantDialog({
               <Lock className="size-3.5 text-zinc-400" />
               <span>Boundary Fencing & Isolation Level</span>
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setIsolationLevel('multi_tenant_isolated')}
@@ -278,7 +278,7 @@ export function AddTenantDialog({
             />
           </div>
 
-          <DialogFooter className="mt-2 pt-2 border-t border-zinc-800 flex items-center justify-between sm:justify-between">
+          <DialogFooter className="mt-2 pt-2 border-t border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-1 text-[11px] text-zinc-500">
               <CheckCircle2 className="size-3 text-primary" />
               <span>Immutable Audit Trail record will be signed</span>
