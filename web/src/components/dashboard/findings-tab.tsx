@@ -29,6 +29,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { SourceViewer } from '@/components/dashboard/source-viewer'
+import { SurgicalDiffView } from '@/components/dashboard/surgical-diff-view'
+import { MarkdownView, InlineFormattedText } from '@/components/ui/markdown-view'
 import {
   Select,
   SelectContent,
@@ -867,15 +869,19 @@ export function FindingsTab({
                     {selectedFinding.validationPlan && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                         {selectedFinding.validationPlan.local && (
-                          <div className="p-2.5 rounded bg-zinc-950/60 border border-zinc-800">
+                          <div className="p-2.5 rounded-lg bg-zinc-950/80 border border-zinc-800">
                             <span className="font-bold text-zinc-300 block mb-1">Local Test Plan:</span>
-                            <span className="text-zinc-400 text-[11px] leading-relaxed">{selectedFinding.validationPlan.local}</span>
+                            <span className="text-zinc-400 text-[11px] leading-relaxed">
+                              <InlineFormattedText text={selectedFinding.validationPlan.local} />
+                            </span>
                           </div>
                         )}
                         {selectedFinding.validationPlan.deployment && (
-                          <div className="p-2.5 rounded bg-zinc-950/60 border border-zinc-800">
+                          <div className="p-2.5 rounded-lg bg-zinc-950/80 border border-zinc-800">
                             <span className="font-bold text-zinc-300 block mb-1">Deployment Telemetry Plan:</span>
-                            <span className="text-zinc-400 text-[11px] leading-relaxed">{selectedFinding.validationPlan.deployment}</span>
+                            <span className="text-zinc-400 text-[11px] leading-relaxed">
+                              <InlineFormattedText text={selectedFinding.validationPlan.deployment} />
+                            </span>
                           </div>
                         )}
                       </div>
@@ -894,9 +900,9 @@ export function FindingsTab({
                       This hypothesis was investigated during Phase 3 hunting and decisively disproven by code analysis or local tests. Retained in the audit ledger to eliminate duplicate audit cycles.
                     </p>
                     {selectedFinding.rejectionReason && (
-                      <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-300 font-mono leading-relaxed">
+                      <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-300 leading-relaxed">
                         <span className="font-bold text-primary block mb-1 font-sans">Disproven Rationale:</span>
-                        {selectedFinding.rejectionReason}
+                        <InlineFormattedText text={selectedFinding.rejectionReason} />
                       </div>
                     )}
                   </div>
@@ -933,14 +939,11 @@ export function FindingsTab({
                         Minimal Diff Surgical Remedy
                       </Badge>
                     </div>
-                    <div className="p-3.5 rounded-xl border border-emerald-500/25 bg-zinc-950 shadow-sm flex flex-col gap-2">
-                      <p className="text-[11px] text-zinc-400">
-                        Surgical remediation preserving codebase invariants without broad architectural disruption.
-                      </p>
-                      <pre className="font-mono text-xs bg-zinc-900/90 border border-zinc-800 p-3 rounded-lg overflow-x-auto text-emerald-300 leading-relaxed">
-                        {selectedFinding.smallestEffectiveFix}
-                      </pre>
-                    </div>
+                    <SurgicalDiffView
+                      diff={selectedFinding.smallestEffectiveFix}
+                      filePath={selectedFinding.targetLocation}
+                      title={`Surgical Remedy — ${selectedFinding.targetLocation.split('/').pop()}`}
+                    />
                   </div>
                 )}
 
@@ -1003,46 +1006,48 @@ export function FindingsTab({
                 {(selectedFinding.rootCause || selectedFinding.intendedBehavior) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {selectedFinding.rootCause && (
-                      <div className="flex flex-col gap-1.5 p-3.5 rounded-xl border border-zinc-800 bg-zinc-900/50">
-                        <span className="text-[11px] font-semibold text-rose-400 uppercase tracking-wider">
+                      <div className="flex flex-col gap-1.5 p-3.5 rounded-xl border border-zinc-800 bg-zinc-900/50 shadow-sm">
+                        <span className="text-[11px] font-semibold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <span className="size-1.5 rounded-full bg-rose-500" />
                           Identified Root Cause
                         </span>
-                        <p className="text-xs text-zinc-300 leading-relaxed">
-                          {selectedFinding.rootCause}
-                        </p>
+                        <div className="text-xs text-zinc-300 leading-relaxed">
+                          <InlineFormattedText text={selectedFinding.rootCause} />
+                        </div>
                       </div>
                     )}
                     {selectedFinding.intendedBehavior && (
-                      <div className="flex flex-col gap-1.5 p-3.5 rounded-xl border border-zinc-800 bg-zinc-900/50">
-                        <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">
+                      <div className="flex flex-col gap-1.5 p-3.5 rounded-xl border border-zinc-800 bg-zinc-900/50 shadow-sm">
+                        <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <span className="size-1.5 rounded-full bg-emerald-500" />
                           Intended Boundary Invariant
                         </span>
-                        <p className="text-xs text-zinc-300 leading-relaxed">
-                          {selectedFinding.intendedBehavior}
-                        </p>
+                        <div className="text-xs text-zinc-300 leading-relaxed">
+                          <InlineFormattedText text={selectedFinding.intendedBehavior} />
+                        </div>
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* Vulnerability Analysis Card */}
+                {/* Vulnerability Analysis Card (Enterprise Markdown Rendered) */}
                 <div className="flex flex-col gap-2.5">
                   <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
                     Vulnerability Analysis &amp; Impact
                   </span>
-                  <div className="text-sm bg-zinc-900/80 border border-zinc-800 p-4 rounded-xl text-zinc-200 leading-relaxed shadow-sm">
-                    {selectedFinding.description}
+                  <div className="bg-zinc-900/80 border border-zinc-800 p-4 rounded-xl shadow-sm">
+                    <MarkdownView content={selectedFinding.description} />
                   </div>
                 </div>
 
-                {/* Remediation Guidance */}
+                {/* Remediation Guidance (Enterprise Markdown Rendered) */}
                 {selectedFinding.remediationGuidance && (
                   <div className="flex flex-col gap-2.5">
                     <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
                       Remediation Guidance
                     </span>
-                    <div className="text-xs bg-zinc-900/50 border border-zinc-800/80 p-3.5 rounded-xl text-zinc-300 font-mono leading-relaxed">
-                      {selectedFinding.remediationGuidance}
+                    <div className="bg-zinc-900/50 border border-zinc-800/80 p-4 rounded-xl shadow-sm">
+                      <MarkdownView content={selectedFinding.remediationGuidance} />
                     </div>
                   </div>
                 )}
@@ -1072,14 +1077,16 @@ export function FindingsTab({
                                 {step.step}
                               </span>
                               <Badge
-                                variant={
+                                variant="outline"
+                                className={`text-[11px] font-mono font-bold ${
                                   step.role === 'SOURCE'
-                                    ? 'destructive'
+                                    ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
                                     : step.role === 'SINK'
-                                      ? 'destructive'
-                                      : 'secondary'
-                                }
-                                className="text-[11px] font-mono font-bold"
+                                      ? 'border-rose-500/40 bg-rose-500/10 text-rose-300'
+                                      : step.role === 'SANITIZER'
+                                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                                        : 'border-sky-500/40 bg-sky-500/10 text-sky-300'
+                                }`}
                               >
                                 {step.role}
                               </Badge>
