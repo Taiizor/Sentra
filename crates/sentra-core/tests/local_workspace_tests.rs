@@ -19,7 +19,8 @@ struct Fixture {
 }
 impl Fixture {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
+        let temp = fs::canonicalize(std::env::temp_dir()).unwrap_or_else(|_| std::env::temp_dir());
+        let root = temp.join(format!(
             "sentra-local-core-{}-{}",
             std::process::id(),
             SessionId::new()

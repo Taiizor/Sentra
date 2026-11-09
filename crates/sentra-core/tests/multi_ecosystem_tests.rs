@@ -219,7 +219,8 @@ fn test_deno_lock_audit() {
 #[cfg(any(windows, unix))]
 #[test]
 fn test_local_workspace_discovers_npm_and_bun_lockfiles() {
-    let temp_root = std::env::temp_dir().join(format!("sentra_multi_test_{}", std::process::id()));
+    let temp = fs::canonicalize(std::env::temp_dir()).unwrap_or_else(|_| std::env::temp_dir());
+    let temp_root = temp.join(format!("sentra_multi_test_{}", std::process::id()));
     let workspace = temp_root.join("npm_project");
     let storage = temp_root.join("storage");
 

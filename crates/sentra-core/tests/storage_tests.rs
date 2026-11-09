@@ -22,7 +22,8 @@ struct StorageTestFixture {
 
 impl StorageTestFixture {
     fn new() -> Self {
-        let base = std::env::temp_dir().join(format!(
+        let temp = fs::canonicalize(std::env::temp_dir()).unwrap_or_else(|_| std::env::temp_dir());
+        let base = temp.join(format!(
             "sentra-storage-test-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()

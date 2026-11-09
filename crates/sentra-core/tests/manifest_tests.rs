@@ -30,7 +30,8 @@ pub struct WorkspaceFixture {
 
 impl WorkspaceFixture {
     pub fn new() -> Self {
-        let base = std::env::temp_dir().join(format!(
+        let temp = fs::canonicalize(std::env::temp_dir()).unwrap_or_else(|_| std::env::temp_dir());
+        let base = temp.join(format!(
             "sentra-manifest-test-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()

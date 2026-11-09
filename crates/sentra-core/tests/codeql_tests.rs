@@ -11,7 +11,8 @@ use std::str::FromStr;
 
 #[test]
 fn test_codeql_language_detection_and_workspace_probing() {
-    let ws = std::env::temp_dir().join(format!("sentra-codeql-probe-{}", std::process::id()));
+    let temp = std::fs::canonicalize(std::env::temp_dir()).unwrap_or_else(|_| std::env::temp_dir());
+    let ws = temp.join(format!("sentra-codeql-probe-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&ws);
     std::fs::create_dir_all(&ws).expect("create_dir_all");
 
@@ -60,7 +61,8 @@ fn test_codeql_adapter_manifest_and_execution_protocol() {
     }
 
     // 2. Probe
-    let ws = std::env::temp_dir().join(format!("sentra-codeql-proto-{}", std::process::id()));
+    let temp = std::fs::canonicalize(std::env::temp_dir()).unwrap_or_else(|_| std::env::temp_dir());
+    let ws = temp.join(format!("sentra-codeql-proto-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&ws);
     std::fs::create_dir_all(&ws).expect("create_dir_all");
     std::fs::write(ws.join("app.py"), "import os").unwrap();

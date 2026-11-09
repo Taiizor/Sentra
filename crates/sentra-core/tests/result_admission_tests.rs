@@ -520,7 +520,8 @@ fn test_admit_task_result_core_service_integration_with_blobs() {
     let h = Harness::budget(200_000);
     advance_session_to_running(&h);
 
-    let temp_cas = std::env::temp_dir().join(format!(
+    let temp = fs::canonicalize(std::env::temp_dir()).unwrap_or_else(|_| std::env::temp_dir());
+    let temp_cas = temp.join(format!(
         "sentra-cas-res-test-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()

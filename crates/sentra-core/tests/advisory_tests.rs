@@ -293,7 +293,8 @@ fn test_finding_serialization_roundtrip() {
     ignore = "Workspace filesystem operations require Windows"
 )]
 fn test_local_workspace_audit_dependencies_integration() {
-    let temp_dir = std::env::temp_dir().join(format!("sentra-audit-test-{}", std::process::id()));
+    let temp = fs::canonicalize(std::env::temp_dir()).unwrap_or_else(|_| std::env::temp_dir());
+    let temp_dir = temp.join(format!("sentra-audit-test-{}", std::process::id()));
     let ws_path = temp_dir.join("workspace");
     let storage_dir = temp_dir.join("storage");
     let db_path = storage_dir.join("test.db");
