@@ -345,6 +345,24 @@ function initTenantsTable(dbPath: string = DEFAULT_STORAGE) {
 }
 initTenantsTable();
 
+function initSettingsTable(dbPath: string = DEFAULT_STORAGE) {
+  try {
+    if (!fsSync.existsSync(dbPath)) return;
+    const db = new Database(dbPath);
+    db.run(`
+      CREATE TABLE IF NOT EXISTS system_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
+    db.close();
+  } catch (err) {
+    console.error("Failed to init settings table:", err);
+  }
+}
+initSettingsTable();
+
 // Helper to apply unified diff hunks cleanly
 function applyHunkToContent(originalContent: string, diffText: string): { success: boolean; newContent: string; alreadyPatched?: boolean; error?: string } {
   const normOriginal = originalContent.replace(/\r\n/g, "\n");
@@ -637,6 +655,253 @@ const server = Bun.serve({
         };
 
         return new Response(JSON.stringify({ ok: true, tenant: newTenant }), { status: 201, headers: corsHeaders });
+      } catch (err: any) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // GET /api/settings/ai - Load AI model configurations & masked keys
+    if (url.pathname === "/api/settings/ai" && req.method === "GET") {
+      try {
+        initSettingsTable(DEFAULT_STORAGE);
+        const db = getDb(DEFAULT_STORAGE);
+        let config: any = {
+          defaultProvider: "anthropic",
+          defaultModel: "claude-3-7-sonnet-20250219",
+          providers: {
+            anthropic: { model: "claude-3-7-sonnet-20250219", isConfigured: false, maskedKey: "" },
+            openai: { model: "o3-mini", isConfigured: false, maskedKey: "" },
+            gemini: { model: "gemini-2.5-flash", isConfigured: false, maskedKey: "" },
+            xai: { model: "grok-3", isConfigured: false, maskedKey: "" },
+            deepseek: { model: "deepseek-chat", isConfigured: false, maskedKey: "" },
+            openrouter: { model: "anthropic/claude-3.7-sonnet", isConfigured: false, maskedKey: "" },
+          },
+        };
+
+        if (db) {
+          const row: any = db.query("SELECT value FROM system_settings WHERE key = 'ai_config'").get();
+          if (row && row.value) {
+            try {
+              const parsed = JSON.parse(row.value);
+              config.defaultProvider = parsed.defaultProvider || config.defaultProvider;
+              config.defaultModel = parsed.defaultModel || config.defaultModel;
+              if (parsed.providers) {
+                for (const [pKey, pVal] of Object.entries(parsed.providers) as any[]) {
+                  if (config.providers[pKey]) {
+                    config.providers[pKey].model = pVal.model || config.providers[pKey].model;
+                    config.providers[pKey].endpoint = pVal.endpoint || "";
+                    if (pVal.apiKey && pVal.apiKey.length > 4) {
+                      config.providers[pKey].isConfigured = true;
+                      config.providers[pKey].maskedKey = pVal.apiKey.slice(0, 4) + "••••••••" + pVal.apiKey.slice(-4);
+                    }
+                  }
+                }
+              }
+            } catch (e) {}
+          }
+        }
+        return new Response(JSON.stringify(config), { headers: corsHeaders });
+      } catch (err: any) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // POST /api/settings/ai - Save AI model configurations
+    if (url.pathname === "/api/settings/ai" && req.method === "POST") {
+      try {
+        const body = await req.json();
+        const { defaultProvider, defaultModel, providers, role } = body;
+
+        if (role === "Viewer") {
+          return new Response(
+            JSON.stringify({ error: "Access Denied: Updating AI provider credentials requires Operator or SecurityAdmin privileges." }),
+            { status: 403, headers: corsHeaders }
+          );
+        }
+
+        initSettingsTable(DEFAULT_STORAGE);
+        const db = new Database(DEFAULT_STORAGE);
+
+        let existingConfig: any = { providers: {} };
+        const row: any = db.query("SELECT value FROM system_settings WHERE key = 'ai_config'").get();
+        if (row && row.value) {
+          try { existingConfig = JSON.parse(row.value); } catch (e) {}
+        }
+
+        const mergedProviders: any = { ...(existingConfig.providers || {}) };
+        if (providers && typeof providers === "object") {
+          for (const [pKey, pVal] of Object.entries(providers) as any[]) {
+            const prev = mergedProviders[pKey] || {};
+            let finalKey = prev.apiKey || "";
+            if (pVal.apiKey && !pVal.apiKey.includes("••••")) {
+              finalKey = pVal.apiKey.trim();
+            }
+            mergedProviders[pKey] = {
+              apiKey: finalKey,
+              model: pVal.model || prev.model || "",
+              endpoint: pVal.endpoint || prev.endpoint || "",
+            };
+          }
+        }
+
+        const finalConfig = {
+          defaultProvider: defaultProvider || existingConfig.defaultProvider || "anthropic",
+          defaultModel: defaultModel || existingConfig.defaultModel || "claude-3-7-sonnet-20250219",
+          providers: mergedProviders,
+          updatedAt: new Date().toISOString(),
+        };
+
+        db.query(`
+          INSERT INTO system_settings (key, value, updated_at)
+          VALUES ('ai_config', ?, ?)
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+        `).run(JSON.stringify(finalConfig), finalConfig.updatedAt);
+        db.close();
+
+        recordAuditEvent("ai_provider_configured", {
+          actor: role || "SecurityAdmin",
+          default_provider: finalConfig.defaultProvider,
+          default_model: finalConfig.defaultModel,
+          configured_providers: Object.keys(mergedProviders).filter((k) => !!mergedProviders[k].apiKey),
+        });
+
+        return new Response(JSON.stringify({ ok: true, message: "AI provider settings saved successfully." }), { headers: corsHeaders });
+      } catch (err: any) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // POST /api/ai/test-connection - Test live provider API connectivity
+    if (url.pathname === "/api/ai/test-connection" && req.method === "POST") {
+      try {
+        const body = await req.json();
+        let { provider, apiKey, model, endpoint } = body;
+
+        if (!apiKey || apiKey.includes("••••")) {
+          const db = getDb(DEFAULT_STORAGE);
+          if (db) {
+            const row: any = db.query("SELECT value FROM system_settings WHERE key = 'ai_config'").get();
+            if (row && row.value) {
+              const parsed = JSON.parse(row.value);
+              if (parsed.providers && parsed.providers[provider]?.apiKey) {
+                apiKey = parsed.providers[provider].apiKey;
+              }
+            }
+          }
+        }
+
+        if (!apiKey && provider !== "local") {
+          return new Response(
+            JSON.stringify({ ok: false, error: `No API key provided or configured for '${provider}'.` }),
+            { status: 400, headers: corsHeaders }
+          );
+        }
+
+        const startMs = Date.now();
+        let testResponse = "Verified";
+
+        if (provider === "anthropic") {
+          const m = model || "claude-3-7-sonnet-20250219";
+          const res = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": apiKey,
+              "anthropic-version": "2023-06-01",
+            },
+            body: JSON.stringify({
+              model: m,
+              max_tokens: 10,
+              messages: [{ role: "user", content: "Ping. Respond 'PONG'." }],
+            }),
+          });
+          const data: any = await res.json();
+          if (!res.ok) throw new Error(data.error?.message || `Anthropic HTTP ${res.status}`);
+          testResponse = data.content?.[0]?.text || "OK";
+        } else if (provider === "gemini") {
+          const m = model || "gemini-2.5-flash";
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: "Ping. Respond 'PONG'." }] }],
+              generationConfig: { maxOutputTokens: 10 },
+            }),
+          });
+          const data: any = await res.json();
+          if (!res.ok) throw new Error(data.error?.message || `Gemini HTTP ${res.status}`);
+          testResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || "OK";
+        } else {
+          let targetEp = endpoint || "https://api.openai.com/v1/chat/completions";
+          let targetModel = model || "o3-mini";
+          if (provider === "xai") {
+            targetEp = "https://api.x.ai/v1/chat/completions";
+            targetModel = model || "grok-3";
+          } else if (provider === "deepseek") {
+            targetEp = "https://api.deepseek.com/chat/completions";
+            targetModel = model || "deepseek-chat";
+          } else if (provider === "openrouter") {
+            targetEp = "https://openrouter.ai/api/v1/chat/completions";
+            targetModel = model || "anthropic/claude-3.7-sonnet";
+          }
+          const res = await fetch(targetEp, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model: targetModel,
+              max_tokens: 10,
+              messages: [{ role: "user", content: "Ping. Respond 'PONG'." }],
+            }),
+          });
+          const data: any = await res.json();
+          if (!res.ok) throw new Error(data.error?.message || `${provider} HTTP ${res.status}`);
+          testResponse = data.choices?.[0]?.message?.content || "OK";
+        }
+
+        const latencyMs = Date.now() - startMs;
+        return new Response(JSON.stringify({ ok: true, latencyMs, response: testResponse.trim() }), { headers: corsHeaders });
+      } catch (err: any) {
+        return new Response(JSON.stringify({ ok: false, error: err.message }), { status: 200, headers: corsHeaders });
+      }
+    }
+
+    // GET /api/file-content - Safely read workspace source file content for live code viewer
+    if (url.pathname === "/api/file-content" && req.method === "GET") {
+      try {
+        const filePath = url.searchParams.get("path");
+        if (!filePath) {
+          return new Response(JSON.stringify({ error: "Missing 'path' query parameter." }), { status: 400, headers: corsHeaders });
+        }
+
+        let resolvedPath = path.isAbsolute(filePath) ? path.normalize(filePath) : path.resolve(REPO_ROOT, filePath);
+
+        if (!fsSync.existsSync(resolvedPath)) {
+          return new Response(JSON.stringify({ error: `File not found on host: '${filePath}'` }), { status: 404, headers: corsHeaders });
+        }
+
+        const stat = fsSync.statSync(resolvedPath);
+        if (!stat.isFile()) {
+          return new Response(JSON.stringify({ error: "Target path is not a regular file." }), { status: 400, headers: corsHeaders });
+        }
+
+        if (stat.size > 5 * 1024 * 1024) {
+          return new Response(JSON.stringify({ error: "File exceeds 5MB size limit for live inspection." }), { status: 413, headers: corsHeaders });
+        }
+
+        const content = await fs.readFile(resolvedPath, "utf-8");
+        const lines = content.split("\n");
+
+        return new Response(JSON.stringify({
+          ok: true,
+          path: resolvedPath,
+          relativePath: path.relative(REPO_ROOT, resolvedPath).replace(/\\/g, "/"),
+          sizeBytes: stat.size,
+          lineCount: lines.length,
+          content,
+        }), { headers: corsHeaders });
       } catch (err: any) {
         return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
       }
@@ -957,6 +1222,26 @@ const server = Bun.serve({
         const findingTitle: string = finding.title || "Vulnerability Finding";
         const bundleId = `bundle-${crypto.randomBytes(4).toString("hex")}`;
         const providerCfg = body.providerConfig || {};
+
+        // If apiKey is missing in request, automatically fallback to SQLite saved system_settings
+        if (!providerCfg.apiKey && providerCfg.provider !== "local") {
+          try {
+            const db = getDb(DEFAULT_STORAGE);
+            if (db) {
+              const row: any = db.query("SELECT value FROM system_settings WHERE key = 'ai_config'").get();
+              if (row && row.value) {
+                const parsed = JSON.parse(row.value);
+                const reqProvider = providerCfg.provider || parsed.defaultProvider || "anthropic";
+                if (parsed.providers && parsed.providers[reqProvider]?.apiKey) {
+                  providerCfg.provider = reqProvider;
+                  providerCfg.apiKey = parsed.providers[reqProvider].apiKey;
+                  providerCfg.model = providerCfg.model || parsed.providers[reqProvider].model;
+                  providerCfg.endpoint = providerCfg.endpoint || parsed.providers[reqProvider].endpoint;
+                }
+              }
+            }
+          } catch (e) {}
+        }
 
         let rootCauseAnalysis = "";
         let reproductionTestCode = "";

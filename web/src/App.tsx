@@ -2,10 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import {
   FileDown,
   Shield,
-  CheckCircle2,
-  AlertTriangle,
   Copy,
-  Check,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { copyText } from '@/lib/clipboard'
@@ -37,6 +34,8 @@ import { ScannerConsole } from '@/components/dashboard/scanner-console'
 import { LiveStreamModal } from '@/components/dashboard/live-stream-modal'
 import { AiPatchModal } from '@/components/dashboard/ai-patch-modal'
 import { AddTenantDialog } from '@/components/dashboard/add-tenant-dialog'
+import { SettingsDialog } from '@/components/dashboard/settings-dialog'
+import { generateExecutiveReportHtml } from '@/lib/executive-report'
 
 import {
   DEFAULT_TENANTS,
@@ -72,6 +71,7 @@ export function App() {
   const [isCommandOpen, setIsCommandOpen] = useState<boolean>(false)
   const [isStreamModalOpen, setIsStreamModalOpen] = useState<boolean>(false)
   const [isAddTenantOpen, setIsAddTenantOpen] = useState<boolean>(false)
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false)
   const [selectedPatchFinding, setSelectedPatchFinding] = useState<FindingView | null>(null)
   const [sarifModalContent, setSarifModalContent] = useState<string | null>(null)
 
@@ -89,7 +89,7 @@ export function App() {
   const [sessions, setSessions] = useState<SessionSummaryView[]>(INITIAL_SESSIONS)
   const [campaigns] = useState(INITIAL_CAMPAIGNS)
   const [auditLogs, setAuditLogs] = useState<AuditLogView[]>(INITIAL_AUDIT_LOGS)
-  const [overview, setOverview] = useState(INITIAL_OVERVIEW)
+  const [, setOverview] = useState(INITIAL_OVERVIEW)
   const [workers] = useState(INITIAL_WORKERS)
   const [osvAdvisories] = useState(INITIAL_OSV_ADVISORIES)
   const [trends, setTrends] = useState(INITIAL_SECURITY_TRENDS)
@@ -245,7 +245,7 @@ export function App() {
       totalPatches: tenantPatches.length,
       auditEventCount: tenantAuditLogs.length,
       totalSpentMicroUsd: 0,
-      lastActivityTimestamp: new Date().toISOString(),
+      lastActivityTimestamp: tenantAuditLogs[0]?.timestamp || tenantSessions[0]?.updatedAt || '2026-11-09T18:00:00Z',
       securityScore: total === 0 ? 100 : baseScore,
     }
   }, [currentTenant, tenants, tenantFindings, tenantPatches, tenantSessions, tenantAuditLogs])
@@ -292,6 +292,29 @@ export function App() {
   function handleExportSarif() {
     const json = generateSarifJson(tenantFindings)
     setSarifModalContent(json)
+  }
+
+  function handleExportReport() {
+    const currentTenantObj = tenants.find((t) => t.tenantId === currentTenant)
+    const html = generateExecutiveReportHtml(
+      tenantOverview,
+      tenantFindings,
+      tenantPatches,
+      tenantAuditLogs,
+      currentTenantObj
+    )
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `sentra-executive-threat-report-${currentTenant}.html`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    toast.success('Executive Threat Report Exported', {
+      description: `Downloaded report for ${tenantOverview.workspaceName}. Open in browser or print to PDF.`,
+    })
   }
 
   function handleDownloadSarif() {
@@ -675,6 +698,8 @@ export function App() {
             tenants={tenants}
             onTenantChange={handleTenantChange}
             onOpenAddTenant={() => setIsAddTenantOpen(true)}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+            onExportReport={handleExportReport}
             currentRole={currentRole}
             onRoleChange={setCurrentRole}
             onExportSarif={handleExportSarif}
@@ -871,6 +896,13 @@ export function App() {
           currentRole={currentRole}
           onTenantCreated={handleTenantCreated}
           currentWorkspace={currentWorkspace}
+        />
+
+        {/* Global System Settings & AI Provider Credentials Modal */}
+        <SettingsDialog
+          open={isSettingsOpen}
+          onOpenChange={setIsSettingsOpen}
+          currentRole={currentRole}
         />
 
         {/* Global Sonner Toaster */}
