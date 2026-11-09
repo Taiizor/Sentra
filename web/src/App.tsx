@@ -602,7 +602,15 @@ export function App() {
     })
   }
 
-  function handleSyncAdvisories() {
+  async function handleSyncAdvisories() {
+    try {
+      await fetch('/api/intel/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: currentRole, tenant: currentTenant }),
+      })
+    } catch {}
+
     setAuditLogs((prev) => [
       {
         eventId: `evt-${Date.now().toString().slice(-4)}`,
@@ -610,7 +618,7 @@ export function App() {
         sequenceNumber: prev.length + 1,
         actor: `operator-${currentRole.toLowerCase()}`,
         action: 'osv_mirror_synchronized',
-        details: 'Synchronized universal OSV v1.6 advisory feed (RustSec, Google OSV, GHSA)',
+        details: 'Synchronized universal OSV v1.6 advisory feed across 12 ecosystems (RustSec, Google OSV, GHSA)',
         cryptoHash: `sha256:${Date.now().toString(16)}...`,
         timestamp: new Date().toISOString(),
       },

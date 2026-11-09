@@ -36,6 +36,14 @@ const ECOSYSTEM_OPTIONS = [
   { id: 'crates.io', label: 'crates.io' },
   { id: 'PyPI', label: 'PyPI' },
   { id: 'Go', label: 'Go' },
+  { id: 'Maven', label: 'Maven' },
+  { id: 'Composer', label: 'Composer' },
+  { id: 'NuGet', label: 'NuGet' },
+  { id: 'RubyGems', label: 'RubyGems' },
+  { id: 'Swift', label: 'Swift' },
+  { id: 'Pub', label: 'Pub' },
+  { id: 'Erlang', label: 'Erlang' },
+  { id: 'GitHub Actions', label: 'Actions' },
 ]
 
 export function ThreatIntelTab({ advisories, currentRole, onSyncAdvisories }: ThreatIntelTabProps) {
@@ -119,11 +127,11 @@ export function ThreatIntelTab({ advisories, currentRole, onSyncAdvisories }: Th
               OSV Threat Intelligence
             </h2>
             <Badge variant="outline" className="text-[11px] px-2 py-0 border-sky-500/30 text-sky-400 bg-sky-500/5">
-              Local Mirror
+              Multi-Ecosystem Universal Mirror
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground">
-            Zero-latency offline vulnerability mirror synchronized across npm, crates.io, PyPI, and Go.
+            Zero-latency vulnerability intelligence synchronized across npm, crates.io, PyPI, Go, Maven, Composer, NuGet, RubyGems, Swift, Pub, and Erlang.
           </p>
         </div>
 
