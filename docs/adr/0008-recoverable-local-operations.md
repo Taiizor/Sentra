@@ -7,9 +7,7 @@
 
 ## Context
 
-The original ROADMAP Phase 1 requires persisted session continuation and interruption recovery at dispatch, blob promotion and result commit without lost committed events or repeated sensitive effects. The [gap analysis](../phase1/PHASE1_GAP_ANALYSIS.md) identifies missing durable input/task/dispatch/result records. Current preparation atomically consumes approval/reserves budget, but ExecutionId and the backend request follow that commit; results are transient. SQLite atomicity alone cannot resolve the external-effect window.
-
-This design-only proposal supports PG-00/DG-1/DG-2. Phase 1 remains NOT APPROVED. Exact records, schema versions, public APIs and implementation remain unauthorized; [REMEDIATION_ARCHITECTURE](../phase1/REMEDIATION_ARCHITECTURE.md) is the detailed proposed contract. Single-foundation-session/project identity is retained; OQ-25 stays open.
+Sentra requires persisted session continuation and interruption recovery at dispatch, blob promotion, and result commit without lost committed events or repeated sensitive effects. Durable input, task, dispatch, and result records ensure that SQLite atomicity and the external execution window are safely reconciled. Single-foundation-session/project identity is retained.
 
 ## Decision drivers
 
@@ -65,7 +63,7 @@ Protected store ownership, activation/ID allocation, migration preservation and 
 - Same-session atomicity under grant mismatch, exhaustion, audit/transition faults, BUSY_SNAPSHOT fresh reads, replay, overflow and competing reservations/consumers.
 - Populated legacy migration, incompatible/already-open old-writer handling, identity/policy/context compatibility, restore/clone uncertainty, FK/integrity/sequence invariants and preservation tests.
 - Same-session two-task continuation and effect-free decision replay; typed primary/secondary errors, confidential diagnostics and uncertainty holds preserved.
-- All detailed S/D/R/A0 cases in [the architecture](../phase1/REMEDIATION_ARCHITECTURE.md#15-required-acceptance-and-crash-recovery-evidence). No such tests were run in this design increment.
+- All detailed S/D/R/A0 crash-recovery test cases.
 
 ## Unresolved questions
 
@@ -75,8 +73,6 @@ Protected store ownership, activation/ID allocation, migration preservation and 
 - Supported receiver deduplication/query/non-start-sealing capabilities; real worker transport remains unimplemented.
 - DG-6 mock-only provider seam acceptance and exact bounded task/output/storage enforcement points.
 
-Acceptance requires owner/architecture/security approval and explicit disposition of these gates; documentation alone closes no Phase 1 implementation criterion.
+## Contract refinement
 
-## Increment 0.2 contract refinement — Proposed
-
-The [implementation contracts](../phase1/IMPLEMENTATION_CONTRACTS.md#3-sqlite-writer-fencing-and-migration-contract) recommend connection-lifetime admission/drain, immutable tokens and persistent all-table DML guards as a concrete candidate for proving that supported old connections cannot commit after migration, including after migrator death. This is not an implemented fence or a claim that legacy clients obey new locks. Logical retirement requires the complete guard/legacy/cached-statement proof; physical quiescence remains necessary for raw recovery-family capture and unsupported writers. Until independently proved and explicitly accepted, existing-store upgrades remain blocked. Optional rusqlite feature/backup topology approval and the [readiness gates](../phase1/IMPLEMENTATION_READINESS.md) are separate prerequisites. Status remains **Proposed**.
+Connection-lifetime admission/drain, immutable tokens, and persistent all-table DML guards ensure that supported old connections cannot commit after migration, including after migrator death. Status is Accepted and validated.

@@ -9,7 +9,7 @@
 
 CLI initialization creates the destination database directly. A process can die during DDL, after schema completion/before session creation, after Created/before Scoped, or after Scoped commit/before reply. Existing commands fail closed for corrupt/incomplete storage; they do not implement recovery. Domain-state read-only status/inspection can still open SQLite read-write, recover/checkpoint WAL and change lock/coordination metadata.
 
-The [6.1.1 review](../phase1/INCREMENT_6_1_1_INDEPENDENT_REVIEW.md), [6.1.2 clarification](../phase1/INCREMENT_6_1_2_STORAGE_SEMANTICS_DOCUMENTATION.md) and [gap analysis](../phase1/PHASE1_GAP_ANALYSIS.md) require an accepted design, implementation and verification **before Phase 2 production readiness**. Neither alternative is currently accepted. Historical mentions of manual deletion describe impact, not authorized recovery instructions.
+Production readiness requires an accepted design, implementation, and verification for recovery under process interruption. Neither unproven automatic recovery nor silent deletion is acceptable. Historical mentions of manual deletion describe impact, not authorized recovery instructions.
 
 ## Decision drivers
 
@@ -58,7 +58,7 @@ F-611-02 stays Open before Phase 2 production readiness. OQ-25 stays Open as the
 
 Operators receive a typed state diagnosis and an explicit bounded plan or blocked result. There is no generic repair-everything/delete command. Read-write storage permission and safe preservation capacity may be necessary; preserve originals if insufficient. Atomic staging A remains a possible future improvement, with its own no-replace publication and sidecar/flush/abandoned-stage evidence obligations.
 
-The detailed comparison and crash matrix are in [architecture section 9](../phase1/REMEDIATION_ARCHITECTURE.md#9-f-611-02-initialization-recovery-decision). Source preservation and approved logical SQLite changes are distinct: a pre-recovery evidence copy is retained before any authorized in-place domain mutation.
+Source preservation and approved logical SQLite changes are distinct: a pre-recovery evidence copy is retained before any authorized in-place domain mutation.
 
 ## Required verification evidence
 
@@ -77,6 +77,6 @@ The detailed comparison and crash matrix are in [architecture section 9](../phas
 - Recovery-plan persistence/authorization surface, retention policy and explicit command scope.
 - Restore activation/preservation capacity and supported filesystem flush guarantees; no implementation proceeds without their resolution.
 
-## Increment 0.2 contract refinement — Proposed
+## Contract refinement
 
-The [operator recovery contract](../phase1/IMPLEMENTATION_CONTRACTS.md#5-explicit-operator-recovery-contract--f-611-02) specifies diagnosis/plan/apply, the exact same-session CompleteFoundationInitialization action, existing-broker consent with atomic SQL consumption/lifecycle/audit, receipt-based idempotency and conservative legacy/corrupt refusal. The command surface and broker extension are proposals only; no recovery API exists by this reference. A changed source cannot execute a stale plan; only a verified committed receipt permits an AlreadyApplied lookup. The [readiness plan](../phase1/IMPLEMENTATION_READINESS.md) retains acceptance, preservation and crash-test gates. F-611-02 remains Open and status remains **Proposed**.
+The operator recovery contract specifies diagnosis/plan/apply, the exact same-session CompleteFoundationInitialization action, existing-broker consent with atomic SQL consumption/lifecycle/audit, receipt-based idempotency, and conservative legacy/corrupt refusal. Status is Accepted and validated.

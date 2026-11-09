@@ -14,7 +14,7 @@ Sentra is an open-source, extensible, dual-mode security research platform for a
 
 ## Current Status: Phase 0–6 Foundation Complete
 
-All roadmap phases ([Phase 0 through Phase 6](ROADMAP.md)) and all [Release-wide gates](docs/release/RELEASE_GATES_AUDIT.md) have been implemented, tested, and audited across both the **Windows 11 MSVC** host development environment (461 workspace tests passing) and the isolated **Linux Docker** container test runner (23 independent test suites passing, zero clippy warnings under `-D warnings`, zero formatting discrepancies).
+All roadmap phases ([Phase 0 through Phase 6](ROADMAP.md)) and all [Release-wide gates](docs/RELEASE_GATES_AUDIT.md) have been implemented, tested, and audited across both the **Windows 11 MSVC** host development environment (461 workspace tests passing) and the isolated **Linux Docker** container test runner (23 independent test suites passing, zero clippy warnings under `-D warnings`, zero formatting discrepancies).
 
 ```
 Phase 0: Research, Architecture & Threat Modeling (Complete)
@@ -133,7 +133,7 @@ pwsh -NoProfile -File scripts/docker-test.ps1 -Mode all
 | [Installation Guide](docs/INSTALLATION.md) | Setup, compiler prerequisites, and CLI execution |
 | [Limitations & Constraints](docs/LIMITATIONS.md) | Documented security assumptions, assurance limits, and non-goals |
 | [Security Policy](SECURITY.md) | Coordinated disclosure process, reporting channels, and SLAs |
-| [Release Gates Audit](docs/release/RELEASE_GATES_AUDIT.md) | Formal audit of all release-wide quality and containment gates |
+| [Release Gates Audit](docs/RELEASE_GATES_AUDIT.md) | Formal audit of all release-wide quality and containment gates |
 | [Progress Ledger](PROGRESS.md) | Complete factual history of all implemented increments |
 | [Roadmap](ROADMAP.md) | Dependency-ordered roadmap milestones and acceptance criteria |
 | [Architecture](ARCHITECTURE.md) | High-level system topology, components, and trust boundaries |

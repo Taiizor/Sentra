@@ -19,4 +19,4 @@ All Architectural Decision Records (ADR-0001 through ADR-0010) are now fully val
 
 ## Maintenance
 
-Each ADR states context, alternatives, decision/proposal, consequences, and required evidence. When a decision changes, preserve history and mark the old ADR superseded rather than silently rewriting the rationale. Update requirements, architecture, roadmap, progress, and affected contracts together. Record unresolved operational details in [OPEN_QUESTIONS.md](../OPEN_QUESTIONS.md).
+Each ADR states context, alternatives, decision/proposal, consequences, and required evidence. When a decision changes, preserve history and mark the old ADR superseded rather than silently rewriting the rationale. Update requirements, architecture, roadmap, and affected contracts together. Record unresolved operational details in project issue trackers or roadmap milestones.

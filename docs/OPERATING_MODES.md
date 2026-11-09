@@ -87,4 +87,4 @@ Every report identifies input digests, authorization scope, selected tools/model
 | New revision or changed policy | Invalidate affected approvals and verification applicability |
 | Later scan is quiet | Record no longer observed; do not infer remediation |
 
-The two inspiration summaries and their limitations are in [LANDSCAPE.md](research/LANDSCAPE.md). Neither mode inherits an external product's accuracy or operating guarantees.
+Neither operating mode inherits an external product's accuracy or operating guarantees.

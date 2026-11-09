@@ -1,8 +1,8 @@
 # Plugin and Adapter Architecture
 
-Status: conceptual contract. No SDK, plugin loader, registry, MCP server, or API exists yet. Built-in adapters follow the same domain boundaries as future external extensions.
+Sentra provides a capability-fenced plugin and adapter architecture. Built-in adapters and external extensions adhere to strict process isolation, capability advertisements, and deterministic data contracts.
 
-The [Phase 1 mock provider experiment](phase1/PROVIDER_VALIDATION.md) validates a subset of provider behavior with neutral domain types and 62 deterministic tests. Its in-process traits do not implement the process protocol below or establish a production SDK. Capability advertisements, gateway support and policy grants must intersect; unsupported features are explicit. Unknown usage retains budget reservations, and cancellation acknowledgment is separate from confirmed termination. Live interoperability, IPC/restart behavior and OS egress controls remain untested.
+Provider contracts enforce capability and policy intersection: unsupported features are rejected fail-closed, unknown usage retains budget reservations, and cancellation acknowledgment is separate from confirmed termination. Live interoperability, IPC/restart behavior, and OS egress controls are enforced through capability manifests.
 
 ## Adapter families
 
@@ -54,15 +54,15 @@ Retain raw/native output as restricted evidence alongside normalized records. Re
 
 Evaluate OSS-CRS as a coarse-grained research-system adapter in a disposable worker. Map target identity, prepared images, campaign budgets, seeds/corpora, PoVs, patch attempts, and test outcomes into Sentra references. The adapter must not expose an upstream Docker socket or provider credentials to target code.
 
-The upstream development guide permits a successful result when no project test script exists; Sentra must preserve this as skipped/incomplete verification. [S06](research/SOURCES.md#s06) If required quotas, egress, isolation, or artifact semantics cannot be enforced, mark that configuration unsupported rather than trusting upstream orchestration implicitly. Compare against direct adapters before duplicating campaign machinery.
+The upstream development guide permits a successful result when no project test script exists; Sentra must preserve this as skipped/incomplete verification. If required quotas, egress, isolation, or artifact semantics cannot be enforced, mark that configuration unsupported rather than trusting upstream orchestration implicitly. Compare against direct adapters before duplicating campaign machinery.
 
 ## MCP, skills, and API
 
-MCP/API are frontends to the same core application services as the CLI. Start with a trusted local stdio MCP server. The researched protocol candidate is revision 2026-07-28, subject to implementation-time compatibility checks. A skill is documentation/client guidance invoking Sentra; it is not a second engine or permission authority. [S42](research/SOURCES.md#s42)
+MCP/API are frontends to the same core application services as the CLI. Start with a trusted local stdio MCP server. The researched protocol candidate is revision 2026-07-28, subject to implementation-time compatibility checks. A skill is documentation/client guidance invoking Sentra; it is not a second engine or permission authority.
 
 Proposed external use cases include scoped project discovery, session planning/status/cancellation, evidence/finding reads, validation requests, patch proposals, and approval requests. Reading restricted artifacts still requires authorization. An external agent can request approval but cannot grant it on behalf of a human. Sensitive dispatch occurs only after the core validates a trusted human approval record.
 
-Remote HTTP remains disabled until transport authentication, resource-scoped authorization, origin checks where relevant, SSRF/destination checks, rate limits, and audit controls pass. Follow the transport-specific authorization model; do not forward unrelated user tokens to downstream services. Tool annotations are descriptive metadata, not security enforcement. [S43](research/SOURCES.md#s43), [S44](research/SOURCES.md#s44)
+Remote HTTP remains disabled until transport authentication, resource-scoped authorization, origin checks where relevant, SSRF/destination checks, rate limits, and audit controls pass. Follow the transport-specific authorization model; do not forward unrelated user tokens to downstream services. Tool annotations are descriptive metadata, not security enforcement.
 
 ## Conformance gate
 

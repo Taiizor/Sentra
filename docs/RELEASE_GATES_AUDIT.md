@@ -3,13 +3,13 @@
 **Status:** ALL GATES PASSED  
 **Audit Date:** 2026-11-08  
 **Auditor:** Sentra Independent Security & Quality Review  
-**Reference:** [ROADMAP.md § Release-wide gates](../../ROADMAP.md#release-wide-gates), [ADR-0007](../adr/0007-open-source-and-integration-licensing.md)  
+**Reference:** [ROADMAP.md § Release-wide gates](../ROADMAP.md#release-wide-gates), [ADR-0007](adr/0007-open-source-and-integration-licensing.md)  
 
 ---
 
 ## 1. Executive Summary
 
-This report performs the formal audit of the **Release-wide gates** mandated by [ROADMAP.md](../../ROADMAP.md#release-wide-gates) prior to public platform distribution. All mandatory technical, isolation, dependency, documentation, and licensing gates have been audited and verified.
+This report performs the formal audit of the **Release-wide gates** mandated by [ROADMAP.md](../ROADMAP.md#release-wide-gates) prior to public platform distribution. All mandatory technical, isolation, dependency, documentation, and licensing gates have been audited and verified.
 
 ---
 
@@ -55,8 +55,8 @@ This report performs the formal audit of the **Release-wide gates** mandated by 
 - No Semgrep-maintained registry rules or CodeQL enterprise components are bundled.
 
 ### 3.5 Operational & Security Limitations (Gate 8)
-- Complete setup and getting-started guide published in [INSTALLATION.md](../INSTALLATION.md).
-- Explicit boundaries, fail-closed target execution limits, and host trust assumptions published in [LIMITATIONS.md](../LIMITATIONS.md).
+- Complete setup and getting-started guide published in [INSTALLATION.md](INSTALLATION.md).
+- Explicit boundaries, fail-closed target execution limits, and host trust assumptions published in [LIMITATIONS.md](LIMITATIONS.md).
 
 ---
 

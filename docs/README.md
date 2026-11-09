@@ -12,7 +12,7 @@ These specifications describe Sentra's runtime architecture, operating modes, da
 
 | Specification | Scope & Focus |
 | :--- | :--- |
-| [**Architecture Overview**](ARCHITECTURE.md) | High-level system topology, core services, and trust boundaries. |
+| [**Architecture Overview**](../ARCHITECTURE.md) | High-level system topology, core services, and trust boundaries. |
 | [**Installation & Quick Start**](INSTALLATION.md) | Setup, compiler prerequisites, build instructions, and CLI usage. |
 | [**Operating Modes**](OPERATING_MODES.md) | Detailed workflows for Continuous Security Review and Deep Research. |
 | [**Threat Model**](THREAT_MODEL.md) | Assets, threat catalog (STRIDE), permission gates, and fail-closed isolation. |
@@ -25,19 +25,12 @@ These specifications describe Sentra's runtime architecture, operating modes, da
 
 ---
 
-## 2. Formal Verification & Security Audit Archive
+## 2. Release & Verification Quality
 
-Sentra adheres to strict, evidence-based security engineering. The directories below preserve the independent review reports, verification evidence, and quality audit trails produced across Sentra's delivery gates:
+Sentra adheres to strict, evidence-based security engineering. All core capabilities across continuous review, autonomous research, plugin extensions, and multi-tenant operations are audited against release-wide quality and containment gates:
 
-| Verification Stage | Scope & Audited Deliverables |
-| :--- | :--- |
-| [**Phase 1: Local Foundation**](phase1/README.md) | SQLite WAL persistence, content-addressed storage, workspace boundaries, and CLI bootstrap. |
-| [**Phase 2: Continuous Review**](phase2/README.md) | Base/head differential review, POSIX cross-platform parity, zero-dependency lockfile audit, and 3-tier patch verification. |
-| [**Phase 3: Deep Security Research**](phase3/PHASE3_FINAL_VERIFICATION.md) | Autonomous campaign engine, Scout/Analyst task fanout, coverage ledgers, and Linux fuzzing integration. |
-| [**Phase 4: Extensions & Integrations**](phase4/PHASE4_FINAL_VERIFICATION.md) | Capability-fenced subprocess plugin SDK and JSON-RPC 2.0 Model Context Protocol (MCP) server. |
-| [**Phase 5: Managed Deployment**](phase5/PHASE5_FINAL_VERIFICATION.md) | HMAC-SHA256 authenticated webhook intake, replay attack defense, and human-gated PR proposals. |
-| [**Phase 6: Enterprise Operations**](phase6/PHASE6_FINAL_VERIFICATION.md) | Multi-tenant session isolation, RBAC permissions, supported-target matrices, and worker fleet leasing. |
-| [**Release-Wide Gates Audit**](release/RELEASE_GATES_AUDIT.md) | Comprehensive cross-platform audit of toolchain pinning, network egress controls, and evidence integrity. |
+- [**Release-Wide Gates Audit**](RELEASE_GATES_AUDIT.md) — Comprehensive cross-platform audit of toolchain pinning, network egress controls, fail-closed containment, and evidence integrity.
+- [**Architectural Decisions (ADRs)**](adr/README.md) — Formal records of accepted design decisions (ADR-0001 through ADR-0010).
 
 ---
 

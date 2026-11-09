@@ -8,7 +8,7 @@
 
 The product is intended to be open source and usable for authorized proprietary-project analysis. Tools, rules, models, datasets, advisory databases, containers, and SDKs may have different terms even when they belong to one product ecosystem.
 
-Semgrep's CE engine and maintained rule sets have distinct licenses and usage restrictions. CodeQL use also has conditions that matter for private targets. These examples prevent treating every publicly available scanner artifact as freely redistributable or universally usable. [S20](../research/SOURCES.md#s20), [S22](../research/SOURCES.md#s22)
+Semgrep's CE engine and maintained rule sets have distinct licenses and usage restrictions. CodeQL use also has conditions that matter for private targets. These examples prevent treating every publicly available scanner artifact as freely redistributable or universally usable.
 
 ## Decision
 

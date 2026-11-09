@@ -7,7 +7,7 @@
 
 AI explanations and scanner alerts can be wrong. A crash may lack security relevance, and a patch may hide a symptom by disabling intended behavior. Continuous review and deep research need the same explicit evidence semantics.
 
-The OpenAI inspiration separates research stages and runtime validation; the Vercel inspiration supplies a contextual change-review workflow. These are source-reported designs, not Sentra implementations. [S02](../research/SOURCES.md#s02), [S01](../research/SOURCES.md#s01)
+The inspiration comes from multi-stage research and runtime validation, alongside contextual change-review workflows.
 
 ## Alternatives
 
@@ -27,7 +27,7 @@ Do not infer fixed status from the absence of a finding in a later scan. A verif
 
 Some plausible findings and patches remain inconclusive. Verification costs time and resources, and multiple calls to the same model may share bias. Independent contexts and execution are mandatory; cross-provider/human review can improve assurance without proving perfect independence.
 
-Minimal safe PoCs are preferred. Full exploitation is not required for every issue and requires a separate approved risk profile. CVSS may describe severity under assumptions; it cannot replace evidence. [S47](../research/SOURCES.md#s47)
+Minimal safe PoCs are preferred. Full exploitation is not required for every issue and requires a separate approved risk profile. CVSS may describe severity under assumptions; it cannot replace evidence.
 
 ## Validation and reversal
 

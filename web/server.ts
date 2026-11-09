@@ -2507,14 +2507,14 @@ Target: Sentra (Pure-Rust Security Platform)
 - **Derived Units:** 14 Canonical Ledger Units seeded across 3 run waves.`;
 
         // Save generated architecture map to disk
-        const archPath = path.resolve(REPO_ROOT, "docs/architecture-recon.md");
+        const archPath = path.resolve(REPO_ROOT, ".sentra/architecture-recon.md");
         await fs.mkdir(path.dirname(archPath), { recursive: true });
         await fs.writeFile(archPath, architectureSummaryMd, "utf8");
 
         recordAuditEvent("PHASE1_RECONNAISSANCE_SYNTHESIZED", {
           totalAgents: agentOutputs.length,
           architectureSummaryLength: architectureSummaryMd.length,
-          outputFile: "docs/architecture-recon.md",
+          outputFile: ".sentra/architecture-recon.md",
         });
 
         const report = {

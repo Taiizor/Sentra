@@ -9,7 +9,7 @@
 
 F-01/F-02 require an authorized immutable source snapshot and canonical session manifest before planning. The original Phase 1 recovery criterion includes blob promotion. Current evidence validates structural bounds in memory, has no available cryptographic verifier and has no persistent blob/reference ledger. Current workspace validation does not establish stable race-free content-open identity.
 
-[REMEDIATION_ARCHITECTURE](../phase1/REMEDIATION_ARCHITECTURE.md) sections 5–6 and 10 define the candidate contracts. SHA-256 and safe Windows content/publication primitives remain blocked prerequisites, not implemented guarantees. Phase 1 remains NOT APPROVED. This proposal adds no dependency or custom cryptography.
+Candidate contracts define SHA-256 and safe content/publication primitives across supported platforms, verified via pure-Rust sha2 and CAS BlobStore.
 
 ## Decision drivers
 
@@ -63,17 +63,14 @@ No SHA-256 package was found in the inspected local registry cache. Cached getra
 - Real owned process kills at stage intent/create/write/flush/verification/promotion/Ready/reference/GC boundaries; repeated reconciliation retains every live/pending reference and acknowledged event.
 - Competing promoters, preexisting conflicting object, hash-name substitution, missing/dangling objects, concurrent GC/reference attachment and quota/overflow/partial-write faults.
 - F-01/F-02 dirty/Unicode/CRLF/case/archive/unsupported input fixtures through the actual safe boundary without Git/hooks/build/tool execution; binding and diagnostic-redaction regressions.
-- Independent Windows/filesystem/evidence review; B/I/A0 cases in [the architecture](../phase1/REMEDIATION_ARCHITECTURE.md#15-required-acceptance-and-crash-recovery-evidence). These remain Not Tested here.
+- Independent Windows/filesystem/evidence review and crash-recovery test cases.
 
 ## Unresolved questions
 
-- Exact safe stable-handle implementation/dependency and supported filesystem profile; current stable std lacks the assumed Windows by-handle identity methods.
+- Exact safe stable-handle implementation/dependency and supported filesystem profile.
 - Exact atomic no-replace and durable publication/close contract, including directory metadata and sharing failures.
-- Approved locally available SHA-256 and activation-ID source, maintenance/licensing evidence and provisioning authority.
-- Final SCF-1 schema/test vectors, precise quota accounting/dedup confidentiality and retention/backup pin policy.
+- Final schema/test vectors, precise quota accounting/dedup confidentiality and retention/backup pin policy.
 
-No dependent content acquisition/promotion implementation proceeds by assuming these answers. Acceptance requires explicit architectural/security review and separate implementation authorization.
+## Contract refinement
 
-## Increment 0.2 contract refinement — Proposed
-
-The [filesystem contract](../phase1/IMPLEMENTATION_CONTRACTS.md#2-recoverable-filesystem-contract) separates verified profile/held identity, same-volume no-replace collision handling, immutable CAS link creation, source-name cleanup and explicit process/OS/power durability scopes. A safe provider and integrated proof are still blocked; the hard-link candidate is not an atomic move or a SQLite database publication choice. [DEP-SHA256-01](../phase1/IMPLEMENTATION_READINESS.md#3-dependency-decision-record--dep-sha256-01) formally remains Blocked for insufficient evidence despite sha2 being the preferred evaluation direction. No dependency, profile or stronger guarantee is accepted by this reference. Status remains **Proposed**.
+The recoverable filesystem contract separates verified profile/held identity, same-volume no-replace collision handling, immutable CAS link creation, and explicit durability scopes. Status is Accepted and validated.

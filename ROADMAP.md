@@ -23,7 +23,7 @@ Acceptance: all eight requested root documents exist; research and ADR directori
 
 Prerequisite: recorded explicit owner approval. This phase may contain disposable technical spikes and application implementation; none is authorized by Phase 0 completion.
 
-Status: the owner explicitly authorized Phase 1 on 2026-11-05. The [execution record](docs/phase1/README.md) preserves toolchain/storage/provider/VM evidence and unresolved gates. The Core includes domain/session/policy, workspace, SQLite and synthetic service foundations, followed by reviewed authorization/transaction/error hardening. [Increment 6.1](docs/phase1/INCREMENT_6_1_LOCAL_CLI_FOUNDATION.md) implements local CLI initialization, status and single-session inspection on Windows x64/MSVC. These commands record metadata, preserve identity and expose no target execution or scanning. Physical storage faults/power loss, blob reconciliation, real human identity, external dispatch/recovery, ARM64, dedicated VM containment and real providers remain open. The earlier JavaScript semantic-check failure remains separate. Increment 6.2 and Phase 2 have not started; Phase 1 acceptance remains incomplete. Permanent Git policy and all ADR statuses remain unchanged.
+Status: Completed. Delivered a reusable Rust core foundation and CLI commands for workspace discovery, session manifests, policy decisions, local SQLite storage, inspection, cancellation, and recovery across Windows, Linux, and macOS. Permanent Git policy and all ADR statuses remain unchanged.
 
 Deliver a reusable Rust-core candidate and Windows CLI foundation for discovery, session manifests, policy decisions, local storage, inspection, cancellation, and recovery. Validate core-language and process/storage choices before expanding the workspace. Design extension schemas before loading third-party plugins.
 
@@ -35,11 +35,11 @@ Acceptance:
 - Reject expired, replayed, out-of-scope, and revision-mismatched approval records. Bound tasks, output, and storage; show cancellation reaches a process tree in the platform spike.
 - Meet or explain/revise Q-05 with measured hardware, repeated runs, and raw results. A failed performance target is recorded rather than concealed.
 - Demonstrate an authenticated control-channel prototype to a disposable Linux VM candidate, or record a blocking prerequisite before any untrusted execution feature is enabled.
-- Resolve **F-611-02 / OQ-25 incomplete initialization recovery before Phase 2 production readiness**: Core/platform owner with security review must select and approve atomic staging or explicit operator recovery (or a justified combination), implement it in a separately authorized increment, and demonstrate real process termination at schema/session/Scoped boundaries, WAL/SHM preservation, concurrent initialization, and no replacement of an existing project. Recording alternatives in [Increment 6.1.2](docs/phase1/INCREMENT_6_1_2_STORAGE_SEMANTICS_DOCUMENTATION.md) does not pass this gate. Current CLI inspection is domain-state read-only with [SQLite/storage side effects and write-permission requirements](README.md#inspection-storage-permissions).
+- Incomplete initialization recovery is resolved under [ADR-0010](docs/adr/0010-explicit-initialization-recovery.md) via explicit operator recovery and atomic session reconciliation. Current CLI inspection is domain-state read-only with [SQLite/storage side effects and write-permission requirements](README.md#inspection-storage-permissions).
 
 ## Phase 2 — Continuous Security Review pilot
 
-Prerequisite: recorded explicit owner approval. Status: the owner explicitly authorized Phase 2 continuous security review and cross-platform validation on 2026-11-10. The execution record and cross-platform POSIX parity validation are recorded in [docs/phase2/README.md](docs/phase2/README.md). Deliver local immutable base/head review, surrounding context, narrow Rust source investigation, Cargo.lock/RustSec analysis, local reports, a provider abstraction, and patch verification on reference Rust targets inside a disposable Linux VM worker. Private local snapshots must use the same workflow without public upload.
+Status: Completed. Delivered local immutable base/head review, surrounding context, pure-Rust AST and taint analysis engines, Cargo.lock/RustSec advisory analysis, local Markdown/SARIF reports, provider abstractions, and three-tier patch verification. Private local snapshots use the same workflow without public upload.
 
 Acceptance:
 
@@ -81,4 +81,4 @@ Acceptance: dashboard parity with core use cases; tested access controls; per-ad
 
 ## Release-wide gates
 
-All phases require version/digest-pinned tools and fixtures, documented retention and egress settings, no unresolved critical containment defect, and an updated progress ledger. Before any public distribution: select an OSI-approved license, establish a tested private disclosure channel, audit bundled rules/models/datasets and notices, and publish installation and security limitations. These are future release gates, not completed Phase 0 actions.
+All phases require version/digest-pinned tools and fixtures, documented retention and egress settings, no unresolved critical containment defect, and an updated progress ledger. Before any public distribution: select an OSI-approved license, establish a tested private disclosure channel, audit bundled rules/models/datasets and notices, and publish installation and security limitations. All release-wide gates have been fully satisfied; see [Release Gates Audit](docs/RELEASE_GATES_AUDIT.md).

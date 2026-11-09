@@ -14,7 +14,7 @@ Repository builds, procedural macros, tests, native analysis tools, fuzz targets
 3. Use a dedicated disposable VM boundary, with optional containers inside.
 4. Require Firecracker/gVisor or a proprietary hosted sandbox immediately.
 
-Docker security, WSL2 integration, Hyper-V, gVisor, and Firecracker have different platform and trust assumptions. See [ISOLATION.md](../research/ISOLATION.md) for primary-source comparison.
+Docker security, WSL2 integration, Hyper-V, gVisor, and Firecracker have different platform and trust assumptions. See [Threat Model](../THREAT_MODEL.md) for isolation boundaries.
 
 ## Decision
 

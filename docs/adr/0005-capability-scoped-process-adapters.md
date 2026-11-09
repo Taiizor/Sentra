@@ -18,9 +18,9 @@ Sentra must integrate heterogeneous providers, analysis tools, languages, resear
 
 Choose option 3. Define family-specific capabilities, supported-target tuples, structured plans/jobs/results, resource limits, provenance, cancellation, and schema negotiation. Keep third-party target-facing adapters in approved workers. Process separation is a compatibility boundary; VM containment remains required.
 
-Avoid a stable Rust dynamic-library ABI and unrestricted shell fallback. WASI may be useful for future restricted data-processing extensions, but is not the universal runtime for native security tools. [S41](../research/SOURCES.md#s41)
+Avoid a stable Rust dynamic-library ABI and unrestricted shell fallback. WASI may be useful for future restricted data-processing extensions, but is not the universal runtime for native security tools.
 
-MCP, API, skills, and dashboard clients call the same core application services. Start MCP with local stdio in Phase 4, after schema and permission conformance. The inspected candidate protocol revision is 2026-07-28. HTTP remains disabled until its separate authentication, authorization, SSRF, and parity gates pass. [S42](../research/SOURCES.md#s42), [S43](../research/SOURCES.md#s43), [S44](../research/SOURCES.md#s44)
+MCP, API, skills, and dashboard clients call the same core application services. Start MCP with local stdio in Phase 4, after schema and permission conformance. The inspected candidate protocol revision is 2026-07-28. HTTP remains disabled until its separate authentication, authorization, SSRF, and parity gates pass.
 
 ## Consequences
 

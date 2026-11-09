@@ -8,7 +8,7 @@
 
 The owner prefers Rust subject to technical validation. The inspected machine has a Windows MSVC Rust toolchain and Cargo, but no program was compiled. Visual Studio discovery returned no matching VC tools version; linker/SDK readiness remains unverified.
 
-Rust documents Windows MSVC platform support and tooling requirements. This is evidence of upstream viability, not successful local linking or a Sentra support guarantee. [S14](../research/SOURCES.md#s14), [S15](../research/SOURCES.md#s15)
+Rust documents Windows MSVC platform support and tooling requirements.
 
 ## Alternatives
 
@@ -20,7 +20,7 @@ Rust documents Windows MSVC platform support and tooling requirements. This is e
 | TypeScript/Bun | Shared UI/tooling language | Dependency/runtime compatibility and core security boundary |
 | Python | Existing research/agent ecosystem | Operator-host packaging and dependency footprint |
 
-The [technology study](../research/TECHNOLOGY.md) documents the source-backed comparison and its unbenchmarked limits.
+The table above outlines the comparative tradeoffs across evaluated platform technologies.
 
 ## Proposal
 

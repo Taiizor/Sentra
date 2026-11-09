@@ -58,4 +58,4 @@ Status: normative design baseline, 2026-11-05. MUST denotes a release requiremen
 | Q-05 | SHOULD complete metadata-only discovery of the reference 10,000-file / at-most-100-MiB text fixture within 30 seconds and 512 MiB peak RSS on recorded hardware. | P1 measurement; exclude Git acquisition and model calls |
 | Q-06 | MUST publish benchmark denominators, failures, attempt counts, budgets, and contamination limitations. | P2/P3 evaluation report |
 
-The [roadmap](ROADMAP.md) maps delivery gates; the [threat model](docs/THREAT_MODEL.md), [data model](docs/DATA_MODEL.md), and [validation plan](docs/VALIDATION.md) define the supporting contracts. Open questions have owners and decision deadlines in [OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md).
+The [roadmap](ROADMAP.md) maps delivery gates; the [threat model](docs/THREAT_MODEL.md), [data model](docs/DATA_MODEL.md), and [release gates audit](docs/RELEASE_GATES_AUDIT.md) define the supporting contracts.

@@ -79,7 +79,7 @@ Reports cite evidence IDs with resolvable local references. Exports include mani
 
 Store severity, confidence, validation basis, exploitability, and business priority separately. Confidence is a reasoned label with evidence, not a model's unsupported probability. Record reachable attacker identity, privileges, required configuration, user interaction, and observed confidentiality/integrity/availability effects.
 
-An optional CVSS v4.0 vector must identify assumptions, author/reviewer, and unresolved metrics. Never fabricate missing metric values to generate a score. CVSS is an assessment format, not a substitute for evidence or organizational risk prioritization. [FIRST specification](research/SOURCES.md#s47)
+An optional CVSS v4.0 vector must identify assumptions, author/reviewer, and unresolved metrics. Never fabricate missing metric values to generate a score. CVSS is an assessment format, not a substitute for evidence or organizational risk prioritization. [FIRST specification](https://www.first.org/cvss/v4.0/specification-document)
 
 ## Storage, retention, and audit limits
 

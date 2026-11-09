@@ -43,7 +43,7 @@ Target code and dependencies may be intentionally malicious. AI outputs, reposit
 | T-13 | Local evidence is rewritten, partially deleted, or inconsistent after crash | Transactions, content digests, staged promotion, recovery, audit-limit disclosure | S-09, Q-03, Q-04 |
 | T-14 | MCP confused deputy, token passthrough, SSRF, or local server compromise | No automatic privilege inheritance, scoped server identity, destination checks, transport auth | S-01, S-04, S-13 |
 
-Prompt injection and agentic risks are documented by OWASP; Sentra's deterministic broker requirements are design responses, not a claim that prompts eliminate the risk. [S45](research/SOURCES.md#s45) MCP's published security guidance motivates additional integration-specific checks. [S44](research/SOURCES.md#s44)
+Prompt injection and agentic risks are documented by OWASP; Sentra's deterministic broker requirements are design responses, not a claim that prompts eliminate the risk. MCP's published security guidance motivates additional integration-specific checks.
 
 ## Permission and approval matrix
 

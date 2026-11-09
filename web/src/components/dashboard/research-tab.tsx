@@ -601,7 +601,7 @@ export function ResearchTab({ campaigns: _campaigns, currentRole }: ResearchTabP
                     Synthesized Architecture Boundary Map (&lt;1,000 Words Cap)
                   </CardTitle>
                   <CardDescription className="text-[11px] font-mono text-muted-foreground">
-                    Saved to docs/architecture-recon.md • Mapped to {reconReport.derivedUnitsCount} Canonical Ledger Units
+                    Saved to .sentra/architecture-recon.md • Mapped to {reconReport.derivedUnitsCount} Canonical Ledger Units
                   </CardDescription>
                 </div>
                 <Badge variant="outline" className="text-[10px] font-mono text-emerald-400 border-emerald-500/30 bg-emerald-500/10">

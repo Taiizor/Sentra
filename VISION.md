@@ -30,7 +30,7 @@ Authorized proprietary source analysis is a product requirement, not a premium h
 
 Continuous Security Review optimizes for bounded latency, change attribution, and low reviewer noise. Deep Security Research optimizes for investigation depth, coverage accounting, and controlled exploration. Both are budgeted and share the same evidence semantics; neither can silently relax policy to meet a deadline.
 
-The inspirations are Vercel's contextual change review and OpenAI's Scout/Analyst research pipeline. Their reported results are external observations, not forecasts for Sentra. See [the landscape study](docs/research/LANDSCAPE.md).
+The inspirations are contextual change review and multi-agent Scout/Analyst research pipelines. Sentra brings these capabilities into a unified, evidence-driven local-first architecture.
 
 ## Product principles
 
@@ -50,4 +50,4 @@ Long-term coverage may include multiple ecosystems, operating systems, container
 
 ## Measures of progress
 
-Measure verified precision, vulnerability reproduction rate, patch verification rate, reviewer acceptance, cost per validated finding, time to first useful evidence, and visible coverage gaps. Track these separately by target family, mode, provider, and tool version. Numerical acceptance gates are defined in [ROADMAP.md](ROADMAP.md) and the [validation plan](docs/VALIDATION.md).
+Measure verified precision, vulnerability reproduction rate, patch verification rate, reviewer acceptance, cost per validated finding, time to first useful evidence, and visible coverage gaps. Track these separately by target family, mode, provider, and tool version. Numerical acceptance gates and release requirements are defined in [ROADMAP.md](ROADMAP.md) and [docs/RELEASE_GATES_AUDIT.md](docs/RELEASE_GATES_AUDIT.md).
