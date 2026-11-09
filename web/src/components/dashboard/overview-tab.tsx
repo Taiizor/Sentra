@@ -23,6 +23,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
+import { SentraLogoIcon } from '@/components/ui/sentra-logo'
 import {
   Table,
   TableBody,
@@ -74,7 +75,7 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab, onOpenLiv
     <div className="flex flex-col gap-6">
       {/* Fail-Closed Platform Security Banner */}
       <Alert className="border-primary/30 bg-primary/5">
-        <ShieldAlert className="size-5 text-primary" />
+        <SentraLogoIcon size={20} className="shrink-0" />
         <AlertTitle className="text-sm font-semibold flex items-center justify-between">
           <span>Fail-Closed Host Boundary & Zero Untrusted Target Execution Active</span>
           <div className="flex items-center gap-2">
