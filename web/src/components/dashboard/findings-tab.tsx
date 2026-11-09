@@ -1,11 +1,9 @@
 import { useState, useMemo } from 'react'
 import { cn } from 'cn'
 import {
-  AlertTriangle,
   GitBranch,
   ShieldCheck,
   Search,
-  ExternalLink,
   ChevronRight,
   Eye,
   ArrowUpDown,
@@ -15,16 +13,13 @@ import {
   Check,
   Download,
   ChevronLeft,
-  Filter,
-  Sparkles,
   CheckCircle2,
   HelpCircle,
   XCircle,
-  FileCode,
-  ShieldAlert,
   Layers,
-  ArrowRight,
   Code2,
+  FileCode2,
+  Sparkles,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { copyText } from '@/lib/clipboard'
@@ -33,6 +28,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { SourceViewer } from '@/components/dashboard/source-viewer'
 import {
   Select,
   SelectContent,
@@ -80,7 +76,7 @@ const SEVERITY_WEIGHT: Record<Severity, number> = {
 export function FindingsTab({
   findings,
   currentRole,
-  onProposePatch,
+  onProposePatch: _onProposePatch,
   onOpenAiPatchModal,
 }: FindingsTabProps) {
   const [searchTerm, setSearchTerm] = useState('')
@@ -829,7 +825,7 @@ export function FindingsTab({
                 <SheetTitle className="text-lg font-bold mt-2 text-zinc-100 leading-snug">
                   {selectedFinding.title}
                 </SheetTitle>
-                <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-zinc-400 font-mono">
+                <SheetDescription className="flex flex-wrap items-center gap-2 mt-1 text-xs text-zinc-400 font-mono">
                   <span>File: {selectedFinding.targetLocation}</span>
                   <span>•</span>
                   <span>Lines: {selectedFinding.startLine}-{selectedFinding.endLine}</span>
@@ -841,7 +837,7 @@ export function FindingsTab({
                       </span>
                     </>
                   )}
-                </div>
+                </SheetDescription>
               </SheetHeader>
 
               {/* Scrollable Inspector Body with Generous Padding */}
@@ -905,6 +901,25 @@ export function FindingsTab({
                     )}
                   </div>
                 )}
+
+                {/* Live Host Source Code & Taint Flow Viewer */}
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <FileCode2 className="size-4 text-primary" />
+                      Live Host Source Inspection & Taint Path
+                    </span>
+                    <Badge variant="outline" className="text-[10px] font-mono text-zinc-400">
+                      Line {selectedFinding.startLine || 1}
+                    </Badge>
+                  </div>
+                  <SourceViewer
+                    filePath={selectedFinding.targetLocation || ''}
+                    targetLine={selectedFinding.startLine}
+                    taintSteps={selectedFinding.taintTrace || []}
+                    fallbackSnippet={selectedFinding.smallestEffectiveFix}
+                  />
+                </div>
 
                 {/* Smallest Effective Source Fix (Cloudflare Audit Doctrine) */}
                 {selectedFinding.smallestEffectiveFix && (

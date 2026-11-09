@@ -2,13 +2,12 @@ import {
   Download,
   Terminal,
   UserCircle,
-  Lock,
   Search,
   Code2,
-  CheckCircle2,
   Plus,
+  FileText,
+  Settings,
 } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -27,6 +26,8 @@ interface HeaderProps {
   tenants: TenantView[]
   onTenantChange: (tenant: TenantId) => void
   onOpenAddTenant: () => void
+  onOpenSettings: () => void
+  onExportReport: () => void
   currentRole: UserRole
   onRoleChange: (role: UserRole) => void
   onExportSarif: () => void
@@ -42,6 +43,8 @@ export function Header({
   tenants,
   onTenantChange,
   onOpenAddTenant,
+  onOpenSettings,
+  onExportReport,
   currentRole,
   onRoleChange,
   onExportSarif,
@@ -158,6 +161,18 @@ export function Header({
             Live Studio
           </Button>
 
+          {/* Executive HTML Report Export */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onExportReport}
+            title="Export Executive CISO & Security Audit HTML Report"
+            className="h-8 text-xs border-zinc-800 bg-zinc-900/60 text-zinc-300 hover:text-primary hover:border-primary/50"
+          >
+            <FileText data-icon="inline-start" />
+            Executive Report
+          </Button>
+
           {/* SARIF Export */}
           <Button
             variant="outline"
@@ -178,6 +193,17 @@ export function Header({
           >
             <Terminal data-icon="inline-start" />
             CLI
+          </Button>
+
+          {/* Platform Settings */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onOpenSettings}
+            title="Platform Settings & AI Model Providers"
+            className="size-8 p-0 border-zinc-800 bg-zinc-900/60 text-zinc-300 hover:text-zinc-100"
+          >
+            <Settings className="size-3.5" />
           </Button>
         </div>
       </div>

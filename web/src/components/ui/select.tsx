@@ -119,20 +119,16 @@ function SelectItem({
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "relative flex w-full cursor-default items-center gap-2 rounded-md py-1.5 pr-9 pl-2.5 text-xs font-medium outline-hidden select-none focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
+        "relative flex w-full cursor-default items-center justify-between gap-3 rounded-md py-1.5 pr-8 pl-2.5 text-xs font-medium outline-hidden select-none hover:bg-zinc-900 focus:bg-zinc-800 focus:text-zinc-100 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
         className
       )}
       {...props}
     >
-      <SelectPrimitive.ItemText className="flex-1 whitespace-nowrap pr-2">
+      <SelectPrimitive.ItemText className="flex-1 whitespace-nowrap text-zinc-200">
         {children}
       </SelectPrimitive.ItemText>
-      <SelectPrimitive.ItemIndicator
-        render={
-          <span className="pointer-events-none absolute right-2.5 flex size-4 items-center justify-center text-primary" />
-        }
-      >
-        <CheckIcon className="size-3.5 pointer-events-none" />
+      <SelectPrimitive.ItemIndicator className="absolute right-2 flex size-4 items-center justify-center text-primary">
+        <CheckIcon className="size-3.5" />
       </SelectPrimitive.ItemIndicator>
     </SelectPrimitive.Item>
   )
