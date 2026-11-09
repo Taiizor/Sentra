@@ -3,10 +3,13 @@ import type {
   CampaignLedgerView,
   DashboardOverview,
   FindingView,
+  OsvAdvisoryView,
   PatchBundleView,
+  SecurityTrendPoint,
   SessionSummaryView,
   TenantId,
   UserRole,
+  WorkerNodeView,
 } from '@/types/sentra'
 
 export interface DashboardState {
@@ -18,6 +21,9 @@ export interface DashboardState {
   patches: PatchBundleView[]
   campaigns: CampaignLedgerView[]
   auditLogs: AuditLogView[]
+  workers: WorkerNodeView[]
+  osvAdvisories: OsvAdvisoryView[]
+  trends: SecurityTrendPoint[]
 }
 
 export const INITIAL_FINDINGS: FindingView[] = [
@@ -34,6 +40,9 @@ export const INITIAL_FINDINGS: FindingView[] = [
     targetLocation: 'src/api/search.rs',
     startLine: 12,
     endLine: 18,
+    cvssScore: 9.8,
+    remediationGuidance:
+      'Use parameterized queries or prepared statement interfaces with bound parameters instead of string formatting.',
     description:
       'Untrusted data originating from HTTP request body flows through intermediate variables without sanitization into a raw SQL query execution sink.',
     taintTrace: [
@@ -85,6 +94,9 @@ export const INITIAL_FINDINGS: FindingView[] = [
     targetLocation: 'services/worker.ts',
     startLine: 45,
     endLine: 48,
+    cvssScore: 9.6,
+    remediationGuidance:
+      'Avoid invoking shell commands with interpolated user input. Use execFile or child_process.spawn with an array of arguments.',
     description:
       'Command-line argument is concatenated directly into a child_process.exec call without shell escaping or command allowlisting.',
     taintTrace: [
@@ -128,7 +140,11 @@ export const INITIAL_FINDINGS: FindingView[] = [
     targetLocation: 'config/cloud_credentials.json',
     startLine: 4,
     endLine: 4,
-    description: 'High-entropy credential matching standard AWS Access Key ID format (AKIA...) embedded in plaintext configuration.',
+    cvssScore: 9.1,
+    remediationGuidance:
+      'Remove credentials from source code immediately. Rotate the exposed key in AWS IAM and load secrets via IAM instance roles or secrets manager.',
+    description:
+      'High-entropy credential matching standard AWS Access Key ID format (AKIA...) embedded in plaintext configuration.',
     createdAt: '2026-11-09T02:40:11Z',
   },
   {
@@ -144,7 +160,11 @@ export const INITIAL_FINDINGS: FindingView[] = [
     targetLocation: 'src/routes/download.ts',
     startLine: 28,
     endLine: 31,
-    description: 'User-controlled route parameter passed to fs.readFile without path.resolve containment check or base directory boundary validation.',
+    cvssScore: 7.5,
+    remediationGuidance:
+      'Verify that resolved file paths start with the expected directory boundary using path.resolve and startsWith check before opening.',
+    description:
+      'User-controlled route parameter passed to fs.readFile without path.resolve containment check or base directory boundary validation.',
     taintTrace: [
       {
         step: 1,
@@ -186,7 +206,11 @@ export const INITIAL_FINDINGS: FindingView[] = [
     targetLocation: 'crates/sentra-core/src/ffi.rs',
     startLine: 88,
     endLine: 92,
-    description: 'An unsafe block was declared without preceding // SAFETY: comment explaining the invariants that make this pointer dereference sound.',
+    cvssScore: 5.3,
+    remediationGuidance:
+      'Document memory invariants with a // SAFETY: comment explaining why pointer alignments, lifetimes, and bounds are guaranteed sound.',
+    description:
+      'An unsafe block was declared without preceding // SAFETY: comment explaining the invariants that make this pointer dereference sound.',
     createdAt: '2026-11-09T01:55:40Z',
   },
   {
@@ -202,7 +226,11 @@ export const INITIAL_FINDINGS: FindingView[] = [
     targetLocation: 'package.json (lodash 4.17.20)',
     startLine: 24,
     endLine: 24,
-    description: 'Versions of lodash prior to 4.17.21 are vulnerable to Prototype Pollution via zipObjectDeep and merge functions.',
+    cvssScore: 7.4,
+    remediationGuidance:
+      'Upgrade lodash to version 4.17.21 or later across all lockfiles.',
+    description:
+      'Versions of lodash prior to 4.17.21 are vulnerable to Prototype Pollution via zipObjectDeep and merge functions.',
     createdAt: '2026-11-09T02:10:00Z',
   },
 ]
@@ -221,6 +249,10 @@ export const INITIAL_PATCHES: PatchBundleView[] = [
     branchName: 'sentra/patch/cwe-89-sql-injection-fnd-8910',
     ghPrCommand:
       'gh pr create --draft --title "[Security] Remediate SQL Injection in search.rs (CWE-89)" --body "Automated Sentra Three-Tier Verified Patch" --base main --head sentra/patch/cwe-89-sql-injection-fnd-8910',
+    originalSnippet: `let query = format!("SELECT * FROM products WHERE desc LIKE '%{}%'", intermediate);
+db.execute(&query);`,
+    patchedSnippet: `let query = "SELECT * FROM products WHERE desc LIKE ?";
+db.execute_with_params(query, &[&intermediate]);`,
     diff: `--- a/src/api/search.rs
 +++ b/src/api/search.rs
 @@ -14,5 +14,5 @@
@@ -243,6 +275,8 @@ export const INITIAL_PATCHES: PatchBundleView[] = [
     branchName: 'sentra/patch/ghsa-p6mc-lodash-upgrade',
     ghPrCommand:
       'gh pr create --draft --title "[Security] Upgrade lodash to 4.17.21 (GHSA-p6mc-m468-83gw)" --body "Automated dependency remediation verified by Sentra" --base main --head sentra/patch/ghsa-p6mc-lodash-upgrade',
+    originalSnippet: `"lodash": "4.17.20"`,
+    patchedSnippet: `"lodash": "4.17.21"`,
     diff: `--- a/package.json
 +++ b/package.json
 @@ -24,3 +24,3 @@
@@ -279,7 +313,9 @@ export const INITIAL_CAMPAIGNS: CampaignLedgerView[] = [
   {
     campaignId: 'cmp-research-cwe-416',
     tenantId: 'sentra-internal',
-    title: 'Deep Research: Memory Safety & Use-After-Free Exploration (CWE-416)',
+    title: 'Memory Safety & Use-After-Free Exploration (CWE-416)',
+    targetArchitecture: 'Linux x86_64 ELF',
+    fuzzEngine: 'libFuzzer + ASan',
     maxBudgetMicroUsd: 5000000,
     spentBudgetMicroUsd: 1240000,
     status: 'ACTIVE',
@@ -290,7 +326,9 @@ export const INITIAL_CAMPAIGNS: CampaignLedgerView[] = [
   {
     campaignId: 'cmp-fuzz-delta-min',
     tenantId: 'sentra-internal',
-    title: 'OSS-CRS Linux User-Space Crash Minimization Campaign',
+    title: 'OSS-CRS Linux User-Space Crash Delta Minimization',
+    targetArchitecture: 'Linux x86_64 ELF',
+    fuzzEngine: 'AddressSanitizer + UBSan',
     maxBudgetMicroUsd: 3000000,
     spentBudgetMicroUsd: 890000,
     status: 'CONCLUDED',
@@ -308,6 +346,7 @@ export const INITIAL_AUDIT_LOGS: AuditLogView[] = [
     actor: 'operator-alice',
     action: 'tenant_registered',
     details: "Workspace 'Sentra Production' registered with IsolationLevel::MultiTenantIsolated",
+    cryptoHash: 'sha256:7f83b165...e92a',
     timestamp: '2026-11-09T01:00:00Z',
   },
   {
@@ -317,6 +356,7 @@ export const INITIAL_AUDIT_LOGS: AuditLogView[] = [
     actor: 'system-scanner',
     action: 'sast_scan_completed',
     details: 'Pure-Rust scan completed across 36 files. 42 signals evaluated, 6 canonical findings admitted.',
+    cryptoHash: 'sha256:4c2199b0...128f',
     timestamp: '2026-11-09T02:10:15Z',
   },
   {
@@ -326,6 +366,7 @@ export const INITIAL_AUDIT_LOGS: AuditLogView[] = [
     actor: 'taint-engine',
     action: 'taint_flow_detected',
     details: 'SENTRA-TAINT-001 identified multi-hop SQL injection from req.body to db.execute',
+    cryptoHash: 'sha256:a13cd882...661c',
     timestamp: '2026-11-09T03:15:02Z',
   },
   {
@@ -335,6 +376,7 @@ export const INITIAL_AUDIT_LOGS: AuditLogView[] = [
     actor: 'verifier-oracle',
     action: 'patch_verified',
     details: 'Three-tier verification invariant satisfied for bundle-001-sql-fix (Baseline: Failed, Patched: Passed, Regressions: Passed)',
+    cryptoHash: 'sha256:f09231ca...34ab',
     timestamp: '2026-11-09T03:30:15Z',
   },
   {
@@ -344,13 +386,113 @@ export const INITIAL_AUDIT_LOGS: AuditLogView[] = [
     actor: 'human-admission',
     action: 'draft_pr_authorized',
     details: 'Operator authorized creation of draft PR sentra/patch/cwe-89-sql-injection-fnd-8910',
+    cryptoHash: 'sha256:55ef8821...99bc',
     timestamp: '2026-11-09T03:40:00Z',
   },
+]
+
+export const INITIAL_WORKERS: WorkerNodeView[] = [
+  {
+    workerId: 'worker-node-hyperv-01',
+    hostname: 'hyperv-runner-az1',
+    architecture: 'x86_64-linux',
+    state: 'LEASED',
+    tenantLease: 'sentra-internal',
+    cpuUsagePercent: 34,
+    memoryUsageMb: 820,
+    egressPolicy: 'StrictlyDenied',
+    activeJob: 'cmp-research-cwe-416 (ASan Fuzzing)',
+  },
+  {
+    workerId: 'worker-node-docker-02',
+    hostname: 'docker-isolated-worker-02',
+    architecture: 'x86_64-linux',
+    state: 'AVAILABLE',
+    tenantLease: null,
+    cpuUsagePercent: 3,
+    memoryUsageMb: 140,
+    egressPolicy: 'StrictlyDenied',
+    activeJob: null,
+  },
+  {
+    workerId: 'worker-node-quarantine-03',
+    hostname: 'hyperv-runner-az3',
+    architecture: 'x86_64-linux',
+    state: 'QUARANTINED',
+    tenantLease: 'tenant-alpha',
+    cpuUsagePercent: 0,
+    memoryUsageMb: 64,
+    egressPolicy: 'StrictlyDenied',
+    activeJob: 'Pending sanitization and reset',
+  },
+]
+
+export const INITIAL_OSV_ADVISORIES: OsvAdvisoryView[] = [
+  {
+    id: 'GHSA-p6mc-m468-83gw',
+    package: 'lodash',
+    ecosystem: 'npm',
+    vulnerability: 'Prototype Pollution in lodash',
+    affectedRange: '< 4.17.21',
+    fixedVersion: '4.17.21',
+    severity: 'High',
+    publishedAt: '2021-05-18T18:00:00Z',
+  },
+  {
+    id: 'RUSTSEC-2021-0145',
+    package: 'atty',
+    ecosystem: 'crates.io',
+    vulnerability: 'Potential unaligned read in atty on Windows',
+    affectedRange: '< 0.2.14',
+    fixedVersion: '0.2.14',
+    severity: 'Medium',
+    publishedAt: '2021-12-04T12:00:00Z',
+  },
+  {
+    id: 'GHSA-qw6h-v559-w396',
+    package: 'express',
+    ecosystem: 'npm',
+    vulnerability: 'Path Traversal via serve-static in express',
+    affectedRange: '< 4.19.2',
+    fixedVersion: '4.19.2',
+    severity: 'High',
+    publishedAt: '2024-03-20T10:00:00Z',
+  },
+  {
+    id: 'GHSA-wf5p-g6vw-rhxx',
+    package: 'axios',
+    ecosystem: 'npm',
+    vulnerability: 'Server-Side Request Forgery (SSRF) bypass in axios',
+    affectedRange: '< 1.7.4',
+    fixedVersion: '1.7.4',
+    severity: 'High',
+    publishedAt: '2024-08-12T14:00:00Z',
+  },
+  {
+    id: 'PYSEC-2023-142',
+    package: 'urllib3',
+    ecosystem: 'PyPI',
+    vulnerability: 'Cookie leakage on cross-origin redirects',
+    affectedRange: '< 2.0.7',
+    fixedVersion: '2.0.7',
+    severity: 'Medium',
+    publishedAt: '2023-10-17T16:00:00Z',
+  },
+]
+
+export const INITIAL_SECURITY_TRENDS: SecurityTrendPoint[] = [
+  { date: '11/01', detected: 4, remediated: 1, activeCritical: 1 },
+  { date: '11/03', detected: 7, remediated: 3, activeCritical: 2 },
+  { date: '11/05', detected: 5, remediated: 4, activeCritical: 1 },
+  { date: '11/07', detected: 9, remediated: 6, activeCritical: 3 },
+  { date: '11/08', detected: 6, remediated: 5, activeCritical: 2 },
+  { date: '11/09', detected: 6, remediated: 2, activeCritical: 3 },
 ]
 
 export const INITIAL_OVERVIEW: DashboardOverview = {
   tenantId: 'sentra-internal',
   workspaceName: 'Sentra Security Core',
+  securityScore: 88,
   totalSessions: 2,
   activeSessions: 1,
   criticalFindings: 3,
