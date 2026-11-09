@@ -816,7 +816,7 @@ const server = Bun.serve({
           finding: any;
           workspace?: string;
           providerConfig?: {
-            provider?: "local" | "openai" | "anthropic" | "gemini" | "deepseek" | "xai" | "openrouter";
+            provider?: "local" | "openai" | "anthropic" | "gemini" | "deepseek" | "xai" | "openrouter" | "opencode";
             endpoint?: string;
             apiKey?: string;
             model?: string;
@@ -1084,6 +1084,42 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
                 branchName = parsed.branchName;
                 commitMessage = parsed.commitMessage;
                 modelUsed = `openrouter:${modelName}`;
+                externalSuccess = true;
+              }
+            } else if (providerCfg.provider === "opencode") {
+              const ep = providerCfg.endpoint || "https://opencode.ai/zen/v1/chat/completions";
+              const modelName = providerCfg.model || "claude-3-7-sonnet";
+              const resp = await fetch(ep, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${providerCfg.apiKey}`,
+                },
+                body: JSON.stringify({
+                  model: modelName,
+                  messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: `Generate verified patch for: ${JSON.stringify(finding)}` },
+                  ],
+                  temperature: 0.1,
+                  response_format: { type: "json_object" },
+                }),
+              });
+
+              if (resp.ok) {
+                const jsonResp: any = await resp.json();
+                const contentText = jsonResp.choices?.[0]?.message?.content?.trim() || "";
+                const cleanJson = contentText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+                const parsed = JSON.parse(cleanJson);
+                rootCauseAnalysis = parsed.rootCauseAnalysis;
+                reproductionTestCode = parsed.reproductionTestCode;
+                originalSnippet = parsed.originalSnippet;
+                patchedSnippet = parsed.patchedSnippet;
+                diff = parsed.diff;
+                regressionOracleProof = parsed.regressionOracleProof;
+                branchName = parsed.branchName;
+                commitMessage = parsed.commitMessage;
+                modelUsed = `opencode:${modelName}`;
                 externalSuccess = true;
               }
             }

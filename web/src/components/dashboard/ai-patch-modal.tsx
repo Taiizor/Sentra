@@ -44,7 +44,7 @@ interface AiPatchModalProps {
   onNavigateToPatches: () => void
 }
 
-type ProviderKind = 'builtin' | 'local' | 'openai' | 'anthropic' | 'gemini' | 'deepseek' | 'xai' | 'openrouter'
+type ProviderKind = 'builtin' | 'local' | 'openai' | 'anthropic' | 'gemini' | 'deepseek' | 'xai' | 'openrouter' | 'opencode'
 
 export function AiPatchModal({
   open,
@@ -248,12 +248,13 @@ export function AiPatchModal({
               </span>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {[
                 { id: 'builtin', label: 'Built-in Synthesizer', desc: 'Zero-latency offline AST' },
+                { id: 'opencode', label: 'OpenCode Zen', desc: 'opencode.ai/zen/v1' },
                 { id: 'deepseek', label: 'DeepSeek V3 / R1', desc: 'api.deepseek.com' },
                 { id: 'xai', label: 'xAI Grok', desc: 'api.x.ai (Grok 2)' },
-                { id: 'openrouter', label: 'OpenRouter / OpenCode', desc: '100+ models gateway' },
+                { id: 'openrouter', label: 'OpenRouter', desc: 'openrouter.ai (100+ models)' },
                 { id: 'gemini', label: 'Google Gemini', desc: 'gemini-2.5-pro / flash' },
                 { id: 'anthropic', label: 'Anthropic Claude', desc: 'Claude 3.7 Sonnet' },
                 { id: 'openai', label: 'OpenAI', desc: 'GPT-4o / o1' },
