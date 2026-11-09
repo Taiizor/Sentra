@@ -1,109 +1,158 @@
 # Sentra
 
-**Autonomous AI Security Research & Verified Remediation Platform**
+**Autonomous AI Security Research & Independently Verified Remediation Platform**
 
 [![CI](https://github.com/Taiizor/Sentra/actions/workflows/ci.yml/badge.svg)](https://github.com/Taiizor/Sentra/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/Taiizor/Sentra/actions/workflows/codeql.yml/badge.svg)](https://github.com/Taiizor/Sentra/actions/workflows/codeql.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Safety](https://img.shields.io/badge/unsafe-forbidden-success.svg)](#architectural-boundaries--key-invariants)
-[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-informational)](#development-prerequisites)
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-informational)](#installation--quick-start)
+[![Runtime](https://img.shields.io/badge/runtime-Safe%20Rust%20%7C%20Bun-orange.svg)](#installation--quick-start)
 
 Sentra is an open-source, extensible, dual-mode security research platform for autonomous repository vulnerability discovery, differential code review, and independently verified patch generation across open-source and proprietary software.
 
+Built from the ground up in Safe Rust (`#![forbid(unsafe_code)]`), Sentra pairs deterministic static analysis and interprocedural taint tracking with autonomous multi-role AI agents (Scout, Analyst, Patch Author) under human-in-the-loop governance.
+
 ---
 
-## Current Status: Phase 0–6 Foundation Complete
+## Key Highlights
 
-All roadmap phases ([Phase 0 through Phase 6](ROADMAP.md)) and all [Release-wide gates](docs/RELEASE_GATES_AUDIT.md) have been implemented, tested, and audited across both the **Windows 11 MSVC** host development environment (461 workspace tests passing) and the isolated **Linux Docker** container test runner (23 independent test suites passing, zero clippy warnings under `-D warnings`, zero formatting discrepancies).
-
-```
-Phase 0: Research, Architecture & Threat Modeling (Complete)
-Phase 1: Core Lifecycle, SQLite WAL Persistence, CAS Storage & Manifests (Complete)
-Phase 2: Continuous Review, Differential Analysis, Lockfile Audit & Patch Verification (Complete)
-Phase 3: Deep Research Campaigns, Scout/Analyst Engine, Coverage Ledgers & Linux Fuzzing (Complete)
-Phase 4: Subprocess Plugin SDK & Local Model Context Protocol (MCP over stdio) Server (Complete)
-Phase 5: Authenticated Webhook Intake (HMAC-SHA256), Replay Defense & Draft PR Proposals (Complete)
-Phase 6: Multi-Tenant Dashboard API, RBAC, Target Matrix & Worker Fleet Management (Complete)
-Release Gates: Toolchain Pinning, Egress Controls, Private Disclosure & Documentation (Audited & Complete)
-```
-
-In accordance with `ADR-0004`, untrusted target execution remains **strictly disabled and fail-closed** by default on the host development machine (`FailClosedBackend`). Real untrusted execution requires an approved disposable Linux VM worker (`ContainmentLevel::DisposableVm`) with strictly denied network egress.
+- 🛡️ **In-Engine Pure-Rust Taint Analysis & SAST:** Zero-dependency lexical data-flow tracking detecting SQL Injection (CWE-89), Command Injection (CWE-78), Dynamic Code Eval (CWE-95), Path Traversal (CWE-22), and hardcoded credential leaks with automatic false-positive suppression.
+- 📦 **12-Ecosystem Advisory Auditor:** Pinned OSV and RustSec vulnerability auditing across lockfile formats: Cargo, Bun, npm (v1/v3), Yarn (classic/berry), pnpm (v6/v9), Poetry, Pip `requirements.txt`, Go `go.sum`, Composer, Gemfile, NuGet, and Deno.
+- 🧪 **The Three-Tier Verification Invariant:** Remediation patches are marked verified if and only if: (1) baseline fails on unpatched code, (2) target passes on remediated code, and (3) zero regressions across existing test suites.
+- 🖥️ **Modern Web Operations Dashboard:** Enterprise React 19 + Tailwind CSS v4 + Base UI + shadcn/ui operations console with interactive Taint Flow call path inspectors, live CLI terminal, advisory hunter, PR dispatcher, and SARIF export.
+- 🤖 **Native Model Context Protocol (MCP) Server:** Built-in JSON-RPC 2.0 stdio transport (`sentra mcp`) enabling deep autonomous collaboration with AI coding assistants (Cursor, Claude Desktop, Antigravity).
+- 🔍 **Pure-Rust Differential Review Engine:** Base/head directory delta analysis with SHA-256 snapshot hashing, 1:1 rename tracking, and context-bounded hunk generation.
+- 🔒 **Fail-Closed Host Isolation:** Untrusted target builds, procedural macros, and reproduction scripts never execute on the operator host. Dedicated disposable Linux VM workers (`ContainmentLevel::DisposableVm`) with strictly denied network egress.
+- 📊 **OASIS SARIF v2.1.0 Standard:** Native import and export for seamless integration with GitHub Code Scanning, GitLab SAST, and CodeQL.
 
 ---
 
 ## Operating Modes
 
-1. **Continuous Security Review:** Reviews immutable base/head commit deltas with narrow context extraction, audits package lockfiles (`Cargo.lock`), matches normalized advisory vulnerabilities, and generates candidate remediation patches verified against automated test oracles.
-2. **Deep Security Research:** Uses specialized Scout, Analyst, and Patch Author agent roles to systematically explore large codebases, generate SHA-256 hypothesis trees, track bounded coverage ledgers, and reproduce vulnerabilities with AddressSanitizer/UBSan fuzzing engines.
-
-Both modes enforce the strict **Three-Tier Verification Invariant**: a patch candidate is admitted as verified if and only if original tests fail on unpatched code, target tests pass on patched code, and all baseline regression test suites pass without regression.
+1. **Continuous Security Review:** Designed for PR and commit workflows. Reviews immutable base/head diffs, audits package manifests, matches known advisories, and generates candidate fixes verified against test oracles.
+2. **Deep Security Research:** Designed for autonomous repository exploration. Organizes Scout, Analyst, and Patch Author agent roles across bounded task DAGs, tracks exploration ledgers (covered vs. skipped units), and reproduces crashes inside isolated workers.
 
 ---
 
-## Getting Started & CLI Usage
+## Architecture & System Topology
 
-Sentra provides a high-performance offline CLI tool (`sentra`) for workspace initialization, repository status inspection, zero-dependency advisory auditing, and crash recovery.
+Sentra employs a local-first, modular architecture where policy enforcement, state transitions, and evidence admission remain deterministic:
 
-Refer to the full [Installation Guide](docs/INSTALLATION.md) for prerequisites and setup.
+```mermaid
+flowchart TD
+    Human["Authorized Operator"] --> CLI["sentra CLI (Rust)"]
+    Human --> Web["Web Console (React 19 + Vite)"]
+    Agents["AI Assistants (Cursor, Claude, Antigravity)"] --> MCP["Model Context Protocol (sentra mcp)"]
 
-### Quick Start Commands
+    CLI --> Core["Sentra Core Engine (#![forbid(unsafe_code)])"]
+    Web --> Server["Bun Backend Server (web/server.ts)"]
+    Server --> Core
+    MCP --> Core
 
-```powershell
-# Display help and available commands
-cargo run --package sentra-cli -- --help
+    subgraph CoreServices ["Deterministic Core Services"]
+        Core --> SAST["Pure-Rust Taint & AST Scanner"]
+        Core --> Advisory["12-Ecosystem Lockfile Auditor"]
+        Core --> DiffEngine["Differential Base/Head Comparator"]
+        Core --> PolicyEngine["Policy & Approval Engine"]
+        Core --> EvidenceVerifier["Three-Tier Evidence Verifier"]
+    end
 
-# Initialize a new local security workspace and foundation session
-cargo run --package sentra-cli -- init `
-  --workspace E:/MyProject/Repo `
-  --database E:/SentraStorage/project.db `
-  --json
+    subgraph DurableStorage ["Durable Local Storage"]
+        Core --> SQLite[("SQLite WAL Metadata Store")]
+        Core --> BlobStore[("Content-Addressed CAS BlobStore")]
+    end
 
-# Inspect workspace health, active session, and discovery metadata
-cargo run --package sentra-cli -- status `
-  --workspace E:/MyProject/Repo `
-  --database E:/SentraStorage/project.db `
-  --json
-
-# Audit package dependencies against pinned RustSec advisories
-cargo run --package sentra-cli -- audit `
-  --database E:/SentraStorage/project.db `
-  --workspace E:/MyProject/Repo `
-  --json
-
-# Recover an interrupted or incomplete initialization store
-cargo run --package sentra-cli -- recover `
-  --workspace E:/MyProject/Repo `
-  --database E:/SentraStorage/project.db `
-  --json
-
-# Compute pure-Rust source snapshot diffs between two directory trees
-cargo run --package sentra-cli -- diff `
-  --base E:/MyProject/Repo-v1 `
-  --head E:/MyProject/Repo-v2 `
-  --json
-
-# Evaluate the 5 mandatory multi-user enterprise hosting security gates
-cargo run --package sentra-cli -- verify-audit --json
-
-# Run the interactive JSON-RPC 2.0 Model Context Protocol (MCP) stdio server
-cargo run --package sentra-cli -- mcp
+    subgraph IsolatedExecution ["Strict Containment Boundary"]
+        EvidenceVerifier -. FailClosedBackend .-> Host["Host OS (Target Execution DENIED)"]
+        EvidenceVerifier -. EgressPolicy::StrictlyDenied .-> VM["Disposable Linux VM Worker"]
+    end
 ```
 
 ---
 
-## Verification & Test Suites
+## Installation & Quick Start
+
+### 1. Prerequisites
+
+- **Rust:** 1.80+ (Stable)
+- **Bun:** 1.2+ (Sole JavaScript/TypeScript runtime and package manager)
+
+### 2. Build the CLI
+
+```bash
+# Clone the repository
+git clone https://github.com/Taiizor/Sentra.git
+cd Sentra
+
+# Install sentra CLI globally (or run cargo build --release)
+cargo install --path crates/sentra-cli
+```
+
+### 3. Essential CLI Commands
+
+```bash
+# Initialize a local project workspace
+sentra init --workspace ./my-project --database ./sentra.db
+
+# Inspect workspace health, active session, and discovery metadata
+sentra status --workspace ./my-project --database ./sentra.db
+
+# Run in-engine pure-Rust taint analysis & secret scanning
+sentra scan --workspace ./my-project
+
+# Scan an inline code snippet with SARIF output
+sentra scan --snippet "let query = 'SELECT * FROM users WHERE id = ' + req.query.id; db.execute(query);"
+
+# Audit package dependencies across 12 lockfile formats against OSV/RustSec
+sentra audit --workspace ./my-project --database ./sentra.db
+
+# Compare two directory snapshots with pure-Rust diff engine
+sentra diff --base ./repo-v1 --head ./repo-v2
+
+# Ingest CodeQL SARIF logs or probe workspace languages
+sentra codeql --workspace ./my-project --sarif ./codeql-results.sarif
+
+# Export all findings to OASIS SARIF v2.1.0 (for GitHub Code Scanning)
+sentra export sarif --database ./sentra.db --workspace ./my-project --output ./results.sarif
+
+# Recover an interrupted or incomplete initialization store
+sentra recover --workspace ./my-project --database ./sentra.db
+
+# Launch the native Model Context Protocol (MCP) stdio server
+sentra mcp
+```
+
+### 4. Run the Web Operations Dashboard
+
+Sentra includes a responsive, modern web operations console built with React 19, Tailwind CSS v4, Base UI, and shadcn/ui:
+
+```bash
+# Start the Bun API backend & Vite dev server
+bun run --cwd web dev
+
+# Open in your browser:
+# http://localhost:5173
+```
+
+---
+
+## Verification & Test Harnesses
 
 Sentra enforces comprehensive test coverage across unit, property, and integration harnesses:
 
-```powershell
-# Run all workspace unit and integration tests (Windows 11 MSVC)
+```bash
+# Run all workspace unit and integration tests (460+ tests passing)
 cargo test --workspace
 
-# Run strict clippy static analysis (fails on any warning)
+# Run strict clippy analysis (fails on any warning)
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 
-# Verify source code formatting
+# Check code formatting
 cargo fmt --all -- --check
+
+# Build web operations dashboard for production
+bun run --cwd web build
 
 # Execute all 23 independent test suites in isolated Linux Docker container
 pwsh -NoProfile -File scripts/docker-test.ps1 -Mode all
@@ -113,35 +162,37 @@ pwsh -NoProfile -File scripts/docker-test.ps1 -Mode all
 
 ## Architectural Boundaries & Key Invariants
 
-- **Bun Sole JavaScript Runtime:** Bun is the sole JavaScript/TypeScript runtime and package manager across Sentra tooling (`bun run`, `bunx`). The Node.js ecosystem (`npm`, `npx`, `pnpm`, `yarn`) is not used.
-- **Fail-Closed Isolation:** Untrusted target builds, procedural macros, and tests are never executed directly on the host development machine.
-- **Zero-Secret Fork Boundary:** Pull requests from untrusted forks are quarantined with `secrets_permitted: false`. Write credentials are strictly stripped before reaching workers.
-- **Anti-Collusion & Confused Deputy Protection:** Automated model agents cannot self-approve remediation proposals. Sensitive operations require explicit human operator admission (`HumanApprovalRequired`).
+- **Safe Rust Strictly Enforced:** `#![forbid(unsafe_code)]` is unconditionally enforced across all core workspace crates.
+- **Bun Sole JavaScript Runtime:** Bun is the sole JavaScript/TypeScript runtime and package manager across Sentra tooling (`bun run`, `bunx`). Node.js, npm, and yarn are not used.
+- **Fail-Closed Host Isolation:** Untrusted target builds, procedural macros, and test executions are strictly blocked from the host operating system (`FailClosedBackend`).
+- **Anti-Collusion & Confused Deputy Protection:** AI model agents propose actions but cannot self-approve remediation proposals or verified statuses.
+- **Zero-Secret Fork Boundary:** Pull requests from untrusted forks are quarantined with `secrets_permitted: false`. Write credentials are stripped before reaching workers.
 - **Multi-Tenant Fencing:** Cross-tenant resource queries and worker allocations fail closed at the domain layer (`CrossTenantAccessDenied`, `CrossTenantWorkerAccessDenied`).
-- **Tamper-Resistant Audit Trail:** All mutations, policy decisions, and approvals emit monotonically sequenced, immutable audit records (`AuditEventKind`).
+- **Monotonic Audit Trail:** All mutations, policy decisions, and approvals emit monotonically sequenced, immutable audit records.
 
 ---
 
 ## Documentation Index
 
-| Document | Purpose |
-|---|---|
-| [Contributing Guide](CONTRIBUTING.md) | Guidelines, invariant checklist, and development workflow |
-| [Code of Conduct](CODE_OF_CONDUCT.md) | Standards of professional conduct and community participation |
-| [Security Policy](SECURITY.md) | Coordinated disclosure process, reporting channels, and SLAs |
-| [Changelog](CHANGELOG.md) | Historical release milestones and version change records |
-| [Installation Guide](docs/INSTALLATION.md) | Setup, compiler prerequisites, and CLI execution |
-| [Limitations & Constraints](docs/LIMITATIONS.md) | Documented security assumptions, assurance limits, and non-goals |
-| [Security Policy](SECURITY.md) | Coordinated disclosure process, reporting channels, and SLAs |
-| [Release Gates Audit](docs/RELEASE_GATES_AUDIT.md) | Formal audit of all release-wide quality and containment gates |
-| [Progress Ledger](PROGRESS.md) | Complete factual history of all implemented increments |
-| [Roadmap](ROADMAP.md) | Dependency-ordered roadmap milestones and acceptance criteria |
-| [Architecture](ARCHITECTURE.md) | High-level system topology, components, and trust boundaries |
-| [Threat Model](docs/THREAT_MODEL.md) | STRIDE analysis, threat catalog, and mitigations |
-| [Data Model](docs/DATA_MODEL.md) | Schemas, SQLite DDL, and domain entity models |
-| [Extensions Architecture](docs/EXTENSIONS.md) | Subprocess plugin SDK, MCP server, and supported-target matrices |
-| [Architecture Decisions (ADRs)](docs/adr/README.md) | Architectural Decision Records (ADR-0001 through ADR-0010) |
-| [Notices & Acknowledgments](NOTICE) | Third-party component licenses and copyright notices |
+| Specification / Guide | Description |
+| :--- | :--- |
+| [**Architecture Overview**](ARCHITECTURE.md) | High-level system topology, core services, and trust boundaries |
+| [**Installation Guide**](docs/INSTALLATION.md) | Comprehensive setup, prerequisites, and operational parameters |
+| [**Operating Modes**](docs/OPERATING_MODES.md) | Workflows for Continuous Security Review and Deep Research |
+| [**Threat Model**](docs/THREAT_MODEL.md) | STRIDE analysis, threat catalog, permission gates, and mitigations |
+| [**Limitations & Constraints**](docs/LIMITATIONS.md) | Explicit security boundaries, assurance limits, and non-goals |
+| [**Data Model**](docs/DATA_MODEL.md) | SQLite schema, Findings, Evidence envelopes, and Patch bundles |
+| [**Extensions & MCP**](docs/EXTENSIONS.md) | Subprocess plugin SDK, Model Context Protocol, and target matrices |
+| [**Agent Model**](docs/AGENT_MODEL.md) | Multi-role autonomous agent architecture (Scout, Analyst, Patch Author) |
+| [**Release Gates Audit**](docs/RELEASE_GATES_AUDIT.md) | Formal audit of all release-wide quality and containment gates |
+| [**Decision Records (ADRs)**](docs/adr/README.md) | Accepted design decisions (ADR-0001 through ADR-0010) |
+| [**Progress Ledger**](PROGRESS.md) | Milestone history and verification evidence |
+| [**Roadmap**](ROADMAP.md) | Delivery milestones and acceptance criteria |
+| [**Contributing Guide**](CONTRIBUTING.md) | Guidelines, invariant checklist, and development workflow |
+| [**Code of Conduct**](CODE_OF_CONDUCT.md) | Standards of professional conduct and community participation |
+| [**Security Policy**](SECURITY.md) | Vulnerability disclosure policy, reporting channels, and SLAs |
+| [**Changelog**](CHANGELOG.md) | Release versions and milestone changes |
+| [**Notices & Acknowledgments**](NOTICE) | Third-party component licenses and copyright notices |
 
 ---
 
