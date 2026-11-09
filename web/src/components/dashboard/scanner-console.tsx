@@ -138,7 +138,7 @@ Aggregate digest: sha256:7f83b165...`
           <div className="flex flex-col gap-1">
             <span className="text-xs text-muted-foreground font-medium">Operation Command:</span>
             <Select value={selectedAction} onValueChange={(val) => setSelectedAction(val ?? 'scan')}>
-              <SelectTrigger className="h-8 text-xs">
+              <SelectTrigger className="h-8 text-xs w-full">
                 <SelectValue placeholder="Action" />
               </SelectTrigger>
               <SelectContent>
