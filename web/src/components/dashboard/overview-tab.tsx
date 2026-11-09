@@ -8,6 +8,7 @@ import {
   TrendingUp,
   Activity,
   Layers,
+  Radio,
 } from 'lucide-react'
 import {
   AreaChart,
@@ -17,6 +18,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
+import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -36,9 +38,10 @@ interface OverviewTabProps {
   sessions: SessionSummaryView[]
   trends: SecurityTrendPoint[]
   onSelectTab: (tab: string) => void
+  onOpenLiveStream?: () => void
 }
 
-export function OverviewTab({ overview, sessions, trends, onSelectTab }: OverviewTabProps) {
+export function OverviewTab({ overview, sessions, trends, onSelectTab, onOpenLiveStream }: OverviewTabProps) {
   const totalFindings =
     overview.criticalFindings +
     overview.highFindings +
@@ -74,9 +77,22 @@ export function OverviewTab({ overview, sessions, trends, onSelectTab }: Overvie
         <ShieldAlert className="size-5 text-primary" />
         <AlertTitle className="text-sm font-semibold flex items-center justify-between">
           <span>Fail-Closed Host Boundary & Zero Untrusted Target Execution Active</span>
-          <Badge variant="outline" className="text-xs font-mono">
-            ADR-0004 &amp; ADR-0005
-          </Badge>
+          <div className="flex items-center gap-2">
+            {onOpenLiveStream && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onOpenLiveStream}
+                className="h-7 text-xs border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 font-semibold"
+              >
+                <Radio className="size-3 mr-1.5 animate-pulse text-primary" />
+                Live Stream Scan
+              </Button>
+            )}
+            <Badge variant="outline" className="text-xs font-mono">
+              ADR-0004 &amp; ADR-0005
+            </Badge>
+          </div>
         </AlertTitle>
         <AlertDescription className="text-xs text-muted-foreground mt-1">
           Untrusted code execution on operator host is strictly disabled (<code className="font-mono">FailClosedBackend</code>).
