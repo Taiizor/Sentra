@@ -18,6 +18,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { copyText } from '@/lib/clipboard'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -143,7 +144,7 @@ export function FindingsTab({ findings, currentRole, onProposePatch }: FindingsT
 
   function handleCopyPath(path: string, e: React.MouseEvent) {
     e.stopPropagation()
-    navigator.clipboard.writeText(path)
+    copyText(path)
     setCopiedPath(path)
     toast.success('Path copied to clipboard', {
       description: path,

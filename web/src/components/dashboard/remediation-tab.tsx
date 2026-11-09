@@ -9,6 +9,7 @@ import {
   FileCode,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { copyText } from '@/lib/clipboard'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -24,7 +25,7 @@ export function RemediationTab({ patches, currentRole }: RemediationTabProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
   function copyToClipboard(text: string, id: string) {
-    navigator.clipboard.writeText(text)
+    copyText(text)
     setCopiedId(id)
     toast.success('GitHub Draft PR Command Copied', {
       description: 'Run in terminal to submit three-tier verified remediation patch.',

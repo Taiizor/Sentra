@@ -15,6 +15,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { copyText } from '@/lib/clipboard'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -143,10 +144,10 @@ export function LiveScannerStudio({ currentRole, onAddFinding }: LiveScannerStud
   }
 
   function handleCopyCode() {
-    navigator.clipboard.writeText(sourceCode)
+    copyText(sourceCode)
     setCopiedCode(true)
     toast.success('Code copied to clipboard')
-    setTimeout(() => setCopiedCode(null as unknown as boolean), 2000)
+    setTimeout(() => setCopiedCode(false), 2000)
   }
 
   async function handleAnalyze() {
