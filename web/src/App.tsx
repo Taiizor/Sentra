@@ -33,6 +33,8 @@ import { ResearchTab } from '@/components/dashboard/research-tab'
 import { WorkerFleetTab } from '@/components/dashboard/worker-fleet-tab'
 import { AuditTab } from '@/components/dashboard/audit-tab'
 import { ScannerConsole } from '@/components/dashboard/scanner-console'
+import { LiveStreamModal } from '@/components/dashboard/live-stream-modal'
+import { AiPatchModal } from '@/components/dashboard/ai-patch-modal'
 
 import {
   INITIAL_AUDIT_LOGS,
@@ -48,12 +50,15 @@ import {
 import { generateSarifJson } from '@/lib/sarif-export'
 import {
   checkApiHealth,
+  fetchRealOverview,
+  fetchRealSessions,
+  fetchRealAuditTrail,
   triggerLiveScan,
   triggerLiveAudit,
   triggerLiveCodeQl,
   transformMatchesToFindings,
 } from '@/lib/api-client'
-import type { FindingView, TenantId, UserRole } from '@/types/sentra'
+import type { FindingView, TenantId, UserRole, SessionSummaryView, AuditLogView } from '@/types/sentra'
 
 export function App() {
   const [currentTenant, setCurrentTenant] = useState<TenantId>('sentra-internal')
@@ -61,6 +66,8 @@ export function App() {
   const [activeTab, setActiveTab] = useState<string>('overview')
   const [isConsoleOpen, setIsConsoleOpen] = useState<boolean>(false)
   const [isCommandOpen, setIsCommandOpen] = useState<boolean>(false)
+  const [isStreamModalOpen, setIsStreamModalOpen] = useState<boolean>(false)
+  const [selectedPatchFinding, setSelectedPatchFinding] = useState<FindingView | null>(null)
   const [sarifModalContent, setSarifModalContent] = useState<string | null>(null)
 
   // Real Workspace State
@@ -74,17 +81,17 @@ export function App() {
   // Data Store
   const [findings, setFindings] = useState<FindingView[]>(INITIAL_FINDINGS)
   const [patches, setPatches] = useState(INITIAL_PATCHES)
-  const [sessions] = useState(INITIAL_SESSIONS)
+  const [sessions, setSessions] = useState<SessionSummaryView[]>(INITIAL_SESSIONS)
   const [campaigns] = useState(INITIAL_CAMPAIGNS)
-  const [auditLogs, setAuditLogs] = useState(INITIAL_AUDIT_LOGS)
+  const [auditLogs, setAuditLogs] = useState<AuditLogView[]>(INITIAL_AUDIT_LOGS)
   const [overview, setOverview] = useState(INITIAL_OVERVIEW)
   const [workers] = useState(INITIAL_WORKERS)
   const [osvAdvisories] = useState(INITIAL_OSV_ADVISORIES)
   const [trends, setTrends] = useState(INITIAL_SECURITY_TRENDS)
 
-  // Check backend health on mount
+  // Check backend health & sync real SQLite storage on mount
   useEffect(() => {
-    async function verifyBackend() {
+    async function initData() {
       const health = await checkApiHealth()
       if (health && health.binaryExists) {
         setBackendConnected(true)
@@ -92,9 +99,63 @@ export function App() {
       } else {
         setBackendConnected(false)
       }
+
+      // Fetch real database state
+      const [realOverview, realSessions, realAudit] = await Promise.all([
+        fetchRealOverview(),
+        fetchRealSessions(),
+        fetchRealAuditTrail(),
+      ])
+
+      if (realOverview) {
+        setOverview((prev) => ({
+          ...prev,
+          totalSessions: realOverview.sessionCount || prev.totalSessions,
+          auditEventCount: realOverview.auditEventCount || prev.auditEventCount,
+        }))
+      }
+
+      if (realSessions && realSessions.length > 0) {
+        const mappedSessions: SessionSummaryView[] = realSessions.map((s) => ({
+          sessionId: s.session_id,
+          tenantId: 'sentra-internal',
+          workspaceRoot: s.workspace || currentWorkspace,
+          state: s.state || 'SCOPED',
+          taskCount: 8,
+          fencingEpoch: s.context_generation || 1,
+          createdAt: s.created_at || new Date().toISOString(),
+          updatedAt: s.updated_at || s.created_at || new Date().toISOString(),
+        }))
+        setSessions(mappedSessions)
+      }
+
+      if (realAudit && realAudit.length > 0) {
+        const mappedAudit: AuditLogView[] = realAudit.map((a) => {
+          let detailsText = a.details_json || ''
+          try {
+            const parsed = JSON.parse(a.details_json)
+            if (parsed.event) {
+              detailsText = JSON.stringify(parsed.event).replace(/[{}"]/g, '')
+            }
+          } catch (e) {}
+
+          return {
+            eventId: a.event_id,
+            tenantId: 'sentra-internal',
+            sequenceNumber: a.sequence_number,
+            actor: a.operator_id || 'sentra-core (rusqlite)',
+            action: a.event_kind,
+            details: detailsText || `Recorded transition for ${a.session_id}`,
+            cryptoHash: a.action_digest || `sha256:${a.event_id.slice(-8)}`,
+            timestamp: a.timestamp,
+          }
+        })
+        setAuditLogs(mappedAudit)
+      }
     }
-    verifyBackend()
-  }, [])
+
+    initData()
+  }, [currentWorkspace])
 
   function getTabTitle(tab: string): string {
     switch (tab) {
@@ -367,6 +428,31 @@ export function App() {
     setActiveTab('remediation')
   }
 
+  function handleAdmitPatch(newPatch: any) {
+    setPatches((prev) => [newPatch, ...prev])
+    setOverview((prev) => ({
+      ...prev,
+      verifiedPatches: prev.verifiedPatches + 1,
+      auditEventCount: prev.auditEventCount + 1,
+    }))
+    setAuditLogs((prev) => [
+      {
+        eventId: `evt-patch-${Date.now().toString().slice(-4)}`,
+        tenantId: currentTenant,
+        sequenceNumber: prev.length + 1,
+        actor: `operator-${currentRole.toLowerCase()}`,
+        action: 'three_tier_patch_verified_admitted',
+        details: `Admitted verified patch ${newPatch.bundleId} for finding ${newPatch.findingId}. Branch: ${newPatch.branchName}`,
+        cryptoHash: `sha256:${Date.now().toString(16)}...`,
+        timestamp: new Date().toISOString(),
+      },
+      ...prev,
+    ])
+    toast.success('Three-Tier Verified Patch Admitted', {
+      description: `Added ${newPatch.bundleId} to active catalog. All invariants verified.`,
+    })
+  }
+
   function handleSyncAdvisories() {
     setAuditLogs((prev) => [
       {
@@ -385,6 +471,53 @@ export function App() {
       ...prev,
       auditEventCount: prev.auditEventCount + 1,
     }))
+  }
+
+  // Handle live stream completion
+  function handleStreamScanComplete(newFindings: FindingView[], rawResult: any) {
+    if (newFindings && newFindings.length > 0) {
+      setFindings(newFindings)
+      const criticalCount = newFindings.filter((f) => f.severity === 'Critical').length
+      const highCount = newFindings.filter((f) => f.severity === 'High').length
+      const mediumCount = newFindings.filter((f) => f.severity === 'Medium').length
+
+      setOverview((prev) => ({
+        ...prev,
+        criticalFindings: criticalCount,
+        highFindings: highCount,
+        mediumFindings: mediumCount,
+        securityScore: Math.max(35, 100 - criticalCount * 12 - highCount * 5),
+        auditEventCount: prev.auditEventCount + 1,
+      }))
+    }
+
+    if (rawResult?.auditEvents && rawResult.auditEvents.length > 0) {
+      const mapped = rawResult.auditEvents.map((a: any) => ({
+        eventId: a.event_id,
+        tenantId: 'sentra-internal',
+        sequenceNumber: a.sequence_number,
+        actor: 'sentra-core (rusqlite)',
+        action: a.event_kind,
+        details: a.details_json || 'Recorded transition in SQLite WAL',
+        cryptoHash: a.action_digest || `sha256:${a.event_id.slice(-8)}`,
+        timestamp: a.timestamp,
+      }))
+      setAuditLogs(mapped)
+    }
+
+    if (rawResult?.sessions && rawResult.sessions.length > 0) {
+      const mappedSessions: SessionSummaryView[] = rawResult.sessions.map((s: any) => ({
+        sessionId: s.session_id,
+        tenantId: 'sentra-internal',
+        workspaceRoot: s.workspace || currentWorkspace,
+        state: s.state || 'SCOPED',
+        taskCount: 8,
+        fencingEpoch: s.context_generation || 1,
+        createdAt: s.created_at || new Date().toISOString(),
+        updatedAt: s.updated_at || s.created_at || new Date().toISOString(),
+      }))
+      setSessions(mappedSessions)
+    }
   }
 
   function handleTriggerScanAction(action: string, workspace: string) {
@@ -446,6 +579,7 @@ export function App() {
               onRunScan={handleRealScan}
               onRunAudit={handleRealAudit}
               onRunCodeQl={handleRealCodeQl}
+              onOpenLiveStream={() => setIsStreamModalOpen(true)}
               isScanning={isScanning}
               isAuditing={isAuditing}
               isCodeQlProbing={isCodeQlProbing}
@@ -468,6 +602,7 @@ export function App() {
                 sessions={sessions}
                 trends={trends}
                 onSelectTab={setActiveTab}
+                onOpenLiveStream={() => setIsStreamModalOpen(true)}
               />
             )}
 
@@ -483,6 +618,7 @@ export function App() {
                 findings={findings}
                 currentRole={currentRole}
                 onProposePatch={handleProposePatch}
+                onOpenAiPatchModal={(finding) => setSelectedPatchFinding(finding)}
               />
             )}
 
@@ -581,6 +717,25 @@ export function App() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Live Stream SSE Modal */}
+        <LiveStreamModal
+          open={isStreamModalOpen}
+          onOpenChange={setIsStreamModalOpen}
+          initialWorkspace={currentWorkspace}
+          onScanComplete={handleStreamScanComplete}
+          onNavigateToFindings={() => setActiveTab('findings')}
+        />
+
+        {/* Autonomous AI Patch & Remediation Modal */}
+        <AiPatchModal
+          open={!!selectedPatchFinding}
+          onOpenChange={(open) => !open && setSelectedPatchFinding(null)}
+          finding={selectedPatchFinding}
+          currentRole={currentRole}
+          onAdmitPatch={handleAdmitPatch}
+          onNavigateToPatches={() => setActiveTab('remediation')}
+        />
 
         {/* Global Sonner Toaster */}
         <Toaster />

@@ -53,6 +53,7 @@ interface FindingsTabProps {
   findings: FindingView[]
   currentRole: UserRole
   onProposePatch: (findingId: string) => void
+  onOpenAiPatchModal: (finding: FindingView) => void
 }
 
 type SortField = 'severity' | 'ruleId' | 'title' | 'targetLocation' | 'reachability'
@@ -66,7 +67,12 @@ const SEVERITY_WEIGHT: Record<Severity, number> = {
   Informational: 0,
 }
 
-export function FindingsTab({ findings, currentRole, onProposePatch }: FindingsTabProps) {
+export function FindingsTab({
+  findings,
+  currentRole,
+  onProposePatch,
+  onOpenAiPatchModal,
+}: FindingsTabProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [severityFilter, setSeverityFilter] = useState<string>('ALL')
   const [reachabilityFilter, setReachabilityFilter] = useState<string>('ALL')
@@ -537,18 +543,33 @@ export function FindingsTab({ findings, currentRole, onProposePatch }: FindingsT
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs px-2 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setSelectedFinding(finding)
-                          }}
-                        >
-                          <Eye className="size-3.5 mr-1" />
-                          Inspect
-                        </Button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs px-2 border-primary/30 bg-primary/10 text-primary hover:bg-primary/20"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onOpenAiPatchModal(finding)
+                            }}
+                          >
+                            <Sparkles className="size-3 mr-1" />
+                            AI Patch
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs px-2 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedFinding(finding)
+                            }}
+                          >
+                            <Eye className="size-3.5 mr-1" />
+                            Inspect
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -747,15 +768,13 @@ export function FindingsTab({ findings, currentRole, onProposePatch }: FindingsT
                     size="sm"
                     disabled={currentRole === 'Viewer'}
                     onClick={() => {
-                      onProposePatch(selectedFinding.findingId)
+                      onOpenAiPatchModal(selectedFinding)
                       setSelectedFinding(null)
-                      toast.success('Patch Candidate Proposed', {
-                        description: `Dispatched three-tier verification for ${selectedFinding.findingId}.`,
-                      })
                     }}
-                    className="font-semibold shadow-md bg-primary text-primary-foreground hover:bg-primary/90 shrink-0"
+                    className="font-semibold shadow-md bg-primary text-primary-foreground hover:bg-primary/90 shrink-0 flex items-center gap-1.5"
                   >
-                    Propose Patch
+                    <Sparkles className="size-3.5" />
+                    Synthesize AI Patch &amp; Tests
                   </Button>
                 </div>
                 {currentRole === 'Viewer' && (

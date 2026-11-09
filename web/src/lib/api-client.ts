@@ -62,6 +62,29 @@ export interface RealDiffResponse {
   deltas: any[]
 }
 
+export interface PathValidationResult {
+  exists: boolean
+  isDirectory?: boolean
+  resolvedPath?: string
+  isGitRepo?: boolean
+  fileCount?: number
+  ecosystems?: {
+    rust: boolean
+    node: boolean
+    bun: boolean
+    pnpm: boolean
+    yarn: boolean
+  }
+  error?: string
+}
+
+export interface StreamLogItem {
+  id: string
+  text: string
+  stream: 'stdout' | 'stderr'
+  timestamp: string
+}
+
 export const API_BASE = '/api'
 
 export async function checkApiHealth(): Promise<{ status: string; binaryPath: string; binaryExists: boolean; defaultStorage: string; repoRoot: string } | null> {
@@ -71,6 +94,51 @@ export async function checkApiHealth(): Promise<{ status: string; binaryPath: st
     return await res.json()
   } catch (err) {
     return null
+  }
+}
+
+export async function fetchRealOverview(): Promise<{ sessionCount: number; auditEventCount: number; latestSession: any; defaultStorage: string; repoRoot: string } | null> {
+  try {
+    const res = await fetch(`${API_BASE}/overview`)
+    if (!res.ok) return null
+    return await res.json()
+  } catch (err) {
+    return null
+  }
+}
+
+export async function fetchRealSessions(): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE}/sessions`)
+    if (!res.ok) return []
+    const data = await res.json()
+    return data.sessions || []
+  } catch (err) {
+    return []
+  }
+}
+
+export async function fetchRealAuditTrail(): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE}/audit-trail`)
+    if (!res.ok) return []
+    const data = await res.json()
+    return data.events || []
+  } catch (err) {
+    return []
+  }
+}
+
+export async function validateWorkspacePath(targetPath: string): Promise<PathValidationResult> {
+  try {
+    const res = await fetch(`${API_BASE}/validate-path`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: targetPath }),
+    })
+    return await res.json()
+  } catch (err: any) {
+    return { exists: false, error: err.message || 'Validation request failed' }
   }
 }
 
@@ -122,6 +190,125 @@ export async function triggerScanSnippet(code: string, language: string): Promis
   })
   if (!res.ok) throw new Error(`Snippet scan failed with HTTP ${res.status}`)
   return await res.json()
+}
+
+export async function generateAiPatch(
+  finding: FindingView,
+  providerConfig?: {
+    provider?: 'local' | 'openai' | 'anthropic' | 'gemini'
+    endpoint?: string
+    apiKey?: string
+    model?: string
+  }
+): Promise<any> {
+  const res = await fetch(`${API_BASE}/ai/generate-patch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ finding, providerConfig }),
+  })
+  if (!res.ok) throw new Error(`AI Patch generation failed with HTTP ${res.status}`)
+  return await res.json()
+}
+
+/**
+ * Robust Server-Sent Events (SSE) Stream Reader with chunk buffering
+ */
+export function streamLiveScan(options: {
+  workspace: string
+  scanType?: 'all' | 'sast' | 'audit' | 'codeql'
+  persist?: boolean
+  onLog: (item: StreamLogItem) => void
+  onProgress: (stage: string, percent: number) => void
+  onComplete: (data: any) => void
+  onError: (err: any) => void
+}): () => void {
+  const controller = new AbortController()
+  const params = new URLSearchParams({
+    workspace: options.workspace,
+    scanType: options.scanType || 'all',
+    persist: options.persist !== false ? 'true' : 'false',
+  })
+
+  async function execute() {
+    try {
+      const response = await fetch(`${API_BASE}/scan-stream?${params.toString()}`, {
+        signal: controller.signal,
+      })
+
+      if (!response.ok || !response.body) {
+        throw new Error(`SSE stream failed with HTTP ${response.status}`)
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let logIndex = 0
+
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const events = buffer.split('\n\n')
+        buffer = events.pop() || ''
+
+        for (const rawEvent of events) {
+          if (!rawEvent.trim()) continue
+          const lines = rawEvent.split('\n')
+          let eventType = 'message'
+          let eventData = ''
+
+          for (const line of lines) {
+            if (line.startsWith('event: ')) {
+              eventType = line.replace('event: ', '').trim()
+            } else if (line.startsWith('data: ')) {
+              eventData = line.replace('data: ', '').trim()
+            }
+          }
+
+          if (!eventData) continue
+
+          try {
+            const parsed = JSON.parse(eventData)
+            if (eventType === 'log') {
+              logIndex++
+              options.onLog({
+                id: `log-${logIndex}-${Date.now()}`,
+                text: parsed.text || '',
+                stream: parsed.stream || 'stdout',
+                timestamp: parsed.timestamp || new Date().toISOString(),
+              })
+            } else if (eventType === 'progress') {
+              options.onProgress(parsed.stage || 'Processing...', parsed.percent || 0)
+            } else if (eventType === 'complete') {
+              options.onComplete(parsed)
+            } else if (eventType === 'error') {
+              options.onError(parsed)
+            }
+          } catch (jsonErr) {
+            console.error('Failed to parse SSE payload:', eventData, jsonErr)
+          }
+        }
+      }
+    } catch (err: any) {
+      if (controller.signal.aborted) {
+        options.onLog({
+          id: `abort-${Date.now()}`,
+          text: '[SENTRA] Scan aborted by operator.',
+          stream: 'stderr',
+          timestamp: new Date().toISOString(),
+        })
+      } else {
+        options.onError(err)
+      }
+    }
+  }
+
+  execute()
+
+  return () => {
+    controller.abort()
+  }
 }
 
 export function transformMatchesToFindings(matches: RealScanMatch[]): FindingView[] {

@@ -10,18 +10,11 @@ import {
   Cpu,
   Layers,
   Sparkles,
+  Radio,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 
 interface WorkspaceTargetBarProps {
   currentWorkspace: string
@@ -29,6 +22,7 @@ interface WorkspaceTargetBarProps {
   onRunScan: () => void
   onRunAudit: () => void
   onRunCodeQl: () => void
+  onOpenLiveStream: () => void
   isScanning: boolean
   isAuditing: boolean
   isCodeQlProbing: boolean
@@ -49,6 +43,7 @@ export function WorkspaceTargetBar({
   onRunScan,
   onRunAudit,
   onRunCodeQl,
+  onOpenLiveStream,
   isScanning,
   isAuditing,
   isCodeQlProbing,
@@ -142,12 +137,22 @@ export function WorkspaceTargetBar({
         <div className="flex items-center gap-2 shrink-0">
           <Button
             size="sm"
+            onClick={onOpenLiveStream}
+            className="h-8 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-md flex items-center gap-1.5"
+          >
+            <Radio className="size-3.5 text-primary-foreground animate-pulse" />
+            Live SSE Stream Scan
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
             disabled={isScanning || !backendConnected}
             onClick={onRunScan}
-            className="h-8 text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
+            className="h-8 text-xs font-medium border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-200"
           >
             <Play className={`size-3.5 mr-1.5 fill-current ${isScanning ? 'animate-spin' : ''}`} />
-            {isScanning ? 'Scanning Disk...' : 'Run Pure-Rust SAST & Taint'}
+            {isScanning ? 'Scanning...' : 'Direct SAST'}
           </Button>
 
           <Button
