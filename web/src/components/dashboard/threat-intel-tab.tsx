@@ -1,26 +1,19 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
   Globe,
   Search,
   ExternalLink,
   RefreshCw,
   Database,
-  CheckCircle2,
-  Sparkles,
+  X,
+  FilterX,
+  ShieldAlert,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -37,22 +30,40 @@ interface ThreatIntelTabProps {
   onSyncAdvisories: () => void
 }
 
-const ECOSYSTEM_PILLS = ['ALL', 'npm', 'crates.io', 'PyPI', 'Go']
+const ECOSYSTEM_OPTIONS = [
+  { id: 'ALL', label: 'All Feeds' },
+  { id: 'npm', label: 'npm' },
+  { id: 'crates.io', label: 'crates.io' },
+  { id: 'PyPI', label: 'PyPI' },
+  { id: 'Go', label: 'Go' },
+]
 
 export function ThreatIntelTab({ advisories, currentRole, onSyncAdvisories }: ThreatIntelTabProps) {
   const [search, setSearch] = useState('')
   const [ecosystem, setEcosystem] = useState('ALL')
   const [isSyncing, setIsSyncing] = useState(false)
 
-  const filtered = advisories.filter((a) => {
-    const matchQuery =
-      a.id.toLowerCase().includes(search.toLowerCase()) ||
-      a.package.toLowerCase().includes(search.toLowerCase()) ||
-      a.vulnerability.toLowerCase().includes(search.toLowerCase())
+  const ecosystemCounts = useMemo(() => {
+    const counts: Record<string, number> = { ALL: advisories.length }
+    for (const a of advisories) {
+      counts[a.ecosystem] = (counts[a.ecosystem] || 0) + 1
+    }
+    return counts
+  }, [advisories])
 
-    const matchEco = ecosystem === 'ALL' || a.ecosystem === ecosystem
-    return matchQuery && matchEco
-  })
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return advisories.filter((a) => {
+      const matchQuery =
+        !q ||
+        a.id.toLowerCase().includes(q) ||
+        a.package.toLowerCase().includes(q) ||
+        a.vulnerability.toLowerCase().includes(q)
+
+      const matchEco = ecosystem === 'ALL' || a.ecosystem === ecosystem
+      return matchQuery && matchEco
+    })
+  }, [advisories, search, ecosystem])
 
   function handleSync() {
     if (currentRole === 'Viewer') return
@@ -66,183 +77,205 @@ export function ThreatIntelTab({ advisories, currentRole, onSyncAdvisories }: Th
     }, 800)
   }
 
+  function getSeverityBadge(severity: string) {
+    switch (severity.toLowerCase()) {
+      case 'critical':
+        return <Badge className="bg-rose-500/15 text-rose-400 border-rose-500/30 text-xs">Critical</Badge>
+      case 'high':
+        return <Badge className="bg-orange-500/15 text-orange-400 border-orange-500/30 text-xs">High</Badge>
+      case 'medium':
+        return <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-xs">Medium</Badge>
+      default:
+        return <Badge variant="outline" className="text-xs text-muted-foreground">{severity}</Badge>
+    }
+  }
+
   return (
-    <div className="flex flex-col gap-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="flex flex-col gap-5">
+      {/* Sleek Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-border/40">
         <div className="flex flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <Globe className="size-5 text-primary" />
-            <h2 className="text-lg font-bold tracking-tight">
-              Universal OSV Threat Intelligence & Feed Sync
+          <div className="flex items-center gap-2">
+            <Globe className="size-4 text-sky-400" />
+            <h2 className="text-base font-semibold tracking-tight text-foreground">
+              OSV Threat Intelligence
             </h2>
-            <Badge variant="outline" className="text-xs">
-              Live Feed Ingestion
+            <Badge variant="outline" className="text-[11px] px-2 py-0 border-sky-500/30 text-sky-400 bg-sky-500/5">
+              Local Mirror
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground">
-            Search universal OSV v1.6 advisory feeds (Google OSV, RustSec, GHSA, PyPI, Go) synchronized
-            directly into Sentra’s local memory database without external API dependencies.
+            Zero-latency offline vulnerability mirror synchronized across npm, crates.io, PyPI, and Go.
           </p>
         </div>
 
         <Button
           size="sm"
+          variant="outline"
           disabled={isSyncing || currentRole === 'Viewer'}
           onClick={handleSync}
-          className="h-8 text-xs w-full sm:w-auto"
+          className="h-8 text-xs font-medium gap-2 shrink-0 border-border/80 hover:bg-accent self-start sm:self-auto"
         >
-          <RefreshCw data-icon="inline-start" className={isSyncing ? 'animate-spin' : ''} />
-          <span className="hidden sm:inline">{isSyncing ? 'Syncing OSV Mirror...' : 'Sync Advisories (sentra sync-advisories)'}</span>
-          <span className="inline sm:hidden">{isSyncing ? 'Syncing...' : 'Sync Advisories'}</span>
+          <RefreshCw className={`size-3.5 text-muted-foreground ${isSyncing ? 'animate-spin text-primary' : ''}`} />
+          <span>{isSyncing ? 'Syncing Feeds...' : 'Sync Mirror'}</span>
         </Button>
       </div>
 
-      {/* Quick Ecosystem Pills */}
-      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 max-w-full">
-        <span className="text-xs font-medium text-zinc-400 mr-2 flex items-center gap-1.5 shrink-0">
-          <Sparkles className="size-3.5 text-primary" />
-          Filter by Ecosystem:
-        </span>
-        {ECOSYSTEM_PILLS.map((eco) => {
-          const isActive = ecosystem === eco
-          return (
-            <Button
-              key={eco}
-              variant={isActive ? 'default' : 'outline'}
-              size="sm"
-              className={`h-7 text-xs rounded-full px-3 transition-all shrink-0 ${
-                isActive
-                  ? 'font-semibold shadow-sm'
-                  : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-300'
-              }`}
-              onClick={() => setEcosystem(eco)}
+      {/* Unified Filter & Search Toolbar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-card/60 border border-border/60 rounded-lg p-2.5">
+        {/* Ecosystem Filter Tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          {ECOSYSTEM_OPTIONS.map((eco) => {
+            const count = ecosystemCounts[eco.id] ?? 0
+            const isActive = ecosystem === eco.id
+            return (
+              <button
+                key={eco.id}
+                onClick={() => setEcosystem(eco.id)}
+                className={`h-7 px-2.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 shrink-0 ${
+                  isActive
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
+                }`}
+              >
+                <span>{eco.label}</span>
+                <span
+                  className={`text-[10px] px-1 py-0.2 rounded-full font-mono ${
+                    isActive ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Search Input */}
+        <div className="relative w-full md:w-72 shrink-0">
+          <Search className="size-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <Input
+            placeholder="Search CVE, package, summary..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8 pr-7 h-7 text-xs bg-background/50 border-border/60 focus-visible:ring-1"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded"
             >
-              {eco === 'ALL' ? 'All Feeds' : eco}
-            </Button>
-          )
-        })}
+              <X className="size-3" />
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Filter Bar */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative flex-1 min-w-[240px]">
-              <Search className="size-4 absolute left-3 top-2.5 text-muted-foreground" />
-              <Input
-                placeholder="Search advisories by CVE, GHSA, package name, or vulnerability..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 h-9 text-xs"
-              />
-            </div>
-
-            <Select value={ecosystem} onValueChange={(val) => setEcosystem(val ?? 'ALL')}>
-              <SelectTrigger className="w-full sm:w-[160px] h-9 text-xs">
-                <SelectValue placeholder="Ecosystem">
-                  {(val: string | null) => {
-                    if (val === 'ALL' || !val) return 'All Ecosystems'
-                    if (val === 'npm') return 'npm / Node.js'
-                    if (val === 'crates.io') return 'crates.io (Rust)'
-                    if (val === 'PyPI') return 'PyPI (Python)'
-                    if (val === 'Go') return 'Go Modules'
-                    return val
-                  }}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="ALL">All Ecosystems</SelectItem>
-                  <SelectItem value="npm">npm / Node.js</SelectItem>
-                  <SelectItem value="crates.io">crates.io (Rust)</SelectItem>
-                  <SelectItem value="PyPI">PyPI (Python)</SelectItem>
-                  <SelectItem value="Go">Go Modules</SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Table */}
-      <Card>
-        <CardHeader>
+      {/* Database Table Card */}
+      <Card className="border-border/60 bg-card/40">
+        <CardHeader className="py-3 px-4 border-b border-border/40">
           <div className="flex items-center justify-between">
-            <div className="flex flex-col">
-              <CardTitle className="text-sm font-semibold">Synchronized Vulnerability Database</CardTitle>
-              <CardDescription className="text-xs">
-                Showing {filtered.length} of {advisories.length} advisory records in memory
-              </CardDescription>
+            <div className="flex items-center gap-2">
+              <Database className="size-3.5 text-muted-foreground" />
+              <CardTitle className="text-xs font-medium text-foreground">
+                Vulnerability Database
+              </CardTitle>
+              <span className="text-[11px] text-muted-foreground">
+                ({filtered.length} of {advisories.length})
+              </span>
             </div>
-            <Badge variant="secondary" className="text-xs flex items-center gap-1 font-mono">
-              <Database className="size-3 text-primary" />
-              SQLite Persistent Store
-            </Badge>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-muted-foreground hidden sm:inline">
+                Storage: In-Memory WAL
+              </span>
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono text-muted-foreground">
+                OSV v1.6
+              </Badge>
+            </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs">Advisory ID</TableHead>
-                  <TableHead className="text-xs">Package</TableHead>
-                  <TableHead className="text-xs">Ecosystem</TableHead>
-                  <TableHead className="text-xs">Vulnerability Summary</TableHead>
-                  <TableHead className="text-xs">Affected Range</TableHead>
-                  <TableHead className="text-xs">Fixed Version</TableHead>
-                  <TableHead className="text-xs">Severity</TableHead>
-                  <TableHead className="text-xs text-right">Upstream Link</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-mono text-xs font-bold text-foreground">
-                      {item.id}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs font-semibold">
-                      {item.package}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs">
-                        {item.ecosystem}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs max-w-[300px] truncate">
-                      {item.vulnerability}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-rose-400">
-                      {item.affectedRange}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-emerald-400 font-bold">
-                      {item.fixedVersion}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={item.severity === 'Critical' || item.severity === 'High' ? 'destructive' : 'outline'}
-                        className="text-xs"
-                      >
-                        {item.severity}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <a
-                        href={`https://github.com/advisories/${item.id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                      >
-                        View
-                        <ExternalLink className="size-3" />
-                      </a>
-                    </TableCell>
+        <CardContent className="p-0">
+          {filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+              <FilterX className="size-8 text-muted-foreground/50 mb-3" />
+              <p className="text-xs font-medium text-foreground">No matching advisories</p>
+              <p className="text-[11px] text-muted-foreground mt-1 max-w-sm">
+                No security advisories matched your filter criteria. Try adjusting the search query or ecosystem.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4 h-7 text-xs"
+                onClick={() => {
+                  setSearch('')
+                  setEcosystem('ALL')
+                }}
+              >
+                Reset Filters
+              </Button>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border/40 hover:bg-transparent">
+                    <TableHead className="text-xs font-medium h-9">Advisory</TableHead>
+                    <TableHead className="text-xs font-medium h-9">Package</TableHead>
+                    <TableHead className="text-xs font-medium h-9">Ecosystem</TableHead>
+                    <TableHead className="text-xs font-medium h-9">Vulnerability</TableHead>
+                    <TableHead className="text-xs font-medium h-9">Affected</TableHead>
+                    <TableHead className="text-xs font-medium h-9">Fixed</TableHead>
+                    <TableHead className="text-xs font-medium h-9">Severity</TableHead>
+                    <TableHead className="text-xs font-medium h-9 text-right pr-4">Action</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((item) => (
+                    <TableRow key={item.id} className="border-border/40 hover:bg-muted/30">
+                      <TableCell className="font-mono text-xs font-semibold text-foreground py-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <ShieldAlert className="size-3 text-muted-foreground shrink-0" />
+                          <span>{item.id}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs font-medium text-foreground/90 py-2.5">
+                        {item.package}
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0">
+                          {item.ecosystem}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs max-w-[280px] truncate text-muted-foreground py-2.5" title={item.vulnerability}>
+                        {item.vulnerability}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-rose-400 py-2.5">
+                        {item.affectedRange}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-emerald-400 font-semibold py-2.5">
+                        {item.fixedVersion}
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        {getSeverityBadge(item.severity)}
+                      </TableCell>
+                      <TableCell className="text-right py-2.5 pr-4">
+                        <a
+                          href={`https://github.com/advisories/${item.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300 transition-colors"
+                        >
+                          Details
+                          <ExternalLink className="size-3" />
+                        </a>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
