@@ -11,6 +11,7 @@ import {
   FileDown,
   Terminal,
   Webhook,
+  Settings,
 } from 'lucide-react'
 import {
   CommandDialog,
@@ -163,6 +164,15 @@ export function CommandPalette({
           >
             <History data-icon="inline-start" />
             <span>Tamper-Resistant Immutable Audit Trail</span>
+          </CommandItem>
+          <CommandItem
+            onSelect={() => {
+              onSelectTab('settings')
+              onOpenChange(false)
+            }}
+          >
+            <Settings data-icon="inline-start" />
+            <span>Platform Settings &amp; Frontier AI Providers</span>
           </CommandItem>
         </CommandGroup>
 

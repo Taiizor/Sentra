@@ -11,35 +11,29 @@ export const VALID_TABS = [
   'fleet',
   'webhooks',
   'audit',
+  'settings',
 ] as const
 
 export type TabId = (typeof VALID_TABS)[number]
 
-const PATH_TO_TAB: Record<string, TabId> = {
-  '': 'overview',
-  '/': 'overview',
-  '/overview': 'overview',
-  '/studio': 'studio',
-  '/findings': 'findings',
-  '/remediation': 'remediation',
-  '/intel': 'intel',
-  '/threat-intel': 'intel',
-  '/research': 'research',
-  '/fleet': 'fleet',
-  '/webhooks': 'webhooks',
-  '/audit': 'audit',
+const ROLE_MAP: Record<string, UserRole> = {
+  viewer: 'Viewer',
+  operator: 'Operator',
+  admin: 'SecurityAdmin',
+  securityadmin: 'SecurityAdmin',
+  'security-admin': 'SecurityAdmin',
 }
 
-const TAB_TO_PATH: Record<TabId, string> = {
-  overview: '/',
-  studio: '/studio',
-  findings: '/findings',
-  remediation: '/remediation',
-  intel: '/intel',
-  research: '/research',
-  fleet: '/fleet',
-  webhooks: '/webhooks',
-  audit: '/audit',
+function roleToSlug(role: UserRole): string {
+  switch (role) {
+    case 'SecurityAdmin':
+      return 'admin'
+    case 'Viewer':
+      return 'viewer'
+    case 'Operator':
+    default:
+      return 'operator'
+  }
 }
 
 export interface RouterState {
@@ -55,35 +49,88 @@ function parseUrlState(): RouterState {
   const searchParams = new URLSearchParams(window.location.search)
   const hash = window.location.hash.replace(/^#\/?/, '')
 
-  // 1. Resolve Active Tab (Priority: Pathname > Hash > SearchParam > Fallback)
-  let activeTab: TabId = PATH_TO_TAB[path] || 'overview'
+  const segments = path.split('/').filter(Boolean)
+
+  let detectedTenant: string | null = null
+  let detectedTab: TabId | null = null
+  let detectedRole: UserRole | null = null
+
+  // 1. Check query parameters first as fallback / explicit override
+  const queryRole = searchParams.get('role')
+  if (queryRole && ROLE_MAP[queryRole.toLowerCase()]) {
+    detectedRole = ROLE_MAP[queryRole.toLowerCase()]
+  }
+
+  const queryTenant = searchParams.get('tenant')
+  if (queryTenant) {
+    detectedTenant = queryTenant
+  }
+
+  const queryTab = searchParams.get('tab')
+  if (queryTab && (VALID_TABS as readonly string[]).includes(queryTab)) {
+    detectedTab = queryTab as TabId
+  }
+
   if (hash && (VALID_TABS as readonly string[]).includes(hash)) {
-    activeTab = hash as TabId
-  }
-  const tabParam = searchParams.get('tab')
-  if (tabParam && (VALID_TABS as readonly string[]).includes(tabParam)) {
-    activeTab = tabParam as TabId
+    detectedTab = hash as TabId
   }
 
-  // 2. Resolve Tenant (SearchParam > LocalStorage > Default)
-  const tenantParam = searchParams.get('tenant')
+  // 2. Parse path segments
+  // Supported structures:
+  // /:tenant/:tab (primary: /acme-corp/overview, /acme-corp/settings)
+  // /:tenant/:role/:tab (/acme-corp/operator/overview)
+  // /:tenant/:tab/:role (/acme-corp/overview/operator)
+  // /:tab (/overview, /settings)
+  // /:tenant (/acme-corp)
+  if (segments.length === 1) {
+    const s0 = segments[0]
+    if ((VALID_TABS as readonly string[]).includes(s0)) {
+      detectedTab = s0 as TabId
+    } else {
+      detectedTenant = s0
+    }
+  } else if (segments.length === 2) {
+    const [s0, s1] = segments
+    if ((VALID_TABS as readonly string[]).includes(s1)) {
+      detectedTenant = s0
+      detectedTab = s1 as TabId
+    } else if (ROLE_MAP[s0.toLowerCase()] && (VALID_TABS as readonly string[]).includes(s1)) {
+      detectedRole = ROLE_MAP[s0.toLowerCase()]
+      detectedTab = s1 as TabId
+    } else if (ROLE_MAP[s1.toLowerCase()]) {
+      detectedTenant = s0
+      detectedRole = ROLE_MAP[s1.toLowerCase()]
+    } else {
+      detectedTenant = s0
+    }
+  } else if (segments.length >= 3) {
+    const [s0, s1, s2] = segments
+    if (ROLE_MAP[s1.toLowerCase()] && (VALID_TABS as readonly string[]).includes(s2)) {
+      detectedTenant = s0
+      detectedRole = ROLE_MAP[s1.toLowerCase()]
+      detectedTab = s2 as TabId
+    } else if ((VALID_TABS as readonly string[]).includes(s1) && ROLE_MAP[s2.toLowerCase()]) {
+      detectedTenant = s0
+      detectedTab = s1 as TabId
+      detectedRole = ROLE_MAP[s2.toLowerCase()]
+    } else if ((VALID_TABS as readonly string[]).includes(s1)) {
+      detectedTenant = s0
+      detectedTab = s1 as TabId
+    }
+  }
+
+  // 3. Fallbacks
   const savedTenant = localStorage.getItem('sentra_tenant')
-  const currentTenant = tenantParam || savedTenant || 'sentra-internal'
+  const currentTenant = (detectedTenant || savedTenant || 'sentra-internal') as TenantId
 
-  // 3. Resolve Role (SearchParam > LocalStorage > Default)
-  const roleParam = searchParams.get('role') as UserRole | null
   const savedRole = localStorage.getItem('sentra_role') as UserRole | null
-  const validRoles: UserRole[] = ['Viewer', 'Operator', 'SecurityAdmin']
-  const currentRole: UserRole =
-    (roleParam && validRoles.includes(roleParam) && roleParam) ||
-    (savedRole && validRoles.includes(savedRole) && savedRole) ||
-    'Operator'
+  const currentRole: UserRole = detectedRole || savedRole || 'Operator'
 
-  // 4. Resolve Workspace
+  const activeTab: TabId = detectedTab || 'overview'
+
   const savedWorkspace = localStorage.getItem('sentra_workspace')
   const currentWorkspace = searchParams.get('workspace') || savedWorkspace || 'E:/MyProject/Mix/GitHub/Sentra'
 
-  // 5. Deep Linked Finding ID
   const selectedFindingId = searchParams.get('finding') || searchParams.get('id') || null
 
   return {
@@ -96,26 +143,26 @@ function parseUrlState(): RouterState {
 }
 
 function syncUrlToHistory(state: RouterState, replace = false) {
-  const path = TAB_TO_PATH[state.activeTab] || `/${state.activeTab}`
-  const params = new URLSearchParams()
+  const tenant = state.currentTenant || 'sentra-internal'
+  const tab = state.activeTab || 'overview'
+  const roleSlug = roleToSlug(state.currentRole)
 
-  if (state.currentTenant && state.currentTenant !== 'sentra-internal') {
-    params.set('tenant', state.currentTenant)
-  }
+  const basePath = `/${tenant}/${roleSlug}/${tab}`
+  const params = new URLSearchParams()
 
   if (state.selectedFindingId && state.activeTab === 'findings') {
     params.set('finding', state.selectedFindingId)
   }
 
   const query = params.toString() ? `?${params.toString()}` : ''
-  const newUrl = `${path}${query}`
+  const newUrl = `${basePath}${query}`
   const currentUrl = `${window.location.pathname}${window.location.search}`
 
   if (newUrl !== currentUrl) {
     if (replace) {
-      window.history.replaceState({ tab: state.activeTab }, '', newUrl)
+      window.history.replaceState({ tab: state.activeTab, tenant: state.currentTenant, role: state.currentRole }, '', newUrl)
     } else {
-      window.history.pushState({ tab: state.activeTab }, '', newUrl)
+      window.history.pushState({ tab: state.activeTab, tenant: state.currentTenant, role: state.currentRole }, '', newUrl)
     }
   }
 

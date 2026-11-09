@@ -35,7 +35,7 @@ import { ScannerConsole } from '@/components/dashboard/scanner-console'
 import { LiveStreamModal } from '@/components/dashboard/live-stream-modal'
 import { AiPatchModal } from '@/components/dashboard/ai-patch-modal'
 import { AddTenantDialog } from '@/components/dashboard/add-tenant-dialog'
-import { SettingsDialog } from '@/components/dashboard/settings-dialog'
+import { SettingsTab } from '@/components/dashboard/settings-tab'
 import { generateExecutiveReportHtml } from '@/lib/executive-report'
 import { useAppRouter } from '@/lib/router'
 
@@ -84,7 +84,6 @@ export function App() {
   const [isCommandOpen, setIsCommandOpen] = useState<boolean>(false)
   const [isStreamModalOpen, setIsStreamModalOpen] = useState<boolean>(false)
   const [isAddTenantOpen, setIsAddTenantOpen] = useState<boolean>(false)
-  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false)
   const [selectedPatchFinding, setSelectedPatchFinding] = useState<FindingView | null>(null)
   const [sarifModalContent, setSarifModalContent] = useState<string | null>(null)
 
@@ -207,6 +206,8 @@ export function App() {
         return 'Continuous Integration Webhook Intake & Automated Proposals'
       case 'audit':
         return 'Tamper-Resistant Immutable Audit Trail'
+      case 'settings':
+        return 'Platform Settings & AI Model Providers'
       default:
         return 'Security Operations Dashboard'
     }
@@ -725,7 +726,6 @@ export function App() {
             tenants={tenants}
             onTenantChange={handleTenantChange}
             onOpenAddTenant={() => setIsAddTenantOpen(true)}
-            onOpenSettings={() => setIsSettingsOpen(true)}
             onExportReport={handleExportReport}
             currentRole={currentRole}
             onRoleChange={setCurrentRole}
@@ -819,6 +819,7 @@ export function App() {
             {activeTab === 'webhooks' && <WebhookTab currentRole={currentRole} />}
 
             {activeTab === 'audit' && <AuditTab auditLogs={tenantAuditLogs} />}
+            {activeTab === 'settings' && <SettingsTab currentRole={currentRole} />}
           </main>
 
           {/* Footer */}
@@ -934,13 +935,6 @@ export function App() {
           currentRole={currentRole}
           onTenantCreated={handleTenantCreated}
           currentWorkspace={currentWorkspace}
-        />
-
-        {/* Global System Settings & AI Provider Credentials Modal */}
-        <SettingsDialog
-          open={isSettingsOpen}
-          onOpenChange={setIsSettingsOpen}
-          currentRole={currentRole}
         />
 
         {/* Global Sonner Toaster */}
