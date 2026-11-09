@@ -7,6 +7,12 @@
       "skillPath": "skills/migrate-radix-to-base/SKILL.md",
       "computedHash": "4fdc31bf287f674ba6bf91a648120f7b34cd7ef370f998f2cc116fed067789c5"
     },
+    "security-audit": {
+      "source": "cloudflare/security-audit-skill",
+      "sourceType": "github",
+      "skillPath": "skills/security-audit/SKILL.md",
+      "computedHash": "c117037eaeb654810fac7d8a05289821848f6e052db11d5d616aa3cf28900036"
+    },
     "shadcn": {
       "source": "shadcn/ui",
       "sourceType": "github",
