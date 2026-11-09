@@ -131,7 +131,25 @@ impl McpServer {
                     .unwrap_or_else(|| serde_json::json!({}));
 
                 match self.execute_tool(tool_name, arguments) {
-                    Ok(result) => McpResponse::success(req_id, result),
+                    Ok(result) => {
+                        let mut mcp_call_result = result.clone();
+                        if let serde_json::Value::Object(ref mut map) = mcp_call_result {
+                            if !map.contains_key("content") {
+                                let text_repr = serde_json::to_string_pretty(&result).unwrap_or_default();
+                                map.insert(
+                                    "content".to_string(),
+                                    serde_json::json!([
+                                        {
+                                            "type": "text",
+                                            "text": text_repr
+                                        }
+                                    ]),
+                                );
+                                map.insert("isError".to_string(), serde_json::json!(false));
+                            }
+                        }
+                        McpResponse::success(req_id, mcp_call_result)
+                    }
                     Err(err) => McpResponse::error(req_id, err),
                 }
             }
