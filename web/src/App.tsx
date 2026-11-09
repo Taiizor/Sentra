@@ -8,6 +8,7 @@ import {
   Check,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { copyText } from '@/lib/clipboard'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
@@ -553,7 +554,7 @@ export function App() {
                 size="sm"
                 onClick={() => {
                   if (sarifModalContent) {
-                    navigator.clipboard.writeText(sarifModalContent)
+                    copyText(sarifModalContent)
                     toast.success('SARIF JSON copied to clipboard')
                   }
                 }}
