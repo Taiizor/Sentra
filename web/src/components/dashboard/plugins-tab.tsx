@@ -108,7 +108,7 @@ export function PluginsTab({ currentWorkspace, currentRole }: PluginsTabProps) {
   async function fetchPlugins() {
     setIsLoading(true)
     try {
-      const res = await fetch('http://localhost:3001/api/plugins')
+      const res = await fetch('/api/plugins')
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       if (Array.isArray(data.plugins)) {
@@ -138,7 +138,7 @@ export function PluginsTab({ currentWorkspace, currentRole }: PluginsTabProps) {
     }))
 
     try {
-      const res = await fetch('http://localhost:3001/api/plugins/probe', {
+      const res = await fetch('/api/plugins/probe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -201,7 +201,7 @@ export function PluginsTab({ currentWorkspace, currentRole }: PluginsTabProps) {
         .map((s) => s.trim())
         .filter(Boolean)
 
-      const res = await fetch('http://localhost:3001/api/plugins/run', {
+      const res = await fetch('/api/plugins/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

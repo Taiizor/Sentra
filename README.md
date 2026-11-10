@@ -134,8 +134,14 @@ sentra mcp
 Sentra includes a responsive, modern web operations console built with React 19, Tailwind CSS v4, Base UI, and shadcn/ui:
 
 ```bash
-# Start the Bun API backend & Vite dev server
+# Start both the Bun API backend (port 3001) and Vite dev server (port 5173) concurrently:
 bun run --cwd web dev
+
+# Or start them in separate terminals if preferred:
+# Terminal 1 - Bun API Bridge:
+bun run web/server.ts
+# Terminal 2 - Vite Frontend:
+bun run --cwd web dev:ui
 
 # Open in your browser:
 # http://localhost:5173
