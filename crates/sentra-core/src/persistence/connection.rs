@@ -117,6 +117,12 @@ pub struct SessionAdmission {
     _parents: Vec<File>,
 }
 
+impl Drop for SessionAdmission {
+    fn drop(&mut self) {
+        let _ = self._file.unlock();
+    }
+}
+
 impl SqliteConnectionManager {
     // The CLI-local lifecycle uses a separate database-wide admission name. It
     // never grants session authority and must not be unlinked by callers.
