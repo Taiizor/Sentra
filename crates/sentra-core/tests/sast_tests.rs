@@ -519,3 +519,142 @@ fn test_detect_supply_chain_curl_pipe() {
     assert_eq!(matches[0].rule.category, RuleCategory::CiCdWorkflow);
     assert_eq!(matches[1].rule.id, "SENTRA-SUPPLY-001");
 }
+
+#[test]
+fn test_detect_go_zipslip_ciphers_and_ssh() {
+    let scanner = SastScanner::new();
+    let go_code = r#"
+        package main
+        import (
+            "crypto/des"
+            "path/filepath"
+            "golang.org/x/crypto/ssh"
+        )
+        func extract(targetDir string, file ZipEntry) {
+            dest := filepath.Join(targetDir, file.Name)
+            c, _ := des.NewCipher([]byte("12345678"))
+            clientConfig := &ssh.ClientConfig{
+                HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+            }
+        }
+    "#;
+    let matches = scanner.scan_content("extractor.go", go_code);
+    let ids: Vec<&str> = matches.iter().map(|m| m.rule.id).collect();
+    assert!(ids.contains(&"SENTRA-GO-005"));
+    assert!(ids.contains(&"SENTRA-GO-006"));
+    assert!(ids.contains(&"SENTRA-GO-007"));
+}
+
+#[test]
+fn test_detect_django_raw_sql_and_template_xss() {
+    let scanner = SastScanner::new();
+    let py_code = r#"
+        from django.db import connection
+        def get_user(request):
+            name = request.GET.get('name')
+            users = Person.objects.raw(f"SELECT * FROM person WHERE name = '{name}'")
+            return users
+    "#;
+    let matches_py = scanner.scan_content("views.py", py_code);
+    let ids_py: Vec<&str> = matches_py.iter().map(|m| m.rule.id).collect();
+    assert!(ids_py.contains(&"SENTRA-DJANGO-004"));
+
+    let template_html = r#"
+        <div class="user-content">
+            {{ user_comment|safe }}
+        </div>
+    "#;
+    let matches_html = scanner.scan_content("templates/comment.html", template_html);
+    let ids_html: Vec<&str> = matches_html.iter().map(|m| m.rule.id).collect();
+    assert!(ids_html.contains(&"SENTRA-DJANGO-005"));
+    assert_eq!(
+        matches_html[0].rule.category,
+        RuleCategory::CrossSiteScripting
+    );
+}
+
+#[test]
+fn test_detect_laravel_raw_sql_and_blade_xss() {
+    let scanner = SastScanner::new();
+    let php_code = r#"
+        <?php
+        $users = DB::table('users')->whereRaw("status = '" . $status . "'")->get();
+    "#;
+    let matches_php = scanner.scan_content("app/Http/Controllers/UserController.php", php_code);
+    let ids_php: Vec<&str> = matches_php.iter().map(|m| m.rule.id).collect();
+    assert!(ids_php.contains(&"SENTRA-LARAVEL-003"));
+
+    let blade_code = r#"
+        <div class="bio">
+            {!! $userProfile->biography !!}
+        </div>
+    "#;
+    let matches_blade = scanner.scan_content("resources/views/profile.blade.php", blade_code);
+    let ids_blade: Vec<&str> = matches_blade.iter().map(|m| m.rule.id).collect();
+    assert!(ids_blade.contains(&"SENTRA-LARAVEL-004"));
+    assert_eq!(
+        matches_blade[0].rule.category,
+        RuleCategory::CrossSiteScripting
+    );
+}
+
+#[test]
+fn test_detect_spring_spel_and_csrf_disabled() {
+    let scanner = SastScanner::new();
+    let java_code = r#"
+        public void configure(HttpSecurity http) throws Exception {
+            http.csrf().disable();
+            Expression exp = parser.parseExpression(userInput + ".length()");
+        }
+    "#;
+    let matches = scanner.scan_content("SecurityConfig.java", java_code);
+    let ids: Vec<&str> = matches.iter().map(|m| m.rule.id).collect();
+    assert!(ids.contains(&"SENTRA-SPRING-003"));
+    assert!(ids.contains(&"SENTRA-SPRING-004"));
+}
+
+#[test]
+fn test_detect_cicd_secret_exfiltration() {
+    let scanner = SastScanner::new();
+    let workflow = r#"
+        name: Build
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo "Super secret is ${{ secrets.SUPER_SECRET }}"
+    "#;
+    let matches = scanner.scan_content(".github/workflows/build.yml", workflow);
+    let ids: Vec<&str> = matches.iter().map(|m| m.rule.id).collect();
+    assert!(ids.contains(&"SENTRA-CICD-006"));
+    assert_eq!(matches[0].rule.category, RuleCategory::Secret);
+}
+
+#[test]
+fn test_detect_auth_pkce_and_jwt_expiration() {
+    let scanner = SastScanner::new();
+    let auth_code = r#"
+        const url = "https://auth.example.com/oauth/authorize?response_type=code&client_id=123";
+        jwt.verify(token, secret, { ignoreExpiration: true });
+    "#;
+    let matches = scanner.scan_content("services/auth.ts", auth_code);
+    let ids: Vec<&str> = matches.iter().map(|m| m.rule.id).collect();
+    assert!(ids.contains(&"SENTRA-AUTH-006"));
+    assert!(ids.contains(&"SENTRA-AUTH-007"));
+}
+
+#[test]
+fn test_detect_api_unbounded_collection() {
+    let scanner = SastScanner::new();
+    let api_code = r#"
+        app.get("/api/products", async (req, res) => {
+            const products = await Product.findAll();
+            res.json(products);
+        });
+    "#;
+    let matches = scanner.scan_content("routes/products.js", api_code);
+    let ids: Vec<&str> = matches.iter().map(|m| m.rule.id).collect();
+    assert!(ids.contains(&"SENTRA-API-002"));
+    assert_eq!(matches[0].rule.category, RuleCategory::ResourceExhaustion);
+}

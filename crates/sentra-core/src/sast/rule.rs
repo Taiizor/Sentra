@@ -36,6 +36,10 @@ pub enum RuleCategory {
     Ssrf,
     /// Mass assignment and unvalidated object property modification.
     MassAssignment,
+    /// Cross-Site Scripting (XSS) and template unescaping flaws.
+    CrossSiteScripting,
+    /// Unrestricted resource consumption and denial of service.
+    ResourceExhaustion,
 }
 
 impl RuleCategory {
@@ -56,6 +60,8 @@ impl RuleCategory {
             Self::SmartContract => "SMART_CONTRACT",
             Self::Ssrf => "SSRF",
             Self::MassAssignment => "MASS_ASSIGNMENT",
+            Self::CrossSiteScripting => "CROSS_SITE_SCRIPTING",
+            Self::ResourceExhaustion => "RESOURCE_EXHAUSTION",
         }
     }
 }
@@ -482,6 +488,130 @@ pub static BUILTIN_RULES: &[SastRule] = &[
         cwe_id: "CWE-494",
         description: "Download and pipe to shell execution (`curl | bash`, `curl | sh`, `wget | sh`) detected in script or workflow. If the transport or remote server is compromised, arbitrary code executes directly.",
         recommendation: "Download packages via verified package managers or verify the SHA-256 checksum of downloaded scripts before execution.",
+    },
+    // Go Filesystem & Cryptography (golang-security skill)
+    SastRule {
+        id: "SENTRA-GO-005",
+        name: "GoZipSlipPathTraversal",
+        category: RuleCategory::PathTraversal,
+        severity: Severity::High,
+        cwe_id: "CWE-29",
+        description: "Go archive extraction (`archive/zip` or `archive/tar`) extracts entries without validating that destination paths do not escape the destination root via `../` (ZipSlip).",
+        recommendation: "Validate each entry path with `filepath.Clean` and check `strings.HasPrefix(destPath, targetDir)` or use `os.Root` in Go 1.24+.",
+    },
+    SastRule {
+        id: "SENTRA-GO-006",
+        name: "GoInsecureCipherMode",
+        category: RuleCategory::Cryptographic,
+        severity: Severity::High,
+        cwe_id: "CWE-327",
+        description: "Use of legacy or broken cryptographic ciphers (e.g. DES via `des.NewCipher`, 3DES via `des.NewTripleDESCipher`, or RC4) in Go code.",
+        recommendation: "Use authenticated symmetric encryption such as AES-256-GCM (`cipher.NewGCM`) or ChaCha20-Poly1305.",
+    },
+    SastRule {
+        id: "SENTRA-GO-007",
+        name: "GoInsecureSshIgnoreHostKey",
+        category: RuleCategory::Authentication,
+        severity: Severity::High,
+        cwe_id: "CWE-295",
+        description: "SSH client uses `ssh.InsecureIgnoreHostKey()` callback, completely disabling host key verification and enabling man-in-the-middle attacks.",
+        recommendation: "Use `knownhosts.New` or a fixed host public key callback (`ssh.FixedHostKey`) instead of ignoring host keys.",
+    },
+    // Django Advanced Checks (django-security skill)
+    SastRule {
+        id: "SENTRA-DJANGO-004",
+        name: "DjangoRawSqlInjection",
+        category: RuleCategory::SqlInjection,
+        severity: Severity::Critical,
+        cwe_id: "CWE-89",
+        description: "Django raw SQL query execution using `.raw(...)`, `.extra(...)`, or `cursor.execute(...)` with string formatting or f-strings.",
+        recommendation: "Pass query parameters as a list or tuple to the query method (e.g. `Model.objects.raw('SELECT * FROM myapp_model WHERE id = %s', [user_id])`).",
+    },
+    SastRule {
+        id: "SENTRA-DJANGO-005",
+        name: "DjangoTemplateXssSafeFilter",
+        category: RuleCategory::CrossSiteScripting,
+        severity: Severity::High,
+        cwe_id: "CWE-79",
+        description: "Django template uses `|safe` filter or `{% autoescape off %}` to disable HTML escaping on potentially user-controlled variables.",
+        recommendation: "Remove `|safe` and rely on Django's default autoescaping, or sanitize content with `bleach` before marking as safe.",
+    },
+    // Laravel Advanced Checks (laravel-security skill)
+    SastRule {
+        id: "SENTRA-LARAVEL-003",
+        name: "LaravelRawSqlInjection",
+        category: RuleCategory::SqlInjection,
+        severity: Severity::Critical,
+        cwe_id: "CWE-89",
+        description: "Laravel query builder uses `DB::raw(...)`, `whereRaw(...)`, `selectRaw(...)`, or `havingRaw(...)` with unparameterized string concatenation.",
+        recommendation: "Use query bindings with question mark placeholders: `->whereRaw('price > ? and status = ?', [$price, $status])`.",
+    },
+    SastRule {
+        id: "SENTRA-LARAVEL-004",
+        name: "LaravelBladeUnescapedXss",
+        category: RuleCategory::CrossSiteScripting,
+        severity: Severity::High,
+        cwe_id: "CWE-79",
+        description: "Laravel Blade template outputs unescaped raw HTML using `{!! $variable !!}` instead of default escaped `{{ $variable }}`.",
+        recommendation: "Use standard `{{ $variable }}` interpolation for automatic `htmlspecialchars` escaping.",
+    },
+    // Spring Boot Advanced Checks (springboot-security skill)
+    SastRule {
+        id: "SENTRA-SPRING-003",
+        name: "SpringBootSpelInjection",
+        category: RuleCategory::CommandInjection,
+        severity: Severity::Critical,
+        cwe_id: "CWE-917",
+        description: "Spring Expression Language (SpEL) parser parses dynamic or user-controlled expressions (`parseExpression(...)`), enabling arbitrary Java code execution.",
+        recommendation: "Use `SimpleEvaluationContext` instead of `StandardEvaluationContext` to prevent arbitrary method invocation and Java type access.",
+    },
+    SastRule {
+        id: "SENTRA-SPRING-004",
+        name: "SpringBootCsrfDisabled",
+        category: RuleCategory::Misconfiguration,
+        severity: Severity::Medium,
+        cwe_id: "CWE-352",
+        description: "Spring Security CSRF protection explicitly disabled (`.csrf().disable()` or `.csrf(AbstractHttpConfigurer::disable)`).",
+        recommendation: "Keep CSRF enabled for cookie-based stateful sessions; if creating stateless REST APIs, ensure authentication is solely token-based.",
+    },
+    // CI/CD Secret Exposure (ci-cd-security skill)
+    SastRule {
+        id: "SENTRA-CICD-006",
+        name: "WorkflowSecretExfiltrationRisk",
+        category: RuleCategory::Secret,
+        severity: Severity::High,
+        cwe_id: "CWE-532",
+        description: "GitHub Actions workflow echoes secrets or writes secret expressions (`${{ secrets.* }}`) into public PR issue comments, logs, or curl request parameters.",
+        recommendation: "Pass secrets only via step `env:` blocks to binaries that natively consume them, and never `echo` secrets into runner output.",
+    },
+    // OAuth2 & JWT Verification (auth-implementation-patterns skill)
+    SastRule {
+        id: "SENTRA-AUTH-006",
+        name: "OAuthMissingStateOrPkce",
+        category: RuleCategory::Authentication,
+        severity: Severity::High,
+        cwe_id: "CWE-352",
+        description: "OAuth 2.0 authorization URL constructed without a cryptographically random `state` parameter or missing PKCE `code_challenge`.",
+        recommendation: "Generate a cryptographically random `state` parameter verified in callback, and mandate PKCE (RFC 7636) for authorization code flows.",
+    },
+    SastRule {
+        id: "SENTRA-AUTH-007",
+        name: "JwtMissingExpirationValidation",
+        category: RuleCategory::Authentication,
+        severity: Severity::High,
+        cwe_id: "CWE-613",
+        description: "JWT verification explicitly disables expiration checking (`ignoreExpiration: true`) or does not enforce the `exp` claim, allowing replayed expired tokens.",
+        recommendation: "Ensure `ignoreExpiration` is false and verify that JWTs have short lifetimes with mandatory `exp` claim enforcement.",
+    },
+    // API Resource Limits (api-security-testing skill)
+    SastRule {
+        id: "SENTRA-API-002",
+        name: "ApiUnboundedResourceCollection",
+        category: RuleCategory::ResourceExhaustion,
+        severity: Severity::Medium,
+        cwe_id: "CWE-770",
+        description: "API route executes unpaginated database queries (`.findAll()`, `.find()`, `SELECT *`) directly returning unbounded collections without `limit`, `take`, or pagination.",
+        recommendation: "Enforce default maximum page sizes (e.g. `limit: Math.min(requestedLimit, 100)`) on all list endpoints.",
     },
 ];
 

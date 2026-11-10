@@ -265,8 +265,12 @@ impl SastScanner {
                 matches.extend(self.check_go_security(rel_path, line_num, line));
             }
 
-            // 15. Django Security Misconfigurations (SENTRA-DJANGO-001 to 003)
-            if rel_path.ends_with(".py") {
+            // 15. Django Security Misconfigurations (SENTRA-DJANGO-001 to 005)
+            if rel_path.ends_with(".py")
+                || rel_path.ends_with(".html")
+                || rel_path.ends_with(".jinja")
+                || rel_path.ends_with(".jinja2")
+            {
                 matches.extend(self.check_django_security(rel_path, line_num, line));
             }
 
@@ -305,8 +309,12 @@ impl SastScanner {
                 matches.push(m);
             }
 
-            // 21. API Security & Mass Assignment (SENTRA-API-001)
-            if rel_path.ends_with(".js") || rel_path.ends_with(".ts") || rel_path.ends_with(".py") {
+            // 21. API Security & Mass Assignment (SENTRA-API-001 to 002)
+            if rel_path.ends_with(".js")
+                || rel_path.ends_with(".ts")
+                || rel_path.ends_with(".py")
+                || rel_path.ends_with(".go")
+            {
                 matches.extend(self.check_api_security(rel_path, line_num, line));
             }
 
@@ -904,6 +912,30 @@ impl SastScanner {
             });
         }
 
+        // 6. Workflow secret echo / exfiltration risk (SENTRA-CICD-006)
+        let is_secret_ref = line.contains("${{ secrets.") || line.contains("${{secrets.");
+        if is_secret_ref
+            && (line.contains("echo ")
+                || line.contains("echo \"")
+                || line.contains("echo '")
+                || line.contains("curl ")
+                || line.contains("wget ")
+                || line.contains("GITHUB_OUTPUT")
+                || line.contains("add-mask"))
+            && !path.contains("test")
+        {
+            let rule = find_rule_by_id("SENTRA-CICD-006").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Workflow echoes or transmits ${{ secrets.* }} directly into logs or network calls"
+                        .to_string(),
+            });
+        }
+
         results
     }
 
@@ -1024,6 +1056,43 @@ impl SastScanner {
                 snippet: trimmed.to_string(),
                 rationale:
                     "Trivial or hardcoded JWT symmetric secret allows token forgery and unauthorized authentication claims"
+                        .to_string(),
+            });
+        }
+
+        // 6. OAuth missing state or PKCE (SENTRA-AUTH-006)
+        if (lower.contains("response_type=code")
+            || lower.contains("response_type: 'code'")
+            || lower.contains("response_type: \"code\"")
+            || (lower.contains("/oauth/authorize") && lower.contains("client_id")))
+            && !lower.contains("state")
+            && !lower.contains("code_challenge")
+            && !path.contains("test")
+        {
+            let rule = find_rule_by_id("SENTRA-AUTH-006").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "OAuth 2.0 authorization request constructed without state or code_challenge parameter, vulnerable to CSRF login and code interception"
+                        .to_string(),
+            });
+        }
+
+        // 7. JWT ignoreExpiration bypass (SENTRA-AUTH-007)
+        if (lower.contains("ignoreexpiration: true") || lower.contains("ignoreexpiration:true"))
+            && !path.contains("test")
+        {
+            let rule = find_rule_by_id("SENTRA-AUTH-007").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "JWT token verification explicitly disables expiration validation with ignoreExpiration: true"
                         .to_string(),
             });
         }
@@ -1176,6 +1245,61 @@ impl SastScanner {
             });
         }
 
+        // 5. Go ZipSlip path traversal in archive extraction (SENTRA-GO-005)
+        let is_zip_slip = (line.contains("filepath.Join(") || line.contains("path.Join("))
+            && (line.contains("file.Name")
+                || line.contains("f.Name")
+                || line.contains("header.Name")
+                || line.contains("hdr.Name")
+                || line.contains("entry.Name"))
+            && !line.contains("filepath.Rel")
+            && !line.contains("os.Root")
+            && !line.contains("filepath.Clean");
+        if is_zip_slip && !path.contains("test") {
+            let rule = find_rule_by_id("SENTRA-GO-005").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Go archive extraction joins unvalidated entry filename, enabling ZipSlip arbitrary directory traversal"
+                        .to_string(),
+            });
+        }
+
+        // 6. Insecure legacy cipher DES/3DES/RC4 (SENTRA-GO-006)
+        if (line.contains("des.NewCipher(")
+            || line.contains("des.NewTripleDESCipher(")
+            || line.contains("rc4.NewCipher("))
+            && !path.contains("test")
+        {
+            let rule = find_rule_by_id("SENTRA-GO-006").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Go code uses obsolete or broken cipher (DES, 3DES, or RC4) vulnerable to cryptanalysis"
+                        .to_string(),
+            });
+        }
+
+        // 7. SSH InsecureIgnoreHostKey bypass (SENTRA-GO-007)
+        if line.contains("ssh.InsecureIgnoreHostKey()") && !path.contains("test") {
+            let rule = find_rule_by_id("SENTRA-GO-007").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Go SSH client disables host key verification via ssh.InsecureIgnoreHostKey(), enabling MitM attacks"
+                        .to_string(),
+            });
+        }
+
         results
     }
 
@@ -1227,6 +1351,46 @@ impl SastScanner {
             });
         }
 
+        // 4. Raw SQL injection via .raw(), .extra(), or cursor.execute() (SENTRA-DJANGO-004)
+        let is_django_raw_sql = (line.contains(".raw(")
+            || line.contains(".extra(")
+            || line.contains("cursor.execute("))
+            && (line.contains("f\"")
+                || line.contains("f'")
+                || line.contains(".format(")
+                || line.contains(" % ")
+                || line.contains(" + "));
+        if is_django_raw_sql && !path.contains("test") {
+            let rule = find_rule_by_id("SENTRA-DJANGO-004").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Django raw SQL query execution constructed with dynamic string interpolation or f-string"
+                        .to_string(),
+            });
+        }
+
+        // 5. Template autoescaping bypass via |safe filter or autoescape off (SENTRA-DJANGO-005)
+        if (line.contains("|safe")
+            || line.contains("| safe")
+            || line.contains("{% autoescape off %}"))
+            && !path.contains("test")
+        {
+            let rule = find_rule_by_id("SENTRA-DJANGO-005").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Django template bypasses HTML autoescaping via |safe filter or autoescape off directive"
+                        .to_string(),
+            });
+        }
+
         results
     }
 
@@ -1264,6 +1428,45 @@ impl SastScanner {
             });
         }
 
+        // 3. Raw SQL injection in Laravel query builder (SENTRA-LARAVEL-003)
+        let is_laravel_raw_sql = (line.contains("DB::raw(")
+            || line.contains("whereRaw(")
+            || line.contains("selectRaw(")
+            || line.contains("havingRaw(")
+            || line.contains("orderByRaw("))
+            && (line.contains('$')
+                || line.contains(" . ")
+                || line.contains("\".$")
+                || line.contains("'.$"));
+        if is_laravel_raw_sql && !path.contains("test") {
+            let rule = find_rule_by_id("SENTRA-LARAVEL-003").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Laravel raw query builder method constructed with string concatenation instead of parameter bindings"
+                        .to_string(),
+            });
+        }
+
+        // 4. Blade unescaped raw HTML output {!! $var !!} (SENTRA-LARAVEL-004)
+        if ((line.contains("{!!") && line.contains("!!}")) || line.contains("{!! $"))
+            && !path.contains("test")
+        {
+            let rule = find_rule_by_id("SENTRA-LARAVEL-004").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Laravel Blade template outputs unescaped raw HTML using {!! !!} tags susceptible to XSS"
+                        .to_string(),
+            });
+        }
+
         results
     }
 
@@ -1293,6 +1496,46 @@ impl SastScanner {
                 snippet: trimmed.to_string(),
                 rationale:
                     "Broad Spring Boot Actuator endpoint exposure leaks sensitive system metrics"
+                        .to_string(),
+            });
+        }
+
+        // 3. SpEL expression injection (SENTRA-SPRING-003)
+        let is_spel = line.contains("parseExpression(")
+            && (line.contains('+')
+                || line.contains("input")
+                || line.contains("param")
+                || line.contains("expr")
+                || line.contains("payload")
+                || line.contains("req."));
+        if is_spel && !path.contains("test") {
+            let rule = find_rule_by_id("SENTRA-SPRING-003").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Spring SpEL ExpressionParser evaluates dynamic expression allowing remote code execution"
+                        .to_string(),
+            });
+        }
+
+        // 4. Spring Security CSRF disabled (SENTRA-SPRING-004)
+        if (line.contains(".csrf().disable()")
+            || line.contains(".csrf(AbstractHttpConfigurer::disable)")
+            || line.contains(".csrf(csrf -> csrf.disable())")
+            || line.contains(".csrf((csrf) -> csrf.disable())"))
+            && !path.contains("test")
+        {
+            let rule = find_rule_by_id("SENTRA-SPRING-004").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Spring Security CSRF protection explicitly disabled on HTTP security configuration"
                         .to_string(),
             });
         }
@@ -1401,6 +1644,27 @@ impl SastScanner {
                 snippet: trimmed.to_string(),
                 rationale: "Direct mass assignment of unvalidated request body into model mutation"
                     .to_string(),
+            });
+        }
+
+        // 2. Unbounded collection query without pagination limit (SENTRA-API-002)
+        if (trimmed.contains(".findAll()")
+            || trimmed.contains(".findMany({})")
+            || trimmed.contains(".find().toArray()")
+            || trimmed.contains(".all().fetch()"))
+            && !trimmed.contains("limit")
+            && !trimmed.contains("take")
+            && !path.contains("test")
+        {
+            let rule = find_rule_by_id("SENTRA-API-002").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "API database collection query executes without limit or pagination, risking memory exhaustion and DoS"
+                        .to_string(),
             });
         }
 
