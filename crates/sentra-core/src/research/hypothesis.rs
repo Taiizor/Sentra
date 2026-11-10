@@ -43,6 +43,16 @@ pub enum VulnerabilityCategory {
     RaceCondition,
     /// Business logic or state machine violation.
     LogicFlaw,
+    /// CI/CD workflow, runner takeover, or supply chain manipulation flaw (CWE-829 / CWE-284).
+    CiCdPipelineFlaw,
+    /// Cryptographic failure, weak algorithm, or side-channel leak (OWASP A04:2025 / CWE-327 / CWE-208).
+    CryptographicFailure,
+    /// Broken access control, IDOR, or BOLA/BFLA (OWASP A01:2025 / CWE-284 / CWE-639).
+    BrokenAccessControl,
+    /// Prompt injection, jailbreak, or agent guardrail bypass (OWASP LLM01 / CWE-693).
+    AgentPromptInjection,
+    /// Mishandling of exceptional conditions or fail-open behavior (OWASP A10:2025 / CWE-754).
+    MishandledExceptions,
 }
 
 impl VulnerabilityCategory {
@@ -62,6 +72,11 @@ impl VulnerabilityCategory {
             Self::FormatString => "format_string",
             Self::RaceCondition => "race_condition",
             Self::LogicFlaw => "logic_flaw",
+            Self::CiCdPipelineFlaw => "cicd_pipeline_flaw",
+            Self::CryptographicFailure => "cryptographic_failure",
+            Self::BrokenAccessControl => "broken_access_control",
+            Self::AgentPromptInjection => "agent_prompt_injection",
+            Self::MishandledExceptions => "mishandled_exceptions",
         }
     }
 }

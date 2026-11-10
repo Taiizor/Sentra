@@ -245,6 +245,24 @@ impl SastScanner {
             if let Some(m) = self.check_path_traversal(rel_path, line_num, line) {
                 matches.push(m);
             }
+
+            // 11. CI/CD Workflow Security (SENTRA-CICD-001 to 004)
+            if rel_path.contains(".github/workflows") || rel_path.ends_with(".yml") || rel_path.ends_with(".yaml") {
+                matches.extend(self.check_cicd_workflow(rel_path, line_num, line));
+            }
+
+            // 12. Authentication and Cryptography Hygiene (SENTRA-AUTH-001 to 003)
+            matches.extend(self.check_auth_and_crypto(rel_path, line_num, line));
+
+            // 13. AI Agent & Skill Safety (SENTRA-SKILL-001 to 002)
+            matches.extend(self.check_agent_skill_security(rel_path, line_num, line));
+
+            // 14. Go Path Traversal Scoping (SENTRA-GO-001)
+            if rel_path.ends_with(".go") {
+                if let Some(m) = self.check_go_path_clean(rel_path, line_num, line) {
+                    matches.push(m);
+                }
+            }
         }
 
         // 11. In-Engine Pure-Rust Semantic Taint Tracking
@@ -731,6 +749,263 @@ impl SastScanner {
             });
         }
 
+        None
+    }
+
+    fn check_cicd_workflow(&self, path: &str, line_num: u32, line: &str) -> Vec<SastMatch> {
+        let mut results = Vec::new();
+        let trimmed = line.trim();
+
+        // 1. pull_request_target trigger (SENTRA-CICD-001)
+        if trimmed.starts_with("pull_request_target:")
+            || trimmed == "pull_request_target"
+            || trimmed.contains(" pull_request_target:")
+        {
+            if let Some(rule) = find_rule_by_id("SENTRA-CICD-001") {
+                results.push(SastMatch {
+                    rule: rule.clone(),
+                    file_path: path.to_string(),
+                    line_number: line_num,
+                    snippet: trimmed.to_string(),
+                    rationale:
+                        "Workflow triggers on pull_request_target with privileged access to secrets and write tokens"
+                            .to_string(),
+                });
+            }
+        }
+
+        // 2. Script template injection in ${{ ... }} (SENTRA-CICD-002)
+        let is_untrusted_event_expr = line.contains("${{ github.event.")
+            || line.contains("${{github.event.")
+            || line.contains("${{ github.head_ref")
+            || line.contains("${{github.head_ref");
+        if is_untrusted_event_expr
+            && (line.contains("run:")
+                || trimmed.starts_with("- run:")
+                || trimmed.starts_with("run:")
+                || line.contains("echo ")
+                || line.contains("bash ")
+                || line.contains("sh "))
+        {
+            if let Some(rule) = find_rule_by_id("SENTRA-CICD-002") {
+                results.push(SastMatch {
+                    rule: rule.clone(),
+                    file_path: path.to_string(),
+                    line_number: line_num,
+                    snippet: trimmed.to_string(),
+                    rationale:
+                        "Untrusted GitHub context expression interpolated directly into shell execution"
+                            .to_string(),
+                });
+            }
+        }
+
+        // 3. permissions: write-all (SENTRA-CICD-003)
+        if trimmed.contains("permissions: write-all")
+            || trimmed.contains("permissions: 'write-all'")
+            || trimmed.contains("permissions: \"write-all\"")
+        {
+            if let Some(rule) = find_rule_by_id("SENTRA-CICD-003") {
+                results.push(SastMatch {
+                    rule: rule.clone(),
+                    file_path: path.to_string(),
+                    line_number: line_num,
+                    snippet: trimmed.to_string(),
+                    rationale:
+                        "Workflow grants write-all permissions to GITHUB_TOKEN, violating principle of least privilege"
+                            .to_string(),
+                });
+            }
+        }
+
+        // 4. Environment file injection (SENTRA-CICD-004)
+        if (line.contains(">> $GITHUB_ENV")
+            || line.contains(">> \"$GITHUB_ENV\"")
+            || line.contains(">> $GITHUB_OUTPUT")
+            || line.contains(">> \"$GITHUB_OUTPUT\""))
+            && line.contains("${{")
+        {
+            if let Some(rule) = find_rule_by_id("SENTRA-CICD-004") {
+                results.push(SastMatch {
+                    rule: rule.clone(),
+                    file_path: path.to_string(),
+                    line_number: line_num,
+                    snippet: trimmed.to_string(),
+                    rationale:
+                        "Untrusted expression appended directly to GITHUB_ENV or GITHUB_OUTPUT without delimiter isolation"
+                            .to_string(),
+                });
+            }
+        }
+
+        results
+    }
+
+    fn check_auth_and_crypto(&self, path: &str, line_num: u32, line: &str) -> Vec<SastMatch> {
+        let mut results = Vec::new();
+        let trimmed = line.trim();
+
+        // 1. Timing attack in secret/signature comparison (SENTRA-AUTH-001)
+        let has_eq = line.contains(" === ") || line.contains(" == ");
+        if has_eq {
+            let lower = line.to_ascii_lowercase();
+            let is_secret_comp = (lower.contains("token")
+                || lower.contains("secret")
+                || lower.contains("signature")
+                || lower.contains("apikey")
+                || lower.contains("api_key")
+                || lower.contains("passwordhash")
+                || lower.contains("password_hash"))
+                && (lower.contains("===") || lower.contains("=="))
+                && !lower.contains("constanttimecompare")
+                && !lower.contains("timingsafeequal")
+                && !lower.contains("constant_time")
+                && !lower.contains("typeof")
+                && !lower.contains("null")
+                && !lower.contains("undefined")
+                && !lower.contains("\"\"")
+                && !lower.contains("''");
+
+            if is_secret_comp {
+                if let Some(rule) = find_rule_by_id("SENTRA-AUTH-001") {
+                    results.push(SastMatch {
+                        rule: rule.clone(),
+                        file_path: path.to_string(),
+                        line_number: line_num,
+                        snippet: trimmed.to_string(),
+                        rationale:
+                            "Variable-time comparison of secret, token, or cryptographic signature susceptible to side-channel timing attacks"
+                                .to_string(),
+                    });
+                }
+            }
+        }
+
+        // 2. Insecure JWT none algorithm or verify disabled (SENTRA-AUTH-002)
+        let lower = line.to_ascii_lowercase();
+        if (lower.contains("algorithm") && (lower.contains("'none'") || lower.contains("\"none\"")))
+            || (lower.contains("jwt")
+                && (lower.contains("verify: false") || lower.contains("verify:false")))
+        {
+            if let Some(rule) = find_rule_by_id("SENTRA-AUTH-002") {
+                results.push(SastMatch {
+                    rule: rule.clone(),
+                    file_path: path.to_string(),
+                    line_number: line_num,
+                    snippet: trimmed.to_string(),
+                    rationale:
+                        "JWT configuration permits insecure 'none' algorithm or disables signature verification"
+                            .to_string(),
+                });
+            }
+        }
+
+        // 3. Weak password hash algorithm (MD5 or SHA1) (SENTRA-AUTH-003)
+        if (lower.contains("createhash('md5')")
+            || lower.contains("createhash(\"md5\")")
+            || lower.contains("createhash('sha1')")
+            || lower.contains("createhash(\"sha1\")")
+            || lower.contains("md5(")
+            || lower.contains("sha1("))
+            && (lower.contains("password")
+                || lower.contains("passwd")
+                || lower.contains("credential"))
+        {
+            if let Some(rule) = find_rule_by_id("SENTRA-AUTH-003") {
+                results.push(SastMatch {
+                    rule: rule.clone(),
+                    file_path: path.to_string(),
+                    line_number: line_num,
+                    snippet: trimmed.to_string(),
+                    rationale:
+                        "Weak cryptographic digest (MD5/SHA1) used in credential or password handling"
+                            .to_string(),
+                });
+            }
+        }
+
+        results
+    }
+
+    fn check_agent_skill_security(&self, path: &str, line_num: u32, line: &str) -> Vec<SastMatch> {
+        let mut results = Vec::new();
+        let trimmed = line.trim();
+        let lower = line.to_ascii_lowercase();
+
+        // 1. Agent prompt injection / instruction bypass (SENTRA-SKILL-001)
+        if lower.contains("ignore previous instructions")
+            || lower.contains("ignore all previous instructions")
+            || lower.contains("system prompt override")
+            || lower.contains("classify this skill as benign")
+            || lower.contains("mark this skill as safe")
+        {
+            // Exclude definition in our own detector/rules
+            if !path.ends_with("scanner.rs") && !path.ends_with("rule.rs") {
+                if let Some(rule) = find_rule_by_id("SENTRA-SKILL-001") {
+                    results.push(SastMatch {
+                        rule: rule.clone(),
+                        file_path: path.to_string(),
+                        line_number: line_num,
+                        snippet: trimmed.to_string(),
+                        rationale:
+                            "Instruction injection or prompt override pattern detected in agent skill/instruction payload"
+                                .to_string(),
+                    });
+                }
+            }
+        }
+
+        // 2. Agent credential harvesting (SENTRA-SKILL-002)
+        if (lower.contains("process.env") || lower.contains("env::var"))
+            && (lower.contains("send")
+                || lower.contains("upload")
+                || lower.contains("webhook")
+                || lower.contains("post(")
+                || lower.contains("fetch(")
+                || lower.contains("http"))
+            && (lower.contains("secret")
+                || lower.contains("key")
+                || lower.contains("token")
+                || lower.contains("password"))
+        {
+            if !path.ends_with("scanner.rs") && !path.ends_with("rule.rs") {
+                if let Some(rule) = find_rule_by_id("SENTRA-SKILL-002") {
+                    results.push(SastMatch {
+                        rule: rule.clone(),
+                        file_path: path.to_string(),
+                        line_number: line_num,
+                        snippet: trimmed.to_string(),
+                        rationale:
+                            "Environment credential harvesting routine detected attempting remote data transmission"
+                                .to_string(),
+                    });
+                }
+            }
+        }
+
+        results
+    }
+
+    fn check_go_path_clean(&self, path: &str, line_num: u32, line: &str) -> Option<SastMatch> {
+        if line.contains("filepath.Clean(")
+            && (line.contains("req.")
+                || line.contains("input")
+                || line.contains("param")
+                || line.contains("userPath"))
+            && !line.contains("filepath.Rel(")
+            && !line.contains("os.Root")
+        {
+            let rule = find_rule_by_id("SENTRA-GO-001")?.clone();
+            return Some(SastMatch {
+                rule,
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: line.trim().to_string(),
+                rationale:
+                    "Go filepath.Clean used on user input without root directory boundary containment (filepath.Rel or os.Root)"
+                        .to_string(),
+            });
+        }
         None
     }
 }

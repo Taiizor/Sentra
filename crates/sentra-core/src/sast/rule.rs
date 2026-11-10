@@ -20,6 +20,14 @@ pub enum RuleCategory {
     UnsoundUnsafe,
     /// Path traversal or unvalidated filesystem access.
     PathTraversal,
+    /// CI/CD workflow and supply chain security antipatterns.
+    CiCdWorkflow,
+    /// Authentication, session, and credential verification flaws.
+    Authentication,
+    /// Cryptographic weaknesses and side-channel timing leaks.
+    Cryptographic,
+    /// Agent skill, prompt injection, and plugin safety risks.
+    AgentSkillSecurity,
 }
 
 impl RuleCategory {
@@ -32,6 +40,10 @@ impl RuleCategory {
             Self::DangerousEval => "DANGEROUS_EVAL",
             Self::UnsoundUnsafe => "UNSOUND_UNSAFE",
             Self::PathTraversal => "PATH_TRAVERSAL",
+            Self::CiCdWorkflow => "CICD_WORKFLOW",
+            Self::Authentication => "AUTHENTICATION",
+            Self::Cryptographic => "CRYPTOGRAPHIC",
+            Self::AgentSkillSecurity => "AGENT_SKILL_SECURITY",
         }
     }
 }
@@ -182,6 +194,100 @@ pub static BUILTIN_RULES: &[SastRule] = &[
         cwe_id: "CWE-22",
         description: "Unsanitized user input traced from source to filesystem path read/write operation.",
         recommendation: "Canonicalize and validate paths against an explicit allowlisted base directory before filesystem access.",
+    },
+    // CI/CD Workflow & Supply Chain Security (ci-cd-security skill)
+    SastRule {
+        id: "SENTRA-CICD-001",
+        name: "WorkflowPullRequestTargetPwn",
+        category: RuleCategory::CiCdWorkflow,
+        severity: Severity::Critical,
+        cwe_id: "CWE-284",
+        description: "GitHub Actions `pull_request_target` trigger detected. This trigger runs in the context of the base repository with read/write tokens and access to secrets, creating a critical pwn-request vector if untrusted PR code is checked out or interpolated.",
+        recommendation: "Use the unprivileged `pull_request` trigger instead, or isolate privileged operations into a separate workflow triggered by `workflow_dispatch` with strict reviewer gates.",
+    },
+    SastRule {
+        id: "SENTRA-CICD-002",
+        name: "WorkflowScriptTemplateInjection",
+        category: RuleCategory::CiCdWorkflow,
+        severity: Severity::Critical,
+        cwe_id: "CWE-94",
+        description: "GitHub Actions expression `${{ github.event... }}` or `${{ github.head_ref }}` interpolated directly into a `run:` script block. Attackers can control PR titles, branch names, or issue comments to execute arbitrary shell commands.",
+        recommendation: "Pass untrusted GitHub event contexts via intermediate environment variables (e.g. `env: PR_TITLE: ${{ github.event.pull_request.title }}`) and reference the variable in shell scripts via `$PR_TITLE`.",
+    },
+    SastRule {
+        id: "SENTRA-CICD-003",
+        name: "WorkflowPermissivePermissions",
+        category: RuleCategory::CiCdWorkflow,
+        severity: Severity::High,
+        cwe_id: "CWE-272",
+        description: "GitHub Actions workflow configured with `permissions: write-all` or missing top-level restrictive permissions. Overly permissive GITHUB_TOKEN permissions violate the principle of least privilege.",
+        recommendation: "Declare `permissions: {}` at the top level and grant only required granular scopes (e.g. `contents: read`) per individual job.",
+    },
+    SastRule {
+        id: "SENTRA-CICD-004",
+        name: "WorkflowEnvFileInjection",
+        category: RuleCategory::CiCdWorkflow,
+        severity: Severity::High,
+        cwe_id: "CWE-94",
+        description: "Untrusted expression interpolated directly into environment file write operation (`>> $GITHUB_ENV` or `>> $GITHUB_OUTPUT`). Attackers can inject newlines to override environment variables or workflow outputs.",
+        recommendation: "Use delimiter syntax or sanitize multi-line user inputs before appending to GitHub environment files.",
+    },
+    // Authentication & Cryptographic Hygiene (auth-implementation-patterns & golang-security skills)
+    SastRule {
+        id: "SENTRA-AUTH-001",
+        name: "TimingAttackInSecretComparison",
+        category: RuleCategory::Cryptographic,
+        severity: Severity::High,
+        cwe_id: "CWE-208",
+        description: "Direct equality comparison (`===` or `==`) used on cryptographic hashes, API tokens, or HMAC signatures. Variable-time comparison leaks information through byte-by-byte timing discrepancies.",
+        recommendation: "Use constant-time comparison routines such as `crypto.timingSafeEqual` in Node/Bun, `crypto/subtle.ConstantTimeCompare` in Go, or `subtle::ConstantTimeEq` in Rust.",
+    },
+    SastRule {
+        id: "SENTRA-AUTH-002",
+        name: "InsecureJwtNoneAlgorithm",
+        category: RuleCategory::Authentication,
+        severity: Severity::Critical,
+        cwe_id: "CWE-327",
+        description: "JWT configuration permits the unauthenticated `none` algorithm or explicitly disables signature verification (`verify: false`). This allows attackers to forge arbitrary authentication tokens.",
+        recommendation: "Enforce strict algorithm allowlists (e.g. `['HS256', 'RS256']`) and reject unverified tokens unconditionally.",
+    },
+    SastRule {
+        id: "SENTRA-AUTH-003",
+        name: "WeakPasswordHashAlgorithm",
+        category: RuleCategory::Cryptographic,
+        severity: Severity::High,
+        cwe_id: "CWE-328",
+        description: "Obsolete or broken cryptographic hash function (`MD5` or `SHA-1`) used for password hashing or credential verification. These algorithms are vulnerable to collision and fast pre-image attacks.",
+        recommendation: "Upgrade to memory-hard password hashing algorithms such as Argon2id or bcrypt with adaptive work factors.",
+    },
+    // AI Agent & Plugin Safety (skill-security skill)
+    SastRule {
+        id: "SENTRA-SKILL-001",
+        name: "AgentPromptInjectionBypass",
+        category: RuleCategory::AgentSkillSecurity,
+        severity: Severity::High,
+        cwe_id: "CWE-693",
+        description: "Prompt injection or guardrail override directive detected in agent instructions or skill definition (e.g. 'ignore previous instructions', 'system prompt override', or 'mark as safe').",
+        recommendation: "Isolate untrusted data from system prompts, treat external skills as untrusted input, and enforce deterministic policy verification before executing agent-requested actions.",
+    },
+    SastRule {
+        id: "SENTRA-SKILL-002",
+        name: "AgentCredentialHarvester",
+        category: RuleCategory::AgentSkillSecurity,
+        severity: Severity::Critical,
+        cwe_id: "CWE-552",
+        description: "Agent skill or plugin instruction attempting to harvest environment variables, API secrets, or credentials for unauthorized egress or telemetry.",
+        recommendation: "Deny agent tools access to host environment files (`.env`, `process.env`), isolate worker execution within bounded sandboxes, and redact sensitive variables.",
+    },
+    // Go Path Traversal Scoping (golang-security skill)
+    SastRule {
+        id: "SENTRA-GO-001",
+        name: "InsecureFilePathClean",
+        category: RuleCategory::PathTraversal,
+        severity: Severity::High,
+        cwe_id: "CWE-22",
+        description: "Go `filepath.Clean()` used on untrusted path input without verifying root directory enclosure. `filepath.Clean` removes lexical dot-dots but does not prevent filesystem root escape.",
+        recommendation: "In Go 1.24+, use `os.Root` for scoped filesystem operations. In earlier versions, verify containment using `filepath.Rel` and explicit path prefix boundary checks.",
     },
 ];
 

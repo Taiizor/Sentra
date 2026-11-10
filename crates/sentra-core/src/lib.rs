@@ -160,11 +160,13 @@ pub use provider::{
 };
 pub use remediation::RemediationPrPackage;
 pub use research::{
-    ApproachRunMetrics, ApproachSummary, Campaign, CampaignLimits, CampaignStatus,
-    CampaignStopReason, CampaignTask, CoverageLedger, CoverageSummary, CoveredRegion,
-    CrashArtifact, FuzzEngine, FuzzRunConfig, FuzzTarget, Hypothesis, HypothesisDeduplicator,
-    HypothesisStatus, ReferenceCrashTarget, ResearchApproach, ResearchError, ResearchErrorKind,
-    ResearchRole, ResearchTaskStatus, RoleCapability, SanitizerType, SkipReason, SkippedRegion,
+    ApproachRunMetrics, ApproachSummary, AttackAttributes, AttackDifficulty, AttackNode, Campaign,
+    CampaignLimits, CampaignStatus, CampaignStopReason, CampaignTask, ControlFamily, ControlLayer,
+    ControlType, CostTier, CoverageLedger, CoverageSummary, CoveredRegion, CrashArtifact,
+    DetectionRisk, FuzzEngine, FuzzRunConfig, FuzzTarget, Hypothesis, HypothesisDeduplicator,
+    HypothesisStatus, NodeType, ReferenceCrashTarget, ResearchApproach, ResearchError,
+    ResearchErrorKind, ResearchRole, ResearchTaskStatus, RoleCapability, SanitizerType,
+    SecurityMitigation, SkipReason, SkippedRegion, StrideCategory, ThreatMitigationMapping,
     TriMethodComparisonMatrix, VulnerabilityCategory, assert_patch_verifier_independent,
     assert_peer_approval_forbidden, generate_reference_tri_method_matrix, minimize_input,
     reference_root_cause_targets,

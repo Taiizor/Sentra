@@ -225,12 +225,17 @@ pub fn generate_sarif_report(findings: &[Finding], tool_version: &str) -> SarifL
                     lockfile_path.clone(),
                 )
             }
-            FindingSource::StaticAnalysis { engine, rule_id } => (
-                rule_id.clone(),
-                format!("{engine}Rule"),
-                None,
-                "src/lib.rs".to_string(),
-            ),
+            FindingSource::StaticAnalysis { engine, rule_id } => {
+                let builtin_rule = crate::sast::find_rule_by_id(rule_id);
+                let name = builtin_rule
+                    .map(|r| r.name.to_string())
+                    .unwrap_or_else(|| format!("{engine}Rule"));
+                let help = builtin_rule.map(|r| {
+                    let cwe_num = r.cwe_id.trim_start_matches("CWE-");
+                    format!("https://cwe.mitre.org/data/definitions/{cwe_num}.html")
+                });
+                (rule_id.clone(), name, help, "src/lib.rs".to_string())
+            }
             FindingSource::DynamicAnalysis {
                 agent_role,
                 oracle_id,
@@ -254,6 +259,10 @@ pub fn generate_sarif_report(findings: &[Finding], tool_version: &str) -> SarifL
         rules_map.entry(rule_id.clone()).or_insert_with(|| {
             let mut props = BTreeMap::new();
             props.insert("security-severity".to_string(), score.to_string());
+            if let Some(r) = crate::sast::find_rule_by_id(&rule_id) {
+                props.insert("cwe".to_string(), r.cwe_id.to_string());
+                props.insert("category".to_string(), r.category.as_str().to_string());
+            }
             SarifRule {
                 id: rule_id.clone(),
                 name: rule_name,

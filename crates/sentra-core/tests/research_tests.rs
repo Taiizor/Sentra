@@ -2,9 +2,11 @@
 //! Scout/Analyst task fanout, coverage ledgers, and anti-collusion boundaries (REQ-F04, REQ-S06, REQ-S08, Autonomous Research Specification).
 
 use sentra_core::{
-    Campaign, CampaignLimits, CampaignStatus, CampaignStopReason, Confidence, CoverageLedger,
-    Hypothesis, HypothesisStatus, ResearchErrorKind, ResearchRole, RoleCapability, SessionId,
-    SkipReason, TaskId, TimestampUtc, VulnerabilityCategory, assert_patch_verifier_independent,
+    AttackAttributes, AttackDifficulty, AttackNode, Campaign, CampaignLimits, CampaignStatus,
+    CampaignStopReason, Confidence, ControlLayer, ControlType, CostTier, CoverageLedger,
+    DetectionRisk, Hypothesis, HypothesisStatus, ResearchErrorKind, ResearchRole, RoleCapability,
+    SecurityMitigation, SessionId, SkipReason, StrideCategory, TaskId, ThreatMitigationMapping,
+    TimestampUtc, VulnerabilityCategory, assert_patch_verifier_independent,
     assert_peer_approval_forbidden,
 };
 
@@ -443,4 +445,143 @@ fn test_research_serde_roundtrip() {
     assert_eq!(recovered.target_file, h.target_file);
     assert_eq!(recovered.status, HypothesisStatus::Proposed);
     assert_eq!(recovered.fingerprint, h.fingerprint);
+}
+
+#[test]
+fn test_attack_tree_construction_and_path_calculation() {
+    let mut root = AttackNode::new_or(
+        "root_rce",
+        "Achieve Remote Code Execution",
+        "Adversary targets host system execution",
+    );
+
+    let mut branch_and = AttackNode::new_and(
+        "branch_pwn_request",
+        "CI/CD Pwn Request & Script Injection",
+        "Adversary exploits workflow triggers and injects shell script",
+    );
+
+    let leaf_trigger = AttackNode::new_leaf(
+        "leaf_trigger_pr",
+        "Trigger pull_request_target via Fork",
+        "Adversary opens PR from external fork",
+        AttackAttributes {
+            difficulty: AttackDifficulty::Low,
+            cost: CostTier::Free,
+            detection_risk: DetectionRisk::Low,
+            time_hours: 0.5,
+            requires_insider: false,
+            requires_physical: false,
+        },
+    );
+
+    let leaf_inject = AttackNode::new_leaf(
+        "leaf_inject_title",
+        "Inject Command in PR Title",
+        "Adversary formats PR title with backticks and curl payload",
+        AttackAttributes {
+            difficulty: AttackDifficulty::Medium,
+            cost: CostTier::Free,
+            detection_risk: DetectionRisk::Medium,
+            time_hours: 1.0,
+            requires_insider: false,
+            requires_physical: false,
+        },
+    );
+
+    branch_and.add_child(leaf_trigger);
+    branch_and.add_child(leaf_inject);
+
+    let leaf_direct_sqli = AttackNode::new_leaf(
+        "leaf_direct_sqli",
+        "Direct SQL Injection to UDF Exec",
+        "Adversary exploits unescaped query string to execute UDF shell",
+        AttackAttributes {
+            difficulty: AttackDifficulty::High,
+            cost: CostTier::Medium,
+            detection_risk: DetectionRisk::High,
+            time_hours: 12.0,
+            requires_insider: false,
+            requires_physical: false,
+        },
+    );
+
+    root.add_child(branch_and);
+    root.add_child(leaf_direct_sqli);
+
+    // AND branch difficulty is max(Low, Medium) = Medium (score 3)
+    // OR root difficulty is min(branch_and (3), leaf_direct_sqli (4)) = 3
+    assert_eq!(root.calculate_path_difficulty(), 3);
+
+    // AND branch cost is sum(Free(0) + Free(0)) = 0
+    // OR root cost is min(branch_and (0), leaf_direct_sqli (2)) = 0
+    assert_eq!(root.calculate_path_cost(), 0);
+
+    // Verify Mermaid diagram output
+    let mermaid = root.to_mermaid_flowchart();
+    assert!(mermaid.starts_with("flowchart TD"));
+    assert!(mermaid.contains("root_rce([\"Achieve Remote Code Execution (OR)\"])"));
+    assert!(mermaid.contains("branch_pwn_request[[\"CI/CD Pwn Request & Script Injection (AND)\"]]"));
+    assert!(mermaid.contains("leaf_inject_title[\"Inject Command in PR Title\"]"));
+}
+
+#[test]
+fn test_stride_threat_modeling_and_mitigation_mapping() {
+    let mut threat = ThreatMitigationMapping::new(
+        "THREAT-STRIDE-001",
+        StrideCategory::ElevationOfPrivilege,
+        "Privilege Escalation via Insecure CI/CD Workflow",
+        "Fork author leverages write token in privileged runner",
+    );
+
+    assert_eq!(threat.category.letter(), 'E');
+    assert_eq!(threat.defense_in_depth_score(), 0);
+
+    // Layer 1: Preventive Application/Workflow Level
+    threat.add_mitigation(SecurityMitigation {
+        id: "MIT-001".to_string(),
+        name: "Enforce least-privilege permissions".to_string(),
+        description: "Set permissions: {} at top level of workflow".to_string(),
+        layer: ControlLayer::Application,
+        control_type: ControlType::Preventive,
+        effectiveness: 5,
+    });
+
+    // Layer 2: Detective Host/CI Level
+    threat.add_mitigation(SecurityMitigation {
+        id: "MIT-002".to_string(),
+        name: "Static SAST scanning in PR gate".to_string(),
+        description: "Sentra SAST blocks pull_request_target on untrusted code".to_string(),
+        layer: ControlLayer::Host,
+        control_type: ControlType::Detective,
+        effectiveness: 5,
+    });
+
+    // Layer 3: Corrective Perimeter Level
+    threat.add_mitigation(SecurityMitigation {
+        id: "MIT-003".to_string(),
+        name: "Immediate Token Revocation".to_string(),
+        description: "Revoke compromised GITHUB_TOKEN upon anomaly detection".to_string(),
+        layer: ControlLayer::Perimeter,
+        control_type: ControlType::Corrective,
+        effectiveness: 4,
+    });
+
+    // 35 (preventive) + 25 (detective) + 15 (corrective) + 3 distinct layers * 5 = 90
+    assert_eq!(threat.defense_in_depth_score(), 90);
+}
+
+#[test]
+fn test_expanded_vulnerability_categories() {
+    let categories = [
+        VulnerabilityCategory::CiCdPipelineFlaw,
+        VulnerabilityCategory::CryptographicFailure,
+        VulnerabilityCategory::BrokenAccessControl,
+        VulnerabilityCategory::AgentPromptInjection,
+        VulnerabilityCategory::MishandledExceptions,
+    ];
+
+    for cat in categories {
+        assert!(!cat.as_str().is_empty());
+    }
 }
