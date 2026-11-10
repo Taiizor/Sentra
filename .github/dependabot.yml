@@ -1,5 +1,5 @@
 # Dependabot configuration for Sentra
-# Configured for Cargo (Rust workspace), GitHub Actions, and Web Frontend (npm/package.json)
+# Configured for Cargo (Rust workspace), GitHub Actions, and Web Frontend (Bun/bun.lock)
 version: 2
 
 updates:
@@ -43,8 +43,8 @@ updates:
         patterns:
           - "*"
 
-  # 3. Web Dashboard Dependencies (/web/package.json)
-  - package-ecosystem: "npm"
+  # 3. Web Dashboard Dependencies (/web/bun.lock & package.json)
+  - package-ecosystem: "bun"
     directory: "/web"
     schedule:
       interval: "weekly"
