@@ -1,0 +1,19 @@
+{
+  "id": "org.sentra.adapter.semgrep",
+  "name": "Semgrep SAST Analysis Adapter",
+  "version": "1.0.0",
+  "interface_version": 1,
+  "family": "analysis_tool",
+  "executable_path": "python adapter.py",
+  "declared_capabilities": [
+    "source_discovery",
+    "static_analysis"
+  ],
+  "quotas": {
+    "max_memory_mib": 1024,
+    "max_execution_time_secs": 120,
+    "max_frame_bytes": 1048576,
+    "max_total_output_bytes": 10485760
+  },
+  "egress_policy": "strictly_denied"
+}

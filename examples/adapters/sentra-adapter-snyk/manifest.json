@@ -1,0 +1,18 @@
+{
+  "id": "org.sentra.adapter.snyk",
+  "name": "Snyk Dependency Audit Adapter",
+  "version": "1.0.0",
+  "interface_version": 1,
+  "family": "analysis_tool",
+  "executable_path": "bun run adapter.ts",
+  "declared_capabilities": [
+    "dependency_audit"
+  ],
+  "quotas": {
+    "max_memory_mib": 1024,
+    "max_execution_time_secs": 90,
+    "max_frame_bytes": 1048576,
+    "max_total_output_bytes": 10485760
+  },
+  "egress_policy": "strictly_denied"
+}

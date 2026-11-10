@@ -299,3 +299,25 @@ fn test_plugin_prompt_injection_containment() {
         other => panic!("Expected ExecuteResult, got {other:?}"),
     }
 }
+
+#[test]
+fn test_example_adapters_manifest_conformance() {
+    let manifest_paths = [
+        "../../examples/adapters/sentra-adapter-semgrep/manifest.json",
+        "../../examples/adapters/sentra-adapter-snyk/manifest.json",
+        "../../examples/adapters/sentra-adapter-ollama/manifest.json",
+    ];
+
+    for rel_path in manifest_paths {
+        let manifest_content = std::fs::read_to_string(rel_path)
+            .unwrap_or_else(|e| panic!("Failed to read {rel_path}: {e}"));
+        let manifest: PluginManifest = serde_json::from_str(&manifest_content)
+            .unwrap_or_else(|e| panic!("Failed to deserialize {rel_path}: {e}"));
+        assert!(
+            manifest.validate().is_ok(),
+            "Manifest {rel_path} validation failed"
+        );
+        let host = PluginHost::new(manifest);
+        assert!(host.is_ok(), "Host creation for {rel_path} failed");
+    }
+}

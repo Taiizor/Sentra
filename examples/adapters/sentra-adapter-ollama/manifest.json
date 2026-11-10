@@ -1,0 +1,18 @@
+{
+  "id": "org.sentra.adapter.ollama",
+  "name": "Ollama Local AI Provider Adapter",
+  "version": "1.0.0",
+  "interface_version": 1,
+  "family": "ai_provider",
+  "executable_path": "python adapter.py",
+  "declared_capabilities": [
+    "patch_generation"
+  ],
+  "quotas": {
+    "max_memory_mib": 2048,
+    "max_execution_time_secs": 180,
+    "max_frame_bytes": 1048576,
+    "max_total_output_bytes": 10485760
+  },
+  "egress_policy": "whitelisted_local_only"
+}
