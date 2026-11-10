@@ -1676,6 +1676,28 @@ fn binary_install_claude_and_antigravity_skills() {
         .join("instructions")
         .join("ci-cd-security.instructions.md");
     assert!(copilot_instr.exists());
+    let copilot_root = f.workspace.join(".github").join("copilot-instructions.md");
+    assert!(copilot_root.exists());
+    let copilot_content = fs::read_to_string(&copilot_root).unwrap();
+    assert!(copilot_content.contains("ci-cd-security"));
+
+    // 6. Install Aider conventions
+    let install_aider = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "install",
+            "aider",
+            "--workspace",
+            tmp_path,
+            "--skill",
+            "api-security-testing",
+        ])
+        .output()
+        .unwrap();
+    assert!(install_aider.status.success());
+    let aider_conventions = f.workspace.join("CONVENTIONS.md");
+    assert!(aider_conventions.exists());
+    let aider_content = fs::read_to_string(&aider_conventions).unwrap();
+    assert!(aider_content.contains("api-security-testing"));
 
     // 6. Install Roo Code rules
     let install_roo = Command::new(env!("CARGO_BIN_EXE_sentra"))
