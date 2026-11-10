@@ -190,9 +190,9 @@ pub use session::{
     AssessmentCompleteness, OperatingMode, SessionMetadata, SessionState, SessionStateMachine,
 };
 pub use skills::{
-    AgentTarget, BUILTIN_SKILLS, InstallReport, SkillCategory, SkillDefinition, find_skill_by_id,
-    install_all_skills, install_selected_skills, install_single_skill, list_builtin_skills,
-    search_skills,
+    AgentTarget, BUILTIN_SKILLS, InstallReport, McpInstallReport, SkillCategory, SkillDefinition,
+    configure_agent_mcp, find_skill_by_id, install_all_skills, install_selected_skills,
+    install_single_skill, list_builtin_skills, resolve_mcp_config_path, search_skills,
 };
 pub use storage::{
     BlobId, BlobMetadata, BlobStore, FileSystemCasBlobStore, StorageError, StorageErrorKind,

@@ -6,6 +6,7 @@
 
 pub mod catalog;
 pub mod installer;
+pub mod mcp_config;
 
 pub use catalog::{
     BUILTIN_SKILLS, SkillCategory, SkillDefinition, find_skill_by_id, list_builtin_skills,
@@ -14,3 +15,4 @@ pub use catalog::{
 pub use installer::{
     AgentTarget, InstallReport, install_all_skills, install_selected_skills, install_single_skill,
 };
+pub use mcp_config::{McpInstallReport, configure_agent_mcp, resolve_mcp_config_path};

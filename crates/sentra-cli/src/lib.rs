@@ -186,6 +186,7 @@ pub enum Command {
     Install {
         target: String,
         global: bool,
+        mcp: bool,
         skill: Option<String>,
         workspace: Option<PathBuf>,
     },
@@ -658,6 +659,48 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
         });
     }
     if name == "mcp" {
+        if words.first().copied() == Some("install") {
+            let mut target = None;
+            let mut global = false;
+            let mut workspace = None;
+            let mut rest = words.into_iter().skip(1);
+            while let Some(arg) = rest.next() {
+                if arg == "--global" || arg == "-g" {
+                    if global {
+                        return Err(invalid());
+                    }
+                    global = true;
+                    continue;
+                }
+                if arg == "--workspace" {
+                    if workspace.is_some() {
+                        return Err(invalid());
+                    }
+                    let val = rest.next().ok_or_else(invalid)?;
+                    if val.is_empty() || val.starts_with('-') {
+                        return Err(invalid());
+                    }
+                    workspace = Some(PathBuf::from(val));
+                    continue;
+                }
+                if !arg.starts_with('-') && target.is_none() {
+                    target = Some(arg.to_string());
+                    continue;
+                }
+                return Err(invalid());
+            }
+            let target = target.ok_or_else(invalid)?;
+            return Ok(Invocation {
+                command: Command::Install {
+                    target,
+                    global,
+                    mcp: true,
+                    skill: None,
+                    workspace,
+                },
+                json,
+            });
+        }
         if !words.is_empty() {
             return Err(invalid());
         }
@@ -782,12 +825,21 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
         }
         let mut target = None;
         let mut global = false;
+        let mut mcp = false;
         let mut skill = None;
         let mut workspace = None;
         let mut rest = words.into_iter();
         while let Some(arg) = rest.next() {
             if arg == "--global" || arg == "-g" {
                 global = true;
+                continue;
+            }
+            if arg == "--mcp" {
+                mcp = true;
+                continue;
+            }
+            if arg == "mcp" && target.is_none() {
+                mcp = true;
                 continue;
             }
             if arg == "--skill" {
@@ -817,6 +869,7 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
             command: Command::Install {
                 target,
                 global,
+                mcp,
                 skill,
                 workspace,
             },
@@ -1656,6 +1709,7 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
         Command::Install {
             target,
             global,
+            mcp,
             skill,
             workspace,
         } => {
@@ -1664,19 +1718,26 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
                 None => return error("invalid_target", 2, json),
             };
             let ws_path = absolute(workspace.as_deref().unwrap_or(cwd), cwd);
-            let report = if let Some(skill_id) = skill {
-                sentra_core::skills::install_selected_skills(
-                    &[&skill_id],
-                    agent_target,
-                    global,
-                    &ws_path,
-                )
+            if mcp {
+                match sentra_core::skills::configure_agent_mcp(agent_target, global, &ws_path) {
+                    Ok(rep) => render_mcp_install(&rep, json),
+                    Err(_) => error("mcp_install_failed", 5, json),
+                }
             } else {
-                sentra_core::skills::install_all_skills(agent_target, global, &ws_path)
-            };
-            match report {
-                Ok(rep) => render_install(&rep, json),
-                Err(_) => error("install_failed", 5, json),
+                let report = if let Some(skill_id) = skill {
+                    sentra_core::skills::install_selected_skills(
+                        &[&skill_id],
+                        agent_target,
+                        global,
+                        &ws_path,
+                    )
+                } else {
+                    sentra_core::skills::install_all_skills(agent_target, global, &ws_path)
+                };
+                match report {
+                    Ok(rep) => render_install(&rep, json),
+                    Err(_) => error("install_failed", 5, json),
+                }
             }
         }
         Command::Skills { action } => match action {
@@ -1774,6 +1835,34 @@ fn render_install(report: &sentra_core::skills::InstallReport, json: bool) -> Re
             text.push_str(&format!("  [installed] {}\n", file.display()));
         }
         text
+    };
+    Response {
+        stdout,
+        stderr: String::new(),
+        exit_code: 0,
+    }
+}
+
+fn render_mcp_install(report: &sentra_core::McpInstallReport, json: bool) -> Response {
+    let stdout = if json {
+        serde_json::to_string(report).unwrap_or_default() + "\n"
+    } else {
+        format!(
+            "Sentra MCP Server Configuration: success\nTarget: {}\nScope: {}\nConfig file: {}\nAction: {}\nMCP Server: \"{}\" -> sentra mcp\n",
+            report.target,
+            if report.is_global {
+                "global (user-wide)"
+            } else {
+                "project (local workspace)"
+            },
+            report.config_file.display(),
+            if report.created_new_file {
+                "created new file"
+            } else {
+                "merged into existing configuration"
+            },
+            report.server_name,
+        )
     };
     Response {
         stdout,

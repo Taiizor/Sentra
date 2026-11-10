@@ -1781,3 +1781,81 @@ fn binary_prompt_generation() {
     assert!(patch_str.contains("ADR-0004"));
     assert!(patch_str.contains("Tier 1"));
 }
+
+#[test]
+fn binary_install_mcp_config() {
+    let f = Fixture::new();
+    let tmp_path = f.workspace.to_str().unwrap();
+
+    // 1. Install MCP via `sentra install mcp claude`
+    let mcp_claude = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["install", "mcp", "claude", "--workspace", tmp_path])
+        .output()
+        .unwrap();
+    assert!(mcp_claude.status.success());
+    let claude_cfg = f.workspace.join(".claude").join("mcp.json");
+    assert!(claude_cfg.exists());
+    let claude_content = fs::read_to_string(&claude_cfg).unwrap();
+    assert!(claude_content.contains("\"mcpServers\""));
+    assert!(claude_content.contains("\"sentra\""));
+    assert!(claude_content.contains("\"command\": \"sentra\""));
+
+    // 2. Install MCP via `sentra install cursor --mcp`
+    let mcp_cursor = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["install", "cursor", "--mcp", "--workspace", tmp_path])
+        .output()
+        .unwrap();
+    assert!(mcp_cursor.status.success());
+    let cursor_cfg = f.workspace.join(".cursor").join("mcp.json");
+    assert!(cursor_cfg.exists());
+
+    // 3. Install MCP via `sentra mcp install zed`
+    let mcp_zed = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["mcp", "install", "zed", "--workspace", tmp_path])
+        .output()
+        .unwrap();
+    assert!(mcp_zed.status.success());
+    let zed_cfg = f.workspace.join(".zed").join("settings.json");
+    assert!(zed_cfg.exists());
+    let zed_content = fs::read_to_string(&zed_cfg).unwrap();
+    assert!(zed_content.contains("\"context_servers\""));
+    assert!(zed_content.contains("\"sentra\""));
+
+    // 4. Install MCP via `sentra mcp install continue`
+    let mcp_continue = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["mcp", "install", "continue", "--workspace", tmp_path])
+        .output()
+        .unwrap();
+    assert!(mcp_continue.status.success());
+    let continue_cfg = f.workspace.join(".continue").join("config.json");
+    assert!(continue_cfg.exists());
+    let continue_content = fs::read_to_string(&continue_cfg).unwrap();
+    assert!(continue_content.contains("modelContextProtocolServers"));
+
+    // 5. Test non-destructive merge: add an existing server to claude config
+    let initial_custom = r#"{
+  "mcpServers": {
+    "my-custom-tool": {
+      "command": "custom-binary",
+      "args": ["--port", "8080"]
+    }
+  }
+}"#;
+    fs::write(&claude_cfg, initial_custom).unwrap();
+    let merge_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "install",
+            "mcp",
+            "claude",
+            "--workspace",
+            tmp_path,
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(merge_out.status.success());
+    let merged_content = fs::read_to_string(&claude_cfg).unwrap();
+    assert!(merged_content.contains("my-custom-tool"));
+    assert!(merged_content.contains("sentra"));
+    assert!(merged_content.contains("custom-binary"));
+}
