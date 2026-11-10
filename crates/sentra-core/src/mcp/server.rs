@@ -357,6 +357,91 @@ impl McpServer {
                     "highest_severity": res.highest_severity.map(|s| s.to_string())
                 }))
             }
+            "sentra_get_security_guidance" => {
+                let topic = args.get("topic").and_then(|v| v.as_str()).ok_or_else(|| {
+                    McpErrorObject::invalid_params("Missing required 'topic' argument")
+                })?;
+
+                if let Some(skill) = crate::skills::find_skill_by_id(topic) {
+                    return Ok(serde_json::json!({
+                        "found": true,
+                        "skill_id": skill.id,
+                        "name": skill.name,
+                        "category": skill.category.as_str(),
+                        "description": skill.description,
+                        "tags": skill.tags,
+                        "playbook": skill.content,
+                    }));
+                }
+
+                let results = crate::skills::search_skills(topic);
+                if !results.is_empty() {
+                    let first = results[0];
+                    return Ok(serde_json::json!({
+                        "found": true,
+                        "matched_query": topic,
+                        "total_matches": results.len(),
+                        "skill_id": first.id,
+                        "name": first.name,
+                        "category": first.category.as_str(),
+                        "description": first.description,
+                        "tags": first.tags,
+                        "playbook": first.content,
+                        "other_matches": results.iter().skip(1).map(|s| s.id).collect::<Vec<_>>()
+                    }));
+                }
+
+                Ok(serde_json::json!({
+                    "found": false,
+                    "query": topic,
+                    "available_skills": crate::skills::list_builtin_skills().iter().map(|s| s.id).collect::<Vec<_>>()
+                }))
+            }
+            "sentra_install_skills" => {
+                let target_str = args.get("target").and_then(|v| v.as_str()).ok_or_else(|| {
+                    McpErrorObject::invalid_params("Missing required 'target' argument")
+                })?;
+
+                let target = crate::skills::AgentTarget::parse(target_str).ok_or_else(|| {
+                    McpErrorObject::invalid_params(format!("Unknown agent target: '{target_str}'. Expected claude, antigravity, cursor, windsurf, cline, codex, copilot, zed, opencode, trae, kimi, or all"))
+                })?;
+
+                let is_global = args
+                    .get("global")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let workspace = args
+                    .get("workspace")
+                    .and_then(|v| v.as_str())
+                    .map(std::path::PathBuf::from)
+                    .unwrap_or_else(|| {
+                        std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+                    });
+
+                let specific_skill = args.get("skill").and_then(|v| v.as_str());
+                let report = if let Some(skill_id) = specific_skill {
+                    crate::skills::install_selected_skills(
+                        &[skill_id],
+                        target,
+                        is_global,
+                        &workspace,
+                    )
+                } else {
+                    crate::skills::install_all_skills(target, is_global, &workspace)
+                }
+                .map_err(|e| {
+                    McpErrorObject::internal_error(format!("Failed to install skills: {e}"))
+                })?;
+
+                Ok(serde_json::json!({
+                    "status": "Success",
+                    "target": report.target.as_str(),
+                    "is_global": report.is_global,
+                    "destination_dir": report.destination_dir.display().to_string(),
+                    "installed_files_count": report.installed_files.len(),
+                    "installed_files": report.installed_files.iter().map(|p| p.display().to_string()).collect::<Vec<_>>()
+                }))
+            }
             // Sensitive actions requiring explicit human approval ticket
             "sentra_apply_checkout_mutation" => {
                 let ticket = args

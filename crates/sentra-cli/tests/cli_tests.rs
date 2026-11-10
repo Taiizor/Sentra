@@ -1533,3 +1533,189 @@ fn binary_plugin_commands() {
         .unwrap();
     assert!(!bad_run_out.status.success());
 }
+
+#[test]
+fn binary_skills_list_and_show() {
+    let list_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["skills", "list"])
+        .output()
+        .unwrap();
+    assert!(list_out.status.success());
+    let list_str = String::from_utf8(list_out.stdout).unwrap();
+    assert!(list_str.contains("api-security-testing"));
+    assert!(list_str.contains("security-threat-model"));
+    assert!(list_str.contains("auth-implementation-patterns"));
+
+    let list_json = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["skills", "list", "--json"])
+        .output()
+        .unwrap();
+    assert!(list_json.status.success());
+    let json_str = String::from_utf8(list_json.stdout).unwrap();
+    assert!(json_str.contains("\"id\": \"api-security-testing\""));
+
+    let show_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["skills", "show", "api-security-testing"])
+        .output()
+        .unwrap();
+    assert!(show_out.status.success());
+    let show_str = String::from_utf8(show_out.stdout).unwrap();
+    assert!(show_str.contains("name: api-security-testing"));
+    assert!(show_str.contains("BOLA/IDOR"));
+}
+
+#[test]
+fn binary_install_claude_and_antigravity_skills() {
+    let f = Fixture::new();
+    let tmp_path = f.workspace.to_str().unwrap();
+
+    // 1. Install Claude skills into temporary workspace
+    let install_claude = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "install",
+            "claude",
+            "--workspace",
+            tmp_path,
+            "--skill",
+            "api-security-testing",
+        ])
+        .output()
+        .unwrap();
+    assert!(install_claude.status.success());
+    let claude_skill = f
+        .workspace
+        .join(".claude")
+        .join("skills")
+        .join("api-security-testing")
+        .join("SKILL.md");
+    assert!(claude_skill.exists());
+    let content = fs::read_to_string(&claude_skill).unwrap();
+    assert!(content.contains("api-security-testing"));
+
+    // 2. Install Antigravity skills with --json
+    let install_agy = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "install",
+            "antigravity",
+            "--workspace",
+            tmp_path,
+            "--skill",
+            "security-threat-model",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(install_agy.status.success());
+    let agy_str = String::from_utf8(install_agy.stdout).unwrap();
+    assert!(agy_str.contains("\"target\":\"antigravity\""));
+    assert!(agy_str.contains("\"count\":1"));
+    let agy_skill = f
+        .workspace
+        .join(".agents")
+        .join("skills")
+        .join("security-threat-model")
+        .join("SKILL.md");
+    assert!(agy_skill.exists());
+
+    // 3. Install Cursor rules
+    let install_cursor = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "install",
+            "cursor",
+            "--workspace",
+            tmp_path,
+            "--skill",
+            "golang-security",
+        ])
+        .output()
+        .unwrap();
+    assert!(install_cursor.status.success());
+    let cursor_rule = f
+        .workspace
+        .join(".cursor")
+        .join("rules")
+        .join("golang-security.mdc");
+    assert!(cursor_rule.exists());
+
+    // 4. Install Windsurf rules
+    let install_windsurf = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "install",
+            "windsurf",
+            "--workspace",
+            tmp_path,
+            "--skill",
+            "django-security",
+        ])
+        .output()
+        .unwrap();
+    assert!(install_windsurf.status.success());
+    let windsurf_rule = f
+        .workspace
+        .join(".windsurf")
+        .join("rules")
+        .join("django-security.md");
+    assert!(windsurf_rule.exists());
+
+    // 5. Install Copilot instructions
+    let install_copilot = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "install",
+            "copilot",
+            "--workspace",
+            tmp_path,
+            "--skill",
+            "ci-cd-security",
+        ])
+        .output()
+        .unwrap();
+    assert!(install_copilot.status.success());
+    let copilot_instr = f
+        .workspace
+        .join(".github")
+        .join("instructions")
+        .join("ci-cd-security.instructions.md");
+    assert!(copilot_instr.exists());
+}
+
+#[test]
+fn binary_prompt_generation() {
+    // 1. Threat model prompt
+    let tm_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["prompt", "threat-model", "--scope", "src/auth"])
+        .output()
+        .unwrap();
+    assert!(tm_out.status.success());
+    let tm_str = String::from_utf8(tm_out.stdout).unwrap();
+    assert!(tm_str.contains("Mermaid"));
+    assert!(tm_str.contains("STRIDE"));
+
+    // 2. API BOLA prompt
+    let bola_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "prompt",
+            "api-bola",
+            "--scope",
+            "/api/v1/orders/:id",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(bola_out.status.success());
+    let bola_str = String::from_utf8(bola_out.stdout).unwrap();
+    assert!(
+        bola_str.contains("\"workflow\": \"api-bola\"")
+            || bola_str.contains("\"workflow\":\"api-bola\"")
+    );
+    assert!(bola_str.contains("BOLA/IDOR"));
+
+    // 3. Patch synthesis prompt
+    let patch_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["prompt", "patch-remediation", "--scope", "src/db.rs"])
+        .output()
+        .unwrap();
+    assert!(patch_out.status.success());
+    let patch_str = String::from_utf8(patch_out.stdout).unwrap();
+    assert!(patch_str.contains("ADR-0004"));
+    assert!(patch_str.contains("Tier 1"));
+}

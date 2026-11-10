@@ -25,7 +25,19 @@ use sentra_core::{
     },
 };
 
-pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra recover --database <file> [--workspace <directory>] [--json]\n  sentra audit --database <file> [--workspace <directory>] [--json]\n  sentra scan [--workspace <directory>] [--snippet <string>] [-] [--database <file>] [--sarif <file>] [--json]\n  sentra patch apply --patch <file> --workspace <directory> [--target <file>] [--backup-dir <directory>] [--database <file>] [--json]\n  sentra patch rollback --backup <file> --workspace <directory> --target <file> [--database <file>] [--json]\n  sentra tenant list --database <file> [--json]\n  sentra tenant add --id <id> --name <name> [--workspace <directory>] [--isolation <level>] --database <file> [--json]\n  sentra config show [--key <key>] --database <file> [--json]\n  sentra config set --key <key> --value <value> --database <file> [--json]\n  sentra config test --provider <name> [--api-key <key>] [--model <model>] [--json]\n  sentra fleet list [--json]\n  sentra fleet status [--json]\n  sentra plugin list [--dir <directory>] [--json]\n  sentra plugin probe (--id <id> | --manifest <file>) [--dir <directory>] [--workspace <directory>] [--json]\n  sentra plugin run (--id <id> | --manifest <file>) --capability <capability> [--args <json>] [--dir <directory>] [--workspace <directory>] [--json]\n  sentra sync-advisories --source <directory-or-file> [--database <file>] [--json]\n  sentra propose-pr --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra codeql [--workspace <directory>] [--sarif <file>] [--database <file>] [--json]\n  sentra diff --base <directory> --head <directory> [--json]\n  sentra verify-audit [--json]\n  sentra export sarif --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra mcp\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session/audit default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\nAudit analyzes multi-ecosystem lockfiles (Cargo, npm, yarn, pnpm, bun, deno, pip, poetry, go, composer, nuget, rubygems).\nScan executes pure-Rust static analysis for secrets and code antipatterns on workspaces or snippets.\nPatch safely applies unified diff hunks with automatic rollback safety backups.\nTenant manages isolated multi-tenant organization workspaces in SQLite WAL store.\nConfig manages provider API credentials and security policy configuration.\nFleet inspects isolated execution worker nodes and containment readiness.\nPlugin discovers, probes, and executes capability-fenced subprocess security adapters.\nSync-advisories ingests universal OSV JSON advisories into the advisory database.\nPropose-pr packages verified vulnerabilities into GitHub Draft PR proposals.\nCodeql probes workspace for languages, generates CLI commands, or ingests CodeQL SARIF logs.\nDiff compares base and head directory snapshots with pure-Rust hashing.\nVerify-audit evaluates the 5 mandatory multi-user hosting security containment gates.\nExport sarif converts dependency and SAST findings into an OASIS SARIF v2.1.0 document.\nMcp runs the JSON-RPC 2.0 Model Context Protocol stdio transport server.\n";
+pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra recover --database <file> [--workspace <directory>] [--json]\n  sentra audit --database <file> [--workspace <directory>] [--json]\n  sentra scan [--workspace <directory>] [--snippet <string>] [-] [--database <file>] [--sarif <file>] [--json]\n  sentra patch apply --patch <file> --workspace <directory> [--target <file>] [--backup-dir <directory>] [--database <file>] [--json]\n  sentra patch rollback --backup <file> --workspace <directory> --target <file> [--database <file>] [--json]\n  sentra install <target> [--global] [--skill <id>] [--workspace <directory>] [--json]\n  sentra skills list [--json]\n  sentra skills show <id> [--json]\n  sentra prompt <workflow> [--scope <path>] [--json]\n  sentra tenant list --database <file> [--json]\n  sentra tenant add --id <id> --name <name> [--workspace <directory>] [--isolation <level>] --database <file> [--json]\n  sentra config show [--key <key>] --database <file> [--json]\n  sentra config set --key <key> --value <value> --database <file> [--json]\n  sentra config test --provider <name> [--api-key <key>] [--model <model>] [--json]\n  sentra fleet list [--json]\n  sentra fleet status [--json]\n  sentra plugin list [--dir <directory>] [--json]\n  sentra plugin probe (--id <id> | --manifest <file>) [--dir <directory>] [--workspace <directory>] [--json]\n  sentra plugin run (--id <id> | --manifest <file>) --capability <capability> [--args <json>] [--dir <directory>] [--workspace <directory>] [--json]\n  sentra sync-advisories --source <directory-or-file> [--database <file>] [--json]\n  sentra propose-pr --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra codeql [--workspace <directory>] [--sarif <file>] [--database <file>] [--json]\n  sentra diff --base <directory> --head <directory> [--json]\n  sentra verify-audit [--json]\n  sentra export sarif --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra mcp\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session/audit default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\nAudit analyzes multi-ecosystem lockfiles (Cargo, npm, yarn, pnpm, bun, deno, pip, poetry, go, composer, nuget, rubygems).\nScan executes pure-Rust static analysis for secrets and code antipatterns on workspaces or snippets.\nPatch safely applies unified diff hunks with automatic rollback safety backups.\nInstall deploys built-in AppSec security skills locally or globally to Claude (.claude/skills), Antigravity (.agents/skills), Cursor (.cursor/rules), Windsurf, Cline, Codex, Copilot, Zed, OpenCode, Trae, or Kimi.\nSkills lists or inspects embedded zero-dependency cognitive security playbooks.\nPrompt generates parameter-grounded AppSec prompts (threat-model, api-bola, patch-remediation, skill-audit) for LLM agents.\nTenant manages isolated multi-tenant organization workspaces in SQLite WAL store.\nConfig manages provider API credentials and security policy configuration.\nFleet inspects isolated execution worker nodes and containment readiness.\nPlugin discovers, probes, and executes capability-fenced subprocess security adapters.\nSync-advisories ingests universal OSV JSON advisories into the advisory database.\nPropose-pr packages verified vulnerabilities into GitHub Draft PR proposals.\nCodeql probes workspace for languages, generates CLI commands, or ingests CodeQL SARIF logs.\nDiff compares base and head directory snapshots with pure-Rust hashing.\nVerify-audit evaluates the 5 mandatory multi-user hosting security containment gates.\nExport sarif converts dependency and SAST findings into an OASIS SARIF v2.1.0 document.\nMcp runs the JSON-RPC 2.0 Model Context Protocol stdio transport server.\n";
+
+/// Actions supported by the `sentra skills` command.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SkillsAction {
+    /// Lists all built-in AppSec skills.
+    List,
+    /// Shows the full Markdown specification of a skill by ID.
+    Show {
+        /// Skill ID to inspect.
+        id: String,
+    },
+}
 
 /// Actions supported by the `sentra tenant` command.
 pub enum TenantAction {
@@ -171,6 +183,19 @@ pub enum Command {
     Plugin {
         action: PluginAction,
     },
+    Install {
+        target: String,
+        global: bool,
+        skill: Option<String>,
+        workspace: Option<PathBuf>,
+    },
+    Skills {
+        action: SkillsAction,
+    },
+    Prompt {
+        workflow: String,
+        scope: Option<String>,
+    },
     Mcp,
     VerifyAudit,
 }
@@ -236,6 +261,9 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
             | "config"
             | "fleet"
             | "plugin"
+            | "install"
+            | "skills"
+            | "prompt"
     ) {
         return Err(invalid());
     }
@@ -747,6 +775,123 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
             }
             _ => return Err(invalid()),
         }
+    }
+    if name == "install" {
+        if words.is_empty() {
+            return Err(invalid());
+        }
+        let mut target = None;
+        let mut global = false;
+        let mut skill = None;
+        let mut workspace = None;
+        let mut rest = words.into_iter();
+        while let Some(arg) = rest.next() {
+            if arg == "--global" || arg == "-g" {
+                global = true;
+                continue;
+            }
+            if arg == "--skill" {
+                let val = rest.next().ok_or_else(invalid)?;
+                if val.is_empty() || val.starts_with('-') {
+                    return Err(invalid());
+                }
+                skill = Some(val.to_string());
+                continue;
+            }
+            if arg == "--workspace" {
+                let val = rest.next().ok_or_else(invalid)?;
+                if val.is_empty() || val.starts_with('-') {
+                    return Err(invalid());
+                }
+                workspace = Some(PathBuf::from(val));
+                continue;
+            }
+            if !arg.starts_with('-') && target.is_none() {
+                target = Some(arg.to_string());
+                continue;
+            }
+            return Err(invalid());
+        }
+        let target = target.ok_or_else(invalid)?;
+        return Ok(Invocation {
+            command: Command::Install {
+                target,
+                global,
+                skill,
+                workspace,
+            },
+            json,
+        });
+    }
+    if name == "skills" {
+        if words.is_empty() {
+            return Ok(Invocation {
+                command: Command::Skills {
+                    action: SkillsAction::List,
+                },
+                json,
+            });
+        }
+        let sub = words.remove(0);
+        match sub {
+            "list" => {
+                if !words.is_empty() {
+                    return Err(invalid());
+                }
+                return Ok(Invocation {
+                    command: Command::Skills {
+                        action: SkillsAction::List,
+                    },
+                    json,
+                });
+            }
+            "show" => {
+                if words.is_empty() {
+                    return Err(invalid());
+                }
+                let id = words.remove(0);
+                if !words.is_empty() || id.starts_with('-') {
+                    return Err(invalid());
+                }
+                return Ok(Invocation {
+                    command: Command::Skills {
+                        action: SkillsAction::Show { id: id.to_string() },
+                    },
+                    json,
+                });
+            }
+            _ => return Err(invalid()),
+        }
+    }
+    if name == "prompt" {
+        if words.is_empty() {
+            return Err(invalid());
+        }
+        let workflow = words.remove(0);
+        if workflow.starts_with('-') {
+            return Err(invalid());
+        }
+        let mut scope = None;
+        let mut rest = words.into_iter();
+        while let Some(flag) = rest.next() {
+            match flag {
+                "--scope" | "--target" => {
+                    let val = rest.next().ok_or_else(invalid)?;
+                    if val.is_empty() || val.starts_with('-') {
+                        return Err(invalid());
+                    }
+                    scope = Some(val.to_string());
+                }
+                _ => return Err(invalid()),
+            }
+        }
+        return Ok(Invocation {
+            command: Command::Prompt {
+                workflow: workflow.to_string(),
+                scope,
+            },
+            json,
+        });
     }
     let id = if name == "session" {
         if words.len() < 2 || words.remove(0) != "show" {
@@ -1508,6 +1653,45 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
                 }
             }
         },
+        Command::Install {
+            target,
+            global,
+            skill,
+            workspace,
+        } => {
+            let agent_target = match sentra_core::skills::AgentTarget::parse(&target) {
+                Some(t) => t,
+                None => return error("invalid_target", 2, json),
+            };
+            let ws_path = absolute(workspace.as_deref().unwrap_or(cwd), cwd);
+            let report = if let Some(skill_id) = skill {
+                sentra_core::skills::install_selected_skills(
+                    &[&skill_id],
+                    agent_target,
+                    global,
+                    &ws_path,
+                )
+            } else {
+                sentra_core::skills::install_all_skills(agent_target, global, &ws_path)
+            };
+            match report {
+                Ok(rep) => render_install(&rep, json),
+                Err(_) => error("install_failed", 5, json),
+            }
+        }
+        Command::Skills { action } => match action {
+            SkillsAction::List => {
+                let skills = sentra_core::skills::list_builtin_skills();
+                render_skills_list(skills, json)
+            }
+            SkillsAction::Show { id } => match sentra_core::skills::find_skill_by_id(&id) {
+                Some(skill) => render_skill_show(skill, json),
+                None => error("skill_not_found", 7, json),
+            },
+        },
+        Command::Prompt { workflow, scope } => {
+            render_prompt(&workflow, scope.as_deref().unwrap_or("workspace"), json)
+        }
         Command::Mcp => unreachable!("handled in run_stream"),
     }
 }
@@ -1548,6 +1732,184 @@ fn render_diff(diff: &SnapshotDiff, json: bool) -> Response {
         }
         text.push_str("Untrusted execution: disabled\n");
         text
+    };
+    Response {
+        stdout,
+        stderr: String::new(),
+        exit_code: 0,
+    }
+}
+
+fn render_install(report: &sentra_core::skills::InstallReport, json: bool) -> Response {
+    let stdout = if json {
+        let files_json = serde_json::to_string(
+            &report
+                .installed_files
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>(),
+        )
+        .unwrap_or_default();
+        format!(
+            "{{\"schema_version\":1,\"command\":\"install\",\"target\":\"{}\",\"global\":{},\"destination\":\"{}\",\"count\":{},\"files\":{}}}\n",
+            report.target.as_str(),
+            report.is_global,
+            report.destination_dir.display(),
+            report.installed_files.len(),
+            files_json
+        )
+    } else {
+        let mut text = format!(
+            "Sentra AppSec Skill Installation: success\nTarget: {}\nScope: {}\nDestination: {}\nInstalled skills: {}\n",
+            report.target.as_str(),
+            if report.is_global {
+                "global (user-wide)"
+            } else {
+                "project (local workspace)"
+            },
+            report.destination_dir.display(),
+            report.installed_files.len(),
+        );
+        for file in &report.installed_files {
+            text.push_str(&format!("  [installed] {}\n", file.display()));
+        }
+        text
+    };
+    Response {
+        stdout,
+        stderr: String::new(),
+        exit_code: 0,
+    }
+}
+
+fn render_skills_list(skills: &[sentra_core::skills::SkillDefinition], json: bool) -> Response {
+    let stdout = if json {
+        let items: Vec<serde_json::Value> = skills
+            .iter()
+            .map(|s| {
+                serde_json::json!({
+                    "id": s.id,
+                    "name": s.name,
+                    "category": s.category.as_str(),
+                    "description": s.description,
+                    "tags": s.tags,
+                })
+            })
+            .collect();
+        format!(
+            "{}\n",
+            serde_json::to_string_pretty(&items).unwrap_or_default()
+        )
+    } else {
+        let mut text = format!(
+            "Sentra Built-in AppSec Skills ({} available):\n\n",
+            skills.len()
+        );
+        for s in skills {
+            text.push_str(&format!(
+                "  • {:<32} [{}] - {}\n",
+                s.id,
+                s.category.as_str(),
+                s.description
+            ));
+        }
+        text.push_str("\nInstall skills into your AI assistant using: sentra install <claude|antigravity|cursor|zed|all> [--global]\n");
+        text
+    };
+    Response {
+        stdout,
+        stderr: String::new(),
+        exit_code: 0,
+    }
+}
+
+fn render_skill_show(skill: &sentra_core::skills::SkillDefinition, json: bool) -> Response {
+    let stdout = if json {
+        let val = serde_json::json!({
+            "id": skill.id,
+            "name": skill.name,
+            "category": skill.category.as_str(),
+            "description": skill.description,
+            "tags": skill.tags,
+            "content": skill.content,
+        });
+        format!(
+            "{}\n",
+            serde_json::to_string_pretty(&val).unwrap_or_default()
+        )
+    } else {
+        format!("{}\n", skill.content)
+    };
+    Response {
+        stdout,
+        stderr: String::new(),
+        exit_code: 0,
+    }
+}
+
+fn render_prompt(workflow: &str, scope: &str, json: bool) -> Response {
+    let (name, prompt_content) = match workflow.to_ascii_lowercase().as_str() {
+        "threat-model" | "threat-modeling" | "stride" => {
+            let p =
+                sentra_core::research::ThreatModelingPromptBuilder::build_stride_assessment_prompt(
+                    ".",
+                    scope,
+                    "Web application with database, cache, and authentication services",
+                );
+            ("Threat Modeling (STRIDE)", p.user_prompt)
+        }
+        "api-bola" | "bola" | "idor" | "api" => {
+            let p = sentra_core::research::ApiSecurityPromptBuilder::build_bola_audit_prompt(
+                scope,
+                "GET",
+                "// Inspect route handler for tenant ID authorization filtering",
+            );
+            ("API BOLA/IDOR Analysis", p.user_prompt)
+        }
+        "patch-remediation" | "patch" | "fix" => {
+            let p =
+                sentra_core::research::PatchSynthesisPromptBuilder::build_three_tier_patch_prompt(
+                    "Autonomous Remediation",
+                    "CWE-89",
+                    scope,
+                    "// Unvalidated input flows into query/execution sink",
+                );
+            ("Three-Tier Patch Synthesis (ADR-0004)", p.user_prompt)
+        }
+        "skill-audit" | "agent-safety" => {
+            let p = sentra_core::research::AgentSkillAuditPromptBuilder::build_skill_safety_prompt(
+                scope,
+                "// Skill instruction payload to evaluate for prompt injection or data leakage",
+            );
+            ("Agent Skill Safety Audit", p.user_prompt)
+        }
+        other => {
+            return Response {
+                stdout: String::new(),
+                stderr: format!(
+                    "Unknown prompt workflow: '{other}'. Expected threat-model, api-bola, patch-remediation, or skill-audit\n"
+                ),
+                exit_code: 2,
+            };
+        }
+    };
+
+    let stdout = if json {
+        let val = serde_json::json!({
+            "workflow": workflow,
+            "name": name,
+            "scope": scope,
+            "prompt": prompt_content,
+        });
+        format!(
+            "{}\n",
+            serde_json::to_string_pretty(&val).unwrap_or_default()
+        )
+    } else {
+        format!(
+            "--- [Sentra Cognitive Prompt Contract: {}] ---\n\n{}\n",
+            name, prompt_content
+        )
     };
     Response {
         stdout,

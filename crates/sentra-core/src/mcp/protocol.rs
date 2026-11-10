@@ -223,5 +223,46 @@ pub fn canonical_tool_definitions() -> Vec<ToolDefinition> {
                 "required": ["sarif_content"]
             }),
         },
+        ToolDefinition {
+            name: "sentra_get_security_guidance".to_string(),
+            description: "Retrieves complete zero-dependency AppSec playbooks, threat modeling guidelines, and cognitive prompt contracts from memory (REQ-F17).".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "Skill identifier or search keyword (e.g. 'api-security-testing', 'threat-model', 'auth-patterns', 'golang-security', 'django-security', 'ci-cd-security')"
+                    }
+                },
+                "required": ["topic"]
+            }),
+        },
+        ToolDefinition {
+            name: "sentra_install_skills".to_string(),
+            description: "Installs Sentra's built-in AppSec security skills directly into Claude Code, Antigravity, Cursor, Windsurf, Cline, Codex, Copilot, Zed, OpenCode, Trae, or Kimi environments (REQ-F17).".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "target": {
+                        "type": "string",
+                        "enum": ["claude", "antigravity", "cursor", "windsurf", "cline", "codex", "copilot", "zed", "opencode", "trae", "kimi", "all"],
+                        "description": "Target agent or IDE ecosystem to install skills for"
+                    },
+                    "global": {
+                        "type": "boolean",
+                        "description": "Install to user global directory instead of local workspace"
+                    },
+                    "skill": {
+                        "type": "string",
+                        "description": "Optional specific skill ID to install. If omitted, installs all built-in skills."
+                    },
+                    "workspace": {
+                        "type": "string",
+                        "description": "Optional target workspace directory. Defaults to current directory."
+                    }
+                },
+                "required": ["target"]
+            }),
+        },
     ]
 }

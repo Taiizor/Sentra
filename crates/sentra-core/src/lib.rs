@@ -58,6 +58,8 @@ pub mod sast;
 pub mod service;
 /// Session lifecycle, state machine, and metadata.
 pub mod session;
+/// Zero-dependency embedded AppSec skill catalog and cross-platform agent installer.
+pub mod skills;
 /// Content-addressed storage (CAS), blob publication, and quota management.
 pub mod storage;
 /// Verification bundle lifecycle, disposable worker containment, and benchmark evaluation.
@@ -186,6 +188,11 @@ pub use service::{
 };
 pub use session::{
     AssessmentCompleteness, OperatingMode, SessionMetadata, SessionState, SessionStateMachine,
+};
+pub use skills::{
+    AgentTarget, BUILTIN_SKILLS, InstallReport, SkillCategory, SkillDefinition, find_skill_by_id,
+    install_all_skills, install_selected_skills, install_single_skill, list_builtin_skills,
+    search_skills,
 };
 pub use storage::{
     BlobId, BlobMetadata, BlobStore, FileSystemCasBlobStore, StorageError, StorageErrorKind,

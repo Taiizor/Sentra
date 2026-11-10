@@ -74,7 +74,7 @@ fn test_tools_list_returns_canonical_suite() {
         .expect("Expected tools array")
         .clone();
 
-    assert_eq!(tools.len(), 8);
+    assert_eq!(tools.len(), 10);
     let names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
 
     assert!(names.contains(&"sentra_discover_workspace"));
@@ -85,6 +85,8 @@ fn test_tools_list_returns_canonical_suite() {
     assert!(names.contains(&"sentra_request_approval"));
     assert!(names.contains(&"sentra_scan_code"));
     assert!(names.contains(&"sentra_codeql_ingest"));
+    assert!(names.contains(&"sentra_get_security_guidance"));
+    assert!(names.contains(&"sentra_install_skills"));
 
     for tool in &tools {
         assert_eq!(tool["inputSchema"]["type"], "object");
@@ -373,4 +375,69 @@ fn test_tool_execution_scan_code() {
     assert!(result["files_scanned"].is_number());
     assert!(result["signals_found"].is_number());
     assert!(result["matches"].is_array());
+}
+
+#[test]
+fn test_mcp_get_security_guidance_and_install() {
+    let mut server = McpServer::new(SessionId::from_sequence(12));
+    server.initialized = true;
+
+    // 1. Get guidance for api-security-testing
+    let call_req = McpRequest {
+        jsonrpc: "2.0".to_string(),
+        id: Some(RequestId::Number(100)),
+        method: "tools/call".to_string(),
+        params: Some(serde_json::json!({
+            "name": "sentra_get_security_guidance",
+            "arguments": {
+                "topic": "api-security-testing"
+            }
+        })),
+    };
+    let res = server.handle_request(call_req);
+    assert!(res.error.is_none());
+    let result = res.result.expect("Expected guidance result");
+    assert_eq!(result["found"], true);
+    assert_eq!(result["skill_id"], "api-security-testing");
+    assert!(result["playbook"].as_str().unwrap().contains("BOLA/IDOR"));
+
+    // 2. Search guidance by topic keyword
+    let search_req = McpRequest {
+        jsonrpc: "2.0".to_string(),
+        id: Some(RequestId::Number(101)),
+        method: "tools/call".to_string(),
+        params: Some(serde_json::json!({
+            "name": "sentra_get_security_guidance",
+            "arguments": {
+                "topic": "stride"
+            }
+        })),
+    };
+    let search_res = server.handle_request(search_req);
+    assert!(search_res.error.is_none());
+    let search_result = search_res.result.expect("Expected search result");
+    assert_eq!(search_result["found"], true);
+
+    // 3. Install skill to temporary directory via MCP
+    let tmp = std::env::temp_dir().join(format!("sentra-mcp-install-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&tmp);
+    let install_req = McpRequest {
+        jsonrpc: "2.0".to_string(),
+        id: Some(RequestId::Number(102)),
+        method: "tools/call".to_string(),
+        params: Some(serde_json::json!({
+            "name": "sentra_install_skills",
+            "arguments": {
+                "target": "claude",
+                "skill": "api-security-testing",
+                "workspace": tmp.to_str().unwrap()
+            }
+        })),
+    };
+    let install_res = server.handle_request(install_req);
+    assert!(install_res.error.is_none());
+    let install_result = install_res.result.expect("Expected install result");
+    assert_eq!(install_result["status"], "Success");
+    assert_eq!(install_result["target"], "claude");
+    let _ = std::fs::remove_dir_all(&tmp);
 }
