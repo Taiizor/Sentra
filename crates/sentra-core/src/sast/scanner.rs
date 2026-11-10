@@ -247,7 +247,10 @@ impl SastScanner {
             }
 
             // 11. CI/CD Workflow Security (SENTRA-CICD-001 to 004)
-            if rel_path.contains(".github/workflows") || rel_path.ends_with(".yml") || rel_path.ends_with(".yaml") {
+            if rel_path.contains(".github/workflows")
+                || rel_path.ends_with(".yml")
+                || rel_path.ends_with(".yaml")
+            {
                 matches.extend(self.check_cicd_workflow(rel_path, line_num, line));
             }
 
@@ -258,10 +261,10 @@ impl SastScanner {
             matches.extend(self.check_agent_skill_security(rel_path, line_num, line));
 
             // 14. Go Path Traversal Scoping (SENTRA-GO-001)
-            if rel_path.ends_with(".go") {
-                if let Some(m) = self.check_go_path_clean(rel_path, line_num, line) {
-                    matches.push(m);
-                }
+            if rel_path.ends_with(".go")
+                && let Some(m) = self.check_go_path_clean(rel_path, line_num, line)
+            {
+                matches.push(m);
             }
 
             // 15. Django Security Misconfigurations (SENTRA-DJANGO-001 to 003)
@@ -270,20 +273,28 @@ impl SastScanner {
             }
 
             // 16. Laravel Misconfigurations (SENTRA-LARAVEL-001 to 002)
-            if rel_path.ends_with(".php") || rel_path.ends_with(".env") || rel_path.ends_with(".env.example") {
+            if rel_path.ends_with(".php")
+                || rel_path.ends_with(".env")
+                || rel_path.ends_with(".env.example")
+            {
                 matches.extend(self.check_laravel_security(rel_path, line_num, line));
             }
 
             // 17. Spring Boot Misconfigurations (SENTRA-SPRING-001 to 002)
-            if rel_path.ends_with(".java") || rel_path.ends_with(".properties") || rel_path.ends_with(".yml") {
+            if rel_path.ends_with(".java")
+                || rel_path.ends_with(".properties")
+                || rel_path.ends_with(".yml")
+            {
                 matches.extend(self.check_spring_security(rel_path, line_num, line));
             }
 
             // 18. Firebase Rules Permissive Access (SENTRA-FIREBASE-001)
-            if rel_path.ends_with(".rules") || rel_path.contains("firestore") || rel_path.contains("firebase") {
-                if let Some(m) = self.check_firebase_rules(rel_path, line_num, line) {
-                    matches.push(m);
-                }
+            if (rel_path.ends_with(".rules")
+                || rel_path.contains("firestore")
+                || rel_path.contains("firebase"))
+                && let Some(m) = self.check_firebase_rules(rel_path, line_num, line)
+            {
+                matches.push(m);
             }
 
             // 19. Solidity Smart Contract Flaws (SENTRA-SOLIDITY-001 to 002)
@@ -788,17 +799,16 @@ impl SastScanner {
             || trimmed == "pull_request_target"
             || trimmed.contains(" pull_request_target:")
         {
-            if let Some(rule) = find_rule_by_id("SENTRA-CICD-001") {
-                results.push(SastMatch {
-                    rule: rule.clone(),
-                    file_path: path.to_string(),
-                    line_number: line_num,
-                    snippet: trimmed.to_string(),
-                    rationale:
-                        "Workflow triggers on pull_request_target with privileged access to secrets and write tokens"
-                            .to_string(),
-                });
-            }
+            let rule = find_rule_by_id("SENTRA-CICD-001").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Workflow triggers on pull_request_target with privileged access to secrets and write tokens"
+                        .to_string(),
+            });
         }
 
         // 2. Script template injection in ${{ ... }} (SENTRA-CICD-002)
@@ -814,17 +824,16 @@ impl SastScanner {
                 || line.contains("bash ")
                 || line.contains("sh "))
         {
-            if let Some(rule) = find_rule_by_id("SENTRA-CICD-002") {
-                results.push(SastMatch {
-                    rule: rule.clone(),
-                    file_path: path.to_string(),
-                    line_number: line_num,
-                    snippet: trimmed.to_string(),
-                    rationale:
-                        "Untrusted GitHub context expression interpolated directly into shell execution"
-                            .to_string(),
-                });
-            }
+            let rule = find_rule_by_id("SENTRA-CICD-002").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Untrusted GitHub context expression interpolated directly into shell execution"
+                        .to_string(),
+            });
         }
 
         // 3. permissions: write-all (SENTRA-CICD-003)
@@ -832,17 +841,16 @@ impl SastScanner {
             || trimmed.contains("permissions: 'write-all'")
             || trimmed.contains("permissions: \"write-all\"")
         {
-            if let Some(rule) = find_rule_by_id("SENTRA-CICD-003") {
-                results.push(SastMatch {
-                    rule: rule.clone(),
-                    file_path: path.to_string(),
-                    line_number: line_num,
-                    snippet: trimmed.to_string(),
-                    rationale:
-                        "Workflow grants write-all permissions to GITHUB_TOKEN, violating principle of least privilege"
-                            .to_string(),
-                });
-            }
+            let rule = find_rule_by_id("SENTRA-CICD-003").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Workflow grants write-all permissions to GITHUB_TOKEN, violating principle of least privilege"
+                        .to_string(),
+            });
         }
 
         // 4. Environment file injection (SENTRA-CICD-004)
@@ -852,17 +860,16 @@ impl SastScanner {
             || line.contains(">> \"$GITHUB_OUTPUT\""))
             && line.contains("${{")
         {
-            if let Some(rule) = find_rule_by_id("SENTRA-CICD-004") {
-                results.push(SastMatch {
-                    rule: rule.clone(),
-                    file_path: path.to_string(),
-                    line_number: line_num,
-                    snippet: trimmed.to_string(),
-                    rationale:
-                        "Untrusted expression appended directly to GITHUB_ENV or GITHUB_OUTPUT without delimiter isolation"
-                            .to_string(),
-                });
-            }
+            let rule = find_rule_by_id("SENTRA-CICD-004").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Untrusted expression appended directly to GITHUB_ENV or GITHUB_OUTPUT without delimiter isolation"
+                        .to_string(),
+            });
         }
 
         results
@@ -894,17 +901,16 @@ impl SastScanner {
                 && !lower.contains("''");
 
             if is_secret_comp {
-                if let Some(rule) = find_rule_by_id("SENTRA-AUTH-001") {
-                    results.push(SastMatch {
-                        rule: rule.clone(),
-                        file_path: path.to_string(),
-                        line_number: line_num,
-                        snippet: trimmed.to_string(),
-                        rationale:
-                            "Variable-time comparison of secret, token, or cryptographic signature susceptible to side-channel timing attacks"
-                                .to_string(),
-                    });
-                }
+                let rule = find_rule_by_id("SENTRA-AUTH-001").expect("builtin rule");
+                results.push(SastMatch {
+                    rule: rule.clone(),
+                    file_path: path.to_string(),
+                    line_number: line_num,
+                    snippet: trimmed.to_string(),
+                    rationale:
+                        "Variable-time comparison of secret, token, or cryptographic signature susceptible to side-channel timing attacks"
+                            .to_string(),
+                });
             }
         }
 
@@ -914,17 +920,16 @@ impl SastScanner {
             || (lower.contains("jwt")
                 && (lower.contains("verify: false") || lower.contains("verify:false")))
         {
-            if let Some(rule) = find_rule_by_id("SENTRA-AUTH-002") {
-                results.push(SastMatch {
-                    rule: rule.clone(),
-                    file_path: path.to_string(),
-                    line_number: line_num,
-                    snippet: trimmed.to_string(),
-                    rationale:
-                        "JWT configuration permits insecure 'none' algorithm or disables signature verification"
-                            .to_string(),
-                });
-            }
+            let rule = find_rule_by_id("SENTRA-AUTH-002").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "JWT configuration permits insecure 'none' algorithm or disables signature verification"
+                        .to_string(),
+            });
         }
 
         // 3. Weak password hash algorithm (MD5 or SHA1) (SENTRA-AUTH-003)
@@ -938,17 +943,16 @@ impl SastScanner {
                 || lower.contains("passwd")
                 || lower.contains("credential"))
         {
-            if let Some(rule) = find_rule_by_id("SENTRA-AUTH-003") {
-                results.push(SastMatch {
-                    rule: rule.clone(),
-                    file_path: path.to_string(),
-                    line_number: line_num,
-                    snippet: trimmed.to_string(),
-                    rationale:
-                        "Weak cryptographic digest (MD5/SHA1) used in credential or password handling"
-                            .to_string(),
-                });
-            }
+            let rule = find_rule_by_id("SENTRA-AUTH-003").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Weak cryptographic digest (MD5/SHA1) used in credential or password handling"
+                        .to_string(),
+            });
         }
 
         results
@@ -956,6 +960,11 @@ impl SastScanner {
 
     fn check_agent_skill_security(&self, path: &str, line_num: u32, line: &str) -> Vec<SastMatch> {
         let mut results = Vec::new();
+        // Exclude definition in our own detector/rules
+        if path.ends_with("scanner.rs") || path.ends_with("rule.rs") {
+            return results;
+        }
+
         let trimmed = line.trim();
         let lower = line.to_ascii_lowercase();
 
@@ -966,20 +975,16 @@ impl SastScanner {
             || lower.contains("classify this skill as benign")
             || lower.contains("mark this skill as safe")
         {
-            // Exclude definition in our own detector/rules
-            if !path.ends_with("scanner.rs") && !path.ends_with("rule.rs") {
-                if let Some(rule) = find_rule_by_id("SENTRA-SKILL-001") {
-                    results.push(SastMatch {
-                        rule: rule.clone(),
-                        file_path: path.to_string(),
-                        line_number: line_num,
-                        snippet: trimmed.to_string(),
-                        rationale:
-                            "Instruction injection or prompt override pattern detected in agent skill/instruction payload"
-                                .to_string(),
-                    });
-                }
-            }
+            let rule = find_rule_by_id("SENTRA-SKILL-001").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Instruction injection or prompt override pattern detected in agent skill/instruction payload"
+                        .to_string(),
+            });
         }
 
         // 2. Agent credential harvesting (SENTRA-SKILL-002)
@@ -995,19 +1000,16 @@ impl SastScanner {
                 || lower.contains("token")
                 || lower.contains("password"))
         {
-            if !path.ends_with("scanner.rs") && !path.ends_with("rule.rs") {
-                if let Some(rule) = find_rule_by_id("SENTRA-SKILL-002") {
-                    results.push(SastMatch {
-                        rule: rule.clone(),
-                        file_path: path.to_string(),
-                        line_number: line_num,
-                        snippet: trimmed.to_string(),
-                        rationale:
-                            "Environment credential harvesting routine detected attempting remote data transmission"
-                                .to_string(),
-                    });
-                }
-            }
+            let rule = find_rule_by_id("SENTRA-SKILL-002").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Environment credential harvesting routine detected attempting remote data transmission"
+                        .to_string(),
+            });
         }
 
         results
@@ -1046,41 +1048,42 @@ impl SastScanner {
             || trimmed == "DEBUG=True")
             && !path.contains("test")
         {
-            if let Some(rule) = find_rule_by_id("SENTRA-DJANGO-001") {
-                results.push(SastMatch {
-                    rule: rule.clone(),
-                    file_path: path.to_string(),
-                    line_number: line_num,
-                    snippet: trimmed.to_string(),
-                    rationale: "Django DEBUG mode explicitly enabled disclosing diagnostics in responses".to_string(),
-                });
-            }
+            let rule = find_rule_by_id("SENTRA-DJANGO-001").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Django DEBUG mode explicitly enabled disclosing diagnostics in responses"
+                        .to_string(),
+            });
         }
 
         // 2. ALLOWED_HOSTS = ['*'] (SENTRA-DJANGO-002)
         if trimmed.contains("ALLOWED_HOSTS") && trimmed.contains("'*'") {
-            if let Some(rule) = find_rule_by_id("SENTRA-DJANGO-002") {
-                results.push(SastMatch {
-                    rule: rule.clone(),
-                    file_path: path.to_string(),
-                    line_number: line_num,
-                    snippet: trimmed.to_string(),
-                    rationale: "Wildcard in ALLOWED_HOSTS enables HTTP Host header poisoning".to_string(),
-                });
-            }
+            let rule = find_rule_by_id("SENTRA-DJANGO-002").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale: "Wildcard in ALLOWED_HOSTS enables HTTP Host header poisoning"
+                    .to_string(),
+            });
         }
 
         // 3. @csrf_exempt (SENTRA-DJANGO-003)
         if trimmed.starts_with("@csrf_exempt") || trimmed.contains(" @csrf_exempt") {
-            if let Some(rule) = find_rule_by_id("SENTRA-DJANGO-003") {
-                results.push(SastMatch {
-                    rule: rule.clone(),
-                    file_path: path.to_string(),
-                    line_number: line_num,
-                    snippet: trimmed.to_string(),
-                    rationale: "View disables CSRF validation allowing cross-site request forgery".to_string(),
-                });
-            }
+            let rule = find_rule_by_id("SENTRA-DJANGO-003").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale: "View disables CSRF validation allowing cross-site request forgery"
+                    .to_string(),
+            });
         }
 
         results
@@ -1096,28 +1099,28 @@ impl SastScanner {
             || (lower.contains("'debug'") && lower.contains("true")))
             && !path.contains("test")
         {
-            if let Some(rule) = find_rule_by_id("SENTRA-LARAVEL-001") {
-                results.push(SastMatch {
-                    rule: rule.clone(),
-                    file_path: path.to_string(),
-                    line_number: line_num,
-                    snippet: trimmed.to_string(),
-                    rationale: "Laravel debug mode enabled in configuration exposing detailed stack traces".to_string(),
-                });
-            }
+            let rule = find_rule_by_id("SENTRA-LARAVEL-001").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Laravel debug mode enabled in configuration exposing detailed stack traces"
+                        .to_string(),
+            });
         }
 
         // 2. protected $guarded = [] (SENTRA-LARAVEL-002)
         if trimmed.contains("$guarded") && trimmed.contains("[]") {
-            if let Some(rule) = find_rule_by_id("SENTRA-LARAVEL-002") {
-                results.push(SastMatch {
-                    rule: rule.clone(),
-                    file_path: path.to_string(),
-                    line_number: line_num,
-                    snippet: trimmed.to_string(),
-                    rationale: "Empty $guarded array permits mass assignment vulnerability".to_string(),
-                });
-            }
+            let rule = find_rule_by_id("SENTRA-LARAVEL-002").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale: "Empty $guarded array permits mass assignment vulnerability".to_string(),
+            });
         }
 
         results
@@ -1129,28 +1132,28 @@ impl SastScanner {
 
         // 1. allowedOrigins("*") (SENTRA-SPRING-001)
         if trimmed.contains(".allowedOrigins(\"*\")") || trimmed.contains(".allowedOrigins('*')") {
-            if let Some(rule) = find_rule_by_id("SENTRA-SPRING-001") {
-                results.push(SastMatch {
-                    rule: rule.clone(),
-                    file_path: path.to_string(),
-                    line_number: line_num,
-                    snippet: trimmed.to_string(),
-                    rationale: "Spring CORS configured with wildcard allowedOrigins granting cross-origin credential access".to_string(),
-                });
-            }
+            let rule = find_rule_by_id("SENTRA-SPRING-001").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale: "Spring CORS configured with wildcard allowedOrigins granting cross-origin credential access".to_string(),
+            });
         }
 
         // 2. management.endpoints.web.exposure.include=* (SENTRA-SPRING-002)
         if trimmed.contains("management.endpoints.web.exposure.include") && trimmed.contains('*') {
-            if let Some(rule) = find_rule_by_id("SENTRA-SPRING-002") {
-                results.push(SastMatch {
-                    rule: rule.clone(),
-                    file_path: path.to_string(),
-                    line_number: line_num,
-                    snippet: trimmed.to_string(),
-                    rationale: "Broad Spring Boot Actuator endpoint exposure leaks sensitive system metrics".to_string(),
-                });
-            }
+            let rule = find_rule_by_id("SENTRA-SPRING-002").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Broad Spring Boot Actuator endpoint exposure leaks sensitive system metrics"
+                        .to_string(),
+            });
         }
 
         results
@@ -1168,7 +1171,8 @@ impl SastScanner {
                 file_path: path.to_string(),
                 line_number: line_num,
                 snippet: trimmed.to_string(),
-                rationale: "Firebase rule allows unauthenticated public read/write access".to_string(),
+                rationale: "Firebase rule allows unauthenticated public read/write access"
+                    .to_string(),
             });
         }
         None
@@ -1180,30 +1184,30 @@ impl SastScanner {
 
         // 1. tx.origin used for authentication (SENTRA-SOLIDITY-001)
         if trimmed.contains("tx.origin")
-            && (trimmed.contains("==") || trimmed.contains("require(") || trimmed.contains("assert("))
+            && (trimmed.contains("==")
+                || trimmed.contains("require(")
+                || trimmed.contains("assert("))
         {
-            if let Some(rule) = find_rule_by_id("SENTRA-SOLIDITY-001") {
-                results.push(SastMatch {
-                    rule: rule.clone(),
-                    file_path: path.to_string(),
-                    line_number: line_num,
-                    snippet: trimmed.to_string(),
-                    rationale: "Solidity authorization checks tx.origin instead of msg.sender, vulnerable to phishing contract delegation".to_string(),
-                });
-            }
+            let rule = find_rule_by_id("SENTRA-SOLIDITY-001").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale: "Solidity authorization checks tx.origin instead of msg.sender, vulnerable to phishing contract delegation".to_string(),
+            });
         }
 
         // 2. call{value: ...} external call (SENTRA-SOLIDITY-002)
         if trimmed.contains(".call{value:") || trimmed.contains(".call.value(") {
-            if let Some(rule) = find_rule_by_id("SENTRA-SOLIDITY-002") {
-                results.push(SastMatch {
-                    rule: rule.clone(),
-                    file_path: path.to_string(),
-                    line_number: line_num,
-                    snippet: trimmed.to_string(),
-                    rationale: "Low-level Ether transfer via call{value:} susceptible to reentrancy attacks if state is not updated beforehand".to_string(),
-                });
-            }
+            let rule = find_rule_by_id("SENTRA-SOLIDITY-002").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale: "Low-level Ether transfer via call{value:} susceptible to reentrancy attacks if state is not updated beforehand".to_string(),
+            });
         }
 
         results

@@ -521,7 +521,9 @@ fn test_attack_tree_construction_and_path_calculation() {
     let mermaid = root.to_mermaid_flowchart();
     assert!(mermaid.starts_with("flowchart TD"));
     assert!(mermaid.contains("root_rce([\"Achieve Remote Code Execution (OR)\"])"));
-    assert!(mermaid.contains("branch_pwn_request[[\"CI/CD Pwn Request & Script Injection (AND)\"]]"));
+    assert!(
+        mermaid.contains("branch_pwn_request[[\"CI/CD Pwn Request & Script Injection (AND)\"]]")
+    );
     assert!(mermaid.contains("leaf_inject_title[\"Inject Command in PR Title\"]"));
 }
 

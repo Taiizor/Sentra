@@ -53,11 +53,21 @@ impl StrideCategory {
     pub const fn diagnostic_question(&self) -> &'static str {
         match self {
             Self::Spoofing => "Can an attacker pretend to be a valid user, worker, or service?",
-            Self::Tampering => "Can an attacker modify source code, configuration, or data in transit/rest?",
-            Self::Repudiation => "Can an attacker or operator perform malicious actions without an immutable audit trail?",
-            Self::InformationDisclosure => "Can an attacker leak secrets, private keys, or confidential source code?",
-            Self::DenialOfService => "Can an attacker exhaust CPU, memory, budget, or worker concurrency ceilings?",
-            Self::ElevationOfPrivilege => "Can an unprivileged actor or child task gain unrestricted capabilities?",
+            Self::Tampering => {
+                "Can an attacker modify source code, configuration, or data in transit/rest?"
+            }
+            Self::Repudiation => {
+                "Can an attacker or operator perform malicious actions without an immutable audit trail?"
+            }
+            Self::InformationDisclosure => {
+                "Can an attacker leak secrets, private keys, or confidential source code?"
+            }
+            Self::DenialOfService => {
+                "Can an attacker exhaust CPU, memory, budget, or worker concurrency ceilings?"
+            }
+            Self::ElevationOfPrivilege => {
+                "Can an unprivileged actor or child task gain unrestricted capabilities?"
+            }
         }
     }
 }
