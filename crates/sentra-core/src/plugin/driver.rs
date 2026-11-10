@@ -95,19 +95,47 @@ impl PluginDriver {
     fn spawn_child(&self) -> Result<std::process::Child, PluginError> {
         let (cmd, args) = self.parse_command_args()?;
 
-        Command::new(&cmd)
+        let attempt = Command::new(&cmd)
             .args(&args)
             .current_dir(&self.plugin.adapter_dir)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| {
-                PluginError::protocol_violation(format!(
-                    "Failed to spawn adapter subprocess '{cmd}' in '{}': {e}",
-                    self.plugin.adapter_dir.display()
-                ))
-            })
+            .spawn();
+
+        match attempt {
+            Ok(child) => Ok(child),
+            Err(e) if cmd == "python" => Command::new("python3")
+                .args(&args)
+                .current_dir(&self.plugin.adapter_dir)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .map_err(|_| {
+                    PluginError::protocol_violation(format!(
+                        "Failed to spawn adapter subprocess '{cmd}/python3' in '{}': {e}",
+                        self.plugin.adapter_dir.display()
+                    ))
+                }),
+            Err(e) if cmd == "python3" => Command::new("python")
+                .args(&args)
+                .current_dir(&self.plugin.adapter_dir)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .map_err(|_| {
+                    PluginError::protocol_violation(format!(
+                        "Failed to spawn adapter subprocess '{cmd}/python' in '{}': {e}",
+                        self.plugin.adapter_dir.display()
+                    ))
+                }),
+            Err(e) => Err(PluginError::protocol_violation(format!(
+                "Failed to spawn adapter subprocess '{cmd}' in '{}': {e}",
+                self.plugin.adapter_dir.display()
+            ))),
+        }
     }
 
     /// Reads a single line from the child process stdout, tracks quota, and decodes frame.
