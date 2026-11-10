@@ -12,6 +12,7 @@ import {
 import { toast } from 'sonner'
 import { copyText } from '@/lib/clipboard'
 import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 interface DiffViewerProps {
   diff: string
@@ -367,10 +368,10 @@ export function DiffViewer({
         </div>
       </div>
 
-      {/* Diff Content Body */}
+      {/* Diff Content Body with shadcn ScrollArea */}
       {isExpanded && (
-        <div
-          className={`overflow-x-auto overflow-y-auto font-mono text-[12px] leading-5 ${maxHeight} divide-y divide-zinc-800/40 select-text`}
+        <ScrollArea
+          className={`font-mono text-[12px] leading-5 ${maxHeight} divide-y divide-zinc-800/40 select-text`}
         >
           {/* Raw Mode */}
           {mode === 'raw' && (
@@ -567,7 +568,7 @@ export function DiffViewer({
               </tbody>
             </table>
           )}
-        </div>
+        </ScrollArea>
       )}
     </div>
   )

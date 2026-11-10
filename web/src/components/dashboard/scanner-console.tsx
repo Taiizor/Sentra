@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Select,
   SelectContent,
@@ -166,14 +167,16 @@ Aggregate digest: sha256:7f83b165...`
           </div>
         </div>
 
-        {/* Live Terminal Box */}
-        <div className="bg-background/90 text-emerald-400 font-mono text-[11px] p-3 rounded-md border border-border/50 min-h-[140px] max-h-[220px] overflow-y-auto flex flex-col gap-1 shadow-inner leading-relaxed">
-          {consoleOutput.map((line, idx) => (
-            <div key={idx} className="whitespace-pre-wrap">
-              {line}
-            </div>
-          ))}
-        </div>
+        {/* Live Terminal Box with shadcn ScrollArea */}
+        <ScrollArea className="bg-background/90 text-emerald-400 font-mono text-[11px] rounded-md border border-border/50 h-[180px] shadow-inner">
+          <div className="p-3 flex flex-col gap-1 leading-relaxed">
+            {consoleOutput.map((line, idx) => (
+              <div key={idx} className="whitespace-pre-wrap">
+                {line}
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
 
         {/* Status footer */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-muted-foreground px-0.5">

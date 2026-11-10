@@ -31,6 +31,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   streamLiveScan,
   validateWorkspacePath,
@@ -495,11 +496,12 @@ export function LiveStreamModal({
                 </div>
               </div>
 
-              {/* Monospace Output */}
-              <div
+              {/* Monospace Output with shadcn ScrollArea */}
+              <ScrollArea
                 ref={logContainerRef}
-                className="p-4 font-mono text-xs overflow-y-auto max-h-[300px] min-h-[220px] flex flex-col gap-1 leading-relaxed selection:bg-primary/30"
+                className="font-mono text-xs h-[260px] leading-relaxed selection:bg-primary/30"
               >
+                <div className="p-4 flex flex-col gap-1">
                 {logs.length === 0 ? (
                   <div className="text-zinc-500 italic py-8 text-center">
                     Connecting to sentra.exe stream...
@@ -514,7 +516,8 @@ export function LiveStreamModal({
                     </div>
                   ))
                 )}
-              </div>
+                </div>
+              </ScrollArea>
             </div>
 
             {/* Summary Banner when Completed */}

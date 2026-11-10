@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { SurgicalDiffView } from '@/components/dashboard/surgical-diff-view'
 import type { TaintStep } from '@/types/sentra'
 
@@ -129,8 +130,9 @@ export function SourceViewer({
         </div>
       </div>
 
-      {/* Code Viewer Body */}
-      <div className={`${isExpanded ? 'max-h-[600px]' : 'max-h-[300px]'} overflow-y-auto font-mono text-xs p-2 leading-relaxed select-text`}>
+      {/* Code Viewer Body with shadcn ScrollArea */}
+      <ScrollArea className={`${isExpanded ? 'max-h-[600px]' : 'max-h-[300px]'} font-mono text-xs leading-relaxed select-text`}>
+        <div className="p-2">
         {loading ? (
           <div className="flex items-center justify-center p-8 text-zinc-500 gap-2">
             <Loader2 className="size-4 animate-spin" />
@@ -199,7 +201,8 @@ export function SourceViewer({
             )}
           </div>
         )}
-      </div>
+        </div>
+      </ScrollArea>
     </div>
   )
 }

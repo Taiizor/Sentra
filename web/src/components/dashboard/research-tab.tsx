@@ -31,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Table,
   TableBody,
@@ -954,14 +955,16 @@ export function ResearchTab({ campaigns: _campaigns, currentRole }: ResearchTabP
                   Reviewed Paths ({selectedUnit.reviewedPaths?.length || 0}):
                 </span>
                 {selectedUnit.reviewedPaths?.length > 0 ? (
-                  <div className="space-y-1 max-h-32 overflow-y-auto">
-                    {selectedUnit.reviewedPaths.map((p, i) => (
-                      <div key={i} className="flex items-center gap-2 font-mono text-[11px] p-1.5 rounded bg-background/60 border border-border/50 text-foreground">
-                        <FolderGit2 className="size-3 text-muted-foreground" />
-                        <span className="truncate">{p}</span>
-                      </div>
-                    ))}
-                  </div>
+                  <ScrollArea className="h-32 pr-2">
+                    <div className="space-y-1">
+                      {selectedUnit.reviewedPaths.map((p, i) => (
+                        <div key={i} className="flex items-center gap-2 font-mono text-[11px] p-1.5 rounded bg-background/60 border border-border/50 text-foreground">
+                          <FolderGit2 className="size-3 text-muted-foreground" />
+                          <span className="truncate">{p}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
                 ) : (
                   <p className="text-muted-foreground text-[11px] italic">No paths reviewed yet for this unit.</p>
                 )}

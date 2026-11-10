@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { UserRole } from '@/types/sentra'
 import { toast } from 'sonner'
@@ -279,8 +280,9 @@ export function SettingsDialog({
               </select>
             </div>
 
-            {/* Provider List */}
-            <div className="flex flex-col gap-3 max-h-[340px] overflow-y-auto pr-1">
+            {/* Provider List with shadcn ScrollArea */}
+            <ScrollArea className="h-[340px] pr-2">
+              <div className="flex flex-col gap-3">
               {[
                 { id: 'anthropic', name: 'Anthropic Claude', defaultModel: 'claude-3-7-sonnet-20250219', placeholder: 'sk-ant-api03-...' },
                 { id: 'openai', name: 'OpenAI (o3-mini / GPT-4.5)', defaultModel: 'o3-mini', placeholder: 'sk-proj-...' },
@@ -356,7 +358,8 @@ export function SettingsDialog({
                   </div>
                 )
               })}
-            </div>
+              </div>
+            </ScrollArea>
           </TabsContent>
 
           {/* Policy Tab */}

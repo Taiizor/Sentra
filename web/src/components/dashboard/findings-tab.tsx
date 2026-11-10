@@ -52,6 +52,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Table,
   TableBody,
@@ -839,9 +840,10 @@ export function FindingsTab({
                 </SheetDescription>
               </SheetHeader>
 
-              {/* Scrollable Inspector Body */}
-              <div className="flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-5">
-                {/* Needs Validation Banner */}
+              {/* Scrollable Inspector Body with shadcn ScrollArea */}
+              <ScrollArea className="flex-1 min-h-0">
+                <div className="px-5 py-5 flex flex-col gap-5">
+                  {/* Needs Validation Banner */}
                 {selectedFinding.verdict === 'needs_validation' && (
                   <div className="p-3.5 rounded-lg border border-amber-500/30 bg-amber-500/5 flex flex-col gap-2.5 text-xs">
                     <div className="flex items-center gap-1.5 text-amber-400 font-semibold tracking-wider uppercase text-[11px]">
@@ -1029,7 +1031,8 @@ export function FindingsTab({
                     </div>
                   </div>
                 )}
-              </div>
+                </div>
+              </ScrollArea>
 
               {/* Sticky Bottom Actions & Governance Footer */}
               <div className="border-t border-border/60 px-5 py-3 bg-card/90 backdrop-blur sticky bottom-0 z-20 flex items-center justify-between gap-3 mt-auto">

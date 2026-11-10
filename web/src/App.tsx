@@ -37,6 +37,7 @@ import { LiveStreamModal } from '@/components/dashboard/live-stream-modal'
 import { AiPatchModal } from '@/components/dashboard/ai-patch-modal'
 import { AddTenantDialog } from '@/components/dashboard/add-tenant-dialog'
 import { SettingsTab } from '@/components/dashboard/settings-tab'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { generateExecutiveReportHtml } from '@/lib/executive-report'
 import { useAppRouter } from '@/lib/router'
 
@@ -881,9 +882,11 @@ export function App() {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto bg-background/60 p-3 rounded-md border border-border/50 font-mono text-xs my-2 text-foreground/90 max-h-[380px]">
-              <pre className="whitespace-pre-wrap">{sarifModalContent}</pre>
-            </div>
+            <ScrollArea className="h-[380px] bg-background/60 rounded-md border border-border/50 my-2">
+              <div className="p-3 font-mono text-xs text-foreground/90">
+                <pre className="whitespace-pre-wrap">{sarifModalContent}</pre>
+              </div>
+            </ScrollArea>
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-border/60">
               <Button

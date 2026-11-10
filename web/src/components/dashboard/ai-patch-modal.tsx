@@ -30,6 +30,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { generateAiPatch, applyPatchToWorkspace, rollbackPatch } from '@/lib/api-client'
 import { DiffViewer } from '@/components/dashboard/diff-viewer'
@@ -332,8 +333,9 @@ export function AiPatchModal({
           </Badge>
         </div>
 
-        {/* Main Content Area */}
-        <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
+        {/* Main Content Area with shadcn ScrollArea */}
+        <ScrollArea className="flex-1 min-h-0">
+          <div className="p-5 flex flex-col gap-4">
           {/* Initial State / Generation Trigger */}
           {!patchResult && !isGenerating && (
             <div className="flex flex-col items-center justify-center py-12 text-center gap-4">
@@ -510,7 +512,8 @@ export function AiPatchModal({
               </Tabs>
             </div>
           )}
-        </div>
+          </div>
+        </ScrollArea>
 
         {/* Footer Actions */}
         <div className="px-5 py-3 border-t border-border/60 bg-card/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
