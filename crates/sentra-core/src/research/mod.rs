@@ -6,6 +6,7 @@ pub mod coverage;
 pub mod error;
 pub mod fuzzing;
 pub mod hypothesis;
+pub mod prompt;
 pub mod role;
 pub mod stride;
 
@@ -23,6 +24,10 @@ pub use fuzzing::{
     generate_reference_tri_method_matrix, minimize_input, reference_root_cause_targets,
 };
 pub use hypothesis::{Hypothesis, HypothesisDeduplicator, HypothesisStatus, VulnerabilityCategory};
+pub use prompt::{
+    AgentSkillAuditPromptBuilder, ApiSecurityPromptBuilder, AppSecPersona, AppSecPrompt,
+    PatchSynthesisPromptBuilder, ThreatModelingPromptBuilder,
+};
 pub use role::{
     ResearchRole, RoleCapability, assert_patch_verifier_independent, assert_peer_approval_forbidden,
 };

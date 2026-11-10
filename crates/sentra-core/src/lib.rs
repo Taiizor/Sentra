@@ -160,16 +160,17 @@ pub use provider::{
 };
 pub use remediation::RemediationPrPackage;
 pub use research::{
+    AgentSkillAuditPromptBuilder, ApiSecurityPromptBuilder, AppSecPersona, AppSecPrompt,
     ApproachRunMetrics, ApproachSummary, AttackAttributes, AttackDifficulty, AttackNode, Campaign,
     CampaignLimits, CampaignStatus, CampaignStopReason, CampaignTask, ControlFamily, ControlLayer,
     ControlType, CostTier, CoverageLedger, CoverageSummary, CoveredRegion, CrashArtifact,
     DetectionRisk, FuzzEngine, FuzzRunConfig, FuzzTarget, Hypothesis, HypothesisDeduplicator,
-    HypothesisStatus, NodeType, ReferenceCrashTarget, ResearchApproach, ResearchError,
-    ResearchErrorKind, ResearchRole, ResearchTaskStatus, RoleCapability, SanitizerType,
-    SecurityMitigation, SkipReason, SkippedRegion, StrideCategory, ThreatMitigationMapping,
-    TriMethodComparisonMatrix, VulnerabilityCategory, assert_patch_verifier_independent,
-    assert_peer_approval_forbidden, generate_reference_tri_method_matrix, minimize_input,
-    reference_root_cause_targets,
+    HypothesisStatus, NodeType, PatchSynthesisPromptBuilder, ReferenceCrashTarget,
+    ResearchApproach, ResearchError, ResearchErrorKind, ResearchRole, ResearchTaskStatus,
+    RoleCapability, SanitizerType, SecurityMitigation, SkipReason, SkippedRegion, StrideCategory,
+    ThreatMitigationMapping, ThreatModelingPromptBuilder, TriMethodComparisonMatrix,
+    VulnerabilityCategory, assert_patch_verifier_independent, assert_peer_approval_forbidden,
+    generate_reference_tri_method_matrix, minimize_input, reference_root_cause_targets,
 };
 pub use sast::{
     BUILTIN_RULES, MAX_SCANNABLE_FILE_BYTES, RuleCategory, SastMatch, SastReport, SastRule,

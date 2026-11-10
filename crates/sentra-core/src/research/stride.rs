@@ -25,6 +25,30 @@ pub enum StrideCategory {
 }
 
 impl StrideCategory {
+    /// Returns all 6 STRIDE categories in canonical order.
+    pub const fn all() -> [Self; 6] {
+        [
+            Self::Spoofing,
+            Self::Tampering,
+            Self::Repudiation,
+            Self::InformationDisclosure,
+            Self::DenialOfService,
+            Self::ElevationOfPrivilege,
+        ]
+    }
+
+    /// Canonical human-readable label.
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Spoofing => "Spoofing",
+            Self::Tampering => "Tampering",
+            Self::Repudiation => "Repudiation",
+            Self::InformationDisclosure => "Information Disclosure",
+            Self::DenialOfService => "Denial of Service",
+            Self::ElevationOfPrivilege => "Elevation of Privilege",
+        }
+    }
+
     /// Maps each STRIDE category to its primary defensive control family.
     pub const fn primary_control_family(&self) -> ControlFamily {
         match self {
