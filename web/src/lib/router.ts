@@ -9,6 +9,7 @@ export const VALID_TABS = [
   'intel',
   'research',
   'fleet',
+  'pull-requests',
   'webhooks',
   'plugins',
   'audit',

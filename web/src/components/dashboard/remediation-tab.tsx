@@ -10,13 +10,15 @@ import {
   Download,
   Terminal,
   Sparkles,
+  GitPullRequest,
+  ExternalLink,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { copyText } from '@/lib/clipboard'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { applyPatchToWorkspace, rollbackPatch } from '@/lib/api-client'
+import { applyPatchToWorkspace, rollbackPatch, createGitHubPr } from '@/lib/api-client'
 import { DiffViewer } from '@/components/dashboard/diff-viewer'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import type { PatchBundleView, UserRole } from '@/types/sentra'
@@ -31,6 +33,41 @@ export function RemediationTab({ patches, currentRole }: RemediationTabProps) {
   const [patchStates, setPatchStates] = useState<
     Record<string, { applied: boolean; backupPath?: string; loading?: boolean }>
   >({})
+  const [dispatchedPrs, setDispatchedPrs] = useState<
+    Record<string, { prNumber?: number; prUrl?: string; loading?: boolean }>
+  >({})
+
+  async function handleDispatchDraftPr(patch: PatchBundleView) {
+    setDispatchedPrs((prev) => ({
+      ...prev,
+      [patch.bundleId]: { ...prev[patch.bundleId], loading: true },
+    }))
+    try {
+      const res = await createGitHubPr({
+        title: patch.title,
+        body: `### 🛡️ Sentra Automated Security Remediation\n\n**Finding:** \`${patch.findingId}\`\n**Target:** \`${patch.targetLocation}\`\n\n#### Three-Tier Verification Invariant Proof\n- Baseline fails on unpatched code: ${patch.originalTestStatus}\n- Patched passes on remediated code: ${patch.patchedTestStatus}\n- Regressions pass across existing suites: ${patch.regressionsPass}\n\nProposed under Human-in-the-Loop Governance.`,
+        branchName: patch.branchName,
+        diff: patch.diff,
+        targetLocation: patch.targetLocation || 'crates/sentra-cli/src/lib.rs',
+        isDraft: true,
+      })
+      setDispatchedPrs((prev) => ({
+        ...prev,
+        [patch.bundleId]: { prNumber: res.prNumber, prUrl: res.prUrl, loading: false },
+      }))
+      toast.success(`Draft PR #${res.prNumber} Dispatched`, {
+        description: `Opened on branch ${res.branchName} under Human-in-the-Loop Governance.`,
+      })
+    } catch (err: any) {
+      setDispatchedPrs((prev) => ({
+        ...prev,
+        [patch.bundleId]: { ...prev[patch.bundleId], loading: false },
+      }))
+      toast.error('Failed to Dispatch PR', {
+        description: err.message || 'Error communicating with GitHub.',
+      })
+    }
+  }
 
   function copyToClipboard(text: string, id: string) {
     copyText(text)
@@ -225,8 +262,31 @@ export function RemediationTab({ patches, currentRole }: RemediationTabProps) {
                         ) : (
                           <Copy className="size-3.5 mr-1" />
                         )}
-                        {copiedId === patch.bundleId ? 'Copied' : 'Draft PR'}
+                        {copiedId === patch.bundleId ? 'Copied' : 'Copy CLI'}
                       </Button>
+
+                      {!dispatchedPrs[patch.bundleId]?.prNumber ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={dispatchedPrs[patch.bundleId]?.loading || currentRole === 'Viewer'}
+                          onClick={() => handleDispatchDraftPr(patch)}
+                          className="h-7.5 text-xs border-primary/40 text-primary hover:bg-primary/10 font-semibold cursor-pointer gap-1"
+                          title="Open a real Draft PR on GitHub under Human-in-the-Loop governance"
+                        >
+                          <GitPullRequest className={`size-3.5 ${dispatchedPrs[patch.bundleId]?.loading ? 'animate-spin' : ''}`} />
+                          <span>{dispatchedPrs[patch.bundleId]?.loading ? 'Opening...' : 'Dispatch PR'}</span>
+                        </Button>
+                      ) : (
+                        <a
+                          href={dispatchedPrs[patch.bundleId]?.prUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 h-7.5 text-xs font-semibold px-2.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20"
+                        >
+                          <span>PR #{dispatchedPrs[patch.bundleId]?.prNumber} ↗</span>
+                        </a>
+                      )}
                     </div>
                   </div>
                 </CardHeader>

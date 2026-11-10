@@ -1,4 +1,15 @@
-import type { FindingView, Severity, Reachability, FindingStatus } from '@/types/sentra'
+import type {
+  FindingView,
+  Severity,
+  Reachability,
+  FindingStatus,
+  GitHubConfig,
+  PullRequestItem,
+  WorkflowRunItem,
+  CreatePrRequest,
+  CreatePrResponse,
+  PrReviewCommentRequest,
+} from '@/types/sentra'
 
 export interface RealScanMatch {
   category: string
@@ -591,4 +602,135 @@ export async function runPluginCapability(
     return null
   }
 }
+
+// =========================================================================
+// GitHub Pull Requests, CI Workflows & Remediation PR Dispatcher API
+// =========================================================================
+
+export async function fetchGitHubConfig(): Promise<GitHubConfig | null> {
+  try {
+    const res = await fetch(`${API_BASE}/github/config`)
+    if (!res.ok) return null
+    return await res.json()
+  } catch (err) {
+    console.error('Failed to fetch GitHub config:', err)
+    return null
+  }
+}
+
+export async function saveGitHubConfig(config: {
+  token?: string
+  owner?: string
+  repo?: string
+  defaultBranch?: string
+}): Promise<GitHubConfig | null> {
+  try {
+    const res = await fetch(`${API_BASE}/github/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    })
+    if (!res.ok) throw new Error('Failed to save GitHub configuration')
+    return await res.json()
+  } catch (err) {
+    console.error('Failed saving GitHub configuration:', err)
+    throw err
+  }
+}
+
+export async function testGitHubConnection(payload?: {
+  token?: string
+  owner?: string
+  repo?: string
+}): Promise<{ connected: boolean; simulated?: boolean; repository?: string; message?: string; error?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/github/test-connection`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    })
+    return await res.json()
+  } catch (err: any) {
+    return { connected: false, error: err.message || 'Connection test failed.' }
+  }
+}
+
+export async function fetchGitHubPulls(): Promise<{ pulls: PullRequestItem[]; source: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/github/pulls`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch pull requests`)
+    return await res.json()
+  } catch (err) {
+    console.error('Failed to fetch PRs:', err)
+    return { pulls: [], source: 'error' }
+  }
+}
+
+export async function fetchPrWorkflows(prNumber: number): Promise<{ prNumber: number; workflows: WorkflowRunItem[]; source: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/github/pulls/${prNumber}/workflows`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch workflows`)
+    return await res.json()
+  } catch (err) {
+    console.error(`Failed to fetch workflows for PR #${prNumber}:`, err)
+    return { prNumber, workflows: [], source: 'error' }
+  }
+}
+
+export async function scanPr(prNumber: number): Promise<{
+  prNumber: number
+  securityStatus: string
+  findingsCount: number
+  criticalCount: number
+  matches: any[]
+  scannedAt: string
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/github/pulls/${prNumber}/scan`, {
+      method: 'POST',
+    })
+    if (!res.ok) throw new Error('Failed to run security scan on PR')
+    return await res.json()
+  } catch (err) {
+    console.error(`Failed scanning PR #${prNumber}:`, err)
+    throw err
+  }
+}
+
+export async function postPrReviewComment(
+  prNumber: number,
+  payload: PrReviewCommentRequest
+): Promise<{ success: boolean; prNumber: number; message: string; commentPreview?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/github/pulls/${prNumber}/comment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) throw new Error('Failed to post review comment to PR')
+    return await res.json()
+  } catch (err) {
+    console.error(`Failed posting review comment to PR #${prNumber}:`, err)
+    throw err
+  }
+}
+
+export async function createGitHubPr(payload: CreatePrRequest): Promise<CreatePrResponse> {
+  try {
+    const res = await fetch(`${API_BASE}/github/create-pr`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      throw new Error(errData.error || 'Failed to dispatch Draft PR')
+    }
+    return await res.json()
+  } catch (err) {
+    console.error('Failed to create Draft PR:', err)
+    throw err
+  }
+}
+
 

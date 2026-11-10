@@ -32,6 +32,7 @@ import { WorkerFleetTab } from '@/components/dashboard/worker-fleet-tab'
 import { AuditTab } from '@/components/dashboard/audit-tab'
 import { WebhookTab } from '@/components/dashboard/webhook-tab'
 import { PluginsTab } from '@/components/dashboard/plugins-tab'
+import { PullRequestsTab } from '@/components/dashboard/pull-requests-tab'
 import { ScannerConsole } from '@/components/dashboard/scanner-console'
 import { LiveStreamModal } from '@/components/dashboard/live-stream-modal'
 import { AiPatchModal } from '@/components/dashboard/ai-patch-modal'
@@ -827,6 +828,13 @@ export function App() {
             {activeTab === 'research' && <ResearchTab campaigns={campaigns} currentRole={currentRole} />}
 
             {activeTab === 'fleet' && <WorkerFleetTab workers={workers} />}
+
+            {activeTab === 'pull-requests' && (
+              <PullRequestsTab
+                currentRole={currentRole}
+                onNavigateToRemediation={() => setActiveTab('remediation')}
+              />
+            )}
 
             {activeTab === 'webhooks' && <WebhookTab currentRole={currentRole} />}
 

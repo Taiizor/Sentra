@@ -13,6 +13,7 @@ import {
   Webhook,
   Settings,
   Blocks,
+  GitPullRequest,
 } from 'lucide-react'
 import {
   CommandDialog,
@@ -147,6 +148,15 @@ export function CommandPalette({
           >
             <Server data-icon="inline-start" />
             <span>Remote-Worker Fleet &amp; Isolation Sandboxes</span>
+          </CommandItem>
+          <CommandItem
+            onSelect={() => {
+              onSelectTab('pull-requests')
+              onOpenChange(false)
+            }}
+          >
+            <GitPullRequest data-icon="inline-start" />
+            <span>GitHub Pull Requests, CI Workflows &amp; Security Triage</span>
           </CommandItem>
           <CommandItem
             onSelect={() => {

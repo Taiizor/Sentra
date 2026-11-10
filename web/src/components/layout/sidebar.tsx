@@ -14,6 +14,7 @@ import {
   Shield,
   Settings,
   Blocks,
+  GitPullRequest,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { SentraLogo } from '@/components/ui/sentra-logo'
@@ -128,6 +129,22 @@ function SidebarContent({
       ],
     },
     {
+      id: 'cicd',
+      title: 'CI/CD & Supply Chain',
+      items: [
+        {
+          id: 'pull-requests',
+          label: 'Pull Requests',
+          icon: GitPullRequest,
+        },
+        {
+          id: 'webhooks',
+          label: 'CI/CD Webhooks',
+          icon: Webhook,
+        },
+      ],
+    },
+    {
       id: 'operations',
       title: 'Operations',
       items: [
@@ -135,11 +152,6 @@ function SidebarContent({
           id: 'fleet',
           label: 'Worker Fleet',
           icon: Server,
-        },
-        {
-          id: 'webhooks',
-          label: 'CI/CD Webhooks',
-          icon: Webhook,
         },
         {
           id: 'plugins',

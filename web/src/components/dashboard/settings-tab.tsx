@@ -15,6 +15,7 @@ import {
   Sparkles,
   Server,
   UserCheck,
+  GitPullRequest,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,6 +23,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { UserRole } from '@/types/sentra'
 import { toast } from 'sonner'
+import { fetchGitHubConfig, saveGitHubConfig, testGitHubConnection } from '@/lib/api-client'
 
 interface SettingsTabProps {
   currentRole: UserRole
@@ -53,6 +55,17 @@ export function SettingsTab({ currentRole }: SettingsTabProps) {
   const [testing, setTesting] = useState<Record<string, boolean>>({})
   const [testResults, setTestResults] = useState<Record<string, { ok: boolean; message: string }>>({})
   const [saving, setSaving] = useState(false)
+
+  // GitHub Integration State
+  const [ghToken, setGhToken] = useState('')
+  const [ghOwner, setGhOwner] = useState('sentra-security')
+  const [ghRepo, setGhRepo] = useState('sentra')
+  const [ghBranch, setGhBranch] = useState('main')
+  const [ghShowToken, setGhShowToken] = useState(false)
+  const [ghIsConfigured, setGhIsConfigured] = useState(false)
+  const [ghTesting, setGhTesting] = useState(false)
+  const [ghTestResult, setGhTestResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [ghSaving, setGhSaving] = useState(false)
 
   // Load configured settings on mount
   useEffect(() => {
@@ -87,7 +100,80 @@ export function SettingsTab({ currentRole }: SettingsTabProps) {
       }
     }
     loadSettings()
+
+    fetchGitHubConfig().then((cfg) => {
+      if (cfg) {
+        if (cfg.owner) setGhOwner(cfg.owner)
+        if (cfg.repo) setGhRepo(cfg.repo)
+        if (cfg.defaultBranch) setGhBranch(cfg.defaultBranch)
+        setGhIsConfigured(cfg.isConfigured)
+        if (cfg.maskedToken) setGhToken(cfg.maskedToken)
+      }
+    })
   }, [])
+
+  async function handleTestGitHub() {
+    setGhTesting(true)
+    setGhTestResult(null)
+    try {
+      const res = await testGitHubConnection({
+        token: ghToken.includes('••••') ? undefined : ghToken,
+        owner: ghOwner,
+        repo: ghRepo,
+      })
+      if (res.connected) {
+        setGhTestResult({
+          ok: true,
+          message: res.simulated
+            ? 'Sandbox verified: Local mock repository active.'
+            : `Connected successfully to GitHub repository: ${res.repository}`,
+        })
+        toast.success('GitHub Connection Succeeded', {
+          description: res.message || `Connected to ${res.repository}`,
+        })
+      } else {
+        setGhTestResult({
+          ok: false,
+          message: res.error || 'Connection failed.',
+        })
+        toast.error('GitHub Connection Failed', {
+          description: res.error,
+        })
+      }
+    } finally {
+      setGhTesting(false)
+    }
+  }
+
+  async function handleSaveGitHub() {
+    if (currentRole === 'Viewer') {
+      toast.error('Access Denied', {
+        description: 'Updating GitHub integration requires Operator or Security Admin privileges.',
+      })
+      return
+    }
+
+    setGhSaving(true)
+    try {
+      const res = await saveGitHubConfig({
+        token: ghToken.includes('••••') ? undefined : ghToken,
+        owner: ghOwner,
+        repo: ghRepo,
+        defaultBranch: ghBranch,
+      })
+      if (res) {
+        setGhIsConfigured(res.isConfigured)
+        if (res.maskedToken) setGhToken(res.maskedToken)
+        toast.success('GitHub Configuration Saved', {
+          description: `Target set to ${res.owner}/${res.repo} (${res.defaultBranch})`,
+        })
+      }
+    } catch (err: any) {
+      toast.error('Failed to save GitHub config', { description: err.message })
+    } finally {
+      setGhSaving(false)
+    }
+  }
 
   function handleKeyChange(provider: string, val: string) {
     setProviders((prev) => ({
@@ -310,6 +396,10 @@ export function SettingsTab({ currentRole }: SettingsTabProps) {
           <TabsTrigger value="policy" className="text-xs flex items-center gap-1.5 h-8 px-3">
             <ShieldCheck className="size-3.5" />
             <span>Security & Governance Policy</span>
+          </TabsTrigger>
+          <TabsTrigger value="github" className="text-xs flex items-center gap-1.5 h-8 px-3">
+            <GitPullRequest className="size-3.5 text-primary" />
+            <span>GitHub & CI/CD Integration</span>
           </TabsTrigger>
         </TabsList>
 
@@ -564,6 +654,152 @@ export function SettingsTab({ currentRole }: SettingsTabProps) {
                 <div className="text-[11px] text-muted-foreground mt-0.5">
                   Full administrative permissions. Configure frontier LLM credentials and register tenants.
                 </div>
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* GitHub & CI/CD Integration Tab */}
+        <TabsContent value="github" className="space-y-4 focus-visible:outline-none">
+          <div className="p-4 rounded-lg border border-border/60 bg-card/30 flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/40">
+              <div className="flex items-center gap-3">
+                <div className="size-9 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                  <GitPullRequest className="size-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-foreground">GitHub Repository &amp; CI Integration</span>
+                    {ghIsConfigured ? (
+                      <Badge variant="outline" className="text-[10px] font-mono border-emerald-500/30 text-emerald-400 bg-emerald-500/5">
+                        PAT Configured
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] font-mono border-amber-500/30 text-amber-400 bg-amber-500/5">
+                        Local Sandbox Mode
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Connect Sentra to your remote GitHub repository for one-click Draft PR creation, automated security gate checks, and workflow inspection.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleTestGitHub}
+                  disabled={ghTesting}
+                  className="h-8 text-xs border-border/60 gap-1.5"
+                >
+                  {ghTesting ? <Loader2 className="size-3 animate-spin" /> : <CheckCircle2 className="size-3 text-primary" />}
+                  <span>{ghTesting ? 'Testing...' : 'Test Connection'}</span>
+                </Button>
+
+                <Button
+                  size="sm"
+                  onClick={handleSaveGitHub}
+                  disabled={ghSaving || isViewer}
+                  className="h-8 text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5"
+                >
+                  {ghSaving ? <Loader2 className="size-3 animate-spin" /> : <Save className="size-3" />}
+                  <span>{ghSaving ? 'Saving...' : 'Save GitHub Settings'}</span>
+                </Button>
+              </div>
+            </div>
+
+            {/* Test Result Banner */}
+            {ghTestResult && (
+              <div
+                className={`p-3 rounded-md border text-xs flex items-center gap-2 ${
+                  ghTestResult.ok
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                    : 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                }`}
+              >
+                {ghTestResult.ok ? <CheckCircle2 className="size-4 shrink-0" /> : <XCircle className="size-4 shrink-0" />}
+                <span>{ghTestResult.message}</span>
+              </div>
+            )}
+
+            {/* Form Fields */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Token Input */}
+              <div className="md:col-span-2 space-y-1.5">
+                <label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                  <span>GitHub Personal Access Token (PAT) / Fine-Grained Token:</span>
+                  <span className="text-[10px] text-muted-foreground font-normal">
+                    Scopes required: <code className="font-mono">pull_requests: write</code>, <code className="font-mono">contents: write</code>
+                  </span>
+                </label>
+                <div className="relative">
+                  <Input
+                    type={ghShowToken ? 'text' : 'password'}
+                    value={ghToken}
+                    onChange={(e) => setGhToken(e.target.value)}
+                    placeholder="github_pat_11A... or ghp_..."
+                    className="h-9 text-xs font-mono bg-background/60 border-border/60 pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setGhShowToken(!ghShowToken)}
+                    className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                  >
+                    {ghShowToken ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Owner Input */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">
+                  Repository Owner / Organization:
+                </label>
+                <Input
+                  value={ghOwner}
+                  onChange={(e) => setGhOwner(e.target.value)}
+                  placeholder="e.g. sentra-security"
+                  className="h-9 text-xs font-mono bg-background/60 border-border/60"
+                />
+              </div>
+
+              {/* Repo Input */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">
+                  Repository Name:
+                </label>
+                <Input
+                  value={ghRepo}
+                  onChange={(e) => setGhRepo(e.target.value)}
+                  placeholder="e.g. sentra"
+                  className="h-9 text-xs font-mono bg-background/60 border-border/60"
+                />
+              </div>
+
+              {/* Default Branch Input */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">
+                  Default Target Branch:
+                </label>
+                <Input
+                  value={ghBranch}
+                  onChange={(e) => setGhBranch(e.target.value)}
+                  placeholder="main"
+                  className="h-9 text-xs font-mono bg-background/60 border-border/60"
+                />
+              </div>
+            </div>
+
+            {/* Invariant Policy Notice */}
+            <div className="p-3 rounded-lg border border-border/40 bg-background/50 flex items-start gap-2.5 text-xs text-muted-foreground mt-2">
+              <ShieldCheck className="size-4 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <span className="font-semibold text-foreground">Strict Human-in-the-Loop Governance (REQ-F11 / REQ-F18):</span>
+                <p className="text-[11px] leading-relaxed">
+                  Sentra strictly enforces <code className="font-mono text-primary">is_draft_only: true</code> on all remote pull request dispatches. Zero autonomous commits or merges can be executed without explicit operator intervention. Credentials never reach target worker execution environments.
+                </p>
               </div>
             </div>
           </div>

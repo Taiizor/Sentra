@@ -334,3 +334,100 @@ export interface PluginExecutionResult {
   stderr?: string
 }
 
+export interface GitHubConfig {
+  token?: string
+  owner: string
+  repo: string
+  defaultBranch: string
+  isConfigured: boolean
+  maskedToken?: string
+}
+
+export type PrSecurityStatus = 'clean' | 'warnings' | 'critical' | 'scanning' | 'pending'
+
+export interface PullRequestItem {
+  number: number
+  title: string
+  state: 'open' | 'closed' | 'merged'
+  isDraft: boolean
+  author: {
+    login: string
+    avatarUrl?: string
+  }
+  headRef: string
+  headSha: string
+  baseRef: string
+  htmlUrl: string
+  createdAt: string
+  updatedAt: string
+  filesCount: number
+  additions: number
+  deletions: number
+  securityStatus: PrSecurityStatus
+  findingsCount: number
+  criticalCount: number
+  isSentraRemediation?: boolean
+  workflowStats: {
+    total: number
+    successful: number
+    failed: number
+    inProgress: number
+  }
+}
+
+export interface WorkflowStep {
+  name: string
+  status: 'queued' | 'in_progress' | 'completed'
+  conclusion?: 'success' | 'failure' | 'skipped' | 'cancelled' | null
+  duration?: string
+}
+
+export interface WorkflowJob {
+  id: number
+  name: string
+  status: 'queued' | 'in_progress' | 'completed'
+  conclusion?: 'success' | 'failure' | 'skipped' | 'cancelled' | null
+  steps: WorkflowStep[]
+}
+
+export interface WorkflowRunItem {
+  id: number
+  name: string
+  workflowName: string
+  event: string
+  status: 'queued' | 'in_progress' | 'completed' | 'waiting'
+  conclusion?: 'success' | 'failure' | 'neutral' | 'cancelled' | 'timed_out' | 'action_required' | null
+  htmlUrl: string
+  headSha: string
+  runStartedAt: string
+  updatedAt: string
+  jobs: WorkflowJob[]
+  isCiHardeningAudit?: boolean
+  detectedIssuesCount?: number
+}
+
+export interface CreatePrRequest {
+  title: string
+  body: string
+  branchName: string
+  diff: string
+  targetLocation: string
+  isDraft?: boolean
+  baseBranch?: string
+}
+
+export interface CreatePrResponse {
+  prNumber: number
+  prUrl: string
+  branchName: string
+  status: 'created' | 'simulated'
+  message: string
+}
+
+export interface PrReviewCommentRequest {
+  body: string
+  commitStatus?: 'success' | 'failure' | 'pending'
+  statusDescription?: string
+}
+
+

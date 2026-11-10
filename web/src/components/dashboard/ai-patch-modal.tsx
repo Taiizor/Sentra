@@ -17,6 +17,7 @@ import {
   ExternalLink,
   HardDrive,
   RotateCcw,
+  GitPullRequest,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { copyText } from '@/lib/clipboard'
@@ -32,7 +33,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { generateAiPatch, applyPatchToWorkspace, rollbackPatch } from '@/lib/api-client'
+import { generateAiPatch, applyPatchToWorkspace, rollbackPatch, createGitHubPr } from '@/lib/api-client'
 import { DiffViewer } from '@/components/dashboard/diff-viewer'
 import type { FindingView, PatchBundleView, UserRole } from '@/types/sentra'
 
@@ -74,6 +75,10 @@ export function AiPatchModal({
   const [isRollingBack, setIsRollingBack] = useState(false)
   const [backupPath, setBackupPath] = useState<string | null>(null)
   const [isApplied, setIsApplied] = useState(false)
+
+  // PR Dispatch State
+  const [isDispatchingPr, setIsDispatchingPr] = useState(false)
+  const [createdPrInfo, setCreatedPrInfo] = useState<{ prNumber: number; prUrl: string } | null>(null)
 
   if (!finding) return null
 
@@ -179,6 +184,31 @@ export function AiPatchModal({
     toast.success('Unified Diff Downloaded', {
       description: `Saved as ${patchResult.branchName.replace(/\//g, '-')}.patch`,
     })
+  }
+
+  async function handleDispatchDraftPr() {
+    if (!patchResult) return
+    setIsDispatchingPr(true)
+    try {
+      const res = await createGitHubPr({
+        title: patchResult.title,
+        body: `### 🛡️ Sentra Autonomous Verified Patch\n\n**Rule:** \`${finding?.ruleId}\` (${finding?.cwe})\n**Target:** \`${finding?.targetLocation}\`\n\n#### Three-Tier Verification Invariant Proof\n${patchResult.regressionOracleProof}`,
+        branchName: patchResult.branchName,
+        diff: patchResult.diff,
+        targetLocation: finding?.targetLocation || 'src/lib.rs',
+        isDraft: true,
+      })
+      setCreatedPrInfo({ prNumber: res.prNumber, prUrl: res.prUrl })
+      toast.success(`Draft PR #${res.prNumber} Dispatched`, {
+        description: `Opened on branch ${res.branchName} under Human-in-the-Loop Governance.`,
+      })
+    } catch (err: any) {
+      toast.error('Failed to Dispatch PR', {
+        description: err.message || 'Error communicating with GitHub.',
+      })
+    } finally {
+      setIsDispatchingPr(false)
+    }
   }
 
   function handleAdmit() {
@@ -497,8 +527,49 @@ export function AiPatchModal({
                 {/* Tab 4: GitHub PR Dispatch */}
                 <TabsContent value="dispatch" className="pt-3 flex flex-col gap-3">
                   <div className="flex flex-col gap-2 p-4 rounded-lg border border-zinc-800 bg-zinc-900/60">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-zinc-100 flex items-center gap-1.5">
+                        <GitPullRequest className="size-3.5 text-primary" />
+                        <span>Direct GitHub Draft PR Dispatch</span>
+                      </span>
+                      {createdPrInfo && (
+                        <Badge variant="outline" className="text-emerald-400 border-emerald-500/30 text-[10px] font-mono">
+                          PR #{createdPrInfo.prNumber} Active
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-400">
+                      Creates an isolated branch, commits the three-tier verified diff, and opens a GitHub Draft PR under Human-in-the-Loop governance.
+                    </p>
+
+                    <div className="pt-2 flex items-center gap-2">
+                      {!createdPrInfo ? (
+                        <Button
+                          size="sm"
+                          disabled={isDispatchingPr || currentRole === 'Viewer'}
+                          onClick={handleDispatchDraftPr}
+                          className="h-8 text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5"
+                        >
+                          <GitPullRequest className={`size-3.5 ${isDispatchingPr ? 'animate-spin' : ''}`} />
+                          <span>{isDispatchingPr ? 'Dispatching PR...' : 'Create Draft PR on GitHub'}</span>
+                        </Button>
+                      ) : (
+                        <a
+                          href={createdPrInfo.prUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20"
+                        >
+                          <span>Open PR #{createdPrInfo.prNumber} on GitHub</span>
+                          <ExternalLink className="size-3" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2 p-4 rounded-lg border border-zinc-800 bg-zinc-900/60">
                     <span className="text-xs font-bold text-zinc-100">
-                      Operator Human-in-the-Loop Dispatch Command:
+                      Operator Human-in-the-Loop Dispatch Command (CLI Alternative):
                     </span>
                     <div className="flex items-center justify-between gap-2 p-3 bg-zinc-950 border border-zinc-800 rounded-lg font-mono text-xs text-zinc-200">
                       <span className="truncate">{patchResult.ghPrCommand}</span>
@@ -571,6 +642,27 @@ export function AiPatchModal({
                   <Download className="size-3" />
                   <span>Download .patch</span>
                 </Button>
+                {!createdPrInfo ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isDispatchingPr || currentRole === 'Viewer'}
+                    onClick={handleDispatchDraftPr}
+                    className="h-7 text-xs border-primary/40 text-primary hover:bg-primary/10 font-medium gap-1.5"
+                  >
+                    <GitPullRequest className={`size-3 ${isDispatchingPr ? 'animate-spin' : ''}`} />
+                    <span>{isDispatchingPr ? 'Opening PR...' : 'Create Draft PR'}</span>
+                  </Button>
+                ) : (
+                  <a
+                    href={createdPrInfo.prUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20"
+                  >
+                    <span>PR #{createdPrInfo.prNumber} ↗</span>
+                  </a>
+                )}
                 <Button
                   size="sm"
                   onClick={handleAdmit}
