@@ -134,10 +134,12 @@ pub use mcp::{
 };
 pub use plugin::{
     AdapterFamily, CodeQlAdapter, CodeQlError, CodeQlLanguage, CodeQlProbeReport,
-    CodeQlSarifIngestResult, CodeQlTaintStep, CodeQlTaintTrace, HostStatus, PluginCapability,
-    PluginError, PluginErrorKind, PluginHost, PluginManifest, PluginQuotas, PluginRequest,
-    PluginResponse, SampleAdapter, SampleAdapterMode, TaintStepKind, decode_frame, encode_frame,
-    ingest_codeql_sarif_payload, probe_codeql_workspace,
+    CodeQlSarifIngestResult, CodeQlTaintStep, CodeQlTaintTrace, DiscoveredPlugin, HostStatus,
+    PluginCapability, PluginDriver, PluginError, PluginErrorKind, PluginExecutionOutput,
+    PluginHost, PluginManifest, PluginProbeOutput, PluginQuotas, PluginRequest, PluginResponse,
+    SampleAdapter, SampleAdapterMode, TaintStepKind, decode_frame, discover_plugins,
+    discover_plugins_in_dir, encode_frame, find_plugin_by_id, ingest_codeql_sarif_payload,
+    probe_codeql_workspace,
 };
 pub use policy::{
     ApprovalAuthority, ApprovalBroker, ApprovalGrant, ApprovalRequest, BudgetPolicyConfig, CostUsd,

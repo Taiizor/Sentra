@@ -54,6 +54,35 @@ pub enum PluginCapability {
     Custom(String),
 }
 
+impl PluginCapability {
+    /// Returns static string representation of the capability.
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::SourceDiscovery => "source_discovery",
+            Self::DependencyAudit => "dependency_audit",
+            Self::StaticAnalysis => "static_analysis",
+            Self::FuzzExecution => "fuzz_execution",
+            Self::PatchGeneration => "patch_generation",
+            Self::Custom(s) => s.as_str(),
+        }
+    }
+}
+
+impl std::str::FromStr for PluginCapability {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "source_discovery" => Self::SourceDiscovery,
+            "dependency_audit" => Self::DependencyAudit,
+            "static_analysis" => Self::StaticAnalysis,
+            "fuzz_execution" => Self::FuzzExecution,
+            "patch_generation" => Self::PatchGeneration,
+            other => Self::Custom(other.to_string()),
+        })
+    }
+}
+
 /// Bounded resource quotas governing subprocess adapter execution (REQ-S06).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PluginQuotas {

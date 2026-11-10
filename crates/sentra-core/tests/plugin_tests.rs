@@ -321,3 +321,46 @@ fn test_example_adapters_manifest_conformance() {
         assert!(host.is_ok(), "Host creation for {rel_path} failed");
     }
 }
+
+#[test]
+fn test_plugin_discovery_and_driver_lifecycle() {
+    use sentra_core::{PluginDriver, discover_plugins_in_dir};
+    use std::path::PathBuf;
+
+    let adapters_dir = PathBuf::from("../../examples/adapters");
+    let plugins = discover_plugins_in_dir(&adapters_dir);
+    assert!(
+        plugins.len() >= 3,
+        "Expected at least 3 plugins in examples/adapters, found {}",
+        plugins.len()
+    );
+
+    let snyk = plugins
+        .into_iter()
+        .find(|p| p.manifest.id == "org.sentra.adapter.snyk")
+        .expect("snyk adapter found");
+
+    let mut driver = PluginDriver::new(snyk).expect("driver created");
+
+    let repo_root = std::fs::canonicalize("../..").unwrap_or_else(|_| PathBuf::from("."));
+
+    // Probe
+    let probe_out = driver.probe(&repo_root).expect("probe executed");
+    assert!(probe_out.applicable);
+    assert!(
+        probe_out
+            .capabilities
+            .contains(&PluginCapability::DependencyAudit)
+    );
+
+    // Execute
+    let exec_out = driver
+        .execute(
+            "task-test-lifecycle-1",
+            PluginCapability::DependencyAudit,
+            serde_json::json!({ "severity_threshold": "high" }),
+        )
+        .expect("execute completed");
+    assert_eq!(exec_out.exit_code, 0);
+    assert!(exec_out.summary.contains("Snyk audit detected"));
+}

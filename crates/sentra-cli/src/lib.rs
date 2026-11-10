@@ -11,10 +11,12 @@ use std::{
 
 use sentra_core::{
     AdvisoryDatabase, CodeQlProbeReport, CodeQlSarifIngestResult, ContainmentLevel,
-    DEFAULT_MAX_LINE_BYTES, EgressPolicy, FileDeltaKind, McpServer, MultiUserAuditReport,
-    MultiUserSecurityAudit, PatchFileResult, RemediationPrPackage, RemoteWorkerId,
+    DEFAULT_MAX_LINE_BYTES, DiscoveredPlugin, EgressPolicy, FileDeltaKind, McpServer,
+    MultiUserAuditReport, MultiUserSecurityAudit, PatchFileResult, PluginCapability, PluginDriver,
+    PluginExecutionOutput, PluginProbeOutput, RemediationPrPackage, RemoteWorkerId,
     RemoteWorkerNode, SastReport, SessionId, SnapshotDiff, TaskId, TenantRecord, TimestampUtc,
-    WorkerArchitecture, WorkerFleetManager, WorkerResourceCaps,
+    WorkerArchitecture, WorkerFleetManager, WorkerResourceCaps, discover_plugins,
+    find_plugin_by_id,
     fleet::AuditStatus,
     process_transport_line,
     service::{
@@ -23,7 +25,7 @@ use sentra_core::{
     },
 };
 
-pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra recover --database <file> [--workspace <directory>] [--json]\n  sentra audit --database <file> [--workspace <directory>] [--json]\n  sentra scan [--workspace <directory>] [--snippet <string>] [-] [--database <file>] [--sarif <file>] [--json]\n  sentra patch apply --patch <file> --workspace <directory> [--target <file>] [--backup-dir <directory>] [--database <file>] [--json]\n  sentra patch rollback --backup <file> --workspace <directory> --target <file> [--database <file>] [--json]\n  sentra tenant list --database <file> [--json]\n  sentra tenant add --id <id> --name <name> [--workspace <directory>] [--isolation <level>] --database <file> [--json]\n  sentra config show [--key <key>] --database <file> [--json]\n  sentra config set --key <key> --value <value> --database <file> [--json]\n  sentra config test --provider <name> [--api-key <key>] [--model <model>] [--json]\n  sentra fleet list [--json]\n  sentra fleet status [--json]\n  sentra sync-advisories --source <directory-or-file> [--database <file>] [--json]\n  sentra propose-pr --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra codeql [--workspace <directory>] [--sarif <file>] [--database <file>] [--json]\n  sentra diff --base <directory> --head <directory> [--json]\n  sentra verify-audit [--json]\n  sentra export sarif --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra mcp\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session/audit default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\nAudit analyzes multi-ecosystem lockfiles (Cargo, npm, yarn, pnpm, bun, deno, pip, poetry, go, composer, nuget, rubygems).\nScan executes pure-Rust static analysis for secrets and code antipatterns on workspaces or snippets.\nPatch safely applies unified diff hunks with automatic rollback safety backups.\nTenant manages isolated multi-tenant organization workspaces in SQLite WAL store.\nConfig manages provider API credentials and security policy configuration.\nFleet inspects isolated execution worker nodes and containment readiness.\nSync-advisories ingests universal OSV JSON advisories into the advisory database.\nPropose-pr packages verified vulnerabilities into GitHub Draft PR proposals.\nCodeql probes workspace for languages, generates CLI commands, or ingests CodeQL SARIF logs.\nDiff compares base and head directory snapshots with pure-Rust hashing.\nVerify-audit evaluates the 5 mandatory multi-user hosting security containment gates.\nExport sarif converts dependency and SAST findings into an OASIS SARIF v2.1.0 document.\nMcp runs the JSON-RPC 2.0 Model Context Protocol stdio transport server.\n";
+pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra recover --database <file> [--workspace <directory>] [--json]\n  sentra audit --database <file> [--workspace <directory>] [--json]\n  sentra scan [--workspace <directory>] [--snippet <string>] [-] [--database <file>] [--sarif <file>] [--json]\n  sentra patch apply --patch <file> --workspace <directory> [--target <file>] [--backup-dir <directory>] [--database <file>] [--json]\n  sentra patch rollback --backup <file> --workspace <directory> --target <file> [--database <file>] [--json]\n  sentra tenant list --database <file> [--json]\n  sentra tenant add --id <id> --name <name> [--workspace <directory>] [--isolation <level>] --database <file> [--json]\n  sentra config show [--key <key>] --database <file> [--json]\n  sentra config set --key <key> --value <value> --database <file> [--json]\n  sentra config test --provider <name> [--api-key <key>] [--model <model>] [--json]\n  sentra fleet list [--json]\n  sentra fleet status [--json]\n  sentra plugin list [--dir <directory>] [--json]\n  sentra plugin probe (--id <id> | --manifest <file>) [--dir <directory>] [--workspace <directory>] [--json]\n  sentra plugin run (--id <id> | --manifest <file>) --capability <capability> [--args <json>] [--dir <directory>] [--workspace <directory>] [--json]\n  sentra sync-advisories --source <directory-or-file> [--database <file>] [--json]\n  sentra propose-pr --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra codeql [--workspace <directory>] [--sarif <file>] [--database <file>] [--json]\n  sentra diff --base <directory> --head <directory> [--json]\n  sentra verify-audit [--json]\n  sentra export sarif --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra mcp\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session/audit default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\nAudit analyzes multi-ecosystem lockfiles (Cargo, npm, yarn, pnpm, bun, deno, pip, poetry, go, composer, nuget, rubygems).\nScan executes pure-Rust static analysis for secrets and code antipatterns on workspaces or snippets.\nPatch safely applies unified diff hunks with automatic rollback safety backups.\nTenant manages isolated multi-tenant organization workspaces in SQLite WAL store.\nConfig manages provider API credentials and security policy configuration.\nFleet inspects isolated execution worker nodes and containment readiness.\nPlugin discovers, probes, and executes capability-fenced subprocess security adapters.\nSync-advisories ingests universal OSV JSON advisories into the advisory database.\nPropose-pr packages verified vulnerabilities into GitHub Draft PR proposals.\nCodeql probes workspace for languages, generates CLI commands, or ingests CodeQL SARIF logs.\nDiff compares base and head directory snapshots with pure-Rust hashing.\nVerify-audit evaluates the 5 mandatory multi-user hosting security containment gates.\nExport sarif converts dependency and SAST findings into an OASIS SARIF v2.1.0 document.\nMcp runs the JSON-RPC 2.0 Model Context Protocol stdio transport server.\n";
 
 /// Actions supported by the `sentra tenant` command.
 pub enum TenantAction {
@@ -73,6 +75,27 @@ pub enum PatchAction {
         workspace: PathBuf,
         target: PathBuf,
         database: Option<PathBuf>,
+    },
+}
+
+/// Actions supported by the `sentra plugin` command.
+pub enum PluginAction {
+    List {
+        directory: Option<PathBuf>,
+    },
+    Probe {
+        id: Option<String>,
+        manifest: Option<PathBuf>,
+        directory: Option<PathBuf>,
+        workspace: Option<PathBuf>,
+    },
+    Run {
+        id: Option<String>,
+        manifest: Option<PathBuf>,
+        directory: Option<PathBuf>,
+        capability: String,
+        arguments: Option<String>,
+        workspace: Option<PathBuf>,
     },
 }
 
@@ -145,6 +168,9 @@ pub enum Command {
     Patch {
         action: PatchAction,
     },
+    Plugin {
+        action: PluginAction,
+    },
     Mcp,
     VerifyAudit,
 }
@@ -209,6 +235,7 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
             | "tenant"
             | "config"
             | "fleet"
+            | "plugin"
     ) {
         return Err(invalid());
     }
@@ -642,6 +669,85 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
             json,
         });
     }
+    if name == "plugin" {
+        if words.is_empty() {
+            return Err(invalid());
+        }
+        let sub = words.remove(0);
+        if sub == "--help" {
+            return Ok(Invocation {
+                command: Command::Help,
+                json,
+            });
+        }
+        let mut id = None;
+        let mut manifest = None;
+        let mut directory = None;
+        let mut workspace = None;
+        let mut capability = None;
+        let mut arguments = None;
+        let mut rest = words.into_iter();
+        while let Some(flag) = rest.next() {
+            let value = rest.next().ok_or_else(invalid)?;
+            if value.is_empty() || (value.starts_with('-') && flag != "--args") {
+                return Err(invalid());
+            }
+            match flag {
+                "--id" if id.is_none() => id = Some(value.to_string()),
+                "--manifest" if manifest.is_none() => manifest = Some(PathBuf::from(value)),
+                "--dir" if directory.is_none() => directory = Some(PathBuf::from(value)),
+                "--workspace" if workspace.is_none() => workspace = Some(PathBuf::from(value)),
+                "--capability" if capability.is_none() => capability = Some(value.to_string()),
+                "--args" if arguments.is_none() => arguments = Some(value.to_string()),
+                _ => return Err(invalid()),
+            }
+        }
+        match sub {
+            "list" => {
+                return Ok(Invocation {
+                    command: Command::Plugin {
+                        action: PluginAction::List { directory },
+                    },
+                    json,
+                });
+            }
+            "probe" => {
+                if id.is_none() && manifest.is_none() {
+                    return Err(invalid());
+                }
+                return Ok(Invocation {
+                    command: Command::Plugin {
+                        action: PluginAction::Probe {
+                            id,
+                            manifest,
+                            directory,
+                            workspace,
+                        },
+                    },
+                    json,
+                });
+            }
+            "run" => {
+                if (id.is_none() && manifest.is_none()) || capability.is_none() {
+                    return Err(invalid());
+                }
+                return Ok(Invocation {
+                    command: Command::Plugin {
+                        action: PluginAction::Run {
+                            id,
+                            manifest,
+                            directory,
+                            capability: capability.unwrap(),
+                            arguments,
+                            workspace,
+                        },
+                    },
+                    json,
+                });
+            }
+            _ => return Err(invalid()),
+        }
+    }
     let id = if name == "session" {
         if words.len() < 2 || words.remove(0) != "show" {
             return Err(invalid());
@@ -739,6 +845,23 @@ fn absolute(path: &Path, cwd: &Path) -> PathBuf {
     } else {
         cwd.join(path)
     }
+}
+
+fn default_plugin_search_paths(cwd: &Path, directory: Option<&Path>) -> Vec<PathBuf> {
+    if let Some(dir) = directory {
+        return vec![absolute(dir, cwd)];
+    }
+    let mut paths = vec![
+        absolute(Path::new(".sentra/plugins"), cwd),
+        absolute(Path::new("examples/adapters"), cwd),
+    ];
+    if let Some(p1) = cwd.parent() {
+        paths.push(p1.join("examples/adapters"));
+        if let Some(p2) = p1.parent() {
+            paths.push(p2.join("examples/adapters"));
+        }
+    }
+    paths
 }
 
 /// Run an invocation against standard in-memory buffer handling.
@@ -862,7 +985,7 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
     match invocation.command {
         Command::Help => Response {
             stdout: if json {
-                "{\"schema_version\":1,\"commands\":[\"init\",\"status\",\"session show\",\"recover\",\"audit\",\"scan\",\"patch\",\"tenant\",\"config\",\"fleet\",\"diff\",\"verify-audit\",\"export sarif\",\"mcp\"],\"offline\":true,\"untrusted_execution\":false}\n".into()
+                "{\"schema_version\":1,\"commands\":[\"init\",\"status\",\"session show\",\"recover\",\"audit\",\"scan\",\"patch\",\"tenant\",\"config\",\"fleet\",\"plugin\",\"diff\",\"verify-audit\",\"export sarif\",\"mcp\"],\"offline\":true,\"untrusted_execution\":false}\n".into()
             } else {
                 HELP.into()
             },
@@ -1298,6 +1421,93 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
                 FleetAction::Status => render_fleet_status(&fleet, json),
             }
         }
+        Command::Plugin { action } => match action {
+            PluginAction::List { directory } => {
+                let search_paths = default_plugin_search_paths(cwd, directory.as_deref());
+                let plugins = discover_plugins(&search_paths);
+                render_plugin_list(&plugins, json)
+            }
+            PluginAction::Probe {
+                id,
+                manifest,
+                directory,
+                workspace,
+            } => {
+                let plugin = if let Some(man_path) = manifest {
+                    match DiscoveredPlugin::from_manifest_file(absolute(&man_path, cwd)) {
+                        Ok(p) => p,
+                        Err(_) => return error("invalid_manifest", 4, json),
+                    }
+                } else if let Some(plugin_id) = id {
+                    let search_paths = default_plugin_search_paths(cwd, directory.as_deref());
+                    match find_plugin_by_id(&search_paths, &plugin_id) {
+                        Some(p) => p,
+                        None => return error("plugin_not_found", 7, json),
+                    }
+                } else {
+                    return error("invalid_arguments", 2, json);
+                };
+
+                let ws_path = absolute(workspace.as_deref().unwrap_or(cwd), cwd);
+                let mut driver = match PluginDriver::new(plugin) {
+                    Ok(d) => d,
+                    Err(_) => return error("plugin_initialization_failed", 5, json),
+                };
+
+                match driver.probe(&ws_path) {
+                    Ok(report) => render_plugin_probe(&report, json),
+                    Err(_) => error("plugin_probe_failed", 5, json),
+                }
+            }
+            PluginAction::Run {
+                id,
+                manifest,
+                directory,
+                capability,
+                arguments,
+                workspace: _,
+            } => {
+                let plugin = if let Some(man_path) = manifest {
+                    match DiscoveredPlugin::from_manifest_file(absolute(&man_path, cwd)) {
+                        Ok(p) => p,
+                        Err(_) => return error("invalid_manifest", 4, json),
+                    }
+                } else if let Some(plugin_id) = id {
+                    let search_paths = default_plugin_search_paths(cwd, directory.as_deref());
+                    match find_plugin_by_id(&search_paths, &plugin_id) {
+                        Some(p) => p,
+                        None => return error("plugin_not_found", 7, json),
+                    }
+                } else {
+                    return error("invalid_arguments", 2, json);
+                };
+
+                let cap = match capability.parse::<PluginCapability>() {
+                    Ok(c) => c,
+                    Err(_) => return error("invalid_capability", 2, json),
+                };
+
+                let args: serde_json::Value = if let Some(raw_args) = arguments {
+                    match serde_json::from_str(&raw_args) {
+                        Ok(val) => val,
+                        Err(_) => return error("invalid_arguments_json", 2, json),
+                    }
+                } else {
+                    serde_json::json!({})
+                };
+
+                let mut driver = match PluginDriver::new(plugin) {
+                    Ok(d) => d,
+                    Err(_) => return error("plugin_initialization_failed", 5, json),
+                };
+
+                let task_id = format!("task-{}", SessionId::new());
+                match driver.execute(&task_id, cap, args) {
+                    Ok(report) => render_plugin_run(&report, json),
+                    Err(_) => error("plugin_execution_failed", 5, json),
+                }
+            }
+        },
         Command::Mcp => unreachable!("handled in run_stream"),
     }
 }
@@ -2033,5 +2243,151 @@ fn render_fleet_status(fleet: &WorkerFleetManager, json: bool) -> Response {
         stdout,
         stderr: String::new(),
         exit_code: 0,
+    }
+}
+
+fn render_plugin_list(plugins: &[DiscoveredPlugin], json: bool) -> Response {
+    if json {
+        let entries: Vec<String> = plugins
+            .iter()
+            .map(|p| {
+                let caps: Vec<String> = p
+                    .manifest
+                    .declared_capabilities
+                    .iter()
+                    .map(|c| format!("\"{}\"", c.as_str()))
+                    .collect();
+                format!(
+                    "{{\"id\":\"{}\",\"name\":\"{}\",\"version\":\"{}\",\"family\":\"{}\",\"manifest_path\":\"{}\",\"capabilities\":[{}],\"egress_policy\":\"{:?}\"}}",
+                    p.manifest.id,
+                    p.manifest.name,
+                    p.manifest.version,
+                    p.manifest.family.as_str(),
+                    p.manifest_path.display().to_string().replace('\\', "/"),
+                    caps.join(","),
+                    p.manifest.egress_policy
+                )
+            })
+            .collect();
+        Response {
+            stdout: format!(
+                "{{\"schema_version\":1,\"command\":\"plugin\",\"action\":\"list\",\"count\":{},\"plugins\":[{}]}}\n",
+                plugins.len(),
+                entries.join(",")
+            ),
+            stderr: String::new(),
+            exit_code: 0,
+        }
+    } else {
+        let mut out = format!("Sentra discovered plugins (count: {}):\n", plugins.len());
+        for p in plugins {
+            let caps: Vec<&str> = p
+                .manifest
+                .declared_capabilities
+                .iter()
+                .map(|c| c.as_str())
+                .collect();
+            out.push_str(&format!(
+                "  • {} v{} ({})\n    Manifest: {}\n    Capabilities: {}\n    Egress: {:?}\n\n",
+                p.manifest.id,
+                p.manifest.version,
+                p.manifest.family.as_str(),
+                p.manifest_path.display().to_string().replace('\\', "/"),
+                caps.join(", "),
+                p.manifest.egress_policy
+            ));
+        }
+        Response {
+            stdout: out,
+            stderr: String::new(),
+            exit_code: 0,
+        }
+    }
+}
+
+fn render_plugin_probe(output: &PluginProbeOutput, json: bool) -> Response {
+    if json {
+        let caps: Vec<String> = output
+            .capabilities
+            .iter()
+            .map(|c| format!("\"{}\"", c.as_str()))
+            .collect();
+        let reason_str = output
+            .unsupported_reason
+            .as_ref()
+            .map(|r| format!("\"{}\"", r))
+            .unwrap_or_else(|| "null".to_string());
+        Response {
+            stdout: format!(
+                "{{\"schema_version\":1,\"command\":\"plugin\",\"action\":\"probe\",\"plugin_id\":\"{}\",\"name\":\"{}\",\"applicable\":{},\"details\":\"{}\",\"unsupported_reason\":{},\"capabilities\":[{}]}}\n",
+                output.plugin_id,
+                output.name,
+                output.applicable,
+                output.details.replace('"', "\\\""),
+                reason_str,
+                caps.join(",")
+            ),
+            stderr: String::new(),
+            exit_code: 0,
+        }
+    } else {
+        let caps: Vec<&str> = output.capabilities.iter().map(|c| c.as_str()).collect();
+        let mut out = format!(
+            "Sentra plugin probe: completed\nPlugin: {} ({})\nApplicable: {}\nDetails: {}\nCapabilities: {}\n",
+            output.plugin_id,
+            output.name,
+            output.applicable,
+            output.details,
+            caps.join(", ")
+        );
+        if let Some(reason) = &output.unsupported_reason {
+            out.push_str(&format!("Unsupported Reason: {}\n", reason));
+        }
+        Response {
+            stdout: out,
+            stderr: String::new(),
+            exit_code: 0,
+        }
+    }
+}
+
+fn render_plugin_run(output: &PluginExecutionOutput, json: bool) -> Response {
+    if json {
+        let refs: Vec<String> = output
+            .evidence_refs
+            .iter()
+            .map(|r| format!("\"{}\"", r))
+            .collect();
+        Response {
+            stdout: format!(
+                "{{\"schema_version\":1,\"command\":\"plugin\",\"action\":\"run\",\"plugin_id\":\"{}\",\"task_id\":\"{}\",\"capability\":\"{}\",\"exit_code\":{},\"summary\":\"{}\",\"evidence_refs\":[{}]}}\n",
+                output.plugin_id,
+                output.task_id,
+                output.capability.as_str(),
+                output.exit_code,
+                output.summary.replace('"', "\\\""),
+                refs.join(",")
+            ),
+            stderr: String::new(),
+            exit_code: 0,
+        }
+    } else {
+        Response {
+            stdout: format!(
+                "Sentra plugin execution: completed\nPlugin: {}\nTask ID: {}\nCapability: {}\nExit Code: {}\nSummary: {}\nEvidence Refs: {}\n",
+                output.plugin_id,
+                output.task_id,
+                output.capability.as_str(),
+                output.exit_code,
+                output.summary,
+                if output.evidence_refs.is_empty() {
+                    "none".to_string()
+                } else {
+                    output.evidence_refs.join(", ")
+                }
+            ),
+            stderr: String::new(),
+            exit_code: 0,
+        }
     }
 }

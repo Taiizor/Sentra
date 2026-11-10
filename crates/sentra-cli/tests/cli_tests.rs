@@ -1457,3 +1457,71 @@ fn binary_patch_apply_and_rollback() {
     let rolled_back_content = fs::read_to_string(&target_file).unwrap();
     assert!(rolled_back_content.contains("let token = 'old';"));
 }
+
+#[test]
+fn binary_plugin_commands() {
+    // 1. Plugin List (JSON)
+    let list_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["plugin", "list", "--json"])
+        .output()
+        .unwrap();
+    assert!(list_out.status.success());
+    let list_str = String::from_utf8(list_out.stdout).unwrap();
+    assert!(list_str.contains("\"command\":\"plugin\""));
+    assert!(list_str.contains("\"action\":\"list\""));
+    assert!(list_str.contains("org.sentra.adapter.snyk"));
+    assert!(list_str.contains("org.sentra.adapter.semgrep"));
+    assert!(list_str.contains("org.sentra.adapter.ollama"));
+
+    // 2. Plugin Probe (Human & JSON)
+    let probe_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "plugin",
+            "probe",
+            "--id",
+            "org.sentra.adapter.snyk",
+            "--workspace",
+            "../..",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(probe_out.status.success());
+    let probe_str = String::from_utf8(probe_out.stdout).unwrap();
+    assert!(probe_str.contains("\"plugin_id\":\"org.sentra.adapter.snyk\""));
+    assert!(probe_str.contains("\"applicable\":true"));
+
+    // 3. Plugin Run (Execute authorized capability)
+    let run_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "plugin",
+            "run",
+            "--id",
+            "org.sentra.adapter.snyk",
+            "--capability",
+            "dependency_audit",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(run_out.status.success());
+    let run_str = String::from_utf8(run_out.stdout).unwrap();
+    assert!(run_str.contains("\"action\":\"run\""));
+    assert!(run_str.contains("\"capability\":\"dependency_audit\""));
+    assert!(run_str.contains("\"exit_code\":0"));
+
+    // 4. Plugin Run (Undeclared capability rejected)
+    let bad_run_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "plugin",
+            "run",
+            "--id",
+            "org.sentra.adapter.snyk",
+            "--capability",
+            "fuzz_execution",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(!bad_run_out.status.success());
+}

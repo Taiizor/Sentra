@@ -114,6 +114,11 @@ sentra diff --base ./repo-v1 --head ./repo-v2
 # Ingest CodeQL SARIF logs or probe workspace languages
 sentra codeql --workspace ./my-project --sarif ./codeql-results.sarif
 
+# Discover, probe, and run external subprocess security adapters (Semgrep, Snyk, Ollama)
+sentra plugin list
+sentra plugin probe --id org.sentra.adapter.snyk
+sentra plugin run --id org.sentra.adapter.snyk --capability dependency_audit
+
 # Export all findings to OASIS SARIF v2.1.0 (for GitHub Code Scanning)
 sentra export sarif --database ./sentra.db --workspace ./my-project --output ./results.sarif
 
@@ -183,6 +188,7 @@ pwsh -NoProfile -File scripts/docker-test.ps1 -Mode all
 | [**Threat Model**](docs/THREAT_MODEL.md) | STRIDE analysis, threat catalog, permission gates, and mitigations |
 | [**Limitations & Constraints**](docs/LIMITATIONS.md) | Explicit security boundaries, assurance limits, and non-goals |
 | [**Data Model**](docs/DATA_MODEL.md) | SQLite schema, Findings, Evidence envelopes, and Patch bundles |
+| [**Plugin & Adapter Guide**](docs/PLUGINS_GUIDE.md) | End-user commands, manifest specification, and adapter development |
 | [**Extensions & MCP**](docs/EXTENSIONS.md) | Subprocess plugin SDK, Model Context Protocol, and target matrices |
 | [**Agent Model**](docs/AGENT_MODEL.md) | Multi-role autonomous agent architecture (Scout, Analyst, Patch Author) |
 | [**Release Gates Audit**](docs/RELEASE_GATES_AUDIT.md) | Formal audit of all release-wide quality and containment gates |
