@@ -4,8 +4,8 @@ use sentra_core::{
     dashboard::{IsolationLevel, TenantContext, TenantId},
     domain::time::TimestampUtc,
     fleet::{
-        AdapterActionCapability, AuditStatus, EvidenceMethod, FleetErrorKind, HostPlatform,
-        MultiUserSecurityAudit, RemoteWorkerId, RemoteWorkerNode, SupportMatrix,
+        AdapterActionCapability, AuditStatus, ContainmentReadiness, EvidenceMethod, FleetErrorKind,
+        HostPlatform, MultiUserSecurityAudit, RemoteWorkerId, RemoteWorkerNode, SupportMatrix,
         SupportedTargetTuple, TargetLanguage, WorkerFleetManager,
     },
     verification::{ContainmentLevel, EgressPolicy, WorkerArchitecture, WorkerResourceCaps},
@@ -147,6 +147,41 @@ fn test_reference_platform_matrix_queries() {
         matrix
             .find_supporting_adapters(&unsupported_query)
             .is_empty()
+    );
+}
+
+#[test]
+fn test_containment_readiness_is_never_claimed_without_attestation() {
+    let mut fleet = WorkerFleetManager::new();
+    let readiness = fleet.containment_readiness();
+    assert_eq!(readiness, ContainmentReadiness::NoWorkers);
+    assert_eq!(readiness.as_str(), "no_workers");
+    assert!(!readiness.is_ready());
+
+    // A declared containment level is an operator claim, not attestation evidence.
+    let worker = RemoteWorkerNode::new(
+        RemoteWorkerId::new("worker-declared-vm").unwrap(),
+        "https://worker-declared.internal:8443",
+        WorkerArchitecture::LinuxX86_64,
+        ContainmentLevel::DisposableVm,
+        WorkerResourceCaps::default(),
+        EgressPolicy::StrictlyDenied,
+    );
+    fleet.register_worker(worker).unwrap();
+    let readiness = fleet.containment_readiness();
+    assert_eq!(readiness, ContainmentReadiness::Unattested);
+    assert_eq!(readiness.as_str(), "unattested");
+    assert!(!readiness.is_ready());
+}
+
+#[test]
+fn test_local_workspace_fleet_registry_is_empty() {
+    let fleet = sentra_core::service::LocalWorkspace::fleet_manager();
+    assert_eq!(fleet.total_workers(), 0);
+    assert_eq!(fleet.iter_workers().count(), 0);
+    assert_eq!(
+        fleet.containment_readiness(),
+        ContainmentReadiness::NoWorkers
     );
 }
 

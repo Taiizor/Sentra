@@ -121,7 +121,7 @@ pub fn canonical_tool_definitions() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "sentra_audit_dependencies".to_string(),
-            description: "Audits Cargo.lock, package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lock, or deno.lock dependencies against the pinned advisory database (REQ-F07).".to_string(),
+            description: "Audits Cargo.lock, package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lock, or deno.lock dependencies against the small bundled pinned advisory sample (REQ-F07). It is not a synchronized OSV or RustSec feed; the result reports the sample's curation date and whether it is stale.".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {

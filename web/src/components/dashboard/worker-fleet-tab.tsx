@@ -1,283 +1,268 @@
-import { useState, useMemo } from 'react'
-import {
-  Server,
-  Cpu,
-  HardDrive,
-  ShieldAlert,
-  ShieldCheck,
-  Lock,
-  RotateCw,
-  Terminal,
-  Activity,
-  Layers,
-} from 'lucide-react'
+import { useEffect } from 'react'
+import { CheckCircle2, Cpu, MonitorCog, Network, RotateCw, Server, ServerOff, Wrench, XCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import type { WorkerNodeView } from '@/types/sentra'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { api, errorMessage } from '@/lib/api'
+import { useResource } from '@/lib/use-resource'
+import type { HostInfo, SystemStatus } from '@/types/api'
+import { formatBytes, formatDateTime, formatTime, formatUptime, minimumRoleFor } from './console-format'
+import { EmptyBlock, ErrorAlert, KeyValue, LoadingBlock, SectionCard, TabHeader } from './console-kit'
 
-interface WorkerFleetTabProps {
-  workers: WorkerNodeView[]
-}
+const HOST_POLL_MS = 10_000
 
-const FIVE_GATES = [
-  { id: 'g1', name: 'Tenant Fencing', desc: 'Fail-closed isolation', icon: ShieldCheck },
-  { id: 'g2', name: 'Zero Egress', desc: 'StrictlyDenied outbound', icon: Lock },
-  { id: 'g3', name: 'Quarantine Cycle', desc: 'Zero host task reuse', icon: RotateCw },
-  { id: 'g4', name: 'Secret Canaries', desc: 'Zero credential bleed', icon: ShieldAlert },
-  { id: 'g5', name: 'Immutable CAS', desc: 'Content-addressed store', icon: HardDrive },
-]
+/**
+ * The bridge host and its tooling. Sentra's core has no persisted remote-worker registry, so
+ * this view reports that fact instead of rendering workers, leases or quarantine states.
+ */
+export function WorkerFleetTab() {
+  const status = useResource('system-status', (signal) => api.system.status(signal))
+  const host = useResource('system-host', (signal) => api.system.host(signal))
+  const reloadHost = host.reload
 
-export function WorkerFleetTab({ workers }: WorkerFleetTabProps) {
-  const [filterState, setFilterState] = useState<'ALL' | WorkerNodeView['state']>('ALL')
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') reloadHost()
+    }, HOST_POLL_MS)
+    return () => window.clearInterval(timer)
+  }, [reloadHost])
 
-  const stats = useMemo(() => {
-    const total = workers.length
-    const available = workers.filter((w) => w.state === 'AVAILABLE').length
-    const leased = workers.filter((w) => w.state === 'LEASED').length
-    const quarantined = workers.filter((w) => w.state === 'QUARANTINED' || w.state === 'RESETTING').length
-    const avgCpu = total > 0 ? Math.round(workers.reduce((acc, w) => acc + w.cpuUsagePercent, 0) / total) : 0
-    const totalMemMb = workers.reduce((acc, w) => acc + w.memoryUsageMb, 0)
-
-    return { total, available, leased, quarantined, avgCpu, totalMemMb }
-  }, [workers])
-
-  const filteredWorkers = useMemo(() => {
-    if (filterState === 'ALL') return workers
-    return workers.filter((w) => w.state === filterState)
-  }, [workers, filterState])
-
-  function getStateBadge(state: WorkerNodeView['state']) {
-    switch (state) {
-      case 'AVAILABLE':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold font-mono bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-            <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            AVAILABLE
-          </span>
-        )
-      case 'LEASED':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold font-mono bg-amber-500/15 text-amber-400 border border-amber-500/30">
-            <span className="size-1.5 rounded-full bg-amber-400" />
-            LEASED
-          </span>
-        )
-      case 'QUARANTINED':
-      case 'RESETTING':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold font-mono bg-rose-500/15 text-rose-400 border border-rose-500/30">
-            <span className="size-1.5 rounded-full bg-rose-400" />
-            {state}
-          </span>
-        )
-    }
-  }
+  const hostInfo: HostInfo | undefined = host.data ?? status.data?.host
 
   return (
-    <div className="flex flex-col gap-5">
-      {/* Sleek Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-border/40">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <Server className="size-4 text-amber-400" />
-            <h2 className="text-base font-semibold tracking-tight text-foreground">
-              Worker Fleet & Sandboxes
-            </h2>
-            <Badge variant="outline" className="text-[11px] px-2 py-0 border-amber-500/30 text-amber-400 bg-amber-500/5">
-              Worker Enclaves
-            </Badge>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Isolated execution nodes with single-tenant leasing, fail-closed fencing, and zero-egress enforcement.
-          </p>
-        </div>
-
-        {/* Live Status Indicator */}
-        <div className="flex items-center gap-3 text-xs font-mono">
-          <div className="flex items-center gap-1.5 bg-card/60 border border-border/60 px-2.5 py-1 rounded-md">
-            <Activity className="size-3.5 text-emerald-400" />
-            <span className="text-muted-foreground">Avg Load:</span>
-            <span className="font-semibold text-foreground">{stats.avgCpu}%</span>
-          </div>
-          <div className="flex items-center gap-1.5 bg-card/60 border border-border/60 px-2.5 py-1 rounded-md">
-            <HardDrive className="size-3.5 text-sky-400" />
-            <span className="text-muted-foreground">Memory:</span>
-            <span className="font-semibold text-foreground">{stats.totalMemMb} MiB</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 5-Gate Enterprise Governance Ribbon */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 bg-card/40 border border-border/60 rounded-lg p-2.5">
-        {FIVE_GATES.map((gate, i) => {
-          const Icon = gate.icon
-          return (
-            <div
-              key={gate.id}
-              className="flex items-center gap-2 p-1.5 rounded-md bg-background/40 border border-border/40"
-            >
-              <div className="size-6 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-                <Icon className="size-3" />
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="text-[11px] font-semibold text-foreground truncate">
-                  Gate {i + 1}: {gate.name}
-                </span>
-                <span className="text-[10px] text-muted-foreground truncate">
-                  {gate.desc}
-                </span>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Filter Toolbar */}
-      <div className="flex items-center justify-between gap-3 bg-card/60 border border-border/60 rounded-lg p-2">
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setFilterState('ALL')}
-            className={`h-7 px-2.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
-              filterState === 'ALL'
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
-            }`}
+    <div className="flex flex-col gap-4">
+      <TabHeader
+        icon={<Server className="size-4 text-amber-400" />}
+        title="Workers and host"
+        description="Remote workers are not available in this release. This page reports the machine that runs the Sentra bridge and the core CLI."
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              status.reload()
+              host.reload()
+            }}
+            disabled={status.loading}
           >
-            <span>All Nodes</span>
-            <span className={`text-[10px] px-1 py-0.2 rounded-full font-mono ${
-              filterState === 'ALL' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-muted-foreground'
-            }`}>
-              {stats.total}
-            </span>
-          </button>
-          <button
-            onClick={() => setFilterState('AVAILABLE')}
-            className={`h-7 px-2.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
-              filterState === 'AVAILABLE'
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
-            }`}
-          >
-            <span>Available</span>
-            <span className={`text-[10px] px-1 py-0.2 rounded-full font-mono ${
-              filterState === 'AVAILABLE' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-muted-foreground'
-            }`}>
-              {stats.available}
-            </span>
-          </button>
-          <button
-            onClick={() => setFilterState('LEASED')}
-            className={`h-7 px-2.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
-              filterState === 'LEASED'
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
-            }`}
-          >
-            <span>Leased</span>
-            <span className={`text-[10px] px-1 py-0.2 rounded-full font-mono ${
-              filterState === 'LEASED' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-muted-foreground'
-            }`}>
-              {stats.leased}
-            </span>
-          </button>
+            <RotateCw className={status.loading ? 'animate-spin' : undefined} />
+            Refresh
+          </Button>
+        }
+      />
+
+      <RemoteWorkersCard status={status.data} error={status.error} />
+
+      {status.error && !status.data && <ErrorAlert error={status.error} onRetry={status.reload} title="Could not load system status" />}
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <SectionCard
+          icon={<MonitorCog className="size-4 text-sky-400" />}
+          title="Bridge host"
+          description={
+            hostInfo
+              ? `Sampled at ${formatTime(hostInfo.sampledAt)}; refreshed every ${HOST_POLL_MS / 1000} s while this page is visible.`
+              : 'Operating-system metrics of the machine running the bridge.'
+          }
+        >
+          {!hostInfo ? (
+            host.error ? (
+              <ErrorAlert error={host.error} onRetry={host.reload} title="Could not sample the host" />
+            ) : (
+              <LoadingBlock rows={4} />
+            )
+          ) : (
+            <>
+              {host.error && (
+                <p className="text-[11px] text-amber-300">
+                  The latest refresh failed ({errorMessage(host.error)}); showing the sample from {formatTime(hostInfo.sampledAt)}.
+                </p>
+              )}
+              <HostDetails host={hostInfo} />
+            </>
+          )}
+        </SectionCard>
+
+        <SectionCard icon={<Cpu className="size-4 text-violet-400" />} title="Sentra core CLI">
+          {!status.data ? (
+            status.error ? <p className="text-xs text-muted-foreground">Unavailable: system status failed to load.</p> : <LoadingBlock rows={3} />
+          ) : (
+            <CoreDetails status={status.data} cliQueued={hostInfo?.cliQueued ?? null} />
+          )}
+        </SectionCard>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <SectionCard
+          icon={<Wrench className="size-4 text-emerald-400" />}
+          title="Tools on the bridge host"
+          description="Executables found on the bridge's PATH. Presence only; versions and licences are not checked."
+        >
+          {!status.data ? (
+            status.error ? <p className="text-xs text-muted-foreground">Unavailable: system status failed to load.</p> : <LoadingBlock rows={4} />
+          ) : (
+            <Table className="text-xs">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tool</TableHead>
+                  <TableHead>Found</TableHead>
+                  <TableHead>Path</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {status.data.tools.map((tool) => (
+                  <TableRow key={tool.name}>
+                    <TableCell className="font-mono text-[11px]">{tool.name}</TableCell>
+                    <TableCell>
+                      {tool.available ? (
+                        <CheckCircle2 className="size-3.5 text-emerald-400" aria-label="found" />
+                      ) : (
+                        <XCircle className="size-3.5 text-zinc-600" aria-label="not found" />
+                      )}
+                    </TableCell>
+                    <TableCell className="max-w-96 truncate font-mono text-[11px] text-zinc-400" title={tool.path ?? undefined}>
+                      {tool.path ?? 'not on PATH'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </SectionCard>
+
+        <SectionCard icon={<Network className="size-4 text-amber-400" />} title="Bridge configuration">
+          {!status.data ? (
+            status.error ? <p className="text-xs text-muted-foreground">Unavailable: system status failed to load.</p> : <LoadingBlock rows={4} />
+          ) : (
+            <BridgeConfig status={status.data} />
+          )}
+        </SectionCard>
+      </div>
+    </div>
+  )
+}
+
+function RemoteWorkersCard({ status, error }: { status: SystemStatus | undefined; error: Error | null }) {
+  return (
+    <SectionCard
+      icon={<ServerOff className="size-4 text-zinc-400" />}
+      title="Remote worker fleet"
+      actions={
+        status && (
+          <Badge variant="outline" className="border-zinc-600 font-mono text-[10px] text-zinc-400">
+            registry: not available
+          </Badge>
+        )
+      }
+    >
+      {!status ? (
+        error ? <p className="text-xs text-muted-foreground">Unknown: system status failed to load.</p> : <LoadingBlock rows={1} />
+      ) : (
+        <EmptyBlock icon={<ServerOff />} title="No remote workers" className="p-4">
+          {status.remoteWorkers.note}
+        </EmptyBlock>
+      )}
+    </SectionCard>
+  )
+}
+
+function HostDetails({ host }: { host: HostInfo }) {
+  const usedMemory = Math.max(0, host.totalMemoryBytes - host.freeMemoryBytes)
+  const memoryPercent = host.totalMemoryBytes > 0 ? Math.round((usedMemory / host.totalMemoryBytes) * 100) : 0
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+        <KeyValue label="Hostname" mono>
+          {host.hostname}
+        </KeyValue>
+        <KeyValue label="Operating system" mono>
+          {host.platform} {host.release}
+        </KeyValue>
+        <KeyValue label="Architecture" mono>
+          {host.arch}
+        </KeyValue>
+        <KeyValue label="CPU">
+          {host.cpuModel ?? 'model not reported'} × {host.cpuCount}
+        </KeyValue>
+        <KeyValue label="Load average (1 / 5 / 15 min)" mono>
+          {host.loadAverage
+            ? host.loadAverage.map((value) => value.toFixed(2)).join(' / ')
+            : host.platform === 'win32'
+              ? 'not available on Windows'
+              : 'not reported'}
+        </KeyValue>
+        <KeyValue label="Host uptime">{formatUptime(host.uptimeSeconds)}</KeyValue>
+        <KeyValue label="Bridge process memory (RSS)">{formatBytes(host.processRssBytes)}</KeyValue>
+        <KeyValue label="Bun runtime" mono>
+          {host.bunVersion}
+        </KeyValue>
+      </div>
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="text-muted-foreground">System memory in use</span>
+          <span className="font-mono text-zinc-200">
+            {formatBytes(usedMemory)} / {formatBytes(host.totalMemoryBytes)} ({memoryPercent}%)
+          </span>
         </div>
-
-        <span className="text-[11px] text-muted-foreground font-mono hidden sm:inline">
-          Fail-Closed Hardware Enclaves
-        </span>
+        <Progress value={memoryPercent} aria-label="System memory in use" />
       </div>
+    </div>
+  )
+}
 
-      {/* Worker Nodes Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-        {filteredWorkers.map((worker) => {
-          const memPercent = Math.min(100, Math.round((worker.memoryUsageMb / 2048) * 100))
-          return (
-            <Card key={worker.workerId} className="border-border/60 bg-card/40 flex flex-col justify-between">
-              <CardHeader className="p-3 pb-2.5 border-b border-border/40">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Server className="size-3.5 text-muted-foreground shrink-0" />
-                    <span className="font-mono text-xs font-semibold text-foreground truncate">
-                      {worker.hostname}
-                    </span>
-                  </div>
-                  {getStateBadge(worker.state)}
-                </div>
+function CoreDetails({ status, cliQueued }: { status: SystemStatus; cliQueued: number | null }) {
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <KeyValue label="Binary" mono className="sm:col-span-2">
+        {status.core.binaryPath}
+      </KeyValue>
+      <KeyValue label="Binary present">
+        {status.core.present ? (
+          <span className="text-emerald-300">yes</span>
+        ) : (
+          <span className="text-rose-300">no — scans and console commands cannot run</span>
+        )}
+      </KeyValue>
+      <KeyValue label="Version" mono>
+        {status.core.version ?? (status.core.error ? `unknown (${status.core.error})` : 'unknown')}
+      </KeyValue>
+      <KeyValue label="Bridge mode">{status.mode}</KeyValue>
+      <KeyValue label="Core CLI calls waiting for a slot">{cliQueued ?? 'n/a'}</KeyValue>
+      <KeyValue label="Bridge data directory" mono className="sm:col-span-2">
+        {status.dataDir}
+      </KeyValue>
+    </div>
+  )
+}
 
-                <div className="flex items-center justify-between mt-1 text-[11px] font-mono text-muted-foreground">
-                  <span>{worker.workerId}</span>
-                  <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0">
-                    {worker.architecture}
-                  </Badge>
-                </div>
-              </CardHeader>
-
-              <CardContent className="p-3 flex flex-col gap-3">
-                {/* Lease status */}
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Tenant Lease:</span>
-                  <span className={`font-mono text-xs font-medium ${
-                    worker.tenantLease ? 'text-amber-400' : 'text-muted-foreground'
-                  }`}>
-                    {worker.tenantLease ?? 'None (Unassigned)'}
-                  </span>
-                </div>
-
-                {/* Telemetry metrics */}
-                <div className="flex flex-col gap-2 p-2.5 rounded bg-background/40 border border-border/40">
-                  {/* CPU load */}
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        <Cpu className="size-3" /> CPU Load
-                      </span>
-                      <span className="font-mono font-medium text-foreground">{worker.cpuUsagePercent}%</span>
-                    </div>
-                    <Progress
-                      value={worker.cpuUsagePercent}
-                      className="h-1 bg-muted"
-                    />
-                  </div>
-
-                  {/* Memory usage */}
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        <HardDrive className="size-3" /> Memory ({memPercent}%)
-                      </span>
-                      <span className="font-mono font-medium text-foreground">{worker.memoryUsageMb} / 2048 MiB</span>
-                    </div>
-                    <Progress
-                      value={memPercent}
-                      className="h-1 bg-muted"
-                    />
-                  </div>
-                </div>
-
-                {/* Active Dispatched Workload */}
-                <div className="p-2 rounded bg-background/50 border border-border/40 text-xs flex flex-col gap-1">
-                  <span className="text-[10px] text-muted-foreground uppercase font-semibold flex items-center gap-1">
-                    <Terminal className="size-2.5 text-primary" /> Workload:
-                  </span>
-                  <span className="font-mono text-[11px] text-foreground/90 truncate">
-                    {worker.activeJob ?? 'Idle (Awaiting Task)'}
-                  </span>
-                </div>
-
-                {/* Footer Egress Boundary */}
-                <div className="flex items-center justify-between text-xs pt-1 border-t border-border/40">
-                  <span className="text-[11px] text-muted-foreground">Egress Boundary:</span>
-                  <Badge variant="outline" className="text-[10px] font-mono border-emerald-500/30 text-emerald-400 bg-emerald-500/5 flex items-center gap-1 px-1.5 py-0">
-                    <Lock className="size-2.5" />
-                    {worker.egressPolicy}
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-          )
-        })}
-      </div>
+function BridgeConfig({ status }: { status: SystemStatus }) {
+  const { auth, integrations } = status
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <KeyValue label="Bind address" mono>
+        {auth.bindHost} {auth.loopbackOnly ? '(loopback only)' : '(reachable beyond loopback)'}
+      </KeyValue>
+      <KeyValue label="Configured access grants">
+        {auth.configuredGrants}
+        {auth.generatedLocalToken ? ' + a generated local admin token' : ''}
+      </KeyValue>
+      <KeyValue label="GitHub credential">{integrations.githubCredentialSource ?? 'not configured'}</KeyValue>
+      <KeyValue label="OSV lookups">{integrations.osvEnabled ? 'enabled' : 'disabled'}</KeyValue>
+      <KeyValue label="AI providers ready">
+        {integrations.aiReadyProviders.length > 0 ? integrations.aiReadyProviders.join(', ') : 'none'}
+        {integrations.aiDefaultProvider ? ` (default: ${integrations.aiDefaultProvider})` : ''}
+      </KeyValue>
+      <KeyValue label="Webhook secrets">
+        GitHub {integrations.githubWebhookSecretConfigured ? 'configured' : 'not configured'} · GitLab{' '}
+        {integrations.gitlabWebhookTokenConfigured ? 'configured' : 'not configured'}
+      </KeyValue>
+      <p className="text-[11px] text-muted-foreground sm:col-span-2">
+        Read at {formatDateTime(status.host.sampledAt)}. The bind address, access grants and webhook secrets come from the
+        bridge's environment (SENTRA_WEB_HOST, SENTRA_WEB_TOKENS, SENTRA_GITHUB_WEBHOOK_SECRET,
+        SENTRA_GITLAB_WEBHOOK_TOKEN). AI providers, the stored GitHub token and the OSV policy are changed in
+        Settings by someone with the {minimumRoleFor('settings:write')} role.
+      </p>
     </div>
   )
 }

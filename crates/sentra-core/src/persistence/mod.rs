@@ -44,10 +44,12 @@ pub use connection::{
     SqliteConnectionManager, SqliteSettings,
 };
 pub use error::{PersistenceError, PersistenceErrorKind};
+/// `PRAGMA application_id` stamped on every Sentra core store by the migrations.
+pub(crate) use migration::APPLICATION_ID as CORE_STORE_APPLICATION_ID;
 pub use model::{
     ApprovalIntent, AttemptOutcome, AttemptRecord, AttemptState, AuditRecord, BudgetRecord,
-    ConsumptionRecord, ManifestKind, ManifestRecord, PersistentApprovalGrant, SessionRecord,
-    SettlementStatus, TaskRecord, TaskState, TransitionRecord,
+    ConsumptionRecord, ManifestKind, ManifestRecord, OperatorEventKind, PersistentApprovalGrant,
+    SessionRecord, SettlementStatus, TaskRecord, TaskState, TransitionRecord,
 };
 pub use repository::{
     ExecutionContext, ExecutionPreview, PersistenceRepository, PersistentApprovalAuthority,

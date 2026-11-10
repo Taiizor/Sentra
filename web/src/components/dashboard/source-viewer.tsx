@@ -1,208 +1,256 @@
-import { useState, useEffect, useRef } from 'react'
-import {
-  FileCode2,
-  AlertCircle,
-  Loader2,
-  Copy,
-  Check,
-  Maximize2,
-  Minimize2,
-} from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { cn } from 'cn'
+import { AlertTriangle, FileCode2, FileWarning, Maximize2, Minimize2 } from 'lucide-react'
+import { api, ApiError } from '@/lib/api'
+import { useResource } from '@/lib/use-resource'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { SurgicalDiffView } from '@/components/dashboard/surgical-diff-view'
-import type { TaintStep } from '@/types/sentra'
+import { Skeleton } from '@/components/ui/skeleton'
+import { bridgeRedactedLineRules, countBridgeRedactedLines } from '@/components/dashboard/findings-format'
+import { CopyButton, ErrorAlert } from '@/components/dashboard/findings-shared'
+import type { TaintStepView } from '@/types/api'
 
-interface SourceViewerProps {
-  filePath: string
-  targetLine?: number
-  taintSteps?: TaintStep[]
-  fallbackSnippet?: string
+/**
+ * Shows a workspace file exactly as the bridge returns it (FileContentView), with line numbers,
+ * the reported line highlighted, scanner-reported taint steps tagged, redaction markers flagged
+ * and truncation stated. It never substitutes other content when the file cannot be read.
+ */
+
+const ROLE_STYLE: Record<TaintStepView['role'], { label: string; row: string; tag: string }> = {
+  SOURCE: {
+    label: 'SOURCE',
+    row: 'bg-amber-950/30 border-l-2 border-amber-500',
+    tag: 'border-amber-500/40 bg-amber-500/15 text-amber-300',
+  },
+  PROPAGATION: {
+    label: 'PROPAGATION',
+    row: 'bg-sky-950/30 border-l-2 border-sky-500',
+    tag: 'border-sky-500/40 bg-sky-500/15 text-sky-300',
+  },
+  SANITIZER: {
+    label: 'SANITIZER',
+    row: 'bg-emerald-950/30 border-l-2 border-emerald-500',
+    tag: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300',
+  },
+  SINK: {
+    label: 'SINK',
+    row: 'bg-rose-950/30 border-l-2 border-rose-500',
+    tag: 'border-rose-500/40 bg-rose-500/15 text-rose-300',
+  },
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`
+}
+
+function explainFileError(error: Error): { title: string; hint: string | null } {
+  if (error instanceof ApiError) {
+    switch (error.status) {
+      case 403:
+        return {
+          title: 'The bridge refused to read this file',
+          hint: 'The path is outside the registered workspace or is blocked by the bridge policy.',
+        }
+      case 404:
+        return {
+          title: 'File not found in the workspace',
+          hint: 'It may have been moved or deleted since the scan that reported this finding.',
+        }
+      case 413:
+        return { title: 'File too large to display', hint: null }
+      case 415:
+        return {
+          title: 'File cannot be displayed as text',
+          hint: 'The bridge only serves text files; binary or undecodable content is not shown.',
+        }
+      default:
+        break
+    }
+  }
+  return { title: 'Could not load the source file', hint: null }
+}
+
+/** One file line as returned by the bridge; a whole-line bridge redaction marker is flagged. */
+function SourceLineText({ text }: { text: string }) {
+  const ruleIds = bridgeRedactedLineRules(text)
+  if (!ruleIds) return <>{text}</>
+  return (
+    <span
+      className="rounded-sm border border-amber-500/40 bg-amber-500/15 px-1 text-amber-300"
+      title="The bridge withheld this line because it carries an open secret finding"
+    >
+      line redacted by the bridge{ruleIds.length > 0 ? ` · ${ruleIds.join(', ')}` : ''}
+    </span>
+  )
 }
 
 export function SourceViewer({
-  filePath,
-  targetLine,
-  taintSteps = [],
-  fallbackSnippet,
-}: SourceViewerProps) {
-  const [content, setContent] = useState<string | null>(null)
-  const [loading, setLoading] = useState<boolean>(true)
-  const [error, setError] = useState<string | null>(null)
-  const [copied, setCopied] = useState<boolean>(false)
-  const [isExpanded, setIsExpanded] = useState<boolean>(false)
-  const activeLineRef = useRef<HTMLDivElement | null>(null)
+  tenantId,
+  path,
+  line,
+  taintTrace,
+}: {
+  tenantId: string
+  /** Workspace-relative path as reported by the scanner. */
+  path: string
+  line: number | null
+  taintTrace?: TaintStepView[] | null
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const file = useResource(`file:${tenantId}:${path}`, (signal) => api.findings.file(tenantId, path, signal))
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const targetRef = useRef<HTMLDivElement | null>(null)
 
+  const lines = useMemo(() => {
+    const content = file.data?.content ?? ''
+    const split = content.replace(/\r\n/g, '\n').split('\n')
+    if (split.length > 1 && split[split.length - 1] === '') split.pop()
+    return split
+  }, [file.data])
+
+  const redactions = useMemo(() => countBridgeRedactedLines(lines), [lines])
+
+  const stepsByLine = useMemo(() => {
+    const map = new Map<number, TaintStepView[]>()
+    for (const step of taintTrace ?? []) {
+      if (step.line === null) continue
+      map.set(step.line, [...(map.get(step.line) ?? []), step])
+    }
+    return map
+  }, [taintTrace])
+
+  // Center the reported line inside the viewer (without scrolling the surrounding page).
   useEffect(() => {
-    let active = true
-    setLoading(true)
-    setError(null)
+    const container = scrollRef.current
+    const target = targetRef.current
+    if (!container || !target) return
+    container.scrollTop = Math.max(0, target.offsetTop - container.clientHeight / 2)
+  }, [file.data, line, expanded])
 
-    async function fetchFile() {
-      try {
-        const res = await fetch(`/api/file-content?path=${encodeURIComponent(filePath)}`)
-        const data = await res.json()
-        if (!active) return
-
-        if (res.ok && data.ok) {
-          setContent(data.content)
-        } else {
-          setError(data.error || 'File not available on local host')
-        }
-      } catch (err: any) {
-        if (active) setError(err.message || 'Failed to fetch source file')
-      } finally {
-        if (active) setLoading(false)
-      }
-    }
-
-    if (filePath) {
-      fetchFile()
-    } else {
-      setLoading(false)
-    }
-
-    return () => {
-      active = false
-    }
-  }, [filePath])
-
-  // Scroll to target line when loaded
-  useEffect(() => {
-    if (!loading && activeLineRef.current) {
-      activeLineRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }
-  }, [loading, content, targetLine])
-
-  function handleCopy() {
-    if (content || fallbackSnippet) {
-      navigator.clipboard.writeText(content || fallbackSnippet || '')
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
-  }
-
-  // Create a line lookup for taint step tags
-  const taintLineMap = new Map<number, TaintStep>()
-  for (const step of taintSteps) {
-    taintLineMap.set(step.line, step)
-  }
-
-  const lines = content ? content.split('\n') : []
+  const lineBeyondExcerpt = file.data !== undefined && line !== null && line > lines.length
 
   return (
-    <div className="border border-zinc-800 rounded-lg bg-zinc-950 flex flex-col overflow-hidden shadow-inner">
-      {/* File Header Bar */}
-      <div className="flex items-center justify-between px-3 py-2 bg-zinc-900/80 border-b border-zinc-800 text-xs">
-        <div className="flex items-center gap-2 min-w-0">
-          <FileCode2 className="size-4 text-primary shrink-0" />
-          <span className="font-mono text-zinc-300 truncate" title={filePath}>
-            {filePath}
+    <div className="flex flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 bg-zinc-900/70 px-3 py-1.5 text-xs">
+        <div className="flex min-w-0 items-center gap-2">
+          <FileCode2 className="size-3.5 shrink-0 text-zinc-400" />
+          <span className="truncate font-mono text-zinc-300" title={path}>
+            {path}
           </span>
-          {targetLine && (
-            <Badge variant="outline" className="text-[10px] font-mono py-0 text-zinc-400 border-zinc-700">
-              Line {targetLine}
+          {line !== null && (
+            <Badge variant="outline" className="border-zinc-700 font-mono text-[10px] text-zinc-400">
+              line {line}
+            </Badge>
+          )}
+          {file.data?.language && (
+            <Badge variant="outline" className="border-zinc-800 text-[10px] text-zinc-500">
+              {file.data.language}
             </Badge>
           )}
         </div>
-
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1">
+          <CopyButton text={line !== null ? `${path}:${line}` : path} label="Copy path" />
           <Button
             variant="ghost"
-            size="sm"
-            onClick={handleCopy}
-            className="h-6 px-2 text-[11px] text-zinc-400 hover:text-zinc-200"
+            size="icon-xs"
+            className="text-zinc-400 hover:text-zinc-100"
+            onClick={() => setExpanded((value) => !value)}
+            title={expanded ? 'Collapse' : 'Expand'}
           >
-            {copied ? <Check className="size-3 text-primary mr-1" /> : <Copy className="size-3 mr-1" />}
-            {copied ? 'Copied' : 'Copy'}
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsExpanded((v) => !v)}
-            className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200"
-            title={isExpanded ? 'Collapse' : 'Expand'}
-          >
-            {isExpanded ? <Minimize2 className="size-3" /> : <Maximize2 className="size-3" />}
+            {expanded ? <Minimize2 /> : <Maximize2 />}
           </Button>
         </div>
       </div>
 
-      {/* Code Viewer Body with shadcn ScrollArea */}
-      <ScrollArea className={`${isExpanded ? 'max-h-[600px]' : 'max-h-[300px]'} font-mono text-xs leading-relaxed select-text`}>
-        <div className="p-2">
-        {loading ? (
-          <div className="flex items-center justify-center p-8 text-zinc-500 gap-2">
-            <Loader2 className="size-4 animate-spin" />
-            <span>Loading file source...</span>
+      {file.data && (file.data.truncated || redactions > 0 || lineBeyondExcerpt) && (
+        <div className="flex flex-col gap-0.5 border-b border-zinc-800 bg-zinc-900/40 px-3 py-1.5 text-[11px]">
+          {file.data.truncated && (
+            <span className="flex items-center gap-1.5 text-amber-300">
+              <AlertTriangle className="size-3 shrink-0" />
+              Truncated by the bridge: showing {lines.length.toLocaleString()} line{lines.length === 1 ? '' : 's'} of a{' '}
+              {formatBytes(file.data.sizeBytes)} file.
+            </span>
+          )}
+          {lineBeyondExcerpt && (
+            <span className="flex items-center gap-1.5 text-amber-300">
+              <AlertTriangle className="size-3 shrink-0" />
+              Line {line} is not part of the returned content.
+            </span>
+          )}
+          {redactions > 0 && (
+            <span className="text-zinc-400">
+              {redactions} line{redactions === 1 ? ' was' : 's were'} replaced by the bridge before reaching the console
+              because {redactions === 1 ? 'it carries' : 'they carry'} an open secret finding.
+            </span>
+          )}
+        </div>
+      )}
+
+      <div
+        ref={scrollRef}
+        className={cn('relative overflow-auto font-mono text-[11px]', expanded ? 'max-h-[640px]' : 'max-h-[320px]')}
+      >
+        {file.loading && !file.data ? (
+          <div className="flex flex-col gap-1.5 p-3">
+            {Array.from({ length: 8 }, (_, index) => (
+              <Skeleton key={index} className="h-3.5 bg-zinc-800/60" style={{ width: `${40 + ((index * 23) % 55)}%` }} />
+            ))}
           </div>
-        ) : content ? (
-          <div className="flex flex-col">
-            {lines.map((lineText, idx) => {
-              const lineNum = idx + 1
-              const taint = taintLineMap.get(lineNum)
-              const isTarget = lineNum === targetLine
-
-              let bgClass = ''
-              let tagBadge = null
-
-              if (taint) {
-                if (taint.role === 'SOURCE') {
-                  bgClass = 'bg-amber-950/40 border-l-2 border-amber-500 text-amber-200'
-                  tagBadge = <span className="text-[9px] px-1 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 mr-1.5">SOURCE</span>
-                } else if (taint.role === 'SINK') {
-                  bgClass = 'bg-rose-950/40 border-l-2 border-rose-500 text-rose-200'
-                  tagBadge = <span className="text-[9px] px-1 rounded bg-rose-500/20 text-rose-400 border border-rose-500/40 mr-1.5">SINK</span>
-                } else if (taint.role === 'SANITIZER') {
-                  bgClass = 'bg-emerald-950/40 border-l-2 border-emerald-500 text-emerald-200'
-                  tagBadge = <span className="text-[9px] px-1 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 mr-1.5">CLEAN</span>
-                } else {
-                  bgClass = 'bg-sky-950/30 border-l-2 border-sky-500 text-sky-200'
-                  tagBadge = <span className="text-[9px] px-1 rounded bg-sky-500/20 text-sky-400 border border-sky-500/40 mr-1.5">FLOW</span>
-                }
-              } else if (isTarget) {
-                bgClass = 'bg-rose-950/30 border-l-2 border-rose-500'
-              }
-
+        ) : file.error ? (
+          <div className="p-3">
+            <ErrorAlert
+              error={file.error}
+              title={explainFileError(file.error).title}
+              onRetry={file.reload}
+            />
+            {explainFileError(file.error).hint && (
+              <p className="mt-2 flex items-start gap-1.5 text-[11px] text-zinc-500">
+                <FileWarning className="mt-0.5 size-3 shrink-0" />
+                {explainFileError(file.error).hint}
+              </p>
+            )}
+          </div>
+        ) : file.data && file.data.content.length === 0 ? (
+          <div className="p-4 text-center text-xs text-zinc-500">The file is empty.</div>
+        ) : file.data ? (
+          <div className="w-max min-w-full py-1">
+            {lines.map((text, index) => {
+              const number = index + 1
+              const steps = stepsByLine.get(number)
+              const isTarget = number === line
+              const style = steps ? ROLE_STYLE[steps[steps.length - 1].role] : null
               return (
                 <div
-                  key={lineNum}
-                  ref={isTarget ? activeLineRef : null}
-                  className={`flex items-start gap-3 px-2 py-0.5 hover:bg-zinc-900/60 transition-colors ${bgClass}`}
+                  key={number}
+                  ref={isTarget ? targetRef : undefined}
+                  className={cn(
+                    'flex leading-5 hover:bg-zinc-900/60',
+                    style?.row,
+                    isTarget && !style && 'bg-rose-950/30 border-l-2 border-rose-500',
+                    isTarget && 'ring-1 ring-inset ring-rose-500/40',
+                  )}
                 >
-                  <span className="w-9 text-right text-zinc-600 select-none shrink-0 font-mono text-[11px]">
-                    {lineNum}
+                  <span className="w-12 shrink-0 select-none pr-3 text-right text-[10px] text-zinc-600">{number}</span>
+                  <span className="whitespace-pre pr-4 text-zinc-300">
+                    {steps?.map((step) => (
+                      <span
+                        key={step.step}
+                        className={cn('mr-1.5 rounded-sm border px-1 text-[9px]', ROLE_STYLE[step.role].tag)}
+                        title={`Step ${step.step}${step.variable ? ` · ${step.variable}` : ''}`}
+                      >
+                        {ROLE_STYLE[step.role].label}
+                      </span>
+                    ))}
+                    <SourceLineText text={text} />
                   </span>
-                  <div className="flex-1 whitespace-pre-wrap break-all text-zinc-300">
-                    {tagBadge}
-                    {lineText}
-                  </div>
                 </div>
               )
             })}
           </div>
-        ) : (
-          /* Fallback if file not on disk */
-          <div className="flex flex-col gap-2.5 p-3 text-xs text-zinc-400">
-            <div className="flex items-center gap-1.5 text-zinc-400 text-[11px]">
-              <AlertCircle className="size-3.5 text-amber-400" />
-              <span>{error || 'Target file is in an isolated container/sandbox'} — Verified AST Remediation Diff:</span>
-            </div>
-            {fallbackSnippet ? (
-              <SurgicalDiffView
-                diff={fallbackSnippet}
-                filePath={filePath}
-                title={`Verified Remediation (${filePath.split('/').pop()})`}
-              />
-            ) : (
-              <div className="p-4 text-center text-zinc-600">No snippet preview available.</div>
-            )}
-          </div>
-        )}
-        </div>
-      </ScrollArea>
+        ) : null}
+      </div>
     </div>
   )
 }

@@ -1,314 +1,288 @@
-import { useState, useEffect } from 'react'
-import {
-  Building2,
-  ShieldCheck,
-  FolderGit2,
-  Lock,
-  AlertTriangle,
-  CheckCircle2,
-  Loader2,
-} from 'lucide-react'
+import { useState, type FormEvent } from 'react'
+import { CircleAlert, FolderGit2, LoaderCircle } from 'lucide-react'
+import { toast } from 'sonner'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import type { TenantView, UserRole } from '@/types/sentra'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { permissionHint } from '@/components/layout/permission-hint'
+import { ApiError, api, errorMessage } from '@/lib/api'
+import { useConsole } from '@/lib/console-context'
+import { isTabId } from '@/lib/router'
+import type { CreateTenantRequest, IsolationLevel } from '@/types/api'
 
 interface AddTenantDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  currentRole: UserRole
-  onTenantCreated: (newTenant: TenantView) => void
-  currentWorkspace: string
 }
 
-export function AddTenantDialog({
-  open,
-  onOpenChange,
-  currentRole,
-  onTenantCreated,
-  currentWorkspace,
-}: AddTenantDialogProps) {
-  const [name, setName] = useState('')
-  const [tenantId, setTenantId] = useState('')
-  const [autoSlug, setAutoSlug] = useState(true)
-  const [workspace, setWorkspace] = useState(currentWorkspace)
-  const [description, setDescription] = useState('')
-  const [isolationLevel, setIsolationLevel] = useState<'multi_tenant_isolated' | 'single_operator'>('multi_tenant_isolated')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+/** Same grammar the bridge enforces (lowercase, starts with a letter or digit). */
+const TENANT_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
+const REPOSITORY_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}$/
+const ABSOLUTE_PATH_RE = /^(?:[A-Za-z]:[\\/]|\\\\|\/)/
 
-  useEffect(() => {
-    if (open) {
-      setName('')
-      setTenantId('')
-      setAutoSlug(true)
-      setWorkspace(currentWorkspace)
-      setDescription('')
-      setIsolationLevel('multi_tenant_isolated')
-      setError(null)
-    }
-  }, [open, currentWorkspace])
+const ISOLATION_LABELS: Record<IsolationLevel, string> = {
+  single_operator: 'Single operator',
+  multi_tenant_isolated: 'Multi-tenant (declared)',
+}
 
-  function handleNameChange(val: string) {
-    setName(val)
-    if (autoSlug) {
-      const slug = val
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '')
-        .slice(0, 64)
-      setTenantId(slug)
-    }
-  }
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64)
+}
 
-  function handleSlugChange(val: string) {
-    setAutoSlug(false)
-    const sanitized = val.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 64)
-    setTenantId(sanitized)
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError(null)
-
-    if (currentRole === 'Viewer') {
-      setError('Viewer role cannot register tenants. Switch to Operator or Admin in the top-right role selector.')
-      return
-    }
-
-    if (!name.trim()) {
-      setError('Organization name is required.')
-      return
-    }
-
-    if (!tenantId.trim()) {
-      setError('Tenant ID is required (1-64 alphanumeric chars).')
-      return
-    }
-
-    setLoading(true)
-
-    try {
-      const res = await fetch('/api/tenants', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenantId: tenantId.trim(),
-          name: name.trim(),
-          description: description.trim(),
-          defaultWorkspace: workspace.trim() || currentWorkspace,
-          isolationLevel,
-          role: currentRole,
-        }),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to register tenant workspace.')
-      }
-
-      onTenantCreated(data.tenant)
-      onOpenChange(false)
-    } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred while registering tenant.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const isViewer = currentRole === 'Viewer'
-
+export function AddTenantDialog({ open, onOpenChange }: AddTenantDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg border-border/80 bg-background/95 text-foreground shadow-2xl backdrop-blur-md">
+      <DialogContent className="max-w-lg border-zinc-800 bg-zinc-950 text-zinc-100">
+        {/* Mounted only while open, so every opening starts from an empty form. */}
+        {open && <AddTenantForm onClose={() => onOpenChange(false)} />}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function AddTenantForm({ onClose }: { onClose: () => void }) {
+  const { can, refreshTenants, setTenantId, invalidate } = useConsole()
+  const allowed = can('tenant:create')
+  const [name, setName] = useState('')
+  const [tenantId, setTenantIdInput] = useState('')
+  const [autoSlug, setAutoSlug] = useState(true)
+  const [description, setDescription] = useState('')
+  const [workspace, setWorkspace] = useState('')
+  const [isolationLevel, setIsolationLevel] = useState<IsolationLevel>('single_operator')
+  const [repository, setRepository] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+  const [error, setError] = useState<{ message: string; code: string | null } | null>(null)
+
+  function validate(): string | null {
+    if (!name.trim()) return 'Enter a display name.'
+    if (!TENANT_ID_RE.test(tenantId)) {
+      return 'Tenant id must be 1-64 characters of a-z, 0-9, "-" or "_", starting with a letter or digit.'
+    }
+    if (isTabId(tenantId)) return `"${tenantId}" is reserved for a console view; choose another tenant id.`
+    if (!workspace.trim()) return 'Enter the workspace directory.'
+    if (!ABSOLUTE_PATH_RE.test(workspace.trim())) return 'The workspace must be an absolute path on the bridge host.'
+    if (repository.trim() && !REPOSITORY_RE.test(repository.trim())) return 'GitHub repository must look like owner/name.'
+    return null
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!allowed || submitting) return
+    const problem = validate()
+    if (problem) {
+      setError({ message: problem, code: null })
+      return
+    }
+    setError(null)
+    setConfirming(true)
+  }
+
+  async function register() {
+    if (!allowed || submitting) return
+    setSubmitting(true)
+    setError(null)
+    const body: CreateTenantRequest = {
+      tenantId,
+      name: name.trim(),
+      workspace: workspace.trim(),
+      isolationLevel,
+      ...(description.trim() ? { description: description.trim() } : {}),
+      ...(repository.trim() ? { githubRepository: repository.trim() } : {}),
+    }
+    try {
+      const created = await api.tenants.create(body)
+      await refreshTenants()
+      setTenantId(created.tenantId)
+      invalidate()
+      onClose()
+      if (created.coreStore.error) {
+        toast.warning(`Registered ${created.name}`, { description: `Core store: ${created.coreStore.error}` })
+      } else {
+        toast.success(`Registered ${created.name}`, { description: created.workspace })
+      }
+    } catch (failure) {
+      setError({ message: errorMessage(failure), code: failure instanceof ApiError ? failure.code : null })
+      setConfirming(false)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const disabled = !allowed || submitting
+
+  return (
+    <>
         <DialogHeader>
-          <div className="flex items-center gap-2">
-            <div className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary border border-primary/20">
-              <Building2 className="size-3.5" />
-            </div>
-            <div>
-              <DialogTitle className="text-sm font-semibold text-foreground">
-                Register Organization / Tenant
-              </DialogTitle>
-              <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                Provision a cryptographic workspace with multi-tenant boundary fencing.
-              </DialogDescription>
-            </div>
-          </div>
+          <DialogTitle className="text-sm font-semibold flex items-center gap-2">
+            <FolderGit2 className="size-4 text-primary" />
+            Register workspace
+          </DialogTitle>
+          <DialogDescription className="text-xs text-zinc-400">
+            Adds a tenant record that points the console at an existing directory on the bridge host. The bridge initializes a
+            separate core store for it in the bridge data directory (<code className="font-mono">sentra init</code>). This action is
+            recorded in the operator audit log.
+          </DialogDescription>
         </DialogHeader>
 
-        {isViewer && (
-          <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-300">
-            <AlertTriangle className="size-3.5 shrink-0 text-amber-400 mt-0.5" />
-            <span>Viewer role cannot register tenants. Switch to Operator or Admin.</span>
-          </div>
+        {!allowed && (
+          <Alert className="border-amber-500/30 bg-amber-500/5 text-amber-200">
+            <CircleAlert />
+            <AlertDescription className="text-xs text-amber-200/90">{permissionHint('tenant:create')}</AlertDescription>
+          </Alert>
         )}
 
         {error && (
-          <div className="rounded-lg border border-destructive/60 bg-destructive/10 p-2.5 text-xs text-destructive flex items-center gap-2">
-            <AlertTriangle className="size-3.5 shrink-0" />
-            <span>{error}</span>
-          </div>
+          <Alert variant="destructive" className="border-rose-500/40 bg-rose-500/5">
+            <CircleAlert />
+            <AlertTitle className="text-xs">Registration failed{error.code ? ` (${error.code})` : ''}</AlertTitle>
+            <AlertDescription className="text-xs break-words">{error.message}</AlertDescription>
+          </Alert>
         )}
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3 py-1">
-          {/* Organization Name */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-foreground flex items-center justify-between">
-              <span>Organization Name</span>
-              <span className="text-[10px] text-muted-foreground">e.g. Acme Corp</span>
-            </label>
+        {confirming ? (
+          <div className="flex flex-col gap-3">
+            <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-xs flex flex-col gap-2">
+              <span className="font-medium text-zinc-100">Confirm registration</span>
+              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px]">
+                <dt className="text-zinc-500">Tenant id</dt>
+                <dd className="font-mono text-zinc-200 break-all">{tenantId}</dd>
+                <dt className="text-zinc-500">Name</dt>
+                <dd className="text-zinc-200 break-words">{name.trim()}</dd>
+                <dt className="text-zinc-500">Workspace</dt>
+                <dd className="font-mono text-zinc-200 break-all">{workspace.trim()}</dd>
+                <dt className="text-zinc-500">Isolation label</dt>
+                <dd className="text-zinc-200">{ISOLATION_LABELS[isolationLevel]} (not enforced)</dd>
+                <dt className="text-zinc-500">GitHub</dt>
+                <dd className="font-mono text-zinc-200 break-all">{repository.trim() || 'detect from git remote'}</dd>
+              </dl>
+              <p className="text-[11px] text-zinc-400 leading-relaxed">
+                The bridge will verify the directory, run <code className="font-mono">sentra init</code> to create a new core store
+                for this tenant in its data directory, store the tenant record and append a{' '}
+                <code className="font-mono">tenant_registered</code> entry to the operator audit log. Users with read access will
+                be able to view this workspace's findings and files through the console.
+              </p>
+            </div>
+            <DialogFooter className="pt-3 border-t border-zinc-800 flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+              <Button type="button" variant="outline" size="sm" onClick={() => setConfirming(false)} disabled={submitting} className="h-8 text-xs">
+                Back
+              </Button>
+              <Button type="button" size="sm" onClick={() => void register()} disabled={disabled} className="h-8 text-xs font-semibold">
+                {submitting && <LoaderCircle className="size-3.5 animate-spin" />}
+                {submitting ? 'Registering…' : 'Confirm and register'}
+              </Button>
+            </DialogFooter>
+          </div>
+        ) : (
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3" noValidate>
+          <label className="flex flex-col gap-1 text-xs font-medium text-zinc-200">
+            Display name
             <Input
               value={name}
-              onChange={(e) => handleNameChange(e.target.value)}
-              placeholder="e.g. CyberDefense Systems"
-              className="h-8 text-xs bg-background/50 border-border/60"
-              disabled={isViewer || loading}
-              required
+              maxLength={120}
+              onChange={(event) => {
+                setName(event.target.value)
+                if (autoSlug) setTenantIdInput(slugify(event.target.value))
+              }}
+              placeholder="Payments service"
+              className="h-8 text-xs bg-zinc-900/60 border-zinc-800"
+              disabled={disabled}
             />
-          </div>
+          </label>
 
-          {/* Tenant Identifier (Slug) */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-foreground flex items-center justify-between">
-              <span>Unique Tenant ID</span>
-              <span className="text-[10px] text-muted-foreground font-mono">1-64 chars: a-z, 0-9, -, _</span>
-            </label>
-            <div className="relative">
-              <Input
-                value={tenantId}
-                onChange={(e) => handleSlugChange(e.target.value)}
-                placeholder="cyberdefense-systems"
-                className="h-8 text-xs font-mono bg-background/50 border-border/60 pr-14"
-                disabled={isViewer || loading}
-                required
-              />
-              <span className="absolute right-2.5 top-2 text-[10px] font-mono text-muted-foreground">
-                {tenantId.length}/64
-              </span>
-            </div>
-          </div>
+          <label className="flex flex-col gap-1 text-xs font-medium text-zinc-200">
+            <span className="flex items-center justify-between">
+              Tenant id
+              <span className="text-[10px] font-mono text-zinc-500">a-z 0-9 - _ · {tenantId.length}/64</span>
+            </span>
+            <Input
+              value={tenantId}
+              maxLength={64}
+              onChange={(event) => {
+                setAutoSlug(false)
+                setTenantIdInput(event.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))
+              }}
+              placeholder="payments-service"
+              className="h-8 text-xs font-mono bg-zinc-900/60 border-zinc-800"
+              disabled={disabled}
+            />
+            <span className="text-[10px] font-normal text-zinc-500">Used in URLs and the core store file name; cannot be changed later.</span>
+          </label>
 
-          {/* Target Workspace Directory */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-foreground flex items-center gap-1.5">
-              <FolderGit2 className="size-3 text-muted-foreground" />
-              <span>Workspace Directory</span>
-            </label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-zinc-200">
+            Workspace directory (absolute path on the bridge host)
             <Input
               value={workspace}
-              onChange={(e) => setWorkspace(e.target.value)}
-              placeholder="E:/Projects/target"
-              className="h-8 text-xs font-mono bg-background/50 border-border/60"
-              disabled={isViewer || loading}
+              maxLength={1024}
+              onChange={(event) => setWorkspace(event.target.value)}
+              placeholder="E:/Projects/payments-service"
+              className="h-8 text-xs font-mono bg-zinc-900/60 border-zinc-800"
+              disabled={disabled}
+              spellCheck={false}
             />
+            <span className="text-[10px] font-normal text-zinc-500">
+              Must exist and cannot be a filesystem root. When the bridge sets SENTRA_WEB_WORKSPACE_ROOTS, it must lie inside one of
+              those roots.
+            </span>
+          </label>
+
+          <div className="flex flex-col gap-1 text-xs font-medium text-zinc-200">
+            <span>Isolation level</span>
+            <Select value={isolationLevel} onValueChange={(value) => value && setIsolationLevel(value as IsolationLevel)} disabled={disabled}>
+              <SelectTrigger className="h-8 w-full text-xs bg-zinc-900/60 border-zinc-800" aria-label="Isolation level">
+                <SelectValue>{(value: IsolationLevel | null) => (value ? ISOLATION_LABELS[value] : 'Select')}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="single_operator">{ISOLATION_LABELS.single_operator}</SelectItem>
+                <SelectItem value="multi_tenant_isolated">{ISOLATION_LABELS.multi_tenant_isolated}</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-[10px] font-normal text-amber-300/80">
+              Declared label only — not enforced by this console. All workspaces share one bridge process and host.
+            </span>
           </div>
 
-          {/* Isolation Mode */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-foreground flex items-center gap-1.5">
-              <Lock className="size-3 text-muted-foreground" />
-              <span>Isolation Boundary Level</span>
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setIsolationLevel('multi_tenant_isolated')}
-                disabled={isViewer || loading}
-                className={`flex flex-col items-start gap-0.5 p-2 rounded-md border text-left transition-colors ${
-                  isolationLevel === 'multi_tenant_isolated'
-                    ? 'border-primary bg-primary/10 text-foreground font-medium'
-                    : 'border-border/60 bg-card/40 text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <div className="flex items-center gap-1.5 text-xs font-semibold">
-                  <ShieldCheck className="size-3 text-primary" />
-                  <span>Strict Isolated</span>
-                </div>
-                <span className="text-[10px] text-muted-foreground leading-tight">
-                  Cross-tenant queries fail closed
-                </span>
-              </button>
+          <label className="flex flex-col gap-1 text-xs font-medium text-zinc-200">
+            GitHub repository (optional)
+            <Input
+              value={repository}
+              maxLength={200}
+              onChange={(event) => setRepository(event.target.value)}
+              placeholder="owner/name"
+              className="h-8 text-xs font-mono bg-zinc-900/60 border-zinc-800"
+              disabled={disabled}
+              spellCheck={false}
+            />
+            <span className="text-[10px] font-normal text-zinc-500">When empty, the bridge tries the workspace's git remote.</span>
+          </label>
 
-              <button
-                type="button"
-                onClick={() => setIsolationLevel('single_operator')}
-                disabled={isViewer || loading}
-                className={`flex flex-col items-start gap-0.5 p-2 rounded-md border text-left transition-colors ${
-                  isolationLevel === 'single_operator'
-                    ? 'border-primary bg-primary/10 text-foreground font-medium'
-                    : 'border-border/60 bg-card/40 text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <div className="flex items-center gap-1.5 text-xs font-semibold">
-                  <span>Single Operator</span>
-                </div>
-                <span className="text-[10px] text-muted-foreground leading-tight">
-                  Local solo developer development
-                </span>
-              </button>
-            </div>
-          </div>
-
-          {/* Description */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-foreground">
-              <span>Description / Notes (Optional)</span>
-            </label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-zinc-200">
+            Description (optional)
             <Input
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Production payment services and infrastructure"
-              className="h-8 text-xs bg-background/50 border-border/60"
-              disabled={isViewer || loading}
+              maxLength={500}
+              onChange={(event) => setDescription(event.target.value)}
+              className="h-8 text-xs bg-zinc-900/60 border-zinc-800"
+              disabled={disabled}
             />
-          </div>
+          </label>
 
-          <DialogFooter className="mt-2 pt-2 border-t border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-              <CheckCircle2 className="size-3 text-emerald-400" />
-              <span>Signed Audit Record</span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onOpenChange(false)}
-                disabled={loading}
-                className="h-7 text-xs border-border/70 text-muted-foreground hover:text-foreground"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                disabled={isViewer || loading || !name.trim() || !tenantId.trim()}
-                className="h-7 text-xs font-medium"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="size-3 animate-spin mr-1.5" />
-                    Registering...
-                  </>
-                ) : (
-                  'Register Tenant'
-                )}
-              </Button>
-            </div>
+          <DialogFooter className="mt-1 pt-3 border-t border-zinc-800 flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+            <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={submitting} className="h-8 text-xs">
+              Cancel
+            </Button>
+            <Button type="submit" size="sm" disabled={disabled} className="h-8 text-xs font-semibold">
+              Review registration
+            </Button>
           </DialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+        )}
+    </>
   )
 }

@@ -374,6 +374,26 @@ redacted_debug!(
     AttemptRecord
 );
 
+/// Closed set of operator-initiated workspace events that the local CLI may append
+/// to a session's audit trail. Callers cannot supply arbitrary event kinds.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum OperatorEventKind {
+    /// A unified diff was applied to (or found already applied in) a workspace file.
+    PatchApplied,
+    /// A workspace file was restored from a patch backup.
+    PatchRolledBack,
+}
+
+impl OperatorEventKind {
+    /// Stored `audit_events.event_kind` value.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::PatchApplied => "PatchApplied",
+            Self::PatchRolledBack => "PatchRolledBack",
+        }
+    }
+}
+
 /// State of a durable logical task in a session plan.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum TaskState {

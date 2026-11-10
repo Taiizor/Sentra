@@ -16,7 +16,8 @@ Strictly implemented under `#![forbid(unsafe_code)]` in Safe Rust.
 ## Features
 
 - **In-Engine Pure-Rust Taint Analysis:** Fast, zero-dependency lexical data-flow tracking for SQL Injection (CWE-89), OS Command Injection (CWE-78), Dynamic Code Eval (CWE-95), and Path Traversal (CWE-22) with automatic sanitizer and constant-argument false-positive suppression.
-- **12-Ecosystem Lockfile Auditor:** Native parsing and OSV/RustSec vulnerability auditing across Cargo, Bun, npm (v1/v3), Yarn (classic/berry), pnpm (v6/v9), Poetry, Pip, Go sum, Composer, Gemfile, NuGet, and Deno lockfiles.
+- **Lockfile Parsing and Inventory:** Pure-Rust parsers for Cargo, Bun (text `bun.lock`), npm (v1/v3), Yarn (classic/berry), pnpm (v6/v9), Poetry, Pipenv, pip `requirements.txt`, Go `go.sum`, Composer, Gemfile, NuGet and Deno lockfiles. `collect_lockfile_inventory` discovers them recursively and read-only, with a skip list, depth and size limits, and no link or junction traversal. It reports each package with its OSV ecosystem name, and each lockfile's parse error. The built-in `AdvisoryDatabase::default_pinned` is a small, fixed sample, not a synchronized OSV or RustSec feed. It is stamped with its curation date (`PINNED_ADVISORY_SET_CURATED_AT_MILLIS`, 2026-11-08), not the current time, so `is_stale` reports its real age.
+- **Positional Patch Engine:** `UnifiedPatch` / `PatchPlan` apply a single-file unified diff by hunk position with exact context and a bounded offset search. All hunks apply or nothing is written. Line endings are preserved. A patch is reported as already applied only when every hunk's post-image is at its own position.
 - **Pure-Rust Differential Review:** Directory snapshot comparisons with SHA-256 tree hashing, 1:1 rename detection, and bounded hunk generation.
 - **Three-Tier Verification Engine:** Strict verification invariant ensuring remediation patches reproduce original failures, pass on patched code, and break zero regression suites.
 - **Model Context Protocol (MCP):** JSON-RPC 2.0 stdio server for seamless AI coding assistant integrations.
@@ -43,8 +44,9 @@ let code = r#"
     db.execute(query);
 "#;
 
-let report = scanner.scan_content(code, "handler.ts");
-println!("Findings detected: {}", report.findings.len());
+// The file name selects language rules; matches are unverified candidates.
+let matches = scanner.scan_content("handler.ts", code);
+println!("Candidate signals: {}", matches.len());
 ```
 
 ## License

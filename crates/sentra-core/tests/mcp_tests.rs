@@ -171,6 +171,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
         .as_array()
         .expect("Expected advisories array");
     assert!(matched.iter().any(|v| v == "RUSTSEC-2021-0145"));
+
+    // The bundled sample is disclosed with its curation date and a real staleness flag.
+    let pinned = sentra_core::AdvisoryDatabase::default_pinned();
+    assert_eq!(result["advisory_db_source"], "bundled_pinned_sample");
+    assert_eq!(result["advisory_db_records"], pinned.advisory_count());
+    assert_eq!(result["advisory_db_updated_at"], "2026-11-08T23:43:22.000Z");
+    assert_eq!(
+        result["is_stale"],
+        pinned.is_stale(sentra_core::TimestampUtc::now(), 30)
+    );
 }
 
 #[test]

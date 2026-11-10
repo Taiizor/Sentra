@@ -1,8 +1,7 @@
-import React, { useState } from 'react'
-import { Copy, Check, Terminal } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { useState, type ReactNode } from 'react'
+import { Check, Copy, Terminal } from 'lucide-react'
 import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
 import { copyText } from '@/lib/clipboard'
 
 interface MarkdownViewProps {
@@ -11,20 +10,22 @@ interface MarkdownViewProps {
 }
 
 /**
- * Enterprise Markdown View for Sentra
- * Parses GFM tables, fenced code blocks, inline code, headings, lists, blockquotes,
- * and security-specific tokens (CWEs, taint roles, severity levels).
+ * Minimal Markdown renderer for scanner rationale and model output.
+ *
+ * Supported: fenced code blocks, GFM tables (with a delimiter row), headings, blockquotes,
+ * ordered/unordered lists, paragraphs, and inline `code`, **bold**, [links](https://…),
+ * bare http(s) URLs and CWE identifiers.
+ *
+ * Safety: everything is rendered through React text nodes (no raw HTML is ever injected), and
+ * only absolute http(s) URLs become links (opened with rel="noopener noreferrer").
  */
 export function MarkdownView({ content, className = '' }: MarkdownViewProps) {
   if (!content) return null
-
-  // Split into block tokens (code blocks, tables, headings, paragraphs, lists, blockquotes)
   const blocks = parseMarkdownBlocks(content)
-
   return (
     <div className={`space-y-3 text-xs leading-relaxed text-zinc-200 select-text ${className}`}>
-      {blocks.map((block, idx) => (
-        <BlockRenderer key={idx} block={block} />
+      {blocks.map((block, index) => (
+        <BlockRenderer key={index} block={block} />
       ))}
     </div>
   )
@@ -35,140 +36,109 @@ type BlockToken =
   | { type: 'table'; headers: string[]; rows: string[][] }
   | { type: 'heading'; level: number; text: string }
   | { type: 'blockquote'; text: string }
-  | { type: 'list'; ordered: boolean; items: string[] }
+  | { type: 'list'; ordered: boolean; start: number; items: string[] }
   | { type: 'paragraph'; text: string }
 
+const TABLE_DELIMITER = /^\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?$/
+const UNORDERED_ITEM = /^\s*[-*+]\s+/
+const ORDERED_ITEM = /^\s*(\d+)[.)]\s+/
+
+function isTableLine(line: string): boolean {
+  const trimmed = line.trim()
+  return trimmed.startsWith('|') && trimmed.endsWith('|') && trimmed.length > 1
+}
+
 function parseMarkdownBlocks(raw: string): BlockToken[] {
-  const lines = raw.replace(/\r\n/g, '\n').split('\n')
+  const lines = raw.replace(/\r\n?/g, '\n').split('\n')
   const blocks: BlockToken[] = []
   let i = 0
 
   while (i < lines.length) {
     const line = lines[i]
+    const trimmed = line.trim()
 
-    // 1. Fenced Code Block
-    if (line.trim().startsWith('```')) {
-      const lang = line.trim().slice(3).trim()
+    if (trimmed.startsWith('```')) {
+      const lang = trimmed.slice(3).trim()
       const codeLines: string[] = []
       i++
       while (i < lines.length && !lines[i].trim().startsWith('```')) {
         codeLines.push(lines[i])
         i++
       }
-      i++ // Skip closing ```
-      blocks.push({
-        type: 'code_block',
-        lang: lang || 'text',
-        code: codeLines.join('\n'),
-      })
+      i++ // closing fence (or end of input)
+      blocks.push({ type: 'code_block', lang, code: codeLines.join('\n') })
       continue
     }
 
-    // 2. GFM Table
-    if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
+    if (isTableLine(line)) {
       const tableLines: string[] = []
-      while (i < lines.length && lines[i].trim().startsWith('|') && lines[i].trim().endsWith('|')) {
+      while (i < lines.length && isTableLine(lines[i])) {
         tableLines.push(lines[i].trim())
         i++
       }
-
-      if (tableLines.length >= 2) {
-        const headerRow = parseTableRow(tableLines[0])
-        // Filter out delimiter line (e.g., |---|---|)
-        const dataRows = tableLines
-          .slice(1)
-          .filter((l) => !l.replace(/[|\s-:]/g, '').length) // delimiter check
-        const actualDataRows = tableLines.slice(1).filter((l) => {
-          const stripped = l.replace(/[|\s-:]/g, '')
-          return stripped.length > 0
-        })
-
-        blocks.push({
-          type: 'table',
-          headers: headerRow,
-          rows: actualDataRows.map(parseTableRow),
-        })
-        continue
+      if (tableLines.length >= 2 && TABLE_DELIMITER.test(tableLines[1])) {
+        blocks.push({ type: 'table', headers: parseTableRow(tableLines[0]), rows: tableLines.slice(2).map(parseTableRow) })
+      } else {
+        blocks.push({ type: 'paragraph', text: tableLines.join(' ') })
       }
+      continue
     }
 
-    // 3. Headings
-    const headingMatch = line.match(/^(#{1,6})\s+(.*)$/)
-    if (headingMatch) {
-      blocks.push({
-        type: 'heading',
-        level: headingMatch[1].length,
-        text: headingMatch[2],
-      })
+    const heading = line.match(/^(#{1,6})\s+(.*)$/)
+    if (heading) {
+      blocks.push({ type: 'heading', level: heading[1].length, text: heading[2] })
       i++
       continue
     }
 
-    // 4. Blockquote
-    if (line.trim().startsWith('>')) {
+    if (trimmed.startsWith('>')) {
       const quoteLines: string[] = []
       while (i < lines.length && lines[i].trim().startsWith('>')) {
         quoteLines.push(lines[i].trim().replace(/^>\s?/, ''))
         i++
       }
-      blocks.push({
-        type: 'blockquote',
-        text: quoteLines.join(' '),
-      })
+      blocks.push({ type: 'blockquote', text: quoteLines.join(' ') })
       continue
     }
 
-    // 5. Unordered List
-    if (/^\s*[-*+]\s+/.test(line)) {
-      const listItems: string[] = []
-      while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
-        listItems.push(lines[i].replace(/^\s*[-*+]\s+/, '').trim())
+    if (UNORDERED_ITEM.test(line)) {
+      const items: string[] = []
+      while (i < lines.length && UNORDERED_ITEM.test(lines[i])) {
+        items.push(lines[i].replace(UNORDERED_ITEM, '').trim())
         i++
       }
-      blocks.push({
-        type: 'list',
-        ordered: false,
-        items: listItems,
-      })
+      blocks.push({ type: 'list', ordered: false, start: 1, items })
       continue
     }
 
-    // 6. Ordered List
-    if (/^\s*\d+\.\s+/.test(line)) {
-      const listItems: string[] = []
-      while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
-        listItems.push(lines[i].replace(/^\s*\d+\.\s+/, '').trim())
+    const ordered = line.match(ORDERED_ITEM)
+    if (ordered) {
+      const items: string[] = []
+      while (i < lines.length && ORDERED_ITEM.test(lines[i])) {
+        items.push(lines[i].replace(ORDERED_ITEM, '').trim())
         i++
       }
-      blocks.push({
-        type: 'list',
-        ordered: true,
-        items: listItems,
-      })
+      blocks.push({ type: 'list', ordered: true, start: Number.parseInt(ordered[1], 10), items })
       continue
     }
 
-    // 7. Regular Paragraph
-    if (line.trim().length > 0) {
-      const pLines: string[] = [line.trim()]
+    if (trimmed.length > 0) {
+      const paragraph: string[] = [trimmed]
       i++
       while (
         i < lines.length &&
         lines[i].trim().length > 0 &&
         !lines[i].trim().startsWith('```') &&
-        !lines[i].trim().startsWith('|') &&
-        !lines[i].trim().startsWith('#') &&
+        !isTableLine(lines[i]) &&
+        !/^#{1,6}\s/.test(lines[i]) &&
         !lines[i].trim().startsWith('>') &&
-        !/^\s*[-*+]\s+/.test(lines[i]) &&
-        !/^\s*\d+\.\s+/.test(lines[i])
+        !UNORDERED_ITEM.test(lines[i]) &&
+        !ORDERED_ITEM.test(lines[i])
       ) {
-        pLines.push(lines[i].trim())
+        paragraph.push(lines[i].trim())
         i++
       }
-      blocks.push({
-        type: 'paragraph',
-        text: pLines.join(' '),
-      })
+      blocks.push({ type: 'paragraph', text: paragraph.join(' ') })
       continue
     }
 
@@ -179,9 +149,11 @@ function parseMarkdownBlocks(raw: string): BlockToken[] {
 }
 
 function parseTableRow(line: string): string[] {
-  // Strip leading and trailing '|' and split
-  const trimmed = line.replace(/^\|/, '').replace(/\|$/, '')
-  return trimmed.split('|').map((c) => c.trim())
+  return line
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map((cell) => cell.trim())
 }
 
 function BlockRenderer({ block }: { block: BlockToken }) {
@@ -191,29 +163,23 @@ function BlockRenderer({ block }: { block: BlockToken }) {
 
     case 'table':
       return (
-        <div className="my-2.5 overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950/70 shadow-sm">
+        <div className="my-2.5 overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950/70">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="border-b border-zinc-800 bg-zinc-900/80">
-                {block.headers.map((h, idx) => (
-                  <th
-                    key={idx}
-                    className="px-3.5 py-2 font-semibold text-zinc-300 tracking-wider text-[11px] uppercase whitespace-nowrap"
-                  >
-                    <InlineFormattedText text={h} />
+                {block.headers.map((header, index) => (
+                  <th key={index} className="px-3.5 py-2 font-semibold text-zinc-300 text-[11px] whitespace-nowrap">
+                    <InlineFormattedText text={header} />
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-850/60 font-mono text-[11px]">
-              {block.rows.map((row, rIdx) => (
-                <tr
-                  key={rIdx}
-                  className="hover:bg-zinc-900/50 transition-colors odd:bg-transparent even:bg-zinc-900/20"
-                >
-                  {row.map((cell, cIdx) => (
-                    <td key={cIdx} className="px-3.5 py-2 text-zinc-300 align-middle">
-                      <TableCellRenderer text={cell} />
+            <tbody className="divide-y divide-zinc-800/60 font-mono text-[11px]">
+              {block.rows.map((row, rowIndex) => (
+                <tr key={rowIndex} className="even:bg-zinc-900/20">
+                  {row.map((cell, cellIndex) => (
+                    <td key={cellIndex} className="px-3.5 py-2 text-zinc-300 align-top">
+                      <InlineFormattedText text={cell} />
                     </td>
                   ))}
                 </tr>
@@ -223,7 +189,7 @@ function BlockRenderer({ block }: { block: BlockToken }) {
         </div>
       )
 
-    case 'heading': {
+    case 'heading':
       if (block.level === 1) {
         return (
           <h1 className="text-base font-bold text-zinc-100 mt-4 mb-1.5 pb-1 border-b border-zinc-800">
@@ -233,38 +199,42 @@ function BlockRenderer({ block }: { block: BlockToken }) {
       }
       if (block.level === 2) {
         return (
-          <h2 className="text-sm font-bold text-zinc-100 mt-3.5 mb-1.5 flex items-center gap-1.5">
+          <h2 className="text-sm font-bold text-zinc-100 mt-3.5 mb-1.5">
             <InlineFormattedText text={block.text} />
           </h2>
         )
       }
       return (
-        <h3 className="text-xs font-bold text-zinc-200 mt-2.5 mb-1 flex items-center gap-1.5">
+        <h3 className="text-xs font-bold text-zinc-200 mt-2.5 mb-1">
           <InlineFormattedText text={block.text} />
         </h3>
       )
-    }
 
     case 'blockquote':
       return (
-        <blockquote className="my-2 border-l-2 border-primary/50 bg-primary/5 px-3 py-2 rounded-r-lg text-zinc-300 text-xs leading-relaxed italic">
+        <blockquote className="my-2 border-l-2 border-primary/50 bg-primary/5 px-3 py-2 rounded-r-lg text-zinc-300 text-xs leading-relaxed">
           <InlineFormattedText text={block.text} />
         </blockquote>
       )
 
     case 'list':
+      if (block.ordered) {
+        return (
+          <ol start={block.start} className="my-1.5 space-y-1 pl-5 list-decimal marker:text-zinc-500 marker:font-mono">
+            {block.items.map((item, index) => (
+              <li key={index} className="text-xs text-zinc-300 pl-1">
+                <InlineFormattedText text={item} />
+              </li>
+            ))}
+          </ol>
+        )
+      }
       return (
         <ul className="my-1.5 space-y-1 pl-1">
-          {block.items.map((item, idx) => (
-            <li key={idx} className="flex items-start gap-2 text-xs text-zinc-300">
-              {block.ordered ? (
-                <span className="font-mono text-[10px] size-4 rounded-full bg-zinc-800 text-zinc-400 flex items-center justify-center shrink-0 mt-0.5">
-                  {idx + 1}
-                </span>
-              ) : (
-                <span className="size-1.5 rounded-full bg-primary/70 shrink-0 mt-1.5" />
-              )}
-              <span className="flex-1">
+          {block.items.map((item, index) => (
+            <li key={index} className="flex items-start gap-2 text-xs text-zinc-300">
+              <span className="size-1.5 rounded-full bg-primary/70 shrink-0 mt-1.5" />
+              <span className="flex-1 min-w-0">
                 <InlineFormattedText text={item} />
               </span>
             </li>
@@ -274,71 +244,33 @@ function BlockRenderer({ block }: { block: BlockToken }) {
 
     case 'paragraph':
       return (
-        <p className="text-xs text-zinc-300 leading-relaxed">
+        <p className="text-xs text-zinc-300 leading-relaxed break-words">
           <InlineFormattedText text={block.text} />
         </p>
       )
   }
 }
 
-/**
- * Renders Table Cells with Smart Semantic Tagging
- */
-function TableCellRenderer({ text }: { text: string }) {
-  const upper = text.toUpperCase().trim()
-
-  if (upper === 'SOURCE') {
-    return (
-      <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-400 text-[10px] py-0 font-bold">
-        SOURCE
-      </Badge>
-    )
-  }
-  if (upper === 'SINK') {
-    return (
-      <Badge variant="outline" className="border-rose-500/40 bg-rose-500/10 text-rose-400 text-[10px] py-0 font-bold">
-        SINK
-      </Badge>
-    )
-  }
-  if (upper === 'PROPAGATION' || upper === 'PROPAGATE' || upper === 'FLOW') {
-    return (
-      <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 text-sky-400 text-[10px] py-0 font-bold">
-        PROPAGATE
-      </Badge>
-    )
-  }
-  if (upper === 'SANITIZER' || upper === 'CLEAN') {
-    return (
-      <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-400 text-[10px] py-0 font-bold">
-        SANITIZER
-      </Badge>
-    )
-  }
-
-  return <InlineFormattedText text={text} />
-}
-
-/**
- * Fenced Code Block with Copy & Syntax Styling
- */
 function CodeBlock({ lang, code }: { lang: string; code: string }) {
   const [copied, setCopied] = useState(false)
 
   async function handleCopy() {
-    await copyText(code)
-    setCopied(true)
-    toast.success('Code copied to clipboard')
-    setTimeout(() => setCopied(false), 2000)
+    const ok = await copyText(code)
+    if (ok) {
+      setCopied(true)
+      toast.success('Code copied to clipboard')
+      window.setTimeout(() => setCopied(false), 2000)
+    } else {
+      toast.error('Copy failed', { description: 'The clipboard is not available here. Select the code and copy it manually.' })
+    }
   }
 
   return (
-    <div className="my-2.5 rounded-xl border border-zinc-800 bg-zinc-950 overflow-hidden shadow-md">
-      {/* Code Header */}
+    <div className="my-2.5 rounded-xl border border-zinc-800 bg-zinc-950 overflow-hidden">
       <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900/90 border-b border-zinc-800 text-[11px]">
         <div className="flex items-center gap-1.5 text-zinc-400">
           <Terminal className="size-3 text-primary" />
-          <span className="font-mono text-zinc-300 font-semibold uppercase">{lang || 'code'}</span>
+          <span className="font-mono text-zinc-300 font-semibold">{lang || 'text'}</span>
         </div>
         <Button
           type="button"
@@ -351,8 +283,6 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
           {copied ? 'Copied' : 'Copy'}
         </Button>
       </div>
-
-      {/* Code Content */}
       <div className="p-3 font-mono text-xs overflow-x-auto leading-relaxed text-zinc-200">
         <pre className="whitespace-pre">{code}</pre>
       </div>
@@ -360,60 +290,73 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
   )
 }
 
-/**
- * Inline text parser for `code`, **bold**, *italic*, and CWE badges
- */
+/** Returns the URL only when it is an absolute http(s) URL. */
+function safeHttpUrl(raw: string): string | null {
+  try {
+    const url = new URL(raw)
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : null
+  } catch {
+    return null
+  }
+}
+
+function ExternalLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2 break-all hover:text-primary/80">
+      {children}
+    </a>
+  )
+}
+
+const INLINE_TOKEN = /(`[^`]+`|\*\*[^*]+\*\*|\[[^\]\n]+\]\([^()\s]+\)|\bhttps?:\/\/[^\s<>()]+|\bCWE-\d+\b)/g
+
+/** Inline formatting for `code`, **bold**, [label](url), bare http(s) URLs and CWE ids. */
 export function InlineFormattedText({ text }: { text: string }) {
   if (!text) return null
 
-  // Regex to split tokens: inline code `...`, bold **...**, CWE badges, and regular text
-  const parts: React.ReactNode[] = []
-  const tokenRegex = /(`[^`]+`|\*\*[^*]+\*\*|\bCWE-\d+\b)/g
-
+  const parts: ReactNode[] = []
   let lastIndex = 0
-  let match: RegExpExecArray | null
-
-  while ((match = tokenRegex.exec(text)) !== null) {
-    // Push preceding text
-    if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index))
-    }
-
+  for (const match of text.matchAll(INLINE_TOKEN)) {
     const token = match[0]
-    if (token.startsWith('`') && token.endsWith('`')) {
-      const code = token.slice(1, -1)
+    const index = match.index ?? 0
+    if (index > lastIndex) parts.push(text.slice(lastIndex, index))
+    lastIndex = index + token.length
+
+    if (token.startsWith('`')) {
       parts.push(
-        <code
-          key={match.index}
-          className="px-1.5 py-0.5 rounded-md bg-zinc-850 border border-zinc-750 font-mono text-[11px] text-emerald-400 font-semibold"
-        >
-          {code}
-        </code>
+        <code key={index} className="px-1.5 py-0.5 rounded-md bg-zinc-900 border border-zinc-700 font-mono text-[11px] text-emerald-400">
+          {token.slice(1, -1)}
+        </code>,
       )
-    } else if (token.startsWith('**') && token.endsWith('**')) {
-      const bold = token.slice(2, -2)
+    } else if (token.startsWith('**')) {
       parts.push(
-        <strong key={match.index} className="font-bold text-zinc-100">
-          {bold}
-        </strong>
+        <strong key={index} className="font-bold text-zinc-100">
+          {token.slice(2, -2)}
+        </strong>,
       )
-    } else if (/^CWE-\d+$/.test(token)) {
+    } else if (token.startsWith('[')) {
+      const split = token.indexOf('](')
+      const label = token.slice(1, split)
+      const href = safeHttpUrl(token.slice(split + 2, -1))
+      parts.push(href ? <ExternalLink key={index} href={href}>{label}</ExternalLink> : token)
+    } else if (token.startsWith('http')) {
+      // Keep trailing sentence punctuation outside the link.
+      const trailing = token.match(/[.,;:!?'"]+$/)?.[0] ?? ''
+      const urlText = trailing ? token.slice(0, -trailing.length) : token
+      const href = safeHttpUrl(urlText)
+      parts.push(href ? <ExternalLink key={index} href={href}>{urlText}</ExternalLink> : urlText)
+      if (trailing) parts.push(trailing)
+    } else {
       parts.push(
         <span
-          key={match.index}
-          className="inline-flex items-center px-1.5 py-0.2 rounded font-mono text-[10px] font-bold bg-primary/10 border border-primary/30 text-primary mx-0.5"
+          key={index}
+          className="inline-flex items-center px-1.5 py-0.5 leading-none rounded font-mono text-[10px] font-semibold bg-primary/10 border border-primary/30 text-primary mx-0.5"
         >
           {token}
-        </span>
+        </span>,
       )
     }
-
-    lastIndex = match.index + token.length
   }
-
-  if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex))
-  }
-
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex))
   return <>{parts}</>
 }

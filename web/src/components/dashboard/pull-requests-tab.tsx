@@ -1,754 +1,308 @@
-import { useState, useEffect } from 'react'
-import {
-  GitPullRequest,
-  GitBranch,
-  ShieldCheck,
-  AlertTriangle,
-  CheckCircle2,
-  XCircle,
-  RefreshCw,
-  Search,
-  ExternalLink,
-  MessageSquare,
-  Sparkles,
-  Play,
-  Clock,
-  Layers,
-  Check,
-  Workflow,
-  ShieldAlert,
-  ChevronRight,
-  GitCommit,
-  User,
-  Shield,
-  Send,
-  Lock,
-} from 'lucide-react'
-import { toast } from 'sonner'
+import { useMemo, useRef, useState } from 'react'
+import { GitBranch, GitCommit, GitPullRequest, RefreshCw, Search } from 'lucide-react'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import {
-  fetchGitHubPulls,
-  fetchPrWorkflows,
-  scanPr,
-  postPrReviewComment,
-  fetchGitHubConfig,
-} from '@/lib/api-client'
-import type { PullRequestItem, WorkflowRunItem, UserRole, GitHubConfig } from '@/types/sentra'
+import { api } from '@/lib/api'
+import { useConsole } from '@/lib/console-context'
+import { useResource } from '@/lib/use-resource'
+import type { GitHubStatusView, PullRequestListView, PullRequestView } from '@/types/api'
+import { minimumRoleFor } from './console-format'
+import { ChecksSummary, SecurityStatusBadge } from './pr-badges'
+import { PrDetailDialog } from './pr-detail-dialog'
+import { PrRepositoryCard } from './pr-repository-card'
+import { shortSha } from './settings-format'
+import { ErrorState, LoadingRows, NoTenantState, TimeAgo } from './settings-kit'
 
-interface PullRequestsTabProps {
-  currentRole: UserRole
-  onNavigateToRemediation: () => void
+type Filter = 'all' | 'attention' | 'not_scanned' | 'drafts'
+
+const FILTERS: { id: Filter; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'attention', label: 'Signals or failed scan' },
+  { id: 'not_scanned', label: 'Not scanned / stale' },
+  { id: 'drafts', label: 'Drafts' },
+]
+
+function matchesFilter(pr: PullRequestView, filter: Filter): boolean {
+  switch (filter) {
+    case 'all':
+      return true
+    case 'attention':
+      return pr.security.status === 'critical' || pr.security.status === 'warnings' || pr.security.status === 'failed'
+    case 'not_scanned':
+      return pr.security.status === 'not_scanned' || pr.security.status === 'stale'
+    case 'drafts':
+      return pr.isDraft
+  }
 }
 
-export function PullRequestsTab({ currentRole, onNavigateToRemediation }: PullRequestsTabProps) {
-  const [pulls, setPulls] = useState<PullRequestItem[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [filterMode, setFilterMode] = useState<'all' | 'critical' | 'clean' | 'draft'>('all')
-  const [ghConfig, setGhConfig] = useState<GitHubConfig | null>(null)
+export function PullRequestsTab() {
+  const { tenant } = useConsole()
+  if (!tenant) return <NoTenantState feature="pull request inspection" />
+  return <PullRequestsView key={tenant.tenantId} tenantId={tenant.tenantId} />
+}
 
-  // Selected PR Details Dialog State
-  const [selectedPr, setSelectedPr] = useState<PullRequestItem | null>(null)
-  const [workflows, setWorkflows] = useState<WorkflowRunItem[]>([])
-  const [isLoadingWorkflows, setIsLoadingWorkflows] = useState(false)
-  const [isScanningPr, setIsScanningPr] = useState(false)
-  const [isPostingComment, setIsPostingComment] = useState(false)
-  const [commentStatusOption, setCommentStatusOption] = useState<'success' | 'failure'>('success')
+function PullRequestsView({ tenantId }: { tenantId: string }) {
+  const { tenant } = useConsole()
+  const status = useResource(`gh-status:${tenantId}`, (signal) => api.github.status(tenantId, signal))
+  const repository = status.data?.repository ?? null
+  const canListPulls = !!status.data?.credential.source && !!repository
+  // Set by the Refresh button so the next pull-request request bypasses the bridge's short-lived cache.
+  const bypassCacheRef = useRef(false)
+  const pulls = useResource(
+    canListPulls && repository ? `gh-pulls:${tenantId}:${repository.owner}/${repository.repo}` : null,
+    async (signal) => {
+      const refresh = bypassCacheRef.current
+      try {
+        return await api.github.pulls(tenantId, signal, refresh)
+      } finally {
+        // An aborted request is superseded by a new one, which still carries the refresh request.
+        if (!signal.aborted) bypassCacheRef.current = false
+      }
+    },
+  )
 
-  useEffect(() => {
-    loadData()
-  }, [])
-
-  async function loadData() {
-    setIsLoading(true)
-    try {
-      const [configData, pullsData] = await Promise.all([
-        fetchGitHubConfig(),
-        fetchGitHubPulls(),
-      ])
-      setGhConfig(configData)
-      setPulls(pullsData.pulls || [])
-    } finally {
-      setIsLoading(false)
+  function refresh() {
+    status.reload()
+    if (canListPulls) {
+      bypassCacheRef.current = true
+      pulls.reload()
     }
   }
 
-  async function handleSelectPr(pr: PullRequestItem) {
-    setSelectedPr(pr)
-    setCommentStatusOption(pr.securityStatus === 'critical' ? 'failure' : 'success')
-    setIsLoadingWorkflows(true)
-    try {
-      const data = await fetchPrWorkflows(pr.number)
-      setWorkflows(data.workflows || [])
-    } finally {
-      setIsLoadingWorkflows(false)
-    }
-  }
-
-  async function handleScanCurrentPr() {
-    if (!selectedPr) return
-    setIsScanningPr(true)
-    try {
-      const res = await scanPr(selectedPr.number)
-      toast.success(`Security Scan Complete for PR #${selectedPr.number}`, {
-        description: `Status: ${res.securityStatus.toUpperCase()}. Found ${res.findingsCount} signals (${res.criticalCount} critical).`,
-      })
-      // Update local state
-      setPulls((prev) =>
-        prev.map((p) =>
-          p.number === selectedPr.number
-            ? {
-                ...p,
-                securityStatus: res.securityStatus as any,
-                findingsCount: res.findingsCount,
-                criticalCount: res.criticalCount,
-              }
-            : p
-        )
-      )
-      setSelectedPr((prev) =>
-        prev
-          ? {
-              ...prev,
-              securityStatus: res.securityStatus as any,
-              findingsCount: res.findingsCount,
-              criticalCount: res.criticalCount,
-            }
-          : null
-      )
-    } catch (err: any) {
-      toast.error('PR Security Scan Failed', { description: err.message })
-    } finally {
-      setIsScanningPr(false)
-    }
-  }
-
-  async function handlePostReviewComment() {
-    if (!selectedPr) return
-    setIsPostingComment(true)
-    try {
-      const bodyText = `### 🛡️ Sentra Continuous Security Verification\n\n` +
-        `**PR #${selectedPr.number}:** \`${selectedPr.title}\`\n\n` +
-        `| Metric | Audit Result |\n` +
-        `| :--- | :--- |\n` +
-        `| **Security Posture** | ${selectedPr.securityStatus === 'clean' ? '✅ Clean / Verified' : '❌ Critical Vulnerability Detected'} |\n` +
-        `| **Verified Findings** | **${selectedPr.findingsCount}** signals (${selectedPr.criticalCount} critical) |\n` +
-        `| **Three-Tier Invariants** | Evaluated under pure-Rust isolated oracle bounds (#![forbid(unsafe_code)]) |\n` +
-        `| **Commit Status Gate** | **${commentStatusOption.toUpperCase()}** |\n\n` +
-        (selectedPr.securityStatus === 'critical'
-          ? `> ⚠️ **Merge Gate Block:** This PR contains unmitigated critical security findings (e.g. untrusted context injection or unparameterized sink). Remediation required before merge.`
-          : `> 🛡️ **Security Verified:** All static invariants and taint paths are sound. No regression signals detected.`)
-
-      await postPrReviewComment(selectedPr.number, {
-        body: bodyText,
-        commitStatus: commentStatusOption,
-        statusDescription:
-          selectedPr.securityStatus === 'clean'
-            ? 'Sentra Security Gate: 0 vulnerabilities found'
-            : `Sentra Security Gate: ${selectedPr.criticalCount} critical blocker(s)`,
-      })
-
-      toast.success(`Security Review Posted to PR #${selectedPr.number}`, {
-        description: `GitHub commit status set to: ${commentStatusOption.toUpperCase()}`,
-      })
-    } catch (err: any) {
-      toast.error('Failed to Post Review', { description: err.message })
-    } finally {
-      setIsPostingComment(false)
-    }
-  }
-
-  // Filtered PR list
-  const filteredPulls = pulls.filter((pr) => {
-    const matchesSearch =
-      pr.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      pr.author.login.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      pr.headRef.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      String(pr.number).includes(searchQuery)
-
-    if (!matchesSearch) return false
-
-    if (filterMode === 'critical') return pr.securityStatus === 'critical'
-    if (filterMode === 'clean') return pr.securityStatus === 'clean'
-    if (filterMode === 'draft') return pr.isDraft || pr.isSentraRemediation
-    return true
-  })
+  if (!tenant) return null
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/40">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2 flex-wrap">
             <GitPullRequest className="size-5 text-primary" />
-            <h2 className="text-base sm:text-lg font-bold tracking-tight text-foreground">
-              Pull Requests &amp; CI Workflow Inspector
-            </h2>
-            <Badge variant="outline" className="text-xs font-mono border-primary/30 text-primary bg-primary/5">
-              {pulls.length} Open PRs
-            </Badge>
-            {ghConfig && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-muted-foreground font-mono">
-                  Repository: <span className="text-foreground font-medium">{ghConfig.owner}/{ghConfig.repo}</span>
-                </span>
-                {ghConfig.authMethod === 'gh_cli' ? (
-                  <Badge variant="outline" className="text-[10px] font-mono border-emerald-500/30 text-emerald-400 bg-emerald-500/10 flex items-center gap-1">
-                    <CheckCircle2 className="size-2.5" />
-                    CLI Active (@{ghConfig.ghUser || 'detected'})
-                  </Badge>
-                ) : ghConfig.isConfigured ? (
-                  <Badge variant="outline" className="text-[10px] font-mono border-blue-500/30 text-blue-400 bg-blue-500/10">
-                    PAT Token
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="text-[10px] font-mono border-amber-500/30 text-amber-400 bg-amber-500/10">
-                    Local Sandbox
-                  </Badge>
-                )}
-              </div>
+            <h2 className="text-base sm:text-lg font-bold tracking-tight text-foreground">Pull Requests</h2>
+            {pulls.data && (
+              <Badge variant="outline" className="text-xs font-mono border-primary/30 text-primary bg-primary/5">
+                {pulls.data.pulls.length} open
+              </Badge>
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            Continuous AppSec triage, automated security gates, live CI workflow run inspection, and one-click remediation dispatch.
+            Open pull requests of the GitHub repository linked to this workspace, their GitHub checks and workflow runs, and Sentra scans of the
+            files they change.
           </p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={loadData}
-            disabled={isLoading}
-            className="h-8 text-xs border-border/60 gap-1.5"
-          >
-            <RefreshCw className={`size-3 ${isLoading ? 'animate-spin text-primary' : ''}`} />
-            <span>Sync GitHub</span>
-          </Button>
-
-          <Button
-            size="sm"
-            onClick={onNavigateToRemediation}
-            className="h-8 text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5"
-          >
-            <Sparkles className="size-3" />
-            <span>Remediation Catalog</span>
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" onClick={refresh} disabled={status.loading || pulls.loading} className="h-8 text-xs gap-1.5 self-start sm:self-auto">
+          <RefreshCw className={`size-3 ${status.loading || pulls.loading ? 'animate-spin text-primary' : ''}`} />
+          Refresh
+        </Button>
       </div>
 
-      {/* Ribbon Stats & Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-        <div className="p-3 rounded-lg border border-border/60 bg-card/40 flex items-center justify-between">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] uppercase font-semibold text-muted-foreground">Total Open PRs</span>
-            <span className="text-lg font-bold font-mono text-foreground">{pulls.length}</span>
-          </div>
-          <GitPullRequest className="size-5 text-muted-foreground" />
-        </div>
+      {status.error ? (
+        <ErrorState title="Could not read the GitHub configuration" error={status.error} onRetry={status.reload} />
+      ) : !status.data ? (
+        <LoadingRows rows={1} className="h-24" />
+      ) : (
+        <PrRepositoryCard tenant={tenant} status={status.data} onStatusChange={(next) => status.setData(next)} />
+      )}
 
-        <div className="p-3 rounded-lg border border-rose-500/30 bg-rose-500/5 flex items-center justify-between">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] uppercase font-semibold text-rose-400">At-Risk PRs</span>
-            <span className="text-lg font-bold font-mono text-rose-400">
-              {pulls.filter((p) => p.securityStatus === 'critical').length}
-            </span>
-          </div>
-          <ShieldAlert className="size-5 text-rose-400" />
-        </div>
+      {status.data && <PullRequestList tenantId={tenantId} status={status.data} pulls={pulls} />}
+    </div>
+  )
+}
 
-        <div className="p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 flex items-center justify-between">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] uppercase font-semibold text-emerald-400">Verified Clean PRs</span>
-            <span className="text-lg font-bold font-mono text-emerald-400">
-              {pulls.filter((p) => p.securityStatus === 'clean').length}
-            </span>
-          </div>
-          <ShieldCheck className="size-5 text-emerald-400" />
-        </div>
+function PullRequestList({
+  tenantId,
+  status,
+  pulls,
+}: {
+  tenantId: string
+  status: GitHubStatusView
+  pulls: { data: PullRequestListView | undefined; error: unknown; reload: () => void }
+}) {
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState<Filter>('all')
+  const [selectedNumber, setSelectedNumber] = useState<number | null>(null)
 
-        <div className="p-3 rounded-lg border border-primary/30 bg-primary/5 flex items-center justify-between">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] uppercase font-semibold text-primary">Sentra Verified Drafts</span>
-            <span className="text-lg font-bold font-mono text-primary">
-              {pulls.filter((p) => p.isSentraRemediation).length}
-            </span>
-          </div>
-          <Sparkles className="size-5 text-primary" />
-        </div>
+  const list = useMemo(() => pulls.data?.pulls ?? [], [pulls.data])
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    return list.filter((pr) => {
+      if (!matchesFilter(pr, filter)) return false
+      if (!needle) return true
+      return (
+        pr.title.toLowerCase().includes(needle) ||
+        pr.author.login.toLowerCase().includes(needle) ||
+        pr.headRef.toLowerCase().includes(needle) ||
+        String(pr.number).includes(needle)
+      )
+    })
+  }, [list, query, filter])
+
+  if (!status.credential.source) {
+    return (
+      <EmptyCard
+        title="GitHub is not configured"
+        body="Pull requests cannot be listed until the bridge has a GitHub credential. See the options above."
+      />
+    )
+  }
+  if (!status.repository) {
+    return (
+      <EmptyCard
+        title="No repository linked to this workspace"
+        body={`Someone with the ${minimumRoleFor('settings:write')} role can set owner/repository above, or add a GitHub origin remote to the workspace.`}
+      />
+    )
+  }
+  if (pulls.error) return <ErrorState title="Could not list pull requests" error={pulls.error} onRetry={pulls.reload} />
+  if (!pulls.data) return <LoadingRows rows={4} className="h-20" />
+
+  const repository = pulls.data.repository
+  const repoName = `${repository.owner}/${repository.repo}`
+  const selected = selectedNumber === null ? null : (list.find((pr) => pr.number === selectedNumber) ?? null)
+  const scannedCurrent = list.filter((pr) => !['not_scanned', 'stale'].includes(pr.security.status)).length
+  const critical = list.filter((pr) => pr.security.status === 'critical').length
+
+  return (
+    <>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Stat label="Open pull requests" value={list.length} />
+        <Stat label="Scanned at current head" value={scannedCurrent} />
+        <Stat label="Not scanned / stale" value={list.length - scannedCurrent} />
+        <Stat label="With critical signals" value={critical} tone={critical > 0 ? 'text-rose-400' : undefined} />
       </div>
 
-      {/* Search & Filter Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
           <Input
-            placeholder="Search PR by title, branch, or author..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by title, branch, author or number"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
             className="pl-8 h-8 text-xs bg-card/60 border-border/60"
           />
         </div>
-
-        <div className="flex items-center gap-1.5 bg-card/60 p-1 rounded-md border border-border/60 text-xs">
-          {[
-            { id: 'all', label: 'All PRs' },
-            { id: 'critical', label: 'Critical Only' },
-            { id: 'clean', label: 'Clean' },
-            { id: 'draft', label: 'Sentra Drafts' },
-          ].map((m) => (
+        <div className="flex items-center gap-1 bg-card/60 p-1 rounded-md border border-border/60 text-xs flex-wrap">
+          {FILTERS.map((option) => (
             <button
-              key={m.id}
+              key={option.id}
               type="button"
-              onClick={() => setFilterMode(m.id as any)}
+              onClick={() => setFilter(option.id)}
               className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
-                filterMode === m.id
-                  ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
+                filter === option.id ? 'bg-primary text-primary-foreground font-semibold' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              {m.label}
+              {option.label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* PR Cards List */}
-      <div className="flex flex-col gap-3">
-        {filteredPulls.length === 0 ? (
-          <Card className="border-border/60 bg-card/40">
-            <CardContent className="p-8 text-center flex flex-col items-center justify-center gap-2">
-              <GitPullRequest className="size-8 text-muted-foreground" />
-              <div className="text-sm font-semibold text-foreground">No Pull Requests Matching Filter</div>
-              <div className="text-xs text-muted-foreground">
-                Try clearing the search query or clicking "Sync GitHub" above to refresh.
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          filteredPulls.map((pr) => {
-            const isCritical = pr.securityStatus === 'critical'
-            const isClean = pr.securityStatus === 'clean'
-
-            return (
-              <Card
-                key={pr.number}
-                className="border-border/60 bg-card/40 hover:bg-card/70 transition-colors shadow-xs cursor-pointer group"
-                onClick={() => handleSelectPr(pr)}
-              >
-                <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  {/* Left: Identity & Title */}
-                  <div className="flex flex-col gap-1.5 min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-xs font-bold text-foreground">
-                        #{pr.number}
-                      </span>
-                      {pr.isSentraRemediation && (
-                        <Badge variant="outline" className="text-[10px] font-mono border-primary/40 text-primary bg-primary/10 flex items-center gap-1">
-                          <Sparkles className="size-2.5" />
-                          Sentra Verified Fix
-                        </Badge>
-                      )}
-                      {pr.isDraft && !pr.isSentraRemediation && (
-                        <Badge variant="outline" className="text-[10px] font-mono border-muted text-muted-foreground">
-                          Draft
-                        </Badge>
-                      )}
-                      <div className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground bg-muted/30 px-2 py-0.5 rounded border border-border/40 truncate max-w-[260px] sm:max-w-none">
-                        <GitBranch className="size-3 shrink-0" />
-                        <span className="truncate">{pr.headRef}</span>
-                        <span>→</span>
-                        <span>{pr.baseRef}</span>
-                      </div>
-                    </div>
-
-                    <div className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
-                      {pr.title}
-                    </div>
-
-                    <div className="flex items-center gap-3 text-[11px] text-muted-foreground flex-wrap">
-                      <span className="flex items-center gap-1">
-                        <User className="size-3" />
-                        @{pr.author.login}
-                      </span>
-                      <span>•</span>
-                      <span>{pr.filesCount} changed files (+{pr.additions} / -{pr.deletions})</span>
-                      <span>•</span>
-                      <span>Updated {new Date(pr.updatedAt).toLocaleTimeString()}</span>
-                    </div>
-                  </div>
-
-                  {/* Right: Security Status & Workflow Summary */}
-                  <div className="flex items-center gap-3 shrink-0 flex-wrap sm:flex-nowrap justify-between sm:justify-end">
-                    {/* Security Badge */}
-                    <div className="flex flex-col items-start sm:items-end gap-1">
-                      {isCritical ? (
-                        <Badge className="bg-rose-500/15 text-rose-400 border-rose-500/30 text-xs px-2 py-0.5 flex items-center gap-1">
-                          <AlertTriangle className="size-3" />
-                          {pr.criticalCount} Critical Signal(s)
-                        </Badge>
-                      ) : isClean ? (
-                        <Badge variant="outline" className="text-emerald-400 border-emerald-500/30 bg-emerald-500/5 text-xs px-2 py-0.5 flex items-center gap-1">
-                          <CheckCircle2 className="size-3" />
-                          Security Clean
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-amber-400 border-amber-500/30 bg-amber-500/5 text-xs px-2 py-0.5 flex items-center gap-1">
-                          <Clock className="size-3" />
-                          Audit Pending
-                        </Badge>
-                      )}
-
-                      {/* CI Workflow Indicator */}
-                      <span className="text-[10px] text-muted-foreground font-mono flex items-center gap-1">
-                        <Workflow className="size-3" />
-                        {pr.workflowStats.successful}/{pr.workflowStats.total} Workflows Passing
-                      </span>
-                    </div>
-
-                    {/* Action Button */}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 text-xs text-muted-foreground group-hover:text-foreground gap-1"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleSelectPr(pr)
-                      }}
-                    >
-                      <span>Inspect</span>
-                      <ChevronRight className="size-3.5" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })
-        )}
+      <div className="text-[11px] text-muted-foreground">
+        {repoName} · fetched <TimeAgo iso={pulls.data.fetchedAt} />
       </div>
 
-      {/* Selected PR Detail & CI Workflow Inspector Dialog */}
-      <Dialog open={!!selectedPr} onOpenChange={(open) => !open && setSelectedPr(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden bg-background/95 border-border/80 text-foreground shadow-2xl backdrop-blur-md">
-          {selectedPr && (
-            <>
-              {/* Sticky Dialog Header */}
-              <DialogHeader className="px-5 py-3.5 border-b border-border/60 bg-card/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pr-12">
-                <div className="flex flex-col gap-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono text-sm font-bold text-primary">PR #{selectedPr.number}</span>
-                    <Badge variant="outline" className="text-xs font-mono">
-                      {selectedPr.headRef} → {selectedPr.baseRef}
-                    </Badge>
-                    {selectedPr.securityStatus === 'critical' ? (
-                      <Badge className="bg-rose-500/15 text-rose-400 border-rose-500/30 text-[10px] px-1.5 py-0">
-                        Blocker: Security Gate Failure
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-emerald-400 border-emerald-500/30 text-[10px] px-1.5 py-0">
-                        Passed: Invariant Verified
-                      </Badge>
-                    )}
-                  </div>
-                  <DialogTitle className="text-sm font-bold text-foreground">
-                    {selectedPr.title}
-                  </DialogTitle>
-                </div>
+      {list.length === 0 ? (
+        <EmptyCard title={`No open pull requests in ${repoName}`} body="GitHub reported no open pull requests for this repository." />
+      ) : filtered.length === 0 ? (
+        <EmptyCard title="No pull requests match" body="No open pull request matches the current search and filter." />
+      ) : (
+        <div className="flex flex-col gap-2.5">
+          {filtered.map((pr) => (
+            <PullRequestRow key={pr.number} pr={pr} onOpen={() => setSelectedNumber(pr.number)} />
+          ))}
+        </div>
+      )}
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <a
-                    href={selectedPr.htmlUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground underline decoration-muted"
-                  >
-                    <span>View on GitHub</span>
-                    <ExternalLink className="size-3" />
-                  </a>
-                </div>
-              </DialogHeader>
+      {selected && (
+        <PrDetailDialog
+          tenantId={tenantId}
+          repository={repository}
+          pr={selected}
+          viewerLogin={status.viewer?.login ?? null}
+          onClose={() => setSelectedNumber(null)}
+        />
+      )}
+    </>
+  )
+}
 
-              {/* Tabs Content Area */}
-              <ScrollArea className="flex-1 overflow-y-auto">
-                <div className="p-5 flex flex-col gap-4">
-                  <Tabs defaultValue="workflows" className="w-full">
-                    <TabsList className="bg-card/60 border border-border/60 p-1 w-full sm:w-auto grid grid-cols-3">
-                      <TabsTrigger value="workflows" className="text-xs gap-1.5">
-                        <Workflow className="size-3.5" />
-                        <span>Workflows &amp; CI Runs ({workflows.length})</span>
-                      </TabsTrigger>
-                      <TabsTrigger value="security" className="text-xs gap-1.5">
-                        <Shield className="size-3.5" />
-                        <span>Security Signals ({selectedPr.findingsCount})</span>
-                      </TabsTrigger>
-                      <TabsTrigger value="review" className="text-xs gap-1.5">
-                        <Send className="size-3.5" />
-                        <span>Security Gate &amp; Bot Review</span>
-                      </TabsTrigger>
-                    </TabsList>
-
-                    {/* Tab 1: Workflows & Runner Status */}
-                    <TabsContent value="workflows" className="pt-3 flex flex-col gap-3">
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>GitHub Actions CI/CD workflows and automated checks executed on this PR branch:</span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleSelectPr(selectedPr)}
-                          disabled={isLoadingWorkflows}
-                          className="h-6 text-[11px] px-2 border-border/60 gap-1"
-                        >
-                          <RefreshCw className={`size-2.5 ${isLoadingWorkflows ? 'animate-spin' : ''}`} />
-                          <span>Refresh Workflows</span>
-                        </Button>
-                      </div>
-
-                      {isLoadingWorkflows ? (
-                        <div className="p-8 text-center text-xs text-muted-foreground">
-                          Querying GitHub Actions runs...
-                        </div>
-                      ) : workflows.length === 0 ? (
-                        <div className="p-8 text-center text-xs text-muted-foreground border border-border/40 rounded-lg">
-                          No workflow runs recorded yet for commit <code className="font-mono">{selectedPr.headSha.slice(0, 7)}</code>.
-                        </div>
-                      ) : (
-                        <div className="flex flex-col gap-3">
-                          {workflows.map((wf) => {
-                            const isSuccess = wf.conclusion === 'success'
-                            const isFailure = wf.conclusion === 'failure'
-
-                            return (
-                              <Card key={wf.id} className="border-border/60 bg-card/40">
-                                <CardHeader className="py-2.5 px-4 border-b border-border/40 bg-card/60">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                      {isSuccess ? (
-                                        <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
-                                      ) : isFailure ? (
-                                        <XCircle className="size-4 text-rose-500 shrink-0" />
-                                      ) : (
-                                        <Clock className="size-4 text-amber-400 shrink-0 animate-spin" />
-                                      )}
-                                      <div className="flex flex-col">
-                                        <span className="text-xs font-bold text-foreground">
-                                          {wf.name}
-                                        </span>
-                                        <span className="text-[10px] text-muted-foreground font-mono">
-                                          {wf.workflowName} • Event: {wf.event}
-                                        </span>
-                                      </div>
-                                    </div>
-
-                                    <div className="flex items-center gap-2">
-                                      <Badge
-                                        variant="outline"
-                                        className={`text-[10px] font-mono ${
-                                          isSuccess
-                                            ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/5'
-                                            : isFailure
-                                            ? 'text-rose-400 border-rose-500/30 bg-rose-500/5'
-                                            : 'text-amber-400 border-amber-500/30'
-                                        }`}
-                                      >
-                                        {wf.conclusion || wf.status}
-                                      </Badge>
-                                      <a
-                                        href={wf.htmlUrl}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="text-muted-foreground hover:text-foreground"
-                                        title="View workflow run on GitHub"
-                                      >
-                                        <ExternalLink className="size-3.5" />
-                                      </a>
-                                    </div>
-                                  </div>
-                                </CardHeader>
-
-                                <CardContent className="p-3 flex flex-col gap-2">
-                                  {wf.jobs.map((job) => (
-                                    <div
-                                      key={job.id}
-                                      className="p-2.5 rounded bg-background/50 border border-border/40 flex flex-col gap-2"
-                                    >
-                                      <div className="flex items-center justify-between text-xs font-semibold text-foreground">
-                                        <span>Job: {job.name}</span>
-                                        <span className="text-[10px] text-muted-foreground font-mono">
-                                          Status: {job.status}
-                                        </span>
-                                      </div>
-
-                                      <div className="flex flex-col gap-1 pl-2 border-l-2 border-border/60">
-                                        {job.steps.map((st, sIdx) => (
-                                          <div
-                                            key={sIdx}
-                                            className="flex items-center justify-between text-[11px] font-mono text-muted-foreground"
-                                          >
-                                            <div className="flex items-center gap-1.5">
-                                              {st.conclusion === 'success' ? (
-                                                <Check className="size-3 text-emerald-400" />
-                                              ) : st.conclusion === 'failure' ? (
-                                                <XCircle className="size-3 text-rose-500" />
-                                              ) : (
-                                                <span className="size-2 rounded-full bg-zinc-600" />
-                                              )}
-                                              <span className={st.conclusion === 'failure' ? 'text-rose-400 font-semibold' : ''}>
-                                                {st.name}
-                                              </span>
-                                            </div>
-                                            {st.duration && (
-                                              <span className="text-[10px] text-muted-foreground">{st.duration}</span>
-                                            )}
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </CardContent>
-                              </Card>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </TabsContent>
-
-                    {/* Tab 2: Security Signals & Live Scan */}
-                    <TabsContent value="security" className="pt-3 flex flex-col gap-3">
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>AppSec vulnerabilities and supply-chain findings detected on this PR:</span>
-                        <Button
-                          size="sm"
-                          onClick={handleScanCurrentPr}
-                          disabled={isScanningPr || currentRole === 'Viewer'}
-                          className="h-7 text-xs bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5"
-                        >
-                          <Play className={`size-3 ${isScanningPr ? 'animate-spin' : ''}`} />
-                          <span>{isScanningPr ? 'Scanning PR...' : 'Run Security Scan Now'}</span>
-                        </Button>
-                      </div>
-
-                      {selectedPr.securityStatus === 'clean' ? (
-                        <div className="p-6 rounded-lg border border-emerald-500/30 bg-emerald-500/5 flex flex-col items-center justify-center gap-2 text-center">
-                          <CheckCircle2 className="size-8 text-emerald-400" />
-                          <div className="text-xs font-bold text-foreground">Clean PR — Zero Vulnerabilities Detected</div>
-                          <div className="text-[11px] text-muted-foreground max-w-md">
-                            All pure-Rust static analysis checks, taint sources, and dependency lockfile advisories verified sound.
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="p-4 rounded-lg border border-rose-500/30 bg-rose-500/5 flex flex-col gap-3">
-                          <div className="flex items-center gap-2 text-rose-400 font-bold text-xs">
-                            <AlertTriangle className="size-4" />
-                            <span>Security Gate Triggered: {selectedPr.findingsCount} Potential Risks Detected</span>
-                          </div>
-
-                          <div className="text-xs text-foreground/90 leading-relaxed font-mono bg-background/60 p-3 rounded border border-border/40">
-                            {selectedPr.number === 39 ? (
-                              <div>
-                                <span className="text-rose-400 font-bold">[SENTRA-CI-001] Untrusted Context Injection in CI Workflow</span>
-                                <div className="text-muted-foreground mt-1 text-[11px]">
-                                  Location: <code className="text-primary">.github/workflows/labeler.yml:14</code>
-                                  <br />
-                                  Vulnerability: Attacker-controlled issue/PR title interpolated directly into inline shell script in GitHub Actions runner, permitting remote command execution.
-                                </div>
-                              </div>
-                            ) : (
-                              <div>
-                                <span className="text-rose-400 font-bold">[CWE-89] SQL Injection in Dynamic Query Sink</span>
-                                <div className="text-muted-foreground mt-1 text-[11px]">
-                                  Location: <code className="text-primary">apps/auth/session.rs:42</code>
-                                  <br />
-                                  Vulnerability: Unescaped string formatting escapes query parser boundary. Parameterization required.
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="flex items-center justify-end">
-                            <Button
-                              size="sm"
-                              onClick={onNavigateToRemediation}
-                              className="h-7 text-xs bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5"
-                            >
-                              <Sparkles className="size-3" />
-                              <span>Synthesize Verified AI Patch</span>
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </TabsContent>
-
-                    {/* Tab 3: Security Gate & Automated Bot Review */}
-                    <TabsContent value="review" className="pt-3 flex flex-col gap-3">
-                      <div className="p-4 rounded-lg border border-border/60 bg-card/40 flex flex-col gap-3">
-                        <div className="flex flex-col gap-1">
-                          <span className="text-xs font-bold text-foreground">
-                            Enforce Continuous Security Gate via GitHub Status &amp; Comments
-                          </span>
-                          <span className="text-[11px] text-muted-foreground">
-                            Post Sentra's verified mathematical invariant audit report directly into the GitHub PR conversation and configure branch protection commit status.
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-3 pt-2">
-                          <span className="text-xs font-semibold text-foreground">Set Commit Status Gate:</span>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant={commentStatusOption === 'success' ? 'default' : 'outline'}
-                              onClick={() => setCommentStatusOption('success')}
-                              className="h-7 text-xs gap-1"
-                            >
-                              <CheckCircle2 className="size-3 text-emerald-400" />
-                              <span>Pass (Success)</span>
-                            </Button>
-
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant={commentStatusOption === 'failure' ? 'destructive' : 'outline'}
-                              onClick={() => setCommentStatusOption('failure')}
-                              className="h-7 text-xs gap-1"
-                            >
-                              <XCircle className="size-3" />
-                              <span>Block Merge (Failure)</span>
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="pt-2 flex justify-end">
-                          <Button
-                            size="sm"
-                            onClick={handlePostReviewComment}
-                            disabled={isPostingComment || currentRole === 'Viewer'}
-                            className="h-8 text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5"
-                          >
-                            <Send className={`size-3 ${isPostingComment ? 'animate-spin' : ''}`} />
-                            <span>{isPostingComment ? 'Posting to GitHub...' : 'Post Security Review to PR'}</span>
-                          </Button>
-                        </div>
-                      </div>
-                    </TabsContent>
-                  </Tabs>
-                </div>
-              </ScrollArea>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+function Stat({ label, value, tone }: { label: string; value: number; tone?: string }) {
+  return (
+    <div className="p-3 rounded-lg border border-border/60 bg-card/40 flex flex-col gap-0.5">
+      <span className="text-[10px] uppercase font-semibold text-muted-foreground">{label}</span>
+      <span className={`text-lg font-bold font-mono ${tone ?? 'text-foreground'}`}>{value}</span>
     </div>
+  )
+}
+
+function EmptyCard({ title, body }: { title: string; body: string }) {
+  return (
+    <Card className="border-border/60 bg-card/40">
+      <CardContent className="p-8 text-center flex flex-col items-center gap-2">
+        <GitPullRequest className="size-7 text-muted-foreground" />
+        <div className="text-sm font-semibold text-foreground">{title}</div>
+        <div className="text-xs text-muted-foreground max-w-md">{body}</div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function PullRequestRow({ pr, onOpen }: { pr: PullRequestView; onOpen: () => void }) {
+  return (
+    <Card className="border-border/60 bg-card/40 hover:bg-card/70 transition-colors">
+      <CardContent className="p-0">
+        <button type="button" onClick={onOpen} className="w-full text-left p-3.5 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="flex items-start gap-3 min-w-0 flex-1">
+            <Avatar size="sm" className="mt-0.5">
+              {pr.author.avatarUrl && <AvatarImage src={pr.author.avatarUrl} alt="" />}
+              <AvatarFallback className="text-[10px]">{pr.author.login.slice(0, 2).toUpperCase()}</AvatarFallback>
+            </Avatar>
+            <div className="flex flex-col gap-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-mono text-xs font-bold text-foreground">#{pr.number}</span>
+                <span className="text-sm font-semibold text-foreground break-words">{pr.title}</span>
+                {pr.isDraft && (
+                  <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                    Draft
+                  </Badge>
+                )}
+                {pr.isSentraBranch && (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] font-mono border-primary/30 text-primary"
+                    title="The head branch name starts with sentra/, the prefix Sentra uses for candidate patch branches. The name alone says nothing about who wrote the change, and nothing in it is verified."
+                  >
+                    sentra branch
+                  </Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground flex-wrap">
+                <span className="font-mono">@{pr.author.login}</span>
+                <span className="inline-flex items-center gap-1 font-mono min-w-0">
+                  <GitBranch className="size-3 shrink-0" />
+                  <span className="truncate max-w-[220px]">{pr.headRef}</span> → {pr.baseRef}
+                </span>
+                <span className="inline-flex items-center gap-1 font-mono">
+                  <GitCommit className="size-3" />
+                  {shortSha(pr.headSha)}
+                </span>
+                <span>
+                  {pr.filesCount} files · <span className="text-emerald-400">+{pr.additions}</span> / <span className="text-rose-400">-{pr.deletions}</span>
+                </span>
+                <span>
+                  updated <TimeAgo iso={pr.updatedAt} />
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-col items-start lg:items-end gap-1 shrink-0 pl-9 lg:pl-0">
+            <SecurityStatusBadge security={pr.security} />
+            <ChecksSummary checks={pr.checks} />
+          </div>
+        </button>
+      </CardContent>
+    </Card>
   )
 }

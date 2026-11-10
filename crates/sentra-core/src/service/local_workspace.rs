@@ -1,17 +1,29 @@
 //! Local project initialization/inspection. No terminal, target content or execution.
 
-use std::{fmt, fs, path::Path, sync::Arc};
+use std::{
+    fmt, fs,
+    io::Read,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use crate::{
     Clock, CostUsd, EventId, FailClosedBackend, Finding, OperatingMode, PolicyEngine,
     SecurityClassification, SessionId, SessionState, SystemClock, TaskId, TimestampUtc,
     advisory::{
-        AdvisoryAuditResult, AdvisoryDatabase, discover_workspace_lockfiles, parse_cargo_lock,
-        parse_lockfile_content,
+        AdvisoryAuditResult, AdvisoryDatabase, InventoryLimits, MAX_INVENTORY_DEPTH,
+        WorkspaceInventory, collect_lockfile_inventory, discover_workspace_lockfiles,
+        parse_cargo_lock, parse_lockfile_content,
     },
-    diff::{SnapshotDiff, compare_snapshots},
+    diff::{
+        DiffError, DiffErrorKind, MAX_PATCH_BYTES, PatchFileResult, PatchPlan, PatchRollbackResult,
+        RollbackPlan, SnapshotDiff, UnifiedPatch, compare_snapshots,
+    },
     manifest::{SnapshotLimits, capture_source_snapshot},
-    persistence::{PersistenceError, PersistenceRepository, SqliteConnectionManager, TaskState},
+    persistence::{
+        OperatorEventKind, PersistenceError, PersistenceErrorKind, PersistenceRepository,
+        SessionAdmission, SqliteConnectionManager, TaskState,
+    },
     sast::{SastReport, SastScanner},
     workspace::WorkspaceBoundary,
 };
@@ -36,6 +48,19 @@ pub enum LocalWorkspaceErrorKind {
     SessionNotFound,
     /// Core service creation or inspection failed; inspect its typed source.
     Service,
+    /// A request parameter is outside its documented range.
+    InvalidRequest,
+    /// The patch file is unreadable, too large, malformed, multi-file or binary.
+    InvalidPatch,
+    /// The patch is well formed but its hunks do not match the target content.
+    PatchDoesNotApply,
+    /// The patch/rollback target is missing, outside the workspace, reached through
+    /// a link or junction, not an ordinary file, too large or not UTF-8 text.
+    PatchTarget,
+    /// The rollback backup is missing, unreadable, too large or not an ordinary file.
+    PatchBackup,
+    /// A filesystem write (backup or target) failed.
+    Io,
 }
 
 /// Typed, redacted lifecycle error, including a distinct shutdown failure when
@@ -156,6 +181,33 @@ pub struct LocalScanReport {
     pub sast_report: SastReport,
     /// Authoritative candidate findings.
     pub candidate_findings: Vec<Finding>,
+}
+
+/// Read-only lockfile inventory of a validated workspace.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LocalInventoryReport {
+    /// Canonical workspace root that was walked.
+    pub workspace_root: PathBuf,
+    /// Discovered lockfiles and their parsed packages.
+    pub inventory: WorkspaceInventory,
+}
+
+/// Outcome of `patch apply`, including whether a core audit event was committed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LocalPatchReport {
+    /// File-level result (dry-run or applied).
+    pub result: PatchFileResult,
+    /// True only when a `PatchApplied` event was committed to the local store.
+    pub audit_recorded: bool,
+}
+
+/// Outcome of `patch rollback`, including whether a core audit event was committed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LocalRollbackReport {
+    /// File-level result.
+    pub result: PatchRollbackResult,
+    /// True only when a `PatchRolledBack` event was committed to the local store.
+    pub audit_recorded: bool,
 }
 
 /// Persistent organization or tenant record.
@@ -711,9 +763,11 @@ impl LocalWorkspace {
     }
 
     /// Scans a source code snippet directly in-memory without creating files on disk.
+    /// `file_name` selects the language rule families by extension and becomes the
+    /// `file_path` of every match; without it the snippet is labeled `snippet.ts`.
     pub fn scan_snippet(snippet: &str, file_name: Option<&str>) -> SastReport {
         let scanner = SastScanner::new();
-        let matches = scanner.scan_content(file_name.unwrap_or("sample.ts"), snippet);
+        let matches = scanner.scan_content(file_name.unwrap_or("snippet.ts"), snippet);
         SastReport {
             files_scanned: 1,
             directories_scanned: 0,
@@ -721,130 +775,170 @@ impl LocalWorkspace {
         }
     }
 
-    /// Applies a unified diff patch to a target file within workspace boundary with safety backups.
+    /// Read-only lockfile inventory: recursive discovery under the validated
+    /// workspace (skip list, depth limit, no link/junction traversal) and parsing
+    /// with the pure-Rust lockfile parsers. Nothing is executed or written.
+    pub fn inventory(
+        workspace: &Path,
+        max_depth: usize,
+    ) -> Result<LocalInventoryReport, LocalWorkspaceError> {
+        if max_depth > MAX_INVENTORY_DEPTH {
+            return Err(LocalWorkspaceError::new(
+                LocalWorkspaceErrorKind::InvalidRequest,
+            ));
+        }
+        let boundary = establish_workspace(workspace)?;
+        let limits = InventoryLimits {
+            max_depth,
+            ..InventoryLimits::default()
+        };
+        let root = boundary.root().canonical_path();
+        Ok(LocalInventoryReport {
+            workspace_root: root.to_path_buf(),
+            inventory: collect_lockfile_inventory(root, &limits),
+        })
+    }
+
+    /// Applies a single-file unified diff to an ordinary file inside the workspace.
+    ///
+    /// Hunks are applied positionally with exact context (bounded offset search);
+    /// all hunks apply or nothing is written. `dry_run` validates everything and
+    /// writes nothing (no backup, no store access). With `database`, the local store
+    /// must exist and belong to `workspace`; it is validated before the file is
+    /// touched, and a `PatchApplied` event is committed after the write. If that
+    /// event cannot be committed, the file is restored and the call fails.
     pub fn apply_patch(
         workspace: &Path,
         patch_file: &Path,
         target_rel: Option<&Path>,
         backup_dir: Option<&Path>,
         database: Option<&Path>,
-    ) -> Result<crate::diff::PatchFileResult, LocalWorkspaceError> {
+        dry_run: bool,
+    ) -> Result<LocalPatchReport, LocalWorkspaceError> {
         use LocalWorkspaceErrorKind as Kind;
-        let diff_text = fs::read_to_string(patch_file)
-            .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
-
-        let resolved_rel = if let Some(t) = target_rel {
-            t.to_path_buf()
-        } else {
-            let mut found = None;
-            for line in diff_text.lines() {
-                if let Some(rest) = line.strip_prefix("+++ ") {
-                    let clean = rest
-                        .trim()
-                        .trim_start_matches("b/")
-                        .trim_start_matches("a/");
-                    found = Some(std::path::PathBuf::from(clean));
-                    break;
-                }
-            }
-            found.ok_or_else(|| LocalWorkspaceError::new(Kind::Workspace))?
+        let boundary = establish_workspace(workspace)?;
+        let text = read_patch_text(patch_file)?;
+        let patch =
+            UnifiedPatch::parse(&text).map_err(|_| LocalWorkspaceError::new(Kind::InvalidPatch))?;
+        let target = match target_rel {
+            Some(target) => target.to_path_buf(),
+            None => PathBuf::from(
+                patch
+                    .target_path()
+                    .ok_or_else(|| LocalWorkspaceError::new(Kind::InvalidPatch))?,
+            ),
         };
-
-        let result =
-            crate::diff::apply_patch_file(workspace, &resolved_rel, &diff_text, backup_dir)
-                .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
-
-        if let Some(db_path) = database
-            && let Ok(conn) = rusqlite::Connection::open(db_path)
-        {
-            let event_id = EventId::new().to_string();
-            let now = TimestampUtc::now().to_string();
-            let payload = serde_json::json!({
-                "patch_path": patch_file.to_string_lossy(),
-                "target_path": result.target_path,
-                "backup_path": result.backup_path,
-                "already_patched": result.already_patched,
-            })
-            .to_string();
-            let _ = conn.execute(
-                "INSERT INTO audit_events (event_id, event_type, details_json, created_at) VALUES (?1, ?2, ?3, ?4)",
-                rusqlite::params![event_id, "patch_applied_to_workspace", payload, now],
-            );
+        let store = match database {
+            Some(database) if !dry_run => Some(LocalStore::open(&boundary, database)?),
+            _ => None,
+        };
+        let plan = PatchPlan::prepare(&boundary, &target, &patch).map_err(patch_error)?;
+        if dry_run {
+            return Ok(LocalPatchReport {
+                result: plan.dry_run_result(),
+                audit_recorded: false,
+            });
         }
-
-        Ok(result)
+        let result = plan.commit(backup_dir).map_err(patch_error)?;
+        let Some(store) = store else {
+            return Ok(LocalPatchReport {
+                result,
+                audit_recorded: false,
+            });
+        };
+        let details = serde_json::json!({
+            "target_path": result.target_path,
+            "backup_path": result.backup_path,
+            "already_patched": result.already_patched,
+            "hunks": result.hunks,
+            "patch_sha256": result.patch_sha256,
+            "pre_image_sha256": result.pre_image_sha256,
+            "post_image_sha256": result.post_image_sha256,
+        });
+        if let Err(error) = store.record(OperatorEventKind::PatchApplied, &details) {
+            // No unaudited change may remain: restore the exact pre-image.
+            return Err(match plan.revert() {
+                Ok(()) => error,
+                Err(_) => LocalWorkspaceError::new(Kind::Io),
+            });
+        }
+        store.close();
+        Ok(LocalPatchReport {
+            result,
+            audit_recorded: true,
+        })
     }
 
-    /// Rolls back a patched target file from a previously preserved safety backup file.
+    /// Restores an ordinary workspace file from a backup. With `database`, the
+    /// local store must exist and belong to `workspace`; a `PatchRolledBack` event
+    /// is committed after the write, and the pre-rollback content is restored if
+    /// that event cannot be committed.
     pub fn rollback_patch(
         workspace: &Path,
         backup_file: &Path,
         target_rel: &Path,
         database: Option<&Path>,
-    ) -> Result<(), LocalWorkspaceError> {
+    ) -> Result<LocalRollbackReport, LocalWorkspaceError> {
         use LocalWorkspaceErrorKind as Kind;
-        crate::diff::rollback_patch_file(workspace, target_rel, backup_file)
-            .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
-
-        if let Some(db_path) = database
-            && let Ok(conn) = rusqlite::Connection::open(db_path)
-        {
-            let event_id = EventId::new().to_string();
-            let now = TimestampUtc::now().to_string();
-            let payload = serde_json::json!({
-                "backup_path": backup_file.to_string_lossy(),
-                "target_path": target_rel.to_string_lossy(),
-            })
-            .to_string();
-            let _ = conn.execute(
-                "INSERT INTO audit_events (event_id, event_type, details_json, created_at) VALUES (?1, ?2, ?3, ?4)",
-                rusqlite::params![event_id, "patch_rolled_back", payload, now],
-            );
+        let boundary = establish_workspace(workspace)?;
+        let store = match database {
+            Some(database) => Some(LocalStore::open(&boundary, database)?),
+            None => None,
+        };
+        let plan =
+            RollbackPlan::prepare(&boundary, target_rel, backup_file).map_err(patch_error)?;
+        let result = plan.commit().map_err(patch_error)?;
+        let Some(store) = store else {
+            return Ok(LocalRollbackReport {
+                result,
+                audit_recorded: false,
+            });
+        };
+        let details = serde_json::json!({
+            "target_path": result.target_path,
+            "restored_from": result.restored_from,
+            "pre_image_sha256": result.pre_image_sha256,
+            "post_image_sha256": result.post_image_sha256,
+        });
+        if let Err(error) = store.record(OperatorEventKind::PatchRolledBack, &details) {
+            return Err(match plan.revert() {
+                Ok(()) => error,
+                Err(_) => LocalWorkspaceError::new(Kind::Io),
+            });
         }
-
-        Ok(())
+        store.close();
+        Ok(LocalRollbackReport {
+            result,
+            audit_recorded: true,
+        })
     }
 
-    /// Lists all registered tenant organizations from the SQLite database.
+    /// Lists tenant rows that exist in the selected SQLite file. Read-only: a
+    /// missing file or a missing `tenants` table yields an empty list, and nothing
+    /// (no file, table or row) is created.
     pub fn list_tenants(database: &Path) -> Result<Vec<TenantRecord>, LocalWorkspaceError> {
         use LocalWorkspaceErrorKind as Kind;
-        let conn = rusqlite::Connection::open(database)
-            .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?;
-
-        conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS tenants (
-                tenant_id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                description TEXT,
-                default_workspace TEXT,
-                isolation_level TEXT DEFAULT 'multi_tenant_isolated',
-                created_at TEXT NOT NULL
-            );",
+        if !exists(database)? {
+            return Ok(Vec::new());
+        }
+        let conn = rusqlite::Connection::open_with_flags(
+            database,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
         )
         .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?;
-
-        let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM tenants", [], |r| r.get(0))
-            .unwrap_or(0);
-
-        if count == 0 {
-            let now = TimestampUtc::now().to_string();
-            let _ = conn.execute(
-                "INSERT INTO tenants (tenant_id, name, description, default_workspace, isolation_level, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                rusqlite::params!["sentra-internal", "Sentra Core (Internal)", "Core platform codebase and internal services", ".", "single_operator", now],
-            );
-            let _ = conn.execute(
-                "INSERT INTO tenants (tenant_id, name, description, default_workspace, isolation_level, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                rusqlite::params!["tenant-alpha", "Tenant Alpha (Isolated)", "Isolated client cloud infrastructure", "apps/tenant-alpha", "multi_tenant_isolated", now],
-            );
-            let _ = conn.execute(
-                "INSERT INTO tenants (tenant_id, name, description, default_workspace, isolation_level, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                rusqlite::params!["acme-corp", "Acme Corp (Enterprise)", "Acme Enterprise fintech & payment pipelines", "apps/acme-corp", "multi_tenant_isolated", now],
-            );
+        let has_table: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tenants')",
+                [],
+                |r| r.get(0),
+            )
+            .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?;
+        if !has_table {
+            return Ok(Vec::new());
         }
 
         let mut stmt = conn
-            .prepare("SELECT tenant_id, name, description, default_workspace, isolation_level, created_at FROM tenants ORDER BY created_at ASC")
+            .prepare("SELECT tenant_id, name, description, default_workspace, isolation_level, created_at FROM tenants ORDER BY created_at ASC, tenant_id ASC")
             .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?;
 
         let rows = stmt
@@ -862,11 +956,8 @@ impl LocalWorkspace {
             })
             .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))?;
 
-        let mut tenants = Vec::new();
-        for t in rows.flatten() {
-            tenants.push(t);
-        }
-        Ok(tenants)
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|_| LocalWorkspaceError::new(Kind::Persistence))
     }
 
     /// Registers a new tenant organization into the SQLite database.
@@ -884,6 +975,12 @@ impl LocalWorkspace {
 
         if name.trim().is_empty() {
             return Err(LocalWorkspaceError::new(Kind::Workspace));
+        }
+
+        // A core store has an exact schema; adding a `tenants` table to it would make
+        // every later core command fail its schema check. Refuse it untouched.
+        if database.is_file() && is_core_store(database)? {
+            return Err(LocalWorkspaceError::new(Kind::StorageLocation));
         }
 
         let conn = rusqlite::Connection::open(database)
@@ -1024,9 +1121,12 @@ impl LocalWorkspace {
         Ok(())
     }
 
-    /// Returns a pre-configured local development worker fleet manager.
+    /// Returns the local worker fleet registry.
+    ///
+    /// No worker registry source (persisted table or operator fleet file) exists yet, so
+    /// the registry is empty. Workers are never invented to fill it.
     pub fn fleet_manager() -> crate::fleet::WorkerFleetManager {
-        crate::fleet::WorkerFleetManager::new_local_development()
+        crate::fleet::WorkerFleetManager::new()
     }
 
     fn run(
@@ -1218,6 +1318,172 @@ impl LocalWorkspace {
             }
         }
     }
+}
+
+fn establish_workspace(workspace: &Path) -> Result<WorkspaceBoundary, LocalWorkspaceError> {
+    WorkspaceBoundary::establish(
+        workspace,
+        SessionId::new(),
+        SecurityClassification::Internal,
+    )
+    .map_err(|_| LocalWorkspaceError::new(LocalWorkspaceErrorKind::Workspace))
+}
+
+/// Operator-supplied diff text: an ordinary readable file, bounded, UTF-8.
+fn read_patch_text(patch_file: &Path) -> Result<String, LocalWorkspaceError> {
+    let invalid = || LocalWorkspaceError::new(LocalWorkspaceErrorKind::InvalidPatch);
+    let metadata = fs::metadata(patch_file).map_err(|_| invalid())?;
+    if !metadata.is_file() || metadata.len() > MAX_PATCH_BYTES as u64 {
+        return Err(invalid());
+    }
+    let mut bytes = Vec::new();
+    fs::File::open(patch_file)
+        .map_err(|_| invalid())?
+        .take(MAX_PATCH_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| invalid())?;
+    if bytes.len() > MAX_PATCH_BYTES {
+        return Err(invalid());
+    }
+    String::from_utf8(bytes).map_err(|_| invalid())
+}
+
+fn patch_error(error: DiffError) -> LocalWorkspaceError {
+    use LocalWorkspaceErrorKind as Kind;
+    LocalWorkspaceError::new(match error.kind {
+        DiffErrorKind::InvalidPatch(_) => Kind::InvalidPatch,
+        DiffErrorKind::PatchDoesNotApply(_) => Kind::PatchDoesNotApply,
+        DiffErrorKind::InvalidBackup(_) => Kind::PatchBackup,
+        DiffErrorKind::InvalidTarget(_)
+        | DiffErrorKind::BinaryContent
+        | DiffErrorKind::LimitsExceeded(_) => Kind::PatchTarget,
+        DiffErrorKind::Io(_) => Kind::Io,
+        DiffErrorKind::InvalidSnapshot(_)
+        | DiffErrorKind::RevisionMismatch { .. }
+        | DiffErrorKind::AntiRegressionViolation(_) => Kind::Service,
+    })
+}
+
+/// Existing local store bound to the selected workspace, opened with local-context
+/// admission (held until drop) for appending operator audit events.
+struct LocalStore {
+    manager: SqliteConnectionManager,
+    repository: PersistenceRepository,
+    session_id: SessionId,
+    clock: SystemClock,
+    _admission: SessionAdmission,
+}
+
+impl LocalStore {
+    /// Same admission rules as the other local commands: storage outside the
+    /// workspace, an existing initialized store, and a matching workspace root.
+    fn open(boundary: &WorkspaceBoundary, database: &Path) -> Result<Self, LocalWorkspaceError> {
+        use LocalWorkspaceErrorKind as Kind;
+        let parent = database
+            .parent()
+            .ok_or_else(|| LocalWorkspaceError::new(Kind::StorageLocation))?;
+        let storage = WorkspaceBoundary::establish(
+            parent,
+            SessionId::new(),
+            SecurityClassification::Internal,
+        )
+        .map_err(|_| LocalWorkspaceError::new(Kind::StorageLocation))?;
+        if storage
+            .root()
+            .canonical_path()
+            .starts_with(boundary.root().canonical_path())
+        {
+            return Err(LocalWorkspaceError::new(Kind::StorageLocation));
+        }
+        let admission = SqliteConnectionManager::local_context_admission(database)
+            .map_err(LocalWorkspaceError::persistence)?;
+        if !exists(database)? {
+            return Err(LocalWorkspaceError::new(Kind::Incomplete));
+        }
+        let clock = SystemClock::new();
+        let manager = SqliteConnectionManager::open_existing(database, &clock)
+            .map_err(LocalWorkspaceError::persistence)?;
+        let (repository, _authority) = PersistenceRepository::with_authority(manager.clone());
+        let record = repository.local_session().map_err(|error| {
+            if error.kind == PersistenceErrorKind::ContextMismatch {
+                LocalWorkspaceError::new(Kind::Incomplete)
+            } else {
+                LocalWorkspaceError::persistence(error)
+            }
+        })?;
+        if record.state == SessionState::Created {
+            return Err(LocalWorkspaceError::new(Kind::Incomplete));
+        }
+        if Path::new(&record.metadata.workspace_root) != boundary.root().canonical_path() {
+            return Err(LocalWorkspaceError::new(Kind::WorkspaceMismatch));
+        }
+        Ok(Self {
+            manager,
+            repository,
+            session_id: record.metadata.session_id,
+            clock,
+            _admission: admission,
+        })
+    }
+
+    fn record(
+        &self,
+        kind: OperatorEventKind,
+        details: &serde_json::Value,
+    ) -> Result<(), LocalWorkspaceError> {
+        self.repository
+            .record_operator_event(self.session_id, kind, EventId::new(), details, &self.clock)
+            .map(|_| ())
+            .map_err(LocalWorkspaceError::persistence)
+    }
+
+    /// Close after a committed event. The event is durable once committed; a busy
+    /// WAL checkpoint (for example while another process holds a read transaction)
+    /// is deferred to the next writer and does not undo the commit or the file change.
+    fn close(self) {
+        let _deferred_checkpoint = self.manager.shutdown();
+    }
+}
+
+/// Read-only probe: whether an existing SQLite file is a Sentra core store, marked
+/// by the core `application_id` or a `schema_migrations` table. Nothing is written;
+/// a file SQLite cannot read is a persistence failure.
+fn is_core_store(database: &Path) -> Result<bool, LocalWorkspaceError> {
+    // The header check needs no SQLite lock, so a store held open elsewhere is
+    // still recognized; the query below also sees changes not yet checkpointed.
+    if has_core_store_header(database) {
+        return Ok(true);
+    }
+    let failure = |_| LocalWorkspaceError::new(LocalWorkspaceErrorKind::Persistence);
+    let conn = rusqlite::Connection::open_with_flags(
+        database,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(failure)?;
+    let application: i64 = conn
+        .query_row("PRAGMA application_id", [], |r| r.get(0))
+        .map_err(failure)?;
+    if application == crate::persistence::CORE_STORE_APPLICATION_ID {
+        return Ok(true);
+    }
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations')",
+        [],
+        |r| r.get(0),
+    )
+    .map_err(failure)
+}
+
+/// Reads the SQLite file header and compares its `application_id` (big-endian at
+/// byte offset 68) with the core store marker.
+fn has_core_store_header(database: &Path) -> bool {
+    let mut header = [0u8; 72];
+    let read = fs::File::open(database).and_then(|mut file| file.read_exact(&mut header));
+    read.is_ok()
+        && header.starts_with(b"SQLite format 3\0")
+        && i64::from(i32::from_be_bytes([
+            header[68], header[69], header[70], header[71],
+        ])) == crate::persistence::CORE_STORE_APPLICATION_ID
 }
 
 fn exists(path: &Path) -> Result<bool, LocalWorkspaceError> {

@@ -100,6 +100,171 @@ fn test_detect_slack_and_generic_secrets() {
     assert_eq!(matches[1].rule.id, "SENTRA-SEC-005");
 }
 
+/// Secret-shaped fixtures are assembled at runtime so this file holds no literal secrets.
+fn rule_lines(matches: &[sentra_core::SastMatch]) -> Vec<(&'static str, u32)> {
+    matches.iter().map(|m| (m.rule.id, m.line_number)).collect()
+}
+
+#[test]
+fn test_detect_aws_secret_access_key() {
+    let scanner = SastScanner::new();
+    // AWS's published documentation sample pair.
+    let access_key_id = ["AKIA", "IOSFODNN7EXAMPLE"].concat();
+    let secret = ["wJalrXUtnFEMI", "K7MDENG", "bPxRfiCYEXAMPLEKEY"].join("/");
+    let content = format!(
+        "const awsAccessKeyId = \"{access_key_id}\";\n\
+         const awsSecretAccessKey = \"{secret}\";\n\
+         aws_secret_access_key = {secret}\n\
+         SecretAccessKey: '{secret}'\n"
+    );
+
+    let matches = scanner.scan_content("src/config.js", &content);
+    assert_eq!(
+        rule_lines(&matches),
+        vec![
+            ("SENTRA-SEC-001", 1),
+            ("SENTRA-SEC-006", 2),
+            ("SENTRA-SEC-006", 3),
+            ("SENTRA-SEC-006", 4),
+        ]
+    );
+    let sec006 = &matches[1];
+    assert_eq!(sec006.rule.category, RuleCategory::Secret);
+    assert_eq!(sec006.rule.severity, Severity::Critical);
+    assert_eq!(sec006.rule.cwe_id, "CWE-798");
+    assert_eq!(sec006.snippet, "wJal...[REDACTED]");
+    assert!(!sec006.snippet.contains(&secret));
+}
+
+#[test]
+fn test_aws_secret_key_reported_once_and_not_on_lookalikes() {
+    let scanner = SastScanner::new();
+    let key = "Ab3/".repeat(10);
+    assert_eq!(key.len(), 40);
+
+    // A non-sample key is reported by the specific rule only, not again by SEC-005.
+    let assigned = format!("aws_secret_access_key = \"{key}\"\n");
+    let matches = scanner.scan_content("deploy/settings.py", &assigned);
+    assert_eq!(rule_lines(&matches), vec![("SENTRA-SEC-006", 1)]);
+
+    let lookalikes = format!(
+        // 40 lowercase hex characters (a SHA-1 digest), no upper case.
+        "aws_secret_key_sha1 = {}\n\
+         // A 40-character key value without an AWS secret identifier.\n\
+         const blob = \"{key}\";\n\
+         // 41 characters and a padded base64 run are not 40-character keys.\n\
+         aws_secret = {key}Z\n\
+         aws_secret = {key}==\n\
+         aws_secret_access_key = process.env.AWS_SECRET_ACCESS_KEY\n",
+        "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+    );
+    let matches = scanner.scan_content("deploy/lookalikes.ts", &lookalikes);
+    assert!(
+        matches.iter().all(|m| m.rule.id != "SENTRA-SEC-006"),
+        "unexpected SEC-006 match: {:?}",
+        rule_lines(&matches)
+    );
+}
+
+#[test]
+fn test_detect_short_password_literals() {
+    let scanner = SastScanner::new();
+    let long_pw = ["Super", "Secret123!"].concat();
+    let short_pw = ["hun", "ter2"].concat();
+    let cases = [
+        ("src/app.py", format!("password = \"{long_pw}\"")),
+        (
+            "snap/head/new.js",
+            format!("let password = \"{short_pw}\";"),
+        ),
+        (
+            "config/db.json",
+            format!("  \"db_password\": \"{short_pw}\","),
+        ),
+        ("config/db.php", format!("    'password' => '{short_pw}',")),
+        (
+            "app/settings.py",
+            format!("    password: str = \"{short_pw}\""),
+        ),
+        ("cmd/main.go", format!("\tdbPasswd := `{short_pw}`")),
+        (".env", format!("DB_PASSWORD={short_pw}")),
+        ("deploy/values.yml", format!("  password: {short_pw}")),
+        (
+            "conf/app.properties",
+            format!("spring.datasource.password={short_pw}"),
+        ),
+    ];
+
+    for (path, line) in &cases {
+        let matches = scanner.scan_content(path, line);
+        assert_eq!(
+            rule_lines(&matches),
+            vec![("SENTRA-SEC-005", 1)],
+            "expected SEC-005 for {path}: {line}"
+        );
+        assert_eq!(matches[0].snippet, "[REDACTED_SECRET]");
+        assert!(!matches[0].snippet.contains(&short_pw));
+    }
+}
+
+#[test]
+fn test_password_heuristic_ignores_labels_references_and_comparisons() {
+    let scanner = SastScanner::new();
+    let short_pw = ["hun", "ter2"].concat();
+    let cases = [
+        ("src/login.ts", "password = getPassword();".to_string()),
+        (
+            "src/login.ts",
+            "const passwordLabel = \"Password1\";".to_string(),
+        ),
+        ("src/i18n/en.ts", "  password: \"Password:\",".to_string()),
+        ("src/i18n/de.ts", "  password: \"Passwort\",".to_string()),
+        (
+            "src/i18n/keys.ts",
+            "  password: \"auth.password\",".to_string(),
+        ),
+        ("src/config.ts", "password = \"${DB_PASSWORD}\"".to_string()),
+        ("src/config.ts", "password = \"********\"".to_string()),
+        ("src/config.ts", "password = \"pw1\"".to_string()),
+        (
+            "src/config.ts",
+            "PASSWORD_FILE = \"/run/pw/db1\"".to_string(),
+        ),
+        ("src/auth.py", format!("if password == \"{short_pw}\":")),
+        (
+            "src/form.html",
+            "<input type=\"password\" name=\"password\">".to_string(),
+        ),
+        // Unquoted values count only in configuration-style files.
+        ("src/app.js", format!("  password: {short_pw},")),
+        (".env.example", format!("DB_PASSWORD={short_pw}")),
+        (
+            "deploy/ci.yml",
+            "  password: ${{ secrets.REGISTRY_PASSWORD }}".to_string(),
+        ),
+    ];
+
+    for (path, line) in &cases {
+        let matches = scanner.scan_content(path, line);
+        assert!(
+            matches.iter().all(|m| m.rule.id != "SENTRA-SEC-005"),
+            "unexpected SEC-005 for {path}: {line} -> {:?}",
+            rule_lines(&matches)
+        );
+    }
+}
+
+#[test]
+fn test_generic_secret_snippet_handles_non_ascii_literals() {
+    let scanner = SastScanner::new();
+    // The redacted prefix is cut on character boundaries, never inside a UTF-8 sequence.
+    let literal = format!("é{}", "a1".repeat(10));
+    let line = format!("api_secret = \"{literal}\"");
+    let matches = scanner.scan_content("src/intl.js", &line);
+    assert_eq!(rule_lines(&matches), vec![("SENTRA-SEC-005", 1)]);
+    assert_eq!(matches[0].snippet, "éa1[REDACTED_SECRET]");
+}
+
 #[test]
 fn test_detect_sql_injection() {
     let scanner = SastScanner::new();

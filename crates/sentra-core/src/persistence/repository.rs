@@ -675,6 +675,41 @@ impl PersistenceRepository {
         })
     }
 
+    /// Append one operator-initiated workspace event (for example a patch that was
+    /// applied to a workspace file) to the session's audit chain in a single write
+    /// transaction. The event is bound to the session's current context and
+    /// classification floor; terminal sessions and unknown sessions are refused.
+    /// `details` must be a JSON object; it is stored as inert data.
+    pub fn record_operator_event(
+        &self,
+        session: SessionId,
+        kind: model::OperatorEventKind,
+        event: EventId,
+        details: &serde_json::Value,
+        clock: &impl Clock,
+    ) -> Result<u64, PersistenceError> {
+        model::event_text(event)?;
+        if !details.is_object() {
+            return Err(model::invalid());
+        }
+        self.manager.write(|tx| {
+            let (_, record) = read_snapshot(tx, session)?.ok_or_else(|| error(Kind::Conflict))?;
+            if record.state.is_terminal() {
+                return Err(error(Kind::PolicyDenied));
+            }
+            let now = model::time_text(clock.now())?;
+            audit(
+                tx,
+                session,
+                event,
+                (kind.as_str(), record.classification_floor),
+                &now,
+                None,
+                details,
+            )
+        })
+    }
+
     /// Bounded explicit audit read; no automatic diagnostic/export of private fields.
     pub fn audit_events(
         &self,

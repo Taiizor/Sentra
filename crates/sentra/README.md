@@ -44,7 +44,7 @@ sentra --help
 ## Features
 
 - **🛡️ In-Engine Pure-Rust Taint Analysis & SAST:** Zero-dependency lexical data-flow tracking detecting SQL Injection (CWE-89), Command Injection (CWE-78), Dynamic Code Eval (CWE-95), Path Traversal (CWE-22), and hardcoded credential leaks.
-- **📦 12-Ecosystem Advisory Auditor:** Pinned OSV and RustSec vulnerability auditing across lockfile formats: Cargo, Bun, npm (v1/v3), Yarn (classic/berry), pnpm (v6/v9), Poetry, Pip `requirements.txt`, Go `go.sum`, Composer, Gemfile, NuGet, and Deno.
+- **📦 Lockfile Inventory:** Recursive, read-only lockfile discovery (`sentra inventory`) with pure-Rust parsers for Cargo, Bun (text `bun.lock`), npm (v1/v3), Yarn (classic/berry), pnpm (v6/v9), Poetry, Pipenv, pip `requirements.txt`, Go `go.sum`, Composer, Gemfile, NuGet and Deno; packages are reported with OSV ecosystem names. The built-in advisory set is a small, fixed sample, not a synchronized OSV or RustSec feed.
 - **🧪 Three-Tier Verification Invariant:** Remediation patches are marked verified if and only if: (1) baseline fails on unpatched code, (2) target passes on remediated code, and (3) zero regressions across existing test suites.
 - **🤖 Native Model Context Protocol (MCP) Server:** Built-in JSON-RPC 2.0 stdio transport (`sentra mcp`) for integration with Claude Desktop, Cursor, and IDE coding agents.
 

@@ -15,6 +15,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Pure-Rust SAST scanner with 10 high-precision secret and code antipattern rules (`sentra scan`).
 - Multi-ecosystem lockfile support: npm, Yarn, pnpm, Bun, Deno, and Cargo (`sentra audit`).
 - Web operations dashboard built with React 19, TypeScript, Bun, Tailwind CSS v4, and shadcn/ui.
+- `sentra inventory`: read-only, recursive lockfile inventory with OSV ecosystem names.
+- `sentra scan --file-name <name>` for snippet and stdin scans (selects language rules; replaces the fixed `sample.ts` label).
+- `sentra patch apply --dry-run` and the `patch_does_not_apply` error code.
+- `PatchApplied` / `PatchRolledBack` core audit events recorded through the persistence repository when `--database` is given.
+
+### Changed
+- Web console rebuilt to show real data only. Removed all seeded findings, patches, sessions, audit entries, workers, advisories, trends and scores; fake pull requests and CI runs; simulated webhook dispatch; fake intel sync; canned AI patches that were always reported as verified; and the hard-coded coverage ledger and reconnaissance reports. Every view now reads the core CLI, read-only core stores, the bridge's persisted history, GitHub, OSV (opt-in) or configured model providers, and shows an explicit empty or "not configured" state otherwise.
+- Web bridge (`web/server.ts`, `web/server/`) rewritten:
+  - binds to loopback by default;
+  - token authentication and server-side role permissions;
+  - Host, Origin and CSRF guards; no CORS;
+  - path confinement, an SSRF guard, encrypted credential storage, and an HMAC-chained append-only operator audit log;
+  - webhook HMAC/token verification with duplicate-delivery detection;
+  - a production mode that serves the built UI.
+- The bridge no longer writes to core stores. Each workspace has its own core store under `<data dir>/core-stores/`.
+- The patch engine applies hunks by position with exact context matching. It applies all hunks or none, and it reports `already_patched` only when every hunk's post-image is in place.
+- `sentra tenant list` no longer seeds demo tenants.
+
+### Security
+- Fixed the legacy bridge's critical issues: unauthenticated API reachable from any interface or website, arbitrary file read and write, plugin command execution through client-supplied manifest paths, stored provider keys forwarded to client-chosen endpoints, and client-supplied roles.
 
 ## [0.2.0] - 2026-11-10
 

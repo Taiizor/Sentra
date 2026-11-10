@@ -106,7 +106,7 @@ fn test_cargo_lock_parsing() {
 fn test_f07_affected_package_creates_present_only_finding() {
     let packages = parse_cargo_lock(sample_lockfile()).expect("parse lockfile");
     let now = TimestampUtc::now();
-    let db = AdvisoryDatabase::default_pinned(now);
+    let db = AdvisoryDatabase::new(AdvisoryDatabase::pinned_advisories(), now);
 
     let result = db.audit_packages(&packages, now, 30).expect("audit");
     assert_eq!(result.packages_audited, 3);
@@ -150,7 +150,7 @@ version = "0.2.23"
 "#;
     let packages = parse_cargo_lock(clean_lockfile).expect("parse lockfile");
     let now = TimestampUtc::now();
-    let db = AdvisoryDatabase::default_pinned(now);
+    let db = AdvisoryDatabase::new(AdvisoryDatabase::pinned_advisories(), now);
 
     let result = db.audit_packages(&packages, now, 30).expect("audit");
     assert_eq!(result.packages_audited, 2);
@@ -164,7 +164,7 @@ fn test_f07_stale_advisory_database_detected() {
     // Database updated 45 days ago
     let past = TimestampUtc::from_epoch_millis(1_000_000_000_000);
     let now = TimestampUtc::from_epoch_millis(1_000_000_000_000 + (45 * 24 * 60 * 60 * 1000));
-    let db = AdvisoryDatabase::default_pinned(past);
+    let db = AdvisoryDatabase::new(AdvisoryDatabase::pinned_advisories(), past);
 
     assert!(db.is_stale(now, 30));
 
@@ -172,6 +172,44 @@ fn test_f07_stale_advisory_database_detected() {
     assert!(
         result.is_stale,
         "Database older than 30 days must be flagged as is_stale"
+    );
+}
+
+#[test]
+fn test_f07_bundled_pinned_set_is_stamped_with_its_curation_date() {
+    let db = AdvisoryDatabase::default_pinned();
+    let curated_at = AdvisoryDatabase::pinned_curated_at();
+
+    // The snapshot age is the fixed curation date, never the clock of the running command.
+    assert_eq!(db.updated_at(), curated_at);
+    assert_eq!(
+        curated_at.as_epoch_millis(),
+        sentra_core::advisory::PINNED_ADVISORY_SET_CURATED_AT_MILLIS
+    );
+    assert_eq!(curated_at.to_rfc3339(), "2026-11-08T23:43:22.000Z");
+    assert_eq!(
+        db.advisory_count(),
+        AdvisoryDatabase::pinned_advisories().len()
+    );
+
+    let packages = parse_cargo_lock(sample_lockfile()).expect("parse lockfile");
+    let day_millis = 24 * 60 * 60 * 1000;
+    let within_window =
+        TimestampUtc::from_epoch_millis(curated_at.as_epoch_millis() + 29 * day_millis);
+    let after_window =
+        TimestampUtc::from_epoch_millis(curated_at.as_epoch_millis() + 31 * day_millis);
+
+    let fresh = db
+        .audit_packages(&packages, within_window, 30)
+        .expect("audit");
+    assert!(!fresh.is_stale);
+
+    let stale = db
+        .audit_packages(&packages, after_window, 30)
+        .expect("audit");
+    assert!(
+        stale.is_stale,
+        "The bundled sample must report staleness once it is older than the threshold"
     );
 }
 
@@ -190,7 +228,7 @@ version = "1.0.229"
 "#;
     let packages = parse_cargo_lock(malformed_version_lockfile).expect("parse lockfile");
     let now = TimestampUtc::now();
-    let db = AdvisoryDatabase::default_pinned(now);
+    let db = AdvisoryDatabase::new(AdvisoryDatabase::pinned_advisories(), now);
 
     let result = db.audit_packages(&packages, now, 30).expect("audit");
     assert_eq!(result.packages_audited, 2);
@@ -307,7 +345,7 @@ fn test_local_workspace_audit_dependencies_integration() {
 
     // Attempt audit before init fails with Incomplete
     let now = TimestampUtc::now();
-    let db = AdvisoryDatabase::default_pinned(now);
+    let db = AdvisoryDatabase::new(AdvisoryDatabase::pinned_advisories(), now);
     let early_audit = LocalWorkspace::audit_dependencies(&ws_path, &db_path, &db);
     assert!(early_audit.is_err());
     assert_eq!(

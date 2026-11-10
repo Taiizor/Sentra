@@ -11,21 +11,21 @@ use std::{
 
 use sentra_core::{
     AdvisoryDatabase, CodeQlProbeReport, CodeQlSarifIngestResult, ContainmentLevel,
-    DEFAULT_MAX_LINE_BYTES, DiscoveredPlugin, EgressPolicy, FileDeltaKind, McpServer,
-    MultiUserAuditReport, MultiUserSecurityAudit, PatchFileResult, PluginCapability, PluginDriver,
-    PluginExecutionOutput, PluginProbeOutput, RemediationPrPackage, RemoteWorkerId,
-    RemoteWorkerNode, SastReport, SessionId, SnapshotDiff, TaskId, TenantRecord, TimestampUtc,
-    WorkerArchitecture, WorkerFleetManager, WorkerResourceCaps, discover_plugins,
-    find_plugin_by_id,
+    ContainmentReadiness, DEFAULT_INVENTORY_MAX_DEPTH, DEFAULT_MAX_LINE_BYTES, DiscoveredPlugin,
+    EgressPolicy, FileDeltaKind, MAX_INVENTORY_DEPTH, McpServer, MultiUserAuditReport,
+    MultiUserSecurityAudit, PluginCapability, PluginDriver, PluginExecutionOutput,
+    PluginProbeOutput, RemediationPrPackage, RemoteWorkerId, RemoteWorkerNode, SastReport,
+    SessionId, SnapshotDiff, TaskId, TenantRecord, TimestampUtc, WorkerArchitecture,
+    WorkerFleetManager, WorkerResourceCaps, discover_plugins, find_plugin_by_id,
     fleet::AuditStatus,
     process_transport_line,
     service::{
-        LocalAuditReport, LocalWorkspace, LocalWorkspaceError, LocalWorkspaceErrorKind,
-        LocalWorkspaceReport,
+        LocalAuditReport, LocalInventoryReport, LocalPatchReport, LocalRollbackReport,
+        LocalWorkspace, LocalWorkspaceError, LocalWorkspaceErrorKind, LocalWorkspaceReport,
     },
 };
 
-pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra recover --database <file> [--workspace <directory>] [--json]\n  sentra audit --database <file> [--workspace <directory>] [--json]\n  sentra scan [--workspace <directory>] [--snippet <string>] [-] [--database <file>] [--sarif <file>] [--json]\n  sentra patch apply --patch <file> --workspace <directory> [--target <file>] [--backup-dir <directory>] [--database <file>] [--json]\n  sentra patch rollback --backup <file> --workspace <directory> --target <file> [--database <file>] [--json]\n  sentra install <target> [--mcp] [--global] [--skill <id>] [--workspace <directory>] [--json]\n  sentra install mcp <target> [--global] [--workspace <directory>] [--json]\n  sentra skills list [--json]\n  sentra skills show <id> [--json]\n  sentra prompt <workflow> [--scope <path>] [--skills <skill-ids>] [--json]\n  sentra tenant list --database <file> [--json]\n  sentra tenant add --id <id> --name <name> [--workspace <directory>] [--isolation <level>] --database <file> [--json]\n  sentra config show [--key <key>] --database <file> [--json]\n  sentra config set --key <key> --value <value> --database <file> [--json]\n  sentra config test --provider <name> [--api-key <key>] [--model <model>] [--json]\n  sentra fleet list [--json]\n  sentra fleet status [--json]\n  sentra plugin list [--dir <directory>] [--json]\n  sentra plugin probe (--id <id> | --manifest <file>) [--dir <directory>] [--workspace <directory>] [--json]\n  sentra plugin run (--id <id> | --manifest <file>) --capability <capability> [--args <json>] [--dir <directory>] [--workspace <directory>] [--json]\n  sentra sync-advisories --source <directory-or-file> [--database <file>] [--json]\n  sentra propose-pr --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra codeql [--workspace <directory>] [--sarif <file>] [--database <file>] [--json]\n  sentra diff --base <directory> --head <directory> [--json]\n  sentra verify-audit [--json]\n  sentra export sarif --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra mcp [install <target> [--global] [--workspace <directory>]]\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session/audit default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\nAudit analyzes multi-ecosystem lockfiles (Cargo, npm, yarn, pnpm, bun, deno, pip, poetry, go, composer, nuget, rubygems).\nScan executes pure-Rust static analysis for secrets and code antipatterns on workspaces or snippets.\nPatch safely applies unified diff hunks with automatic rollback safety backups.\nInstall deploys built-in AppSec security skills or configures the Sentra stdio MCP server (--mcp) locally or globally across 28 AI agent ecosystems: Claude, Antigravity, GitHub Copilot, Cursor, Windsurf, Cline, Roo, Continue, Aider, OpenHands, Goose, Tabnine, Junie, Warp, Droid, Kiro, Codex, Zed, Amazon Q, Cody, Devin, OpenCode, Trae, Kimi, Qwen, Hermes, Replit, or Augment.\nSkills lists or inspects embedded zero-dependency cognitive security playbooks.\nPrompt generates parameter-grounded AppSec prompts (threat-model, api-bola, patch-remediation, skill-audit, scout, verify) with cognitive skill injection for LLM agents.\nTenant manages isolated multi-tenant organization workspaces in SQLite WAL store.\nConfig manages provider API credentials and security policy configuration.\nFleet inspects isolated execution worker nodes and containment readiness.\nPlugin discovers, probes, and executes capability-fenced subprocess security adapters.\nSync-advisories ingests universal OSV JSON advisories into the advisory database.\nPropose-pr packages verified vulnerabilities into GitHub Draft PR proposals.\nCodeql probes workspace for languages, generates CLI commands, or ingests CodeQL SARIF logs.\nDiff compares base and head directory snapshots with pure-Rust hashing.\nVerify-audit evaluates the 5 mandatory multi-user hosting security containment gates.\nExport sarif converts dependency and SAST findings into an OASIS SARIF v2.1.0 document.\nMcp runs the JSON-RPC 2.0 Model Context Protocol stdio transport server or configures it into agents.\n";
+pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra recover --database <file> [--workspace <directory>] [--json]\n  sentra audit --database <file> [--workspace <directory>] [--json]\n  sentra inventory [--workspace <directory>] [--max-depth <n>] [--json]\n  sentra scan [--workspace <directory>] [--snippet <string>] [-] [--file-name <name>] [--database <file>] [--sarif <file>] [--json]\n  sentra patch apply --patch <file> --workspace <directory> [--target <file>] [--backup-dir <directory>] [--database <file>] [--dry-run] [--json]\n  sentra patch rollback --backup <file> --workspace <directory> --target <file> [--database <file>] [--json]\n  sentra install <target> [--mcp] [--global] [--skill <id>] [--workspace <directory>] [--json]\n  sentra install mcp <target> [--global] [--workspace <directory>] [--json]\n  sentra skills list [--json]\n  sentra skills show <id> [--json]\n  sentra prompt <workflow> [--scope <path>] [--skills <skill-ids>] [--json]\n  sentra tenant list --database <file> [--json]\n  sentra tenant add --id <id> --name <name> [--workspace <directory>] [--isolation <level>] --database <file> [--json]\n  sentra config show [--key <key>] --database <file> [--json]\n  sentra config set --key <key> --value <value> --database <file> [--json]\n  sentra config test --provider <name> [--api-key <key>] [--model <model>] [--json]\n  sentra fleet list [--json]\n  sentra fleet status [--json]\n  sentra plugin list [--dir <directory>] [--json]\n  sentra plugin probe (--id <id> | --manifest <file>) [--dir <directory>] [--workspace <directory>] [--json]\n  sentra plugin run (--id <id> | --manifest <file>) --capability <capability> [--args <json>] [--dir <directory>] [--workspace <directory>] [--json]\n  sentra sync-advisories --source <directory-or-file> [--database <file>] [--json]\n  sentra propose-pr --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra codeql [--workspace <directory>] [--sarif <file>] [--database <file>] [--json]\n  sentra diff --base <directory> --head <directory> [--json]\n  sentra verify-audit [--json]\n  sentra export sarif --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra mcp [install <target> [--global] [--workspace <directory>]]\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session/audit default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\nAudit analyzes multi-ecosystem lockfiles (Cargo, npm, yarn, pnpm, bun, deno, pip, poetry, go, composer, nuget, rubygems) against a small bundled pinned advisory sample, not a synchronized OSV or RustSec feed; is_stale reflects the sample's curation date.\nInventory lists lockfiles found recursively (depth 6 by default; dependency, build and VCS directories skipped; links not followed) and their parsed packages with OSV ecosystem names. Read-only; nothing is executed.\nScan runs heuristic line-based pattern rules for secrets and code antipatterns on workspaces or snippets; --file-name labels a snippet and selects its language rules. Results are unverified candidates.\nPatch applies a single-file unified diff positionally with exact context; all hunks apply or nothing is written. --dry-run validates without writing. --database records PatchApplied/PatchRolledBack events in the local store.\nInstall deploys built-in AppSec security skills or configures the Sentra stdio MCP server (--mcp) locally or globally across 28 AI agent ecosystems: Claude, Antigravity, GitHub Copilot, Cursor, Windsurf, Cline, Roo, Continue, Aider, OpenHands, Goose, Tabnine, Junie, Warp, Droid, Kiro, Codex, Zed, Amazon Q, Cody, Devin, OpenCode, Trae, Kimi, Qwen, Hermes, Replit, or Augment.\nSkills lists or inspects embedded zero-dependency cognitive security playbooks.\nPrompt generates parameter-grounded AppSec prompts (threat-model, api-bola, patch-remediation, skill-audit, scout, verify) with cognitive skill injection for LLM agents.\nTenant lists or adds operator-declared tenant rows (labels only; no isolation is provisioned). List is read-only and never seeds rows.\nConfig manages provider API credentials and security policy configuration.\nFleet reports the in-process worker registry, which is empty because no worker registry source exists; containment readiness is never reported as ready without worker attestation.\nPlugin discovers, probes, and executes capability-fenced subprocess security adapters.\nSync-advisories ingests universal OSV JSON advisories into the advisory database.\nPropose-pr packages verified vulnerabilities into GitHub Draft PR proposals.\nCodeql probes workspace for languages, generates CLI commands, or ingests CodeQL SARIF logs.\nDiff compares base and head directory snapshots with pure-Rust hashing.\nVerify-audit evaluates the 5 mandatory multi-user hosting security containment gates.\nExport sarif converts dependency and SAST findings into an OASIS SARIF v2.1.0 document.\nMcp runs the JSON-RPC 2.0 Model Context Protocol stdio transport server or configures it into agents.\n";
 
 /// Actions supported by the `sentra skills` command.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -81,6 +81,8 @@ pub enum PatchAction {
         target: Option<PathBuf>,
         backup_dir: Option<PathBuf>,
         database: Option<PathBuf>,
+        /// Validate every hunk against the target and write nothing.
+        dry_run: bool,
     },
     Rollback {
         backup: PathBuf,
@@ -140,8 +142,14 @@ pub enum Command {
         workspace: Option<PathBuf>,
         snippet: Option<String>,
         stdin: bool,
+        /// Snippet label (basename); selects language rules. Snippet/stdin only.
+        file_name: Option<String>,
         database: Option<PathBuf>,
         sarif: Option<PathBuf>,
+    },
+    Inventory {
+        workspace: Option<PathBuf>,
+        max_depth: usize,
     },
     SyncAdvisories {
         source: PathBuf,
@@ -213,6 +221,25 @@ pub enum ParseError {
     InvalidArguments,
 }
 
+/// Snippet labels are bare basenames: `^[A-Za-z0-9._-]{1,100}$`.
+pub fn is_snippet_file_name(value: &str) -> bool {
+    (1..=100).contains(&value.len())
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+}
+
+/// Decimal depth in `0..=MAX_INVENTORY_DEPTH`; anything else is rejected, not clamped.
+fn parse_max_depth(value: &str) -> Option<usize> {
+    if value.is_empty() || value.len() > 3 || !value.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    value
+        .parse::<usize>()
+        .ok()
+        .filter(|depth| *depth <= MAX_INVENTORY_DEPTH)
+}
+
 /// Small fixed command grammar; no shell evaluation, plugins or environment
 /// configuration. UTF-8 arguments only, maximum 64 arguments, duplicates deny.
 pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
@@ -250,6 +277,7 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
             | "session"
             | "recover"
             | "audit"
+            | "inventory"
             | "scan"
             | "sync-advisories"
             | "propose-pr"
@@ -275,15 +303,44 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
             json,
         });
     }
+    if name == "inventory" {
+        let mut workspace = None;
+        let mut max_depth = None;
+        let mut rest = words.into_iter();
+        while let Some(flag) = rest.next() {
+            let value = rest.next().ok_or_else(invalid)?;
+            if value.is_empty() || value.starts_with('-') {
+                return Err(invalid());
+            }
+            match flag {
+                "--workspace" if workspace.is_none() => workspace = Some(PathBuf::from(value)),
+                "--max-depth" if max_depth.is_none() => {
+                    max_depth = Some(parse_max_depth(value).ok_or_else(invalid)?)
+                }
+                _ => return Err(invalid()),
+            }
+        }
+        return Ok(Invocation {
+            command: Command::Inventory {
+                workspace,
+                max_depth: max_depth.unwrap_or(DEFAULT_INVENTORY_MAX_DEPTH),
+            },
+            json,
+        });
+    }
     if name == "scan" {
         let mut workspace = None;
         let mut snippet = None;
         let mut stdin = false;
+        let mut file_name = None;
         let mut database = None;
         let mut sarif = None;
         let mut rest = words.into_iter();
         while let Some(flag) = rest.next() {
             if flag == "-" {
+                if stdin {
+                    return Err(invalid());
+                }
                 stdin = true;
                 continue;
             }
@@ -294,6 +351,9 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
             match flag {
                 "--workspace" if workspace.is_none() => workspace = Some(PathBuf::from(value)),
                 "--snippet" if snippet.is_none() => snippet = Some(value.to_string()),
+                "--file-name" if file_name.is_none() && is_snippet_file_name(value) => {
+                    file_name = Some(value.to_string())
+                }
                 "--database" if database.is_none() => database = Some(PathBuf::from(value)),
                 "--sarif" if sarif.is_none() => sarif = Some(PathBuf::from(value)),
                 _ => return Err(invalid()),
@@ -302,11 +362,16 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
         if workspace.is_none() && snippet.is_none() && !stdin {
             return Err(invalid());
         }
+        // A file name only labels in-memory snippet content; it never names a path.
+        if file_name.is_some() && (workspace.is_some() || (snippet.is_none() && !stdin)) {
+            return Err(invalid());
+        }
         return Ok(Invocation {
             command: Command::Scan {
                 workspace,
                 snippet,
                 stdin,
+                file_name,
                 database,
                 sarif,
             },
@@ -330,8 +395,16 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
         let mut backup = None;
         let mut backup_dir = None;
         let mut database = None;
+        let mut dry_run = false;
         let mut rest = words.into_iter();
         while let Some(flag) = rest.next() {
+            if flag == "--dry-run" {
+                if dry_run || sub != "apply" {
+                    return Err(invalid());
+                }
+                dry_run = true;
+                continue;
+            }
             let value = rest.next().ok_or_else(invalid)?;
             if value.is_empty() || value.starts_with('-') {
                 return Err(invalid());
@@ -358,6 +431,7 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
                             target,
                             backup_dir,
                             database,
+                            dry_run,
                         },
                     },
                     json,
@@ -1043,6 +1117,12 @@ fn core_error(source: LocalWorkspaceError, json: bool) -> Response {
         LocalWorkspaceErrorKind::Persistence | LocalWorkspaceErrorKind::Service => {
             ("storage_or_service_failure", 5)
         }
+        LocalWorkspaceErrorKind::InvalidRequest => ("invalid_arguments", 2),
+        LocalWorkspaceErrorKind::InvalidPatch => ("invalid_patch", 4),
+        LocalWorkspaceErrorKind::PatchDoesNotApply => ("patch_does_not_apply", 4),
+        LocalWorkspaceErrorKind::PatchTarget => ("invalid_patch_target", 4),
+        LocalWorkspaceErrorKind::PatchBackup => ("invalid_backup", 4),
+        LocalWorkspaceErrorKind::Io => ("io_error", 5),
     };
     error(code, exit, json)
 }
@@ -1151,14 +1231,23 @@ where
     }
 
     if let Command::Scan {
-        stdin: true, sarif, ..
+        stdin: true,
+        file_name,
+        sarif,
+        ..
     } = &invocation.command
     {
         let mut stdin_content = String::new();
         if input.read_to_string(&mut stdin_content).is_err() {
             return 8;
         }
-        let response = execute_scan_snippet(&stdin_content, sarif.as_deref(), cwd, invocation.json);
+        let response = execute_scan_snippet(
+            &stdin_content,
+            file_name.as_deref(),
+            sarif.as_deref(),
+            cwd,
+            invocation.json,
+        );
         if !response.stdout.is_empty()
             && (output.write_all(response.stdout.as_bytes()).is_err() || output.flush().is_err())
         {
@@ -1193,7 +1282,7 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
     match invocation.command {
         Command::Help => Response {
             stdout: if json {
-                "{\"schema_version\":1,\"commands\":[\"init\",\"status\",\"session show\",\"recover\",\"audit\",\"scan\",\"patch\",\"tenant\",\"config\",\"fleet\",\"plugin\",\"diff\",\"verify-audit\",\"export sarif\",\"mcp\"],\"offline\":true,\"untrusted_execution\":false}\n".into()
+                "{\"schema_version\":1,\"commands\":[\"init\",\"status\",\"session show\",\"recover\",\"audit\",\"inventory\",\"scan\",\"patch\",\"tenant\",\"config\",\"fleet\",\"plugin\",\"diff\",\"verify-audit\",\"export sarif\",\"mcp\"],\"offline\":true,\"untrusted_execution\":false}\n".into()
             } else {
                 HELP.into()
             },
@@ -1268,12 +1357,21 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
             workspace,
             database,
         } => {
-            let clock = TimestampUtc::now();
-            let advisory_db = AdvisoryDatabase::default_pinned(clock);
+            let advisory_db = AdvisoryDatabase::default_pinned();
             let ws_path = absolute(workspace.as_deref().unwrap_or(cwd), cwd);
             let db_path = absolute(&database, cwd);
             match LocalWorkspace::audit_dependencies(&ws_path, &db_path, &advisory_db) {
-                Ok(report) => render_audit(report, json),
+                Ok(report) => render_audit(report, &advisory_db, json),
+                Err(source) => core_error(source, json),
+            }
+        }
+        Command::Inventory {
+            workspace,
+            max_depth,
+        } => {
+            let ws_path = absolute(workspace.as_deref().unwrap_or(cwd), cwd);
+            match LocalWorkspace::inventory(&ws_path, max_depth) {
+                Ok(report) => render_inventory(&report, json),
                 Err(source) => core_error(source, json),
             }
         }
@@ -1281,6 +1379,7 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
             workspace,
             snippet,
             stdin,
+            file_name,
             database,
             sarif,
         } => {
@@ -1288,7 +1387,13 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
                 return error("stdin_scan_requires_input_stream", 2, json);
             }
             if let Some(code) = snippet {
-                return execute_scan_snippet(&code, sarif.as_deref(), cwd, json);
+                return execute_scan_snippet(
+                    &code,
+                    file_name.as_deref(),
+                    sarif.as_deref(),
+                    cwd,
+                    json,
+                );
             }
             let ws = match workspace {
                 Some(w) => w,
@@ -1336,8 +1441,7 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
             database: _,
         } => {
             let src_path = absolute(&source, cwd);
-            let now = TimestampUtc::now();
-            let mut db = AdvisoryDatabase::default_pinned(now);
+            let mut db = AdvisoryDatabase::default_pinned();
             let count = if src_path.is_dir() {
                 db.ingest_osv_directory(&src_path)
             } else {
@@ -1358,8 +1462,7 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
         } => {
             let ws_path = absolute(workspace.as_deref().unwrap_or(cwd), cwd);
             let db_path = absolute(&database, cwd);
-            let now = TimestampUtc::now();
-            let advisory_db = AdvisoryDatabase::default_pinned(now);
+            let advisory_db = AdvisoryDatabase::default_pinned();
             match LocalWorkspace::propose_remediations(&ws_path, &db_path, &advisory_db) {
                 Ok(proposals) => {
                     if let Some(out_file) = output {
@@ -1456,8 +1559,7 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
             database,
             output,
         } => {
-            let clock = TimestampUtc::now();
-            let advisory_db = AdvisoryDatabase::default_pinned(clock);
+            let advisory_db = AdvisoryDatabase::default_pinned();
             let ws_path = absolute(workspace.as_deref().unwrap_or(cwd), cwd);
             let db_path = absolute(&database, cwd);
             match LocalWorkspace::export_audit_sarif(&ws_path, &db_path, &advisory_db) {
@@ -1502,6 +1604,7 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
                 target,
                 backup_dir,
                 database,
+                dry_run,
             } => {
                 let ws_path = absolute(&workspace, cwd);
                 let patch_path = absolute(&patch, cwd);
@@ -1520,8 +1623,9 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
                     target_path.as_deref(),
                     backup_path.as_deref(),
                     db_path.as_deref(),
+                    dry_run,
                 ) {
-                    Ok(result) => render_patch_apply(&result, json),
+                    Ok(report) => render_patch_apply(&report, json),
                     Err(source) => core_error(source, json),
                 }
             }
@@ -1548,7 +1652,7 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
                     &target_path,
                     db_path.as_deref(),
                 ) {
-                    Ok(_) => render_patch_rollback(&target_path, &backup_path, json),
+                    Ok(report) => render_patch_rollback(&report, json),
                     Err(source) => core_error(source, json),
                 }
             }
@@ -2181,7 +2285,11 @@ fn render_verify_audit(report: &MultiUserAuditReport, json: bool) -> Response {
     }
 }
 
-fn render_audit(report: LocalAuditReport, json: bool) -> Response {
+/// Source label for the bundled advisory set: a small hand-written sample, not a feed.
+const ADVISORY_DB_SOURCE: &str = "bundled_pinned_sample";
+
+fn render_audit(report: LocalAuditReport, advisory_db: &AdvisoryDatabase, json: bool) -> Response {
+    let advisory_db_updated_at = advisory_db.updated_at().to_rfc3339();
     let stdout = if json {
         let findings_json = report
             .candidate_findings
@@ -2206,22 +2314,27 @@ fn render_audit(report: LocalAuditReport, json: bool) -> Response {
             .collect::<Vec<_>>()
             .join(",");
         format!(
-            "{{\"schema_version\":1,\"command\":\"audit\",\"session_id\":\"{}\",\"task_id\":\"{}\",\"packages_audited\":{},\"vulnerable_packages\":{},\"is_stale\":{},\"unknown_version_packages\":[{}],\"findings\":[{}],\"untrusted_execution\":false}}\n",
+            "{{\"schema_version\":1,\"command\":\"audit\",\"session_id\":\"{}\",\"task_id\":\"{}\",\"packages_audited\":{},\"vulnerable_packages\":{},\"is_stale\":{},\"advisory_db_source\":\"{}\",\"advisory_db_records\":{},\"advisory_db_updated_at\":\"{}\",\"unknown_version_packages\":[{}],\"findings\":[{}],\"untrusted_execution\":false}}\n",
             report.session_id,
             report.task_id,
             report.audit_result.packages_audited,
             report.audit_result.vulnerable_packages,
             report.audit_result.is_stale,
+            ADVISORY_DB_SOURCE,
+            advisory_db.advisory_count(),
+            advisory_db_updated_at,
             unknown_json,
             findings_json,
         )
     } else {
         let mut text = format!(
-            "Sentra dependency audit: completed\nSession: {}\nTask: {}\nPackages audited: {}\nVulnerable packages: {}\nAdvisory database stale: {}\n",
+            "Sentra dependency audit: completed\nSession: {}\nTask: {}\nPackages audited: {}\nVulnerable packages: {}\nAdvisory database: bundled pinned sample ({} records, curated {}); not a synchronized OSV or RustSec feed\nAdvisory database stale: {}\n",
             report.session_id,
             report.task_id,
             report.audit_result.packages_audited,
             report.audit_result.vulnerable_packages,
+            advisory_db.advisory_count(),
+            advisory_db_updated_at,
             report.audit_result.is_stale
         );
         for f in &report.candidate_findings {
@@ -2523,8 +2636,14 @@ fn render(operation: &str, report: LocalWorkspaceReport, json: bool) -> Response
     }
 }
 
-fn execute_scan_snippet(code: &str, sarif: Option<&Path>, cwd: &Path, json: bool) -> Response {
-    let report = LocalWorkspace::scan_snippet(code, None);
+fn execute_scan_snippet(
+    code: &str,
+    file_name: Option<&str>,
+    sarif: Option<&Path>,
+    cwd: &Path,
+    json: bool,
+) -> Response {
+    let report = LocalWorkspace::scan_snippet(code, file_name);
     if let Some(sarif_out) = sarif {
         let now = TimestampUtc::now();
         let findings = report.to_candidate_findings(SessionId::new(), TaskId::new(), now);
@@ -2551,25 +2670,135 @@ fn execute_scan_snippet(code: &str, sarif: Option<&Path>, cwd: &Path, json: bool
     }
 }
 
-fn render_patch_apply(result: &PatchFileResult, json: bool) -> Response {
-    let stdout = if json {
-        let b_json = result
-            .backup_path
-            .as_ref()
-            .map(|b| format!("\"{}\"", b.replace('\\', "/")))
-            .unwrap_or_else(|| "null".to_string());
+/// Display form of a path: no Windows `\\?\` verbatim prefix, forward slashes.
+fn display_path(path: &Path) -> String {
+    let text = path.to_string_lossy();
+    let plain = if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{rest}")
+    } else if let Some(rest) = text.strip_prefix(r"\\?\") {
+        rest.to_string()
+    } else {
+        text.into_owned()
+    };
+    plain.replace('\\', "/")
+}
+
+fn json_line(value: &impl serde::Serialize) -> Response {
+    match serde_json::to_string(value) {
+        Ok(text) => Response {
+            stdout: format!("{text}\n"),
+            stderr: String::new(),
+            exit_code: 0,
+        },
+        Err(_) => error("serialization_failed", 5, true),
+    }
+}
+
+#[derive(serde::Serialize)]
+struct InventoryJson<'a> {
+    schema_version: u8,
+    command: &'static str,
+    workspace: String,
+    lockfiles: &'a [sentra_core::InventoryLockfile],
+    packages: &'a [sentra_core::InventoryPackage],
+    total_packages: usize,
+    truncated: bool,
+    untrusted_execution: bool,
+}
+
+fn render_inventory(report: &LocalInventoryReport, json: bool) -> Response {
+    let inventory = &report.inventory;
+    let workspace = display_path(&report.workspace_root);
+    if json {
+        return json_line(&InventoryJson {
+            schema_version: 1,
+            command: "inventory",
+            workspace,
+            lockfiles: &inventory.lockfiles,
+            packages: &inventory.packages,
+            total_packages: inventory.total_packages,
+            truncated: inventory.truncated,
+            untrusted_execution: false,
+        });
+    }
+    let mut text = format!(
+        "Sentra dependency inventory: completed\nWorkspace: {workspace}\nLockfiles: {}\nPackages: {}\nTruncated: {}\n",
+        inventory.lockfiles.len(),
+        inventory.total_packages,
+        inventory.truncated
+    );
+    for lockfile in &inventory.lockfiles {
+        match &lockfile.parse_error {
+            Some(reason) => text.push_str(&format!(
+                "  {} ({}): not parsed - {reason}\n",
+                lockfile.path, lockfile.ecosystem
+            )),
+            None => text.push_str(&format!(
+                "  {} ({}): {} packages\n",
+                lockfile.path, lockfile.ecosystem, lockfile.packages
+            )),
+        }
+    }
+    text.push_str("Untrusted execution: disabled\n");
+    Response {
+        stdout: text,
+        stderr: String::new(),
+        exit_code: 0,
+    }
+}
+
+#[derive(serde::Serialize)]
+struct PatchApplyJson<'a> {
+    schema_version: u8,
+    command: &'static str,
+    status: &'static str,
+    dry_run: bool,
+    target_path: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    backup_path: Option<Option<String>>,
+    already_patched: bool,
+    hunks: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    audit_recorded: Option<bool>,
+    patch_sha256: &'a str,
+    pre_image_sha256: &'a str,
+    post_image_sha256: &'a str,
+    untrusted_execution: bool,
+}
+
+fn render_patch_apply(report: &LocalPatchReport, json: bool) -> Response {
+    let result = &report.result;
+    let backup = result.backup_path.clone();
+    if json {
+        return json_line(&PatchApplyJson {
+            schema_version: 1,
+            command: "patch apply",
+            status: "success",
+            dry_run: result.dry_run,
+            target_path: &result.target_path,
+            backup_path: (!result.dry_run).then(|| backup.clone()),
+            already_patched: result.already_patched,
+            hunks: result.hunks,
+            audit_recorded: (!result.dry_run).then_some(report.audit_recorded),
+            patch_sha256: &result.patch_sha256,
+            pre_image_sha256: &result.pre_image_sha256,
+            post_image_sha256: &result.post_image_sha256,
+            untrusted_execution: false,
+        });
+    }
+    let stdout = if result.dry_run {
         format!(
-            "{{\"schema_version\":1,\"command\":\"patch apply\",\"status\":\"success\",\"target_path\":\"{}\",\"backup_path\":{},\"already_patched\":{},\"untrusted_execution\":false}}\n",
-            result.target_path.replace('\\', "/"),
-            b_json,
-            result.already_patched,
+            "Sentra patch apply (dry run): patch applies; nothing was written\nTarget file: {}\nHunks: {}\nAlready in patched state: {}\nUntrusted execution: disabled\n",
+            result.target_path, result.hunks, result.already_patched,
         )
     } else {
         format!(
-            "Sentra patch apply: success\nTarget file: {}\nBackup path: {}\nAlready in patched state: {}\nUntrusted execution: disabled\n",
+            "Sentra patch apply: success\nTarget file: {}\nHunks: {}\nBackup path: {}\nAlready in patched state: {}\nAudit event recorded: {}\nUntrusted execution: disabled\n",
             result.target_path,
-            result.backup_path.as_deref().unwrap_or("none"),
+            result.hunks,
+            backup.as_deref().unwrap_or("none"),
             result.already_patched,
+            report.audit_recorded,
         )
     };
     Response {
@@ -2579,22 +2808,40 @@ fn render_patch_apply(result: &PatchFileResult, json: bool) -> Response {
     }
 }
 
-fn render_patch_rollback(target: &Path, backup: &Path, json: bool) -> Response {
-    let stdout = if json {
-        format!(
-            "{{\"schema_version\":1,\"command\":\"patch rollback\",\"status\":\"success\",\"target_path\":\"{}\",\"restored_from\":\"{}\",\"untrusted_execution\":false}}\n",
-            target.display().to_string().replace('\\', "/"),
-            backup.display().to_string().replace('\\', "/"),
-        )
-    } else {
-        format!(
-            "Sentra patch rollback: success\nTarget file: {}\nRestored from: {}\nUntrusted execution: disabled\n",
-            target.display(),
-            backup.display(),
-        )
-    };
+#[derive(serde::Serialize)]
+struct PatchRollbackJson<'a> {
+    schema_version: u8,
+    command: &'static str,
+    status: &'static str,
+    target_path: &'a str,
+    restored_from: String,
+    audit_recorded: bool,
+    pre_image_sha256: &'a str,
+    post_image_sha256: &'a str,
+    untrusted_execution: bool,
+}
+
+fn render_patch_rollback(report: &LocalRollbackReport, json: bool) -> Response {
+    let result = &report.result;
+    let restored_from = result.restored_from.clone();
+    if json {
+        return json_line(&PatchRollbackJson {
+            schema_version: 1,
+            command: "patch rollback",
+            status: "success",
+            target_path: &result.target_path,
+            restored_from,
+            audit_recorded: report.audit_recorded,
+            pre_image_sha256: &result.pre_image_sha256,
+            post_image_sha256: &result.post_image_sha256,
+            untrusted_execution: false,
+        });
+    }
     Response {
-        stdout,
+        stdout: format!(
+            "Sentra patch rollback: success\nTarget file: {}\nRestored from: {}\nAudit event recorded: {}\nUntrusted execution: disabled\n",
+            result.target_path, restored_from, report.audit_recorded,
+        ),
         stderr: String::new(),
         exit_code: 0,
     }
@@ -2776,21 +3023,31 @@ fn render_fleet_list(fleet: &WorkerFleetManager, json: bool) -> Response {
 }
 
 fn render_fleet_status(fleet: &WorkerFleetManager, json: bool) -> Response {
+    let readiness = fleet.containment_readiness();
     let stdout = if json {
         format!(
-            "{{\"schema_version\":1,\"command\":\"fleet status\",\"total_workers\":{},\"available_workers\":{},\"active_leases\":{},\"quarantined_workers\":{},\"containment_ready\":true,\"untrusted_execution\":false}}\n",
+            "{{\"schema_version\":1,\"command\":\"fleet status\",\"total_workers\":{},\"available_workers\":{},\"active_leases\":{},\"quarantined_workers\":{},\"containment_ready\":{},\"containment_status\":\"{}\",\"untrusted_execution\":false}}\n",
             fleet.total_workers(),
             fleet.available_workers(),
             fleet.active_leases(),
             fleet.quarantined_workers(),
+            readiness.is_ready(),
+            readiness.as_str(),
         )
     } else {
+        let readiness_text = match readiness {
+            ContainmentReadiness::NoWorkers => "not ready (no workers registered)",
+            ContainmentReadiness::Unattested => {
+                "not ready (declared containment levels are not attested)"
+            }
+        };
         format!(
-            "Sentra remote worker fleet status:\nTotal workers: {}\nAvailable workers: {}\nActive leases: {}\nQuarantined workers: {}\nContainment readiness: verified\nUntrusted execution: disabled\n",
+            "Sentra remote worker fleet status:\nTotal workers: {}\nAvailable workers: {}\nActive leases: {}\nQuarantined workers: {}\nContainment readiness: {}\nUntrusted execution: disabled\n",
             fleet.total_workers(),
             fleet.available_workers(),
             fleet.active_leases(),
             fleet.quarantined_workers(),
+            readiness_text,
         )
     };
     Response {
@@ -2800,41 +3057,91 @@ fn render_fleet_status(fleet: &WorkerFleetManager, json: bool) -> Response {
     }
 }
 
+#[derive(serde::Serialize)]
+struct PluginQuotasJson {
+    max_memory_mib: u32,
+    max_execution_time_secs: u32,
+}
+
+#[derive(serde::Serialize)]
+struct PluginListEntryJson<'a> {
+    id: &'a str,
+    name: &'a str,
+    version: String,
+    family: &'static str,
+    manifest_path: String,
+    executable_path: String,
+    capabilities: Vec<&'a str>,
+    egress_policy: String,
+    quotas: PluginQuotasJson,
+}
+
+#[derive(serde::Serialize)]
+struct PluginListJson<'a> {
+    schema_version: u8,
+    command: &'static str,
+    action: &'static str,
+    count: usize,
+    plugins: Vec<PluginListEntryJson<'a>>,
+}
+
+#[derive(serde::Serialize)]
+struct PluginProbeJson<'a> {
+    schema_version: u8,
+    command: &'static str,
+    action: &'static str,
+    plugin_id: &'a str,
+    name: &'a str,
+    applicable: bool,
+    details: &'a str,
+    unsupported_reason: Option<&'a str>,
+    capabilities: Vec<&'a str>,
+}
+
+#[derive(serde::Serialize)]
+struct PluginRunJson<'a> {
+    schema_version: u8,
+    command: &'static str,
+    action: &'static str,
+    plugin_id: &'a str,
+    task_id: &'a str,
+    capability: &'a str,
+    exit_code: i32,
+    summary: &'a str,
+    evidence_refs: &'a [String],
+}
+
 fn render_plugin_list(plugins: &[DiscoveredPlugin], json: bool) -> Response {
     if json {
-        let entries: Vec<String> = plugins
+        let entries = plugins
             .iter()
-            .map(|p| {
-                let caps: Vec<String> = p
+            .map(|p| PluginListEntryJson {
+                id: &p.manifest.id,
+                name: &p.manifest.name,
+                version: p.manifest.version.to_string(),
+                family: p.manifest.family.as_str(),
+                manifest_path: display_path(&p.manifest_path),
+                executable_path: p.manifest.executable_path.replace('\\', "/"),
+                capabilities: p
                     .manifest
                     .declared_capabilities
                     .iter()
-                    .map(|c| format!("\"{}\"", c.as_str()))
-                    .collect();
-                format!(
-                    "{{\"id\":\"{}\",\"name\":\"{}\",\"version\":\"{}\",\"family\":\"{}\",\"manifest_path\":\"{}\",\"executable_path\":\"{}\",\"capabilities\":[{}],\"egress_policy\":\"{:?}\",\"quotas\":{{\"max_memory_mib\":{},\"max_execution_time_secs\":{}}}}}",
-                    p.manifest.id,
-                    p.manifest.name,
-                    p.manifest.version,
-                    p.manifest.family.as_str(),
-                    p.manifest_path.display().to_string().replace('\\', "/"),
-                    p.manifest.executable_path.replace('\\', "/"),
-                    caps.join(","),
-                    p.manifest.egress_policy,
-                    p.manifest.quotas.max_memory_mib,
-                    p.manifest.quotas.max_execution_time_secs
-                )
+                    .map(|c| c.as_str())
+                    .collect(),
+                egress_policy: format!("{:?}", p.manifest.egress_policy),
+                quotas: PluginQuotasJson {
+                    max_memory_mib: p.manifest.quotas.max_memory_mib,
+                    max_execution_time_secs: p.manifest.quotas.max_execution_time_secs,
+                },
             })
             .collect();
-        Response {
-            stdout: format!(
-                "{{\"schema_version\":1,\"command\":\"plugin\",\"action\":\"list\",\"count\":{},\"plugins\":[{}]}}\n",
-                plugins.len(),
-                entries.join(",")
-            ),
-            stderr: String::new(),
-            exit_code: 0,
-        }
+        json_line(&PluginListJson {
+            schema_version: 1,
+            command: "plugin",
+            action: "list",
+            count: plugins.len(),
+            plugins: entries,
+        })
     } else {
         let mut out = format!("Sentra discovered plugins (count: {}):\n", plugins.len());
         for p in plugins {
@@ -2849,7 +3156,7 @@ fn render_plugin_list(plugins: &[DiscoveredPlugin], json: bool) -> Response {
                 p.manifest.id,
                 p.manifest.version,
                 p.manifest.family.as_str(),
-                p.manifest_path.display().to_string().replace('\\', "/"),
+                display_path(&p.manifest_path),
                 caps.join(", "),
                 p.manifest.egress_policy
             ));
@@ -2864,29 +3171,17 @@ fn render_plugin_list(plugins: &[DiscoveredPlugin], json: bool) -> Response {
 
 fn render_plugin_probe(output: &PluginProbeOutput, json: bool) -> Response {
     if json {
-        let caps: Vec<String> = output
-            .capabilities
-            .iter()
-            .map(|c| format!("\"{}\"", c.as_str()))
-            .collect();
-        let reason_str = output
-            .unsupported_reason
-            .as_ref()
-            .map(|r| format!("\"{}\"", r))
-            .unwrap_or_else(|| "null".to_string());
-        Response {
-            stdout: format!(
-                "{{\"schema_version\":1,\"command\":\"plugin\",\"action\":\"probe\",\"plugin_id\":\"{}\",\"name\":\"{}\",\"applicable\":{},\"details\":\"{}\",\"unsupported_reason\":{},\"capabilities\":[{}]}}\n",
-                output.plugin_id,
-                output.name,
-                output.applicable,
-                output.details.replace('"', "\\\""),
-                reason_str,
-                caps.join(",")
-            ),
-            stderr: String::new(),
-            exit_code: 0,
-        }
+        json_line(&PluginProbeJson {
+            schema_version: 1,
+            command: "plugin",
+            action: "probe",
+            plugin_id: &output.plugin_id,
+            name: &output.name,
+            applicable: output.applicable,
+            details: &output.details,
+            unsupported_reason: output.unsupported_reason.as_deref(),
+            capabilities: output.capabilities.iter().map(|c| c.as_str()).collect(),
+        })
     } else {
         let caps: Vec<&str> = output.capabilities.iter().map(|c| c.as_str()).collect();
         let mut out = format!(
@@ -2910,24 +3205,17 @@ fn render_plugin_probe(output: &PluginProbeOutput, json: bool) -> Response {
 
 fn render_plugin_run(output: &PluginExecutionOutput, json: bool) -> Response {
     if json {
-        let refs: Vec<String> = output
-            .evidence_refs
-            .iter()
-            .map(|r| format!("\"{}\"", r))
-            .collect();
-        Response {
-            stdout: format!(
-                "{{\"schema_version\":1,\"command\":\"plugin\",\"action\":\"run\",\"plugin_id\":\"{}\",\"task_id\":\"{}\",\"capability\":\"{}\",\"exit_code\":{},\"summary\":\"{}\",\"evidence_refs\":[{}]}}\n",
-                output.plugin_id,
-                output.task_id,
-                output.capability.as_str(),
-                output.exit_code,
-                output.summary.replace('"', "\\\""),
-                refs.join(",")
-            ),
-            stderr: String::new(),
-            exit_code: 0,
-        }
+        json_line(&PluginRunJson {
+            schema_version: 1,
+            command: "plugin",
+            action: "run",
+            plugin_id: &output.plugin_id,
+            task_id: &output.task_id,
+            capability: output.capability.as_str(),
+            exit_code: output.exit_code,
+            summary: &output.summary,
+            evidence_refs: &output.evidence_refs,
+        })
     } else {
         Response {
             stdout: format!(
@@ -2946,5 +3234,149 @@ fn render_plugin_run(output: &PluginExecutionOutput, json: bool) -> Response {
             stderr: String::new(),
             exit_code: 0,
         }
+    }
+}
+
+#[cfg(test)]
+mod plugin_json_tests {
+    use super::*;
+
+    /// Backslashes, both quote kinds, a newline, a tab and a control character.
+    const TRICKY: &str = "C:\\work\\repo \"quoted\" 'single'\nsecond line\ttab \u{1} end";
+
+    fn single_json_line(response: &Response) -> serde_json::Value {
+        assert_eq!(response.exit_code, 0);
+        assert!(response.stderr.is_empty());
+        assert!(response.stdout.ends_with('\n'));
+        assert_eq!(response.stdout.matches('\n').count(), 1, "one JSON line");
+        serde_json::from_str(&response.stdout).expect("valid JSON")
+    }
+
+    #[test]
+    fn plugin_list_json_escapes_manifest_strings_and_keeps_shape() {
+        let manifest: sentra_core::PluginManifest = serde_json::from_value(serde_json::json!({
+            "id": "org.example.\"esc\\aped\"",
+            "name": TRICKY,
+            "version": "1.2.3",
+            "interface_version": 1,
+            "family": "analysis_tool",
+            "executable_path": "C:\\tools\\scan.exe --rule \"x\"\n",
+            "declared_capabilities": ["static_analysis", "dependency_audit"],
+            "quotas": {
+                "max_memory_mib": 256,
+                "max_execution_time_secs": 30,
+                "max_frame_bytes": 1024,
+                "max_total_output_bytes": 4096
+            },
+            "egress_policy": "strictly_denied"
+        }))
+        .unwrap();
+        let plugin = DiscoveredPlugin {
+            manifest,
+            manifest_path: PathBuf::from(r"\\?\C:\plugins\scan dir\manifest.json"),
+            adapter_dir: PathBuf::from(r"\\?\C:\plugins\scan dir"),
+        };
+        let response = render_plugin_list(std::slice::from_ref(&plugin), true);
+        assert!(response.stdout.starts_with(
+            "{\"schema_version\":1,\"command\":\"plugin\",\"action\":\"list\",\"count\":1,\"plugins\":[{\"id\":"
+        ));
+        let json = single_json_line(&response);
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "schema_version": 1,
+                "command": "plugin",
+                "action": "list",
+                "count": 1,
+                "plugins": [{
+                    "id": "org.example.\"esc\\aped\"",
+                    "name": TRICKY,
+                    "version": "1.2.3",
+                    "family": "analysis_tool",
+                    "manifest_path": "C:/plugins/scan dir/manifest.json",
+                    "executable_path": "C:/tools/scan.exe --rule \"x\"\n",
+                    "capabilities": ["static_analysis", "dependency_audit"],
+                    "egress_policy": "StrictlyDenied",
+                    "quotas": {"max_memory_mib": 256, "max_execution_time_secs": 30}
+                }]
+            })
+        );
+
+        let empty = single_json_line(&render_plugin_list(&[], true));
+        assert_eq!(empty["count"], 0);
+        assert_eq!(empty["plugins"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn plugin_probe_json_escapes_adapter_strings_and_keeps_shape() {
+        let output = PluginProbeOutput {
+            plugin_id: "org.example.\"id\\x".to_string(),
+            name: TRICKY.to_string(),
+            interface_version: 1,
+            capabilities: vec![
+                PluginCapability::StaticAnalysis,
+                PluginCapability::Custom(TRICKY.to_string()),
+            ],
+            applicable: false,
+            details: TRICKY.to_string(),
+            unsupported_reason: Some(TRICKY.to_string()),
+        };
+        let response = render_plugin_probe(&output, true);
+        assert!(response.stdout.starts_with(
+            "{\"schema_version\":1,\"command\":\"plugin\",\"action\":\"probe\",\"plugin_id\":"
+        ));
+        assert_eq!(
+            single_json_line(&response),
+            serde_json::json!({
+                "schema_version": 1,
+                "command": "plugin",
+                "action": "probe",
+                "plugin_id": "org.example.\"id\\x",
+                "name": TRICKY,
+                "applicable": false,
+                "details": TRICKY,
+                "unsupported_reason": TRICKY,
+                "capabilities": ["static_analysis", TRICKY]
+            })
+        );
+
+        let applicable = PluginProbeOutput {
+            applicable: true,
+            unsupported_reason: None,
+            ..output
+        };
+        let json = single_json_line(&render_plugin_probe(&applicable, true));
+        assert_eq!(json["applicable"], true);
+        assert!(json["unsupported_reason"].is_null());
+    }
+
+    #[test]
+    fn plugin_run_json_escapes_adapter_strings_and_keeps_shape() {
+        let output = PluginExecutionOutput {
+            plugin_id: "org.example.\"id\\x".to_string(),
+            task_id: "task-1".to_string(),
+            capability: PluginCapability::Custom(TRICKY.to_string()),
+            exit_code: -3,
+            summary: TRICKY.to_string(),
+            evidence_refs: vec!["sha256:abc".to_string(), TRICKY.to_string()],
+        };
+        let response = render_plugin_run(&output, true);
+        assert!(response.stdout.starts_with(
+            "{\"schema_version\":1,\"command\":\"plugin\",\"action\":\"run\",\"plugin_id\":"
+        ));
+        assert_eq!(
+            single_json_line(&response),
+            serde_json::json!({
+                "schema_version": 1,
+                "command": "plugin",
+                "action": "run",
+                "plugin_id": "org.example.\"id\\x",
+                "task_id": "task-1",
+                "capability": TRICKY,
+                "exit_code": -3,
+                "summary": TRICKY,
+                "evidence_refs": ["sha256:abc", TRICKY]
+            })
+        );
     }
 }

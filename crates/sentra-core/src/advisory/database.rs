@@ -149,6 +149,15 @@ impl AdvisoryAuditResult {
     }
 }
 
+/// When the entries of [`AdvisoryDatabase::pinned_advisories`] were last edited, in
+/// milliseconds since the Unix epoch: 2026-11-08T23:43:22Z, the commit time of repository
+/// commit `f753e09`.
+///
+/// The bundled set is a small hand-written sample. It is not synchronized with OSV,
+/// RustSec or GHSA, so its age is this curation date and never the time a command runs.
+/// Freshness checks against it therefore report real staleness.
+pub const PINNED_ADVISORY_SET_CURATED_AT_MILLIS: u64 = 1_794_181_402_000;
+
 /// Pinned advisory database maintaining security advisories.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AdvisoryDatabase {
@@ -173,9 +182,25 @@ impl AdvisoryDatabase {
         }
     }
 
-    /// Creates a bundled, pinned reference advisory database for offline auditing (Requirement F-07).
-    pub fn default_pinned(updated_at: TimestampUtc) -> Self {
-        let advisories = vec![
+    /// Creates the bundled pinned advisory database for offline auditing (Requirement F-07).
+    ///
+    /// The snapshot is stamped with [`Self::pinned_curated_at`], the date its entries were
+    /// last edited, so `is_stale` reflects the real age of this small fixed sample.
+    pub fn default_pinned() -> Self {
+        Self::new(Self::pinned_advisories(), Self::pinned_curated_at())
+    }
+
+    /// Curation timestamp of the bundled pinned advisory set.
+    pub const fn pinned_curated_at() -> TimestampUtc {
+        TimestampUtc::from_epoch_millis(PINNED_ADVISORY_SET_CURATED_AT_MILLIS)
+    }
+
+    /// Returns the hand-written advisory entries bundled with Sentra.
+    ///
+    /// Callers that need these entries under a different snapshot timestamp (for example a
+    /// test that pins its clock) must say so explicitly through [`Self::new`].
+    pub fn pinned_advisories() -> Vec<Advisory> {
+        vec![
             Advisory {
                 id: "RUSTSEC-2021-0145".to_string(),
                 package: "atty".to_string(),
@@ -242,16 +267,17 @@ impl AdvisoryDatabase {
                 published_at: "2023-11-01T00:00:00Z".to_string(),
                 aliases: vec!["CVE-2023-45857".to_string()],
             },
-        ];
-        Self {
-            advisories,
-            updated_at,
-        }
+        ]
     }
 
     /// Returns the database last update timestamp.
     pub fn updated_at(&self) -> TimestampUtc {
         self.updated_at
+    }
+
+    /// Returns the number of advisories held by the database.
+    pub fn advisory_count(&self) -> usize {
+        self.advisories.len()
     }
 
     /// Checks if the advisory database exceeds the freshness threshold (Requirement F-07).

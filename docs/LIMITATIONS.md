@@ -44,3 +44,8 @@
 
 1. **Domain Immutability vs. Physical File Modification:** CLI inspection commands (`sentra status`, `sentra session show`) are domain-state read-only. However, opening SQLite databases under WAL mode triggers standard database recovery and truncation checkpoints (`PRAGMA wal_checkpoint(TRUNCATE)`), which may modify physical file bytes and timestamps. Writable storage permissions are required even for inspection.
 2. **Unrecoverable Storage Corruption:** Corrupt storage files or orphaned WAL locks fail closed immediately (`storage_or_service_failure`, exit code 5) to preserve forensic bytes. Automatic repair or destructive overwrite is prohibited.
+
+## 6. Web Console and Pinned Core Commands
+
+1. **Web Console Scope:** The web console (`web/`) shows only data from the core CLI, read-only core stores, its own persisted history, GitHub, OSV.dev (opt-in) and configured model providers. Patch candidates are dry-run checked and never reported as verified, PR scans cover only changed files at the head commit, and webhook scans run against the local checkout. See [web/README.md](../web/README.md#limitations).
+2. **Pinned or Static Core Commands:** `sentra audit`, `sentra propose-pr` and `sentra export sarif` match lockfiles against a small hand-curated advisory sample, not a synchronized OSV/RustSec mirror. `sentra sync-advisories` does not persist ingested records. `sentra fleet` reports an empty registry (no persisted worker registry exists yet). `sentra verify-audit` evaluates a built-in fixture worker and constant gates, so its `approved` result is not evidence. `sentra config test` does not contact providers, so its `connected` result is not evidence either. The web console uses none of these as data sources.

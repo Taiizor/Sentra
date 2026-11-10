@@ -19,9 +19,9 @@ Built from the ground up in Safe Rust (`#![forbid(unsafe_code)]`), Sentra pairs 
 ## Key Highlights
 
 - 🛡️ **In-Engine Pure-Rust Taint Analysis & SAST:** Zero-dependency lexical data-flow tracking detecting SQL Injection (CWE-89), Command Injection (CWE-78), Dynamic Code Eval (CWE-95), Path Traversal (CWE-22), and hardcoded credential leaks with automatic false-positive suppression.
-- 📦 **12-Ecosystem Advisory Auditor:** Pinned OSV and RustSec vulnerability auditing across lockfile formats: Cargo, Bun, npm (v1/v3), Yarn (classic/berry), pnpm (v6/v9), Poetry, Pip `requirements.txt`, Go `go.sum`, Composer, Gemfile, NuGet, and Deno.
+- 📦 **Multi-Ecosystem Lockfile Parsing:** Pure-Rust parsers for Cargo, Bun, npm (v1/v3), Yarn (classic/berry), pnpm (v6/v9), Poetry, Pip `requirements.txt`, Go `go.sum`, Composer, Gemfile, NuGet, and Deno, exposed as a package inventory by `sentra inventory`. The `sentra audit` command matches against a small pinned advisory set; the web console matches the inventory against live [OSV.dev](https://osv.dev) data (opt-in).
 - 🧪 **The Three-Tier Verification Invariant:** Remediation patches are marked verified if and only if: (1) baseline fails on unpatched code, (2) target passes on remediated code, and (3) zero regressions across existing test suites.
-- 🖥️ **Modern Web Operations Dashboard:** Enterprise React 19 + Tailwind CSS v4 + Base UI + shadcn/ui operations console with interactive Taint Flow call path inspectors, live CLI terminal, advisory hunter, PR dispatcher, and SARIF export.
+- 🖥️ **Web Operations Console:** React 19 + Tailwind CSS v4 console backed by an authenticated Bun bridge (role-based access, CSRF/DNS-rebinding guards, HMAC-chained operator audit log). It shows only real data: persisted scan history and findings, OSV dependency vulnerabilities, GitHub pull requests and CI runs, verified webhook deliveries, and model-generated patch candidates that are never labelled verified. See [web/README.md](web/README.md).
 - 🤖 **Native Model Context Protocol (MCP) Server:** Built-in JSON-RPC 2.0 stdio transport (`sentra mcp`) enabling deep autonomous collaboration with AI coding assistants (Cursor, Claude Desktop, Antigravity).
 - 🔍 **Pure-Rust Differential Review Engine:** Base/head directory delta analysis with SHA-256 snapshot hashing, 1:1 rename tracking, and context-bounded hunk generation.
 - 🔒 **Fail-Closed Host Isolation:** Untrusted target builds, procedural macros, and reproduction scripts never execute on the operator host. Dedicated disposable Linux VM workers (`ContainmentLevel::DisposableVm`) with strictly denied network egress.
@@ -47,16 +47,16 @@ flowchart TD
     Agents["AI Assistants (Cursor, Claude, Antigravity)"] --> MCP["Model Context Protocol (sentra mcp)"]
 
     CLI --> Core["Sentra Core Engine (#![forbid(unsafe_code)])"]
-    Web --> Server["Bun Backend Server (web/server.ts)"]
+    Web --> Server["Authenticated Bun Bridge (web/server)"]
     Server --> Core
     MCP --> Core
 
     subgraph CoreServices ["Deterministic Core Services"]
-        Core --> SAST["Pure-Rust Taint & AST Scanner"]
-        Core --> Advisory["12-Ecosystem Lockfile Auditor"]
+        Core --> SAST["Heuristic Line-Based SAST & Pattern Taint Tracker"]
+        Core --> Advisory["12-Ecosystem Lockfile Parsers & Inventory"]
         Core --> DiffEngine["Differential Base/Head Comparator"]
         Core --> PolicyEngine["Policy & Approval Engine"]
-        Core --> EvidenceVerifier["Three-Tier Evidence Verifier"]
+        Core --> EvidenceVerifier["Verification Bundle Model (no isolated runner yet)"]
     end
 
     subgraph DurableStorage ["Durable Local Storage"]
@@ -131,20 +131,19 @@ sentra mcp
 
 ### 4. Run the Web Operations Dashboard
 
-Sentra includes a responsive, modern web operations console built with React 19, Tailwind CSS v4, Base UI, and shadcn/ui:
+The web console (React 19 + Vite UI, Bun bridge) shows only real data from the core, GitHub, OSV and configured model providers. Authentication, roles and every environment variable are documented in [web/README.md](web/README.md).
 
 ```bash
-# Start both the Bun API backend (port 3001) and Vite dev server (port 5173) concurrently:
+# Build the core binary the bridge executes
+cargo build --release -p sentra-cli
+
+# Development: bridge on 127.0.0.1:3001 + Vite on http://localhost:5173
 bun run --cwd web dev
+# The bridge prints a one-time sign-in URL (loopback-only admin token) unless SENTRA_WEB_TOKENS is set.
 
-# Or start them in separate terminals if preferred:
-# Terminal 1 - Bun API Bridge:
-bun run web/server.ts
-# Terminal 2 - Vite Frontend:
-bun run --cwd web dev:ui
-
-# Open in your browser:
-# http://localhost:5173
+# Production: one origin serving the built UI and the API
+bun run --cwd web build
+bun run --cwd web start
 ```
 
 ---

@@ -1,34 +1,34 @@
-console.log('[Sentra Web] Launching API bridge (port 3001) and Vite dev server (port 5173)...')
-
+/**
+ * Development launcher: starts the bridge (server.ts, default 127.0.0.1:3001) and the Vite dev
+ * server (127.0.0.1:5173, proxying /api to the bridge). For production use `bun run start`
+ * after `bun run build`, which serves the built UI and the API from a single origin.
+ */
 const cwd = import.meta.dirname
+const bridgePort = process.env.SENTRA_WEB_PORT ?? '3001'
 
-// 1. Start Bun API Backend on port 3001
-const apiProcess = Bun.spawn(['bun', 'run', 'server.ts'], {
-  cwd,
-  stdout: 'inherit',
-  stderr: 'inherit',
-})
+console.log(`[sentra-web] starting bridge on 127.0.0.1:${bridgePort} and Vite on http://localhost:5173`)
 
-// 2. Start Vite Dev Server on port 5173
-const viteProcess = Bun.spawn(['bun', 'run', 'vite'], {
-  cwd,
-  stdout: 'inherit',
-  stderr: 'inherit',
-})
+const bridge = Bun.spawn(['bun', 'run', 'server.ts'], { cwd, stdout: 'inherit', stderr: 'inherit', env: process.env })
+const vite = Bun.spawn(['bun', 'run', 'vite'], { cwd, stdout: 'inherit', stderr: 'inherit', env: process.env })
 
-function handleExit() {
-  try {
-    apiProcess.kill()
-  } catch {}
-  try {
-    viteProcess.kill()
-  } catch {}
-  process.exit(0)
+let stopping = false
+async function stop(code: number) {
+  if (stopping) return
+  stopping = true
+  for (const child of [bridge, vite]) {
+    try {
+      child.kill()
+    } catch {
+      // already exited
+    }
+  }
+  await Promise.allSettled([bridge.exited, vite.exited])
+  process.exit(code)
 }
 
-process.on('SIGINT', handleExit)
-process.on('SIGTERM', handleExit)
+process.on('SIGINT', () => void stop(0))
+process.on('SIGTERM', () => void stop(0))
 
-// Exit if either process terminates unexpectedly
-await Promise.race([apiProcess.exited, viteProcess.exited])
-handleExit()
+// If either process exits, stop the other one too.
+const exitCode = await Promise.race([bridge.exited, vite.exited])
+await stop(typeof exitCode === 'number' ? exitCode : 1)

@@ -261,7 +261,7 @@ checksum = "52524bb7379625ca310543f1e8f48446b1f997ca92021c152ab74507ddfc4043"
     fs::write(f.workspace.join("Cargo.lock"), vulnerable_lock).unwrap();
 
     let clock = TimestampUtc::now();
-    let advisory_db = AdvisoryDatabase::default_pinned(clock);
+    let advisory_db = AdvisoryDatabase::new(AdvisoryDatabase::pinned_advisories(), clock);
 
     // Export to SARIF
     let sarif_json = LocalWorkspace::export_audit_sarif(&f.workspace, &f.db, &advisory_db).unwrap();

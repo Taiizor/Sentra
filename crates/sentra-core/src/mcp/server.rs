@@ -215,7 +215,7 @@ impl McpServer {
                 })?;
 
                 let now = TimestampUtc::now();
-                let db = AdvisoryDatabase::default_pinned(now);
+                let db = AdvisoryDatabase::default_pinned();
                 let audit_result = db
                     .audit_packages(&packages, now, 30)
                     .map_err(|e| McpErrorObject::internal_error(format!("Audit failed: {e}")))?;
@@ -224,7 +224,11 @@ impl McpServer {
                     "lockfile_audited": lock_name,
                     "packages_audited": audit_result.packages_audited,
                     "vulnerabilities_found": audit_result.matches.len(),
-                    "advisories_matched": audit_result.matches.iter().map(|f| &f.advisory.id).collect::<Vec<_>>()
+                    "advisories_matched": audit_result.matches.iter().map(|f| &f.advisory.id).collect::<Vec<_>>(),
+                    "advisory_db_source": "bundled_pinned_sample",
+                    "advisory_db_records": db.advisory_count(),
+                    "advisory_db_updated_at": db.updated_at().to_rfc3339(),
+                    "is_stale": audit_result.is_stale
                 }))
             }
             "sentra_list_findings" => Ok(serde_json::json!({

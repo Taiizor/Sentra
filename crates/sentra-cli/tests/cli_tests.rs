@@ -525,6 +525,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
     assert!(stdout_json.contains("RUSTSEC-2021-0145"));
     assert!(stdout_json.contains("PRESENT_ONLY"));
 
+    // The advisory set is disclosed as the bundled sample, stamped with its curation date,
+    // and staleness is measured against that date rather than the command's clock.
+    let audit: serde_json::Value = serde_json::from_str(&stdout_json).unwrap();
+    let pinned = sentra_core::AdvisoryDatabase::default_pinned();
+    assert_eq!(audit["advisory_db_source"], "bundled_pinned_sample");
+    assert_eq!(audit["advisory_db_records"], pinned.advisory_count());
+    assert_eq!(audit["advisory_db_updated_at"], "2026-11-08T23:43:22.000Z");
+    let expected_stale = pinned.is_stale(sentra_core::TimestampUtc::now(), 30);
+    assert_eq!(audit["is_stale"], expected_stale);
+
     // 2. Human-readable text mode
     let audit_human = f.invoke(&args(&[
         "audit",
@@ -539,6 +549,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
     assert!(stdout_human.contains("Packages audited: 1"));
     assert!(stdout_human.contains("Vulnerable packages: 1"));
     assert!(stdout_human.contains("RUSTSEC-2021-0145"));
+    assert!(stdout_human.contains("Advisory database: bundled pinned sample"));
+    assert!(stdout_human.contains("not a synchronized OSV or RustSec feed"));
 }
 
 #[test]
@@ -1253,19 +1265,33 @@ fn binary_fleet_commands() {
         .output()
         .unwrap();
     assert!(status_out.status.success());
-    let status_str = String::from_utf8(status_out.stdout).unwrap();
-    assert!(status_str.contains("\"command\":\"fleet status\""));
-    assert!(status_str.contains("\"total_workers\":4"));
-    assert!(status_str.contains("\"containment_ready\":true"));
+    let status: serde_json::Value = serde_json::from_slice(&status_out.stdout).unwrap();
+    assert_eq!(status["command"], "fleet status");
+    // No worker registry source exists, so the registry is empty and containment is never
+    // claimed as ready.
+    assert_eq!(status["total_workers"], 0);
+    assert_eq!(status["available_workers"], 0);
+    assert_eq!(status["containment_ready"], false);
+    assert_eq!(status["containment_status"], "no_workers");
+
+    let text_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["fleet", "status"])
+        .output()
+        .unwrap();
+    assert!(text_out.status.success());
+    let text = String::from_utf8(text_out.stdout).unwrap();
+    assert!(text.contains("Containment readiness: not ready (no workers registered)"));
+    assert!(!text.contains("verified"));
 
     let list_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
         .args(["fleet", "list", "--json"])
         .output()
         .unwrap();
     assert!(list_out.status.success());
-    let list_str = String::from_utf8(list_out.stdout).unwrap();
-    assert!(list_str.contains("\"command\":\"fleet list\""));
-    assert!(list_str.contains("worker-x86-01"));
+    let list: serde_json::Value = serde_json::from_slice(&list_out.stdout).unwrap();
+    assert_eq!(list["command"], "fleet list");
+    assert_eq!(list["total"], 0);
+    assert_eq!(list["workers"], serde_json::json!([]));
 }
 
 #[test]
@@ -1296,40 +1322,94 @@ fn binary_tenant_commands() {
         .unwrap();
     assert!(list_out.status.success());
     let list_str = String::from_utf8(list_out.stdout).unwrap();
-    assert!(list_str.contains("\"command\":\"tenant list\""));
-    assert!(list_str.contains("sentra-internal"));
+    assert_eq!(
+        list_str,
+        "{\"schema_version\":1,\"command\":\"tenant list\",\"total\":0,\"tenants\":[],\"untrusted_execution\":false}\n",
+        "an empty registry is reported as empty; no demo tenants are seeded"
+    );
+    // Listing is read-only: the core store keeps its exact schema and stays usable.
+    let status = f.invoke(&f.command("status"));
+    assert!(
+        status.status.success(),
+        "{}",
+        String::from_utf8_lossy(&status.stderr)
+    );
 
-    let add_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+    // A missing database path is listed as empty and is not created.
+    let missing = f.root.join("storage space/missing.db");
+    let missing_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
         .args([
             "tenant",
-            "add",
-            "--id",
-            "custom-corp",
-            "--name",
-            "Custom Corp Global",
+            "list",
             "--database",
-            f.db.to_str().unwrap(),
+            missing.to_str().unwrap(),
             "--json",
         ])
         .output()
         .unwrap();
+    assert!(missing_out.status.success());
+    assert!(
+        String::from_utf8(missing_out.stdout)
+            .unwrap()
+            .contains("\"total\":0")
+    );
+    assert!(!missing.exists());
+
+    // Adding a tenant to a core store is refused and leaves the store untouched.
+    let core_before = fs::read(&f.db).unwrap();
+    let refused = sentra(&[
+        "tenant",
+        "add",
+        "--id",
+        "custom-corp",
+        "--name",
+        "Custom Corp Global",
+        "--database",
+        f.db.to_str().unwrap(),
+        "--json",
+    ]);
+    assert_eq!(refused.status.code(), Some(4));
+    assert!(refused.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8(refused.stderr).unwrap(),
+        "{\"schema_version\":1,\"error\":\"invalid_storage_location\"}\n"
+    );
+    assert_eq!(fs::read(&f.db).unwrap(), core_before);
+    let status_after = f.invoke(&f.command("status"));
+    assert!(
+        status_after.status.success(),
+        "{}",
+        String::from_utf8_lossy(&status_after.stderr)
+    );
+
+    // A dedicated tenant registry file is created and written as before.
+    let registry = f.root.join("storage space/tenants.db");
+    let add_out = sentra(&[
+        "tenant",
+        "add",
+        "--id",
+        "custom-corp",
+        "--name",
+        "Custom Corp Global",
+        "--database",
+        registry.to_str().unwrap(),
+        "--json",
+    ]);
     assert!(add_out.status.success());
     let add_str = String::from_utf8(add_out.stdout).unwrap();
     assert!(add_str.contains("\"command\":\"tenant add\""));
     assert!(add_str.contains("custom-corp"));
 
-    let list_after = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args([
-            "tenant",
-            "list",
-            "--database",
-            f.db.to_str().unwrap(),
-            "--json",
-        ])
-        .output()
-        .unwrap();
+    let list_after = sentra(&[
+        "tenant",
+        "list",
+        "--database",
+        registry.to_str().unwrap(),
+        "--json",
+    ]);
     let list_after_str = String::from_utf8(list_after.stdout).unwrap();
     assert!(list_after_str.contains("custom-corp"));
+    assert!(list_after_str.contains("\"total\":1"));
 }
 
 #[test]
@@ -1427,9 +1507,26 @@ fn binary_patch_apply_and_rollback() {
     let apply_str = String::from_utf8(apply_out.stdout).unwrap();
     assert!(apply_str.contains("\"command\":\"patch apply\""));
     assert!(apply_str.contains("\"status\":\"success\""));
+    let apply_json: serde_json::Value = serde_json::from_str(&apply_str).unwrap();
+    assert_eq!(apply_json["dry_run"], false);
+    assert_eq!(apply_json["hunks"], 1);
+    assert_eq!(apply_json["already_patched"], false);
+    assert_eq!(
+        apply_json["audit_recorded"], false,
+        "no --database means no audit event, reported honestly"
+    );
+    assert!(
+        apply_json["backup_path"]
+            .as_str()
+            .unwrap()
+            .ends_with(".bak")
+    );
 
     let patched_content = fs::read_to_string(&target_file).unwrap();
-    assert!(patched_content.contains("let token = process.env.TOKEN;"));
+    assert_eq!(
+        patched_content,
+        "function auth() {\n  let token = process.env.TOKEN;\n}\n"
+    );
 
     // Find the backup file created
     let backup_entries = fs::read_dir(&backup_dir).unwrap().collect::<Vec<_>>();
@@ -1453,9 +1550,476 @@ fn binary_patch_apply_and_rollback() {
     assert!(rollback_out.status.success());
     let rollback_str = String::from_utf8(rollback_out.stdout).unwrap();
     assert!(rollback_str.contains("\"command\":\"patch rollback\""));
+    assert!(rollback_str.contains("\"audit_recorded\":false"));
 
     let rolled_back_content = fs::read_to_string(&target_file).unwrap();
-    assert!(rolled_back_content.contains("let token = 'old';"));
+    assert_eq!(
+        rolled_back_content,
+        "function auth() {\n  let token = 'old';\n}\n"
+    );
+}
+
+fn sentra(arguments: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(arguments)
+        .output()
+        .unwrap()
+}
+
+fn stdout_json(output: &Output) -> serde_json::Value {
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_json::from_slice(&output.stdout).expect("stdout is one JSON document")
+}
+
+fn audit_records(f: &Fixture, session: &str) -> Vec<(String, serde_json::Value)> {
+    let manager = SqliteConnectionManager::open_existing(&f.db, &SystemClock).unwrap();
+    let (repository, _) = PersistenceRepository::with_authority(manager.clone());
+    let records = repository
+        .audit_events(session.parse::<SessionId>().unwrap(), 0, 1000)
+        .unwrap()
+        .into_iter()
+        .map(|r| {
+            let envelope: serde_json::Value = serde_json::from_str(&r.details_json).unwrap();
+            (r.event_kind, envelope["event"].clone())
+        })
+        .collect();
+    manager.shutdown().unwrap();
+    records
+}
+
+const CARGO_LOCK_FIXTURE: &str = "version = 3\n\n[[package]]\nname = \"app\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"serde\"\nversion = \"1.0.200\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\n\n[[package]]\nname = \"time\"\nversion = \"0.2.10\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\n";
+
+#[test]
+fn binary_inventory_discovers_nested_lockfiles_read_only() {
+    let f = Fixture::new();
+    let ws = &f.workspace;
+    fs::write(ws.join("Cargo.lock"), CARGO_LOCK_FIXTURE).unwrap();
+    fs::create_dir_all(ws.join("tools/py")).unwrap();
+    fs::write(ws.join("tools/py/requirements.txt"), "requests==2.31.0\n").unwrap();
+    fs::write(ws.join("package-lock.json"), "{ broken json").unwrap();
+    // Dependency and build directories are never entered.
+    fs::create_dir_all(ws.join("node_modules/dep")).unwrap();
+    fs::write(ws.join("node_modules/dep/Cargo.lock"), CARGO_LOCK_FIXTURE).unwrap();
+    fs::create_dir_all(ws.join("target/debug")).unwrap();
+    fs::write(ws.join("target/debug/Cargo.lock"), CARGO_LOCK_FIXTURE).unwrap();
+
+    let ws_arg = ws.to_str().unwrap();
+    let json = stdout_json(&sentra(&["inventory", "--workspace", ws_arg, "--json"]));
+    assert_eq!(json["schema_version"], 1);
+    assert_eq!(json["command"], "inventory");
+    assert_eq!(json["untrusted_execution"], false);
+    assert_eq!(json["truncated"], false);
+    let expected_root = fs::canonicalize(ws).unwrap();
+    let reported_root = PathBuf::from(json["workspace"].as_str().unwrap());
+    assert_eq!(fs::canonicalize(reported_root).unwrap(), expected_root);
+    assert!(!json["workspace"].as_str().unwrap().contains('\\'));
+
+    let lockfiles = json["lockfiles"].as_array().unwrap();
+    let paths: Vec<&str> = lockfiles
+        .iter()
+        .map(|l| l["path"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        paths,
+        [
+            "Cargo.lock",
+            "package-lock.json",
+            "tools/py/requirements.txt"
+        ]
+    );
+    assert_eq!(lockfiles[0]["kind"], "Cargo");
+    assert_eq!(lockfiles[0]["ecosystem"], "crates.io");
+    assert_eq!(lockfiles[0]["packages"], 2);
+    assert!(lockfiles[0]["parse_error"].is_null());
+    assert_eq!(lockfiles[1]["kind"], "PackageLock");
+    assert_eq!(lockfiles[1]["ecosystem"], "npm");
+    assert_eq!(lockfiles[1]["packages"], 0);
+    assert!(lockfiles[1]["parse_error"].as_str().is_some());
+    assert_eq!(lockfiles[2]["ecosystem"], "PyPI");
+    assert_eq!(json["total_packages"], 3);
+    let packages = json["packages"].as_array().unwrap();
+    assert_eq!(packages.len(), 3);
+    assert_eq!(
+        packages[0],
+        serde_json::json!({"name":"serde","version":"1.0.200","ecosystem":"crates.io","lockfile":"Cargo.lock"})
+    );
+    assert_eq!(
+        packages[2],
+        serde_json::json!({"name":"requests","version":"2.31.0","ecosystem":"PyPI","lockfile":"tools/py/requirements.txt"})
+    );
+
+    // Depth 0 inspects root files only.
+    let shallow = stdout_json(&sentra(&[
+        "inventory",
+        "--workspace",
+        ws_arg,
+        "--max-depth",
+        "0",
+        "--json",
+    ]));
+    assert_eq!(shallow["lockfiles"].as_array().unwrap().len(), 2);
+
+    // Out-of-range depth and unknown workspaces fail closed with typed errors.
+    let deep = sentra(&[
+        "inventory",
+        "--workspace",
+        ws_arg,
+        "--max-depth",
+        "33",
+        "--json",
+    ]);
+    assert_eq!(deep.status.code(), Some(2));
+    let missing = f.root.join("missing");
+    let invalid = sentra(&[
+        "inventory",
+        "--workspace",
+        missing.to_str().unwrap(),
+        "--json",
+    ]);
+    assert_eq!(invalid.status.code(), Some(4));
+    assert_eq!(
+        String::from_utf8(invalid.stderr).unwrap(),
+        "{\"schema_version\":1,\"error\":\"invalid_workspace\"}\n"
+    );
+}
+
+#[test]
+fn binary_scan_file_name_selects_rules_and_labels_matches() {
+    let go = "cmd := exec.Command(\"sh\", \"-c\", \"ls \" + userPath)";
+    let labeled = stdout_json(&sentra(&[
+        "scan",
+        "--snippet",
+        go,
+        "--file-name",
+        "main.go",
+        "--json",
+    ]));
+    let matches = labeled["matches"].as_array().unwrap();
+    assert!(matches.iter().any(|m| m["rule_id"] == "SENTRA-GO-002"));
+    assert!(matches.iter().all(|m| m["file_path"] == "main.go"));
+
+    // Without a file name, Go-only rules do not run on the snippet.
+    let unlabeled = stdout_json(&sentra(&["scan", "--snippet", go, "--json"]));
+    assert!(
+        unlabeled["matches"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|m| m["rule_id"] != "SENTRA-GO-002")
+    );
+
+    // Stdin mode accepts the same label.
+    let mut child = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["scan", "-", "--file-name", "main.go", "--json"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(go.as_bytes())
+        .unwrap();
+    let piped = stdout_json(&child.wait_with_output().unwrap());
+    assert!(
+        piped["matches"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m["rule_id"] == "SENTRA-GO-002" && m["file_path"] == "main.go")
+    );
+
+    // Names are bare basenames, and only label in-memory snippets.
+    for words in [
+        vec!["scan", "--snippet", "x", "--file-name", "../main.go"],
+        vec!["scan", "--snippet", "x", "--file-name", "dir/main.go"],
+        vec!["scan", "--snippet", "x", "--file-name", "a b.go"],
+        vec!["scan", "--workspace", ".", "--file-name", "main.go"],
+        vec![
+            "scan",
+            "--snippet",
+            "x",
+            "--file-name",
+            "a.go",
+            "--file-name",
+            "b.go",
+        ],
+    ] {
+        assert!(parse(&args(&words)).is_err(), "must reject {words:?}");
+    }
+    let long = "a".repeat(101);
+    assert!(parse(&args(&["scan", "--snippet", "x", "--file-name", &long])).is_err());
+    assert!(
+        parse(&args(&[
+            "scan",
+            "--snippet",
+            "x",
+            "--file-name",
+            &long[..100]
+        ]))
+        .is_ok()
+    );
+}
+
+struct PatchCase {
+    f: Fixture,
+    target: PathBuf,
+    patch: PathBuf,
+    backups: PathBuf,
+}
+
+const AUTH_ORIGINAL: &str = "function auth() {\n  let token = 'old';\n  return token;\n}\n";
+const AUTH_PATCHED: &str =
+    "function auth() {\n  let token = process.env.TOKEN;\n  return token;\n}\n";
+const AUTH_DIFF: &str = "--- a/src/auth.ts\n+++ b/src/auth.ts\n@@ -1,4 +1,4 @@\n function auth() {\n-  let token = 'old';\n+  let token = process.env.TOKEN;\n   return token;\n }\n";
+
+impl PatchCase {
+    fn new(diff: &str) -> Self {
+        let f = Fixture::new();
+        fs::create_dir_all(f.workspace.join("src")).unwrap();
+        let target = f.workspace.join("src/auth.ts");
+        fs::write(&target, AUTH_ORIGINAL).unwrap();
+        let patch = f.root.join("fix.patch");
+        fs::write(&patch, diff).unwrap();
+        let backups = f.root.join("backups");
+        Self {
+            f,
+            target,
+            patch,
+            backups,
+        }
+    }
+    fn apply(&self, extra: &[&str]) -> Output {
+        let mut arguments = vec![
+            "patch",
+            "apply",
+            "--patch",
+            self.patch.to_str().unwrap(),
+            "--workspace",
+            self.f.workspace.to_str().unwrap(),
+            "--target",
+            "src/auth.ts",
+            "--backup-dir",
+            self.backups.to_str().unwrap(),
+        ];
+        arguments.extend_from_slice(extra);
+        arguments.push("--json");
+        sentra(&arguments)
+    }
+}
+
+#[test]
+fn binary_patch_dry_run_validates_and_writes_nothing() {
+    let case = PatchCase::new(AUTH_DIFF);
+    let json = stdout_json(&case.apply(&["--dry-run"]));
+    assert_eq!(json["schema_version"], 1);
+    assert_eq!(json["command"], "patch apply");
+    assert_eq!(json["status"], "success");
+    assert_eq!(json["dry_run"], true);
+    assert_eq!(json["target_path"], "src/auth.ts");
+    assert_eq!(json["already_patched"], false);
+    assert_eq!(json["hunks"], 1);
+    assert_eq!(json["untrusted_execution"], false);
+    assert!(json.get("backup_path").is_none());
+    assert!(json.get("audit_recorded").is_none());
+    assert_eq!(
+        json["post_image_sha256"],
+        sentra_core::sha256_digest(AUTH_PATCHED.as_bytes())
+    );
+    assert_eq!(fs::read_to_string(&case.target).unwrap(), AUTH_ORIGINAL);
+    assert!(!case.backups.exists(), "a dry run creates no backup");
+
+    // --dry-run belongs to apply only and may appear once.
+    assert!(
+        parse(&args(&[
+            "patch",
+            "apply",
+            "--patch",
+            "p",
+            "--workspace",
+            "w",
+            "--dry-run",
+            "--dry-run"
+        ]))
+        .is_err()
+    );
+    assert!(
+        parse(&args(&[
+            "patch",
+            "rollback",
+            "--backup",
+            "b",
+            "--workspace",
+            "w",
+            "--target",
+            "t",
+            "--dry-run"
+        ]))
+        .is_err()
+    );
+}
+
+#[test]
+fn binary_patch_that_does_not_apply_fails_closed_without_writes() {
+    let stale = AUTH_DIFF.replace("   return token;", "   return other;");
+    let case = PatchCase::new(&stale);
+    for extra in [&["--dry-run"][..], &[][..]] {
+        let output = case.apply(extra);
+        assert_eq!(output.status.code(), Some(4));
+        assert!(output.stdout.is_empty());
+        assert_eq!(
+            String::from_utf8(output.stderr).unwrap(),
+            "{\"schema_version\":1,\"error\":\"patch_does_not_apply\"}\n"
+        );
+    }
+    assert_eq!(fs::read_to_string(&case.target).unwrap(), AUTH_ORIGINAL);
+    assert!(!case.backups.exists());
+
+    // Whitespace is never fuzzed: a re-indented pre-image does not match.
+    let reindented = AUTH_DIFF.replace("-  let token = 'old';", "-    let token = 'old';");
+    fs::write(&case.patch, reindented).unwrap();
+    assert_eq!(case.apply(&[]).status.code(), Some(4));
+
+    // Malformed diffs and unsafe targets get their own typed errors.
+    fs::write(&case.patch, "not a diff\n").unwrap();
+    let malformed = case.apply(&[]);
+    assert_eq!(malformed.status.code(), Some(4));
+    assert!(
+        String::from_utf8(malformed.stderr)
+            .unwrap()
+            .contains("\"invalid_patch\"")
+    );
+    fs::write(&case.patch, AUTH_DIFF).unwrap();
+    let escape = sentra(&[
+        "patch",
+        "apply",
+        "--patch",
+        case.patch.to_str().unwrap(),
+        "--workspace",
+        case.f.workspace.to_str().unwrap(),
+        "--target",
+        "../outside.ts",
+        "--json",
+    ]);
+    assert_eq!(escape.status.code(), Some(4));
+    assert!(
+        String::from_utf8(escape.stderr)
+            .unwrap()
+            .contains("\"invalid_patch_target\"")
+    );
+    assert_eq!(fs::read_to_string(&case.target).unwrap(), AUTH_ORIGINAL);
+}
+
+#[test]
+fn binary_patch_apply_and_rollback_record_core_audit_events() {
+    let case = PatchCase::new(AUTH_DIFF);
+    let session = case.f.init();
+    let db = case.f.db.to_str().unwrap();
+
+    let applied = stdout_json(&case.apply(&["--database", db]));
+    assert_eq!(applied["audit_recorded"], true);
+    assert_eq!(applied["already_patched"], false);
+    assert_eq!(fs::read_to_string(&case.target).unwrap(), AUTH_PATCHED);
+    let backup = applied["backup_path"].as_str().unwrap().to_string();
+
+    // Re-applying is detected from the post-image at its own position.
+    let again = stdout_json(&case.apply(&["--database", db]));
+    assert_eq!(again["already_patched"], true);
+    assert!(again["backup_path"].is_null());
+    assert_eq!(fs::read_to_string(&case.target).unwrap(), AUTH_PATCHED);
+
+    let rolled_back = stdout_json(&sentra(&[
+        "patch",
+        "rollback",
+        "--backup",
+        &backup,
+        "--workspace",
+        case.f.workspace.to_str().unwrap(),
+        "--target",
+        "src/auth.ts",
+        "--database",
+        db,
+        "--json",
+    ]));
+    assert_eq!(rolled_back["audit_recorded"], true);
+    assert_eq!(rolled_back["target_path"], "src/auth.ts");
+    assert_eq!(fs::read_to_string(&case.target).unwrap(), AUTH_ORIGINAL);
+
+    let events = audit_records(&case.f, &session);
+    let patch_events: Vec<&(String, serde_json::Value)> = events
+        .iter()
+        .filter(|(kind, _)| kind.starts_with("Patch"))
+        .collect();
+    assert_eq!(patch_events.len(), 3);
+    let (kind, details) = patch_events[0];
+    assert_eq!(kind, "PatchApplied");
+    assert_eq!(details["target_path"], "src/auth.ts");
+    assert_eq!(details["already_patched"], false);
+    assert_eq!(details["hunks"], 1);
+    assert_eq!(
+        details["patch_sha256"],
+        sentra_core::sha256_digest(AUTH_DIFF.as_bytes())
+    );
+    assert_eq!(
+        details["pre_image_sha256"],
+        sentra_core::sha256_digest(AUTH_ORIGINAL.as_bytes())
+    );
+    assert_eq!(
+        details["post_image_sha256"],
+        sentra_core::sha256_digest(AUTH_PATCHED.as_bytes())
+    );
+    assert_eq!(patch_events[1].0, "PatchApplied");
+    assert_eq!(patch_events[1].1["already_patched"], true);
+    assert_eq!(patch_events[2].0, "PatchRolledBack");
+    assert_eq!(
+        patch_events[2].1["post_image_sha256"],
+        sentra_core::sha256_digest(AUTH_ORIGINAL.as_bytes())
+    );
+
+    // The core store keeps its exact schema: core commands still succeed.
+    let status = case.f.invoke(&case.f.command("status"));
+    assert!(
+        status.status.success(),
+        "{}",
+        String::from_utf8_lossy(&status.stderr)
+    );
+}
+
+#[test]
+fn binary_patch_with_foreign_or_missing_store_does_not_touch_the_file() {
+    let case = PatchCase::new(AUTH_DIFF);
+    // Missing store: fails before any write.
+    let missing = case.apply(&["--database", case.f.db.to_str().unwrap()]);
+    assert_eq!(missing.status.code(), Some(6));
+    assert_eq!(fs::read_to_string(&case.target).unwrap(), AUTH_ORIGINAL);
+    assert!(!case.backups.exists());
+
+    // A store that belongs to another workspace is rejected before any write.
+    let other = case.f.root.join("other");
+    fs::create_dir(&other).unwrap();
+    let init = sentra(&[
+        "init",
+        "--workspace",
+        other.to_str().unwrap(),
+        "--database",
+        case.f.db.to_str().unwrap(),
+        "--json",
+    ]);
+    assert!(init.status.success());
+    let mismatch = case.apply(&["--database", case.f.db.to_str().unwrap()]);
+    assert_eq!(mismatch.status.code(), Some(4));
+    assert_eq!(
+        String::from_utf8(mismatch.stderr).unwrap(),
+        "{\"schema_version\":1,\"error\":\"workspace_mismatch\"}\n"
+    );
+    assert_eq!(fs::read_to_string(&case.target).unwrap(), AUTH_ORIGINAL);
+    assert!(!case.backups.exists());
 }
 
 #[test]
@@ -1532,6 +2096,180 @@ fn binary_plugin_commands() {
         .output()
         .unwrap();
     assert!(!bad_run_out.status.success());
+}
+
+/// Backslashes, both quote kinds, a newline, a tab and a control character.
+const PLUGIN_TRICKY: &str = "C:\\work\\repo \"quoted\" 'single'\nsecond line\ttab \u{1} end";
+
+fn write_plugin_manifest(dir: &Path, id: &str, name: &str, executable_path: &str) -> PathBuf {
+    fs::create_dir_all(dir).unwrap();
+    let manifest = serde_json::json!({
+        "id": id,
+        "name": name,
+        "version": "1.2.3",
+        "interface_version": 1,
+        "family": "analysis_tool",
+        "executable_path": executable_path,
+        "declared_capabilities": ["static_analysis"],
+        "quotas": {
+            "max_memory_mib": 256,
+            "max_execution_time_secs": 30,
+            "max_frame_bytes": 1048576,
+            "max_total_output_bytes": 10485760
+        },
+        "egress_policy": "strictly_denied"
+    });
+    let path = dir.join("manifest.json");
+    fs::write(&path, serde_json::to_string_pretty(&manifest).unwrap()).unwrap();
+    path
+}
+
+#[test]
+fn binary_plugin_list_json_escapes_manifest_strings() {
+    let f = Fixture::new();
+    let plugins = f.root.join("plugins");
+    // Windows file names cannot hold `"`; the path still carries backslashes there.
+    let adapter_dir = plugins.join(if cfg!(windows) {
+        "adapter 'q' ü"
+    } else {
+        "adapter \"q\" 'q' ü"
+    });
+    let id = "org.example.\"esc\\aped\"";
+    let manifest = write_plugin_manifest(
+        &adapter_dir,
+        id,
+        PLUGIN_TRICKY,
+        "C:\\tools\\scan.exe --rule \"x\"",
+    );
+
+    let output = sentra(&[
+        "plugin",
+        "list",
+        "--dir",
+        plugins.to_str().unwrap(),
+        "--json",
+    ]);
+    let json = stdout_json(&output);
+    assert_eq!(output.stdout.iter().filter(|b| **b == b'\n').count(), 1);
+    assert_eq!(json["schema_version"], 1);
+    assert_eq!(json["command"], "plugin");
+    assert_eq!(json["action"], "list");
+    assert_eq!(json["count"], 1);
+    let entry = &json["plugins"][0];
+    assert_eq!(entry["id"], id);
+    assert_eq!(entry["name"], PLUGIN_TRICKY);
+    assert_eq!(entry["version"], "1.2.3");
+    assert_eq!(entry["family"], "analysis_tool");
+    assert_eq!(entry["executable_path"], "C:/tools/scan.exe --rule \"x\"");
+    assert_eq!(
+        entry["capabilities"],
+        serde_json::json!(["static_analysis"])
+    );
+    assert_eq!(entry["egress_policy"], "StrictlyDenied");
+    assert_eq!(
+        entry["quotas"],
+        serde_json::json!({"max_memory_mib": 256, "max_execution_time_secs": 30})
+    );
+    let reported = entry["manifest_path"].as_str().unwrap();
+    assert!(!reported.contains('\\'), "{reported}");
+    assert_eq!(
+        fs::canonicalize(reported).unwrap(),
+        fs::canonicalize(&manifest).unwrap()
+    );
+}
+
+fn bun_available() -> bool {
+    Command::new("bun")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+const ESCAPE_ADAPTER: &str = r#"import * as readline from "readline";
+const ID = __ID__;
+const TEXT = __TEXT__;
+const REFS = __REFS__;
+const emit = (frame: object) => process.stdout.write(JSON.stringify(frame) + "\n");
+readline.createInterface({ input: process.stdin }).on("line", (line: string) => {
+  const req = JSON.parse(line);
+  if (req.operation === "initialize") {
+    emit({ status: "initialize_ack", plugin_id: ID, interface_version: 1, capabilities: ["static_analysis"] });
+  } else if (req.operation === "probe") {
+    emit({ status: "probe_result", applicable: false, details: TEXT, unsupported_reason: TEXT });
+  } else if (req.operation === "execute") {
+    emit({ status: "execute_result", task_id: req.task_id, exit_code: 0, evidence_refs: REFS, summary: TEXT });
+  } else if (req.operation === "shutdown") {
+    emit({ status: "shutdown_ack" });
+    process.exit(0);
+  } else {
+    emit({ status: "error", code: 1, message: "unsupported operation" });
+  }
+});
+"#;
+
+#[test]
+fn binary_plugin_probe_and_run_json_escape_adapter_strings() {
+    if !bun_available() {
+        eprintln!("skipped: the escape adapter needs bun on PATH");
+        return;
+    }
+    let f = Fixture::new();
+    let adapter_dir = f.root.join("adapter 'q' ü");
+    let id = "org.example.escape";
+    let manifest = write_plugin_manifest(&adapter_dir, id, PLUGIN_TRICKY, "bun run adapter.ts");
+    let refs = [String::from("sha256:abc"), String::from(PLUGIN_TRICKY)];
+    let script = ESCAPE_ADAPTER
+        .replace("__ID__", &serde_json::to_string(id).unwrap())
+        .replace("__TEXT__", &serde_json::to_string(PLUGIN_TRICKY).unwrap())
+        .replace("__REFS__", &serde_json::to_string(&refs).unwrap());
+    fs::write(adapter_dir.join("adapter.ts"), script).unwrap();
+    let manifest_arg = manifest.to_str().unwrap();
+
+    let probe_out = sentra(&[
+        "plugin",
+        "probe",
+        "--manifest",
+        manifest_arg,
+        "--workspace",
+        f.workspace.to_str().unwrap(),
+        "--json",
+    ]);
+    let probe = stdout_json(&probe_out);
+    assert_eq!(probe_out.stdout.iter().filter(|b| **b == b'\n').count(), 1);
+    assert_eq!(probe["schema_version"], 1);
+    assert_eq!(probe["command"], "plugin");
+    assert_eq!(probe["action"], "probe");
+    assert_eq!(probe["plugin_id"], id);
+    assert_eq!(probe["name"], PLUGIN_TRICKY);
+    assert_eq!(probe["applicable"], false);
+    assert_eq!(probe["details"], PLUGIN_TRICKY);
+    assert_eq!(probe["unsupported_reason"], PLUGIN_TRICKY);
+    assert_eq!(
+        probe["capabilities"],
+        serde_json::json!(["static_analysis"])
+    );
+
+    let run_out = sentra(&[
+        "plugin",
+        "run",
+        "--manifest",
+        manifest_arg,
+        "--capability",
+        "static_analysis",
+        "--json",
+    ]);
+    let run = stdout_json(&run_out);
+    assert_eq!(run_out.stdout.iter().filter(|b| **b == b'\n').count(), 1);
+    assert_eq!(run["schema_version"], 1);
+    assert_eq!(run["command"], "plugin");
+    assert_eq!(run["action"], "run");
+    assert_eq!(run["plugin_id"], id);
+    assert!(run["task_id"].as_str().unwrap().starts_with("task-"));
+    assert_eq!(run["capability"], "static_analysis");
+    assert_eq!(run["exit_code"], 0);
+    assert_eq!(run["summary"], PLUGIN_TRICKY);
+    assert_eq!(run["evidence_refs"], serde_json::json!(refs));
 }
 
 #[test]

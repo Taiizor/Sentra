@@ -69,9 +69,11 @@ pub mod workspace;
 
 pub use advisory::{
     Advisory, AdvisoryAuditResult, AdvisoryDatabase, AdvisoryError, AdvisoryErrorKind,
-    AdvisoryMatch, LockfileKind, OsvAffected, OsvPackage, OsvRange, OsvRecord, OsvSeverity,
-    PackageRecord, SemverVersion, VersionReq, discover_workspace_lockfiles, ingest_osv_directory,
-    parse_bun_lock, parse_cargo_lock, parse_deno_lock, parse_lockfile_content, parse_osv_payload,
+    AdvisoryMatch, DEFAULT_INVENTORY_MAX_DEPTH, InventoryLimits, InventoryLockfile,
+    InventoryPackage, LockfileKind, MAX_INVENTORY_DEPTH, OsvAffected, OsvPackage, OsvRange,
+    OsvRecord, OsvSeverity, PackageRecord, SemverVersion, VersionReq, WorkspaceInventory,
+    collect_lockfile_inventory, discover_workspace_lockfiles, ingest_osv_directory, parse_bun_lock,
+    parse_cargo_lock, parse_deno_lock, parse_lockfile_content, parse_osv_payload,
     parse_package_lock, parse_pnpm_lock, parse_yarn_lock,
 };
 pub use audit::{AuditEvent, AuditEventKind};
@@ -86,9 +88,10 @@ pub use dashboard::{
 };
 pub use diff::{
     DiffError, DiffErrorKind, DiffHunk, DiffLine, DiffSummary, FileContentDiff, FileDelta,
-    FileDeltaKind, HunkLimits, PatchFileResult, PatchOutcome, RevisionBinding, SnapshotDiff,
-    apply_hunk_to_content, apply_patch_file, compare_snapshots, compute_line_diff,
-    reconcile_findings_anti_regression, rollback_patch_file, validate_patch_approval_invalidation,
+    FileDeltaKind, HunkLimits, PatchFileResult, PatchOutcome, PatchPlan, PatchRollbackResult,
+    RevisionBinding, RollbackPlan, SnapshotDiff, UnifiedPatch, apply_hunk_to_content,
+    apply_patch_file, compare_snapshots, compute_line_diff, reconcile_findings_anti_regression,
+    rollback_patch_file, validate_patch_approval_invalidation,
 };
 pub use domain::{
     ApprovalId, AttemptId, CampaignId, Confidence, DomainError, EventId, EvidenceId, ExecutionId,
@@ -114,9 +117,10 @@ pub use export::{
     severity_to_sarif_level, severity_to_security_score,
 };
 pub use fleet::{
-    AdapterActionCapability, AuditStatus, EvidenceMethod, FleetError, FleetErrorKind, HostPlatform,
-    MultiUserAuditReport, MultiUserSecurityAudit, RemoteWorkerId, RemoteWorkerNode, SupportMatrix,
-    SupportedTargetTuple, TargetLanguage, WorkerFleetManager, WorkerState,
+    AdapterActionCapability, AuditStatus, ContainmentReadiness, EvidenceMethod, FleetError,
+    FleetErrorKind, HostPlatform, MultiUserAuditReport, MultiUserSecurityAudit, RemoteWorkerId,
+    RemoteWorkerNode, SupportMatrix, SupportedTargetTuple, TargetLanguage, WorkerFleetManager,
+    WorkerState,
 };
 pub use hosted::{
     DEFAULT_MAX_DRIFT_SECS, DEFAULT_MAX_LEDGER_CAPACITY, DeliveryLedger, DeliveryRecord,

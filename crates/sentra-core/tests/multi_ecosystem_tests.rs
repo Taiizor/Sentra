@@ -52,7 +52,7 @@ fn test_npm_package_lock_audit_and_advisories() {
     assert_eq!(packages.len(), 3);
 
     let now = TimestampUtc::now();
-    let db = AdvisoryDatabase::default_pinned(now);
+    let db = AdvisoryDatabase::new(AdvisoryDatabase::pinned_advisories(), now);
     let result = db
         .audit_packages(&packages, now, 30)
         .expect("audit succeeds");
@@ -99,7 +99,7 @@ minimist@0.0.8:
     assert_eq!(pkgs.len(), 2);
 
     let now = TimestampUtc::now();
-    let db = AdvisoryDatabase::default_pinned(now);
+    let db = AdvisoryDatabase::new(AdvisoryDatabase::pinned_advisories(), now);
     let result = db.audit_packages(&pkgs, now, 30).unwrap();
 
     // lodash 4.17.10 is vulnerable
@@ -147,7 +147,7 @@ packages:
     assert_eq!(pkgs.len(), 2);
 
     let now = TimestampUtc::now();
-    let db = AdvisoryDatabase::default_pinned(now);
+    let db = AdvisoryDatabase::new(AdvisoryDatabase::pinned_advisories(), now);
     let result = db.audit_packages(&pkgs, now, 30).unwrap();
 
     // lodash 4.17.5 is vulnerable
@@ -176,7 +176,7 @@ fn test_bun_lock_audit() {
     assert_eq!(pkgs.len(), 2);
 
     let now = TimestampUtc::now();
-    let db = AdvisoryDatabase::default_pinned(now);
+    let db = AdvisoryDatabase::new(AdvisoryDatabase::pinned_advisories(), now);
     let result = db.audit_packages(&pkgs, now, 30).unwrap();
 
     // lodash 4.17.4 is vulnerable
@@ -207,7 +207,7 @@ fn test_deno_lock_audit() {
     assert_eq!(pkgs.len(), 2);
 
     let now = TimestampUtc::now();
-    let db = AdvisoryDatabase::default_pinned(now);
+    let db = AdvisoryDatabase::new(AdvisoryDatabase::pinned_advisories(), now);
     let result = db.audit_packages(&pkgs, now, 30).unwrap();
 
     // lodash 4.17.0 is vulnerable
@@ -248,7 +248,7 @@ fn test_local_workspace_discovers_npm_and_bun_lockfiles() {
     assert!(init_report.initialized);
 
     let now = TimestampUtc::now();
-    let advisory_db = AdvisoryDatabase::default_pinned(now);
+    let advisory_db = AdvisoryDatabase::new(AdvisoryDatabase::pinned_advisories(), now);
     let audit_report =
         LocalWorkspace::audit_dependencies(&workspace, &db_path, &advisory_db).unwrap();
 

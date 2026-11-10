@@ -1,309 +1,147 @@
-import { useState, useMemo } from 'react'
-import {
-  Globe,
-  Search,
-  ExternalLink,
-  RefreshCw,
-  Database,
-  X,
-  FilterX,
-  ShieldAlert,
-} from 'lucide-react'
-import { toast } from 'sonner'
+import { useRef, useState } from 'react'
+import { Globe, Play, Radar, Settings, ShieldOff } from 'lucide-react'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import type { OsvAdvisoryView, UserRole } from '@/types/sentra'
+import { api } from '@/lib/api'
+import { useConsole } from '@/lib/console-context'
+import { useResource } from '@/lib/use-resource'
+import type { IntelStatusView } from '@/types/api'
+import { formatDateTime, minimumRoleFor, permissionHint } from './console-format'
+import { ErrorAlert, GatedButton, KeyValue, LoadingBlock, NoTenantState, SectionCard, TabHeader } from './console-kit'
+import { DependencyFindings } from './intel-dependency-findings'
+import { DependencyInventory } from './intel-inventory'
+import { OsvLookup, type OsvLookupHandle } from './intel-osv-lookup'
+import { LiveStreamModal } from './live-stream-modal'
 
-interface ThreatIntelTabProps {
-  advisories: OsvAdvisoryView[]
-  currentRole: UserRole
-  onSyncAdvisories: () => void
-}
+/**
+ * Dependency vulnerability intelligence from OSV.dev, queried on demand and only when an
+ * administrator has enabled outbound OSV lookups. No local advisory mirror exists.
+ */
+export function ThreatIntelTab() {
+  const { tenant, can } = useConsole()
+  const status = useResource('intel-status', (signal) => api.intel.status(signal))
+  const [scanOpen, setScanOpen] = useState(false)
+  const lookupRef = useRef<OsvLookupHandle>(null)
 
-const ECOSYSTEM_OPTIONS = [
-  { id: 'ALL', label: 'All Feeds' },
-  { id: 'npm', label: 'npm' },
-  { id: 'crates.io', label: 'crates.io' },
-  { id: 'PyPI', label: 'PyPI' },
-  { id: 'Go', label: 'Go' },
-  { id: 'Maven', label: 'Maven' },
-  { id: 'Composer', label: 'Composer' },
-  { id: 'NuGet', label: 'NuGet' },
-  { id: 'RubyGems', label: 'RubyGems' },
-  { id: 'Swift', label: 'Swift' },
-  { id: 'Pub', label: 'Pub' },
-  { id: 'Erlang', label: 'Erlang' },
-  { id: 'GitHub Actions', label: 'Actions' },
-]
-
-export function ThreatIntelTab({ advisories, currentRole, onSyncAdvisories }: ThreatIntelTabProps) {
-  const [search, setSearch] = useState('')
-  const [ecosystem, setEcosystem] = useState('ALL')
-  const [isSyncing, setIsSyncing] = useState(false)
-
-  const ecosystemCounts = useMemo(() => {
-    const counts: Record<string, number> = { ALL: advisories.length }
-    for (const a of advisories) {
-      counts[a.ecosystem] = (counts[a.ecosystem] || 0) + 1
-    }
-    return counts
-  }, [advisories])
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return advisories.filter((a) => {
-      const matchQuery =
-        !q ||
-        a.id.toLowerCase().includes(q) ||
-        a.package.toLowerCase().includes(q) ||
-        a.vulnerability.toLowerCase().includes(q)
-
-      const matchEco = ecosystem === 'ALL' || a.ecosystem === ecosystem
-      return matchQuery && matchEco
-    })
-  }, [advisories, search, ecosystem])
-
-  function handleSync() {
-    if (currentRole === 'Viewer') return
-    setIsSyncing(true)
-    setTimeout(() => {
-      setIsSyncing(false)
-      onSyncAdvisories()
-      toast.success('OSV Mirror Synchronized', {
-        description: 'Updated local in-memory threat cache with 250k+ universal security advisories.',
-      })
-    }, 800)
-  }
-
-  function getSeverityBadge(severity: string) {
-    switch (severity.toLowerCase()) {
-      case 'critical':
-        return <Badge className="bg-rose-500/15 text-rose-400 border-rose-500/30 text-xs">Critical</Badge>
-      case 'high':
-        return <Badge className="bg-orange-500/15 text-orange-400 border-orange-500/30 text-xs">High</Badge>
-      case 'medium':
-        return <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-xs">Medium</Badge>
-      default:
-        return <Badge variant="outline" className="text-xs text-muted-foreground">{severity}</Badge>
-    }
-  }
-
-  function getAdvisoryUrl(advisory: OsvAdvisoryView): string {
-    if (advisory.url) return advisory.url
-    const id = advisory.id
-    if (id.startsWith('RUSTSEC-')) {
-      return `https://rustsec.org/advisories/${id}.html`
-    }
-    if (id.startsWith('GHSA-')) {
-      return `https://github.com/advisories/${id}`
-    }
-    if (id.startsWith('CVE-')) {
-      return `https://nvd.nist.gov/vuln/detail/${id}`
-    }
-    if (id.startsWith('GO-')) {
-      return `https://pkg.go.dev/vuln/${id}`
-    }
-    return `https://osv.dev/vulnerability/${id}`
-  }
+  const osvEnabled = status.data?.osvEnabled ?? null
+  const osvBlockedReason =
+    osvEnabled === false
+      ? `OSV lookups are disabled by policy; someone with the ${minimumRoleFor('settings:write')} role can enable them in Settings`
+      : null
 
   return (
-    <div className="flex flex-col gap-5">
-      {/* Sleek Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-border/40">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <Globe className="size-4 text-sky-400" />
-            <h2 className="text-base font-semibold tracking-tight text-foreground">
-              OSV Threat Intelligence
-            </h2>
-            <Badge variant="outline" className="text-[11px] px-2 py-0 border-sky-500/30 text-sky-400 bg-sky-500/5">
-              Multi-Ecosystem Universal Mirror
-            </Badge>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Zero-latency vulnerability intelligence synchronized across npm, crates.io, PyPI, Go, Maven, Composer, NuGet, RubyGems, Swift, Pub, and Erlang.
-          </p>
-        </div>
+    <div className="flex flex-col gap-4">
+      <TabHeader
+        icon={<Radar className="size-4 text-violet-400" />}
+        title="Threat intelligence"
+        description="Known-vulnerability data for this workspace's dependencies, looked up on OSV.dev on demand. Sentra does not keep a local advisory mirror."
+      />
 
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={isSyncing || currentRole === 'Viewer'}
-          onClick={handleSync}
-          className="h-8 text-xs font-medium gap-2 shrink-0 border-border/80 hover:bg-accent self-start sm:self-auto"
-        >
-          <RefreshCw className={`size-3.5 text-muted-foreground ${isSyncing ? 'animate-spin text-primary' : ''}`} />
-          <span>{isSyncing ? 'Syncing Feeds...' : 'Sync Mirror'}</span>
-        </Button>
-      </div>
+      <OsvStatusCard status={status.data} error={status.error} onRetry={status.reload} />
 
-      {/* Unified Filter & Search Toolbar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-card/60 border border-border/60 rounded-lg p-2.5">
-        {/* Ecosystem Filter Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-          {ECOSYSTEM_OPTIONS.map((eco) => {
-            const count = ecosystemCounts[eco.id] ?? 0
-            const isActive = ecosystem === eco.id
-            return (
-              <button
-                key={eco.id}
-                onClick={() => setEcosystem(eco.id)}
-                className={`h-7 px-2.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 shrink-0 ${
-                  isActive
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
-                }`}
-              >
-                <span>{eco.label}</span>
-                <span
-                  className={`text-[10px] px-1 py-0.2 rounded-full font-mono ${
-                    isActive ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-muted-foreground'
-                  }`}
-                >
-                  {count}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Search Input */}
-        <div className="relative w-full md:w-72 shrink-0">
-          <Search className="size-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-          <Input
-            placeholder="Search CVE, package, summary..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-8 pr-7 h-7 text-xs bg-background/50 border-border/60 focus-visible:ring-1"
+      {!tenant ? (
+        <NoTenantState feature="Dependency intelligence" />
+      ) : (
+        <>
+          <DependencyFindings
+            tenant={tenant}
+            actions={
+              <GatedButton permission="scan:run" blockedReason={osvBlockedReason} size="sm" onClick={() => setScanOpen(true)}>
+                <Play className="fill-current" />
+                Run dependency audit
+              </GatedButton>
+            }
           />
-          {search && (
-            <button
-              onClick={() => setSearch('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded"
-            >
-              <X className="size-3" />
-            </button>
-          )}
-        </div>
-      </div>
+          <DependencyInventory
+            tenant={tenant}
+            lookupBlockedReason={
+              !can('intel:query')
+                ? permissionHint('intel:query')
+                : (osvBlockedReason ?? (status.data ? null : 'The OSV policy has not been loaded'))
+            }
+            onLookup={(pkg) =>
+              lookupRef.current?.lookup({ package: pkg.name, ecosystem: pkg.ecosystem ?? '', version: pkg.version })
+            }
+          />
+        </>
+      )}
 
-      {/* Database Table Card */}
-      <Card className="border-border/60 bg-card/40">
-        <CardHeader className="py-3 px-4 border-b border-border/40">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Database className="size-3.5 text-muted-foreground" />
-              <CardTitle className="text-xs font-medium text-foreground">
-                Vulnerability Database
-              </CardTitle>
-              <span className="text-[11px] text-muted-foreground">
-                ({filtered.length} of {advisories.length})
-              </span>
-            </div>
+      <OsvLookup ref={lookupRef} blockedReason={osvBlockedReason} />
 
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-muted-foreground hidden sm:inline">
-                Storage: In-Memory WAL
-              </span>
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono text-muted-foreground">
-                OSV v1.6
-              </Badge>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-              <FilterX className="size-8 text-muted-foreground/50 mb-3" />
-              <p className="text-xs font-medium text-foreground">No matching advisories</p>
-              <p className="text-[11px] text-muted-foreground mt-1 max-w-sm">
-                No security advisories matched your filter criteria. Try adjusting the search query or ecosystem.
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-4 h-7 text-xs"
-                onClick={() => {
-                  setSearch('')
-                  setEcosystem('ALL')
-                }}
-              >
-                Reset Filters
-              </Button>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-border/40 hover:bg-transparent">
-                    <TableHead className="text-xs font-medium h-9">Advisory</TableHead>
-                    <TableHead className="text-xs font-medium h-9">Package</TableHead>
-                    <TableHead className="text-xs font-medium h-9">Ecosystem</TableHead>
-                    <TableHead className="text-xs font-medium h-9">Vulnerability</TableHead>
-                    <TableHead className="text-xs font-medium h-9">Affected</TableHead>
-                    <TableHead className="text-xs font-medium h-9">Fixed</TableHead>
-                    <TableHead className="text-xs font-medium h-9">Severity</TableHead>
-                    <TableHead className="text-xs font-medium h-9 text-right pr-4">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((item) => (
-                    <TableRow key={item.id} className="border-border/40 hover:bg-muted/30">
-                      <TableCell className="font-mono text-xs font-semibold text-foreground py-2.5">
-                        <div className="flex items-center gap-1.5">
-                          <ShieldAlert className="size-3 text-muted-foreground shrink-0" />
-                          <span>{item.id}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs font-medium text-foreground/90 py-2.5">
-                        {item.package}
-                      </TableCell>
-                      <TableCell className="py-2.5">
-                        <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0">
-                          {item.ecosystem}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs max-w-[280px] truncate text-muted-foreground py-2.5" title={item.vulnerability}>
-                        {item.vulnerability}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs text-rose-400 py-2.5">
-                        {item.affectedRange}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs text-emerald-400 font-semibold py-2.5">
-                        {item.fixedVersion}
-                      </TableCell>
-                      <TableCell className="py-2.5">
-                        {getSeverityBadge(item.severity)}
-                      </TableCell>
-                      <TableCell className="text-right py-2.5 pr-4">
-                        <a
-                          href={getAdvisoryUrl(item)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300 transition-colors"
-                        >
-                          Details
-                          <ExternalLink className="size-3" />
-                        </a>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {tenant && <LiveStreamModal open={scanOpen} onOpenChange={setScanOpen} kind="dependency" />}
     </div>
+  )
+}
+
+function OsvStatusCard({
+  status,
+  error,
+  onRetry,
+}: {
+  status: IntelStatusView | undefined
+  error: Error | null
+  onRetry: () => void
+}) {
+  const { can, navigate } = useConsole()
+  return (
+    <SectionCard
+      icon={<Globe className="size-4 text-sky-400" />}
+      title="OSV.dev lookups"
+      actions={
+        status && (
+          <Badge
+            variant="outline"
+            className={
+              status.osvEnabled ? 'border-emerald-500/30 text-emerald-300' : 'border-zinc-600 text-zinc-400'
+            }
+          >
+            {status.osvEnabled ? 'enabled' : 'disabled'}
+          </Badge>
+        )
+      }
+    >
+      {error ? (
+        <ErrorAlert error={error} onRetry={onRetry} title="Could not read the OSV policy" />
+      ) : !status ? (
+        <LoadingBlock rows={2} />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <KeyValue label="Endpoint" mono>
+              {status.endpoint}
+            </KeyValue>
+            <KeyValue label="Cached OSV records">{status.cachedAdvisories.toLocaleString()}</KeyValue>
+            <KeyValue label="Last query">{status.lastQueryAt ? formatDateTime(status.lastQueryAt) : 'never'}</KeyValue>
+            <KeyValue label="Policy last changed">
+              {status.changedAt ? `${formatDateTime(status.changedAt)} by ${status.changedBy ?? 'unknown'}` : 'never changed'}
+            </KeyValue>
+          </div>
+          <p className="text-[11px] text-muted-foreground">{status.privacyNote}</p>
+          {!status.osvEnabled && (
+            <Alert className="border-amber-500/30 bg-amber-500/5">
+              <ShieldOff className="text-amber-400" />
+              <AlertTitle className="text-xs font-semibold text-amber-200">Dependency vulnerability lookups are off</AlertTitle>
+              <AlertDescription className="flex flex-col gap-2 text-xs">
+                <span>
+                  Dependency audits are skipped and OSV queries are refused until someone with the {minimumRoleFor('settings:write')} role enables
+                  OSV lookups in Settings. The local lockfile inventory below is still available.
+                </span>
+                {can('settings:write') ? (
+                  <div>
+                    <Button variant="outline" size="xs" onClick={() => navigate('settings')}>
+                      <Settings />
+                      Open Settings
+                    </Button>
+                  </div>
+                ) : (
+                  <span className="text-[11px] text-zinc-500">{permissionHint('settings:write')}</span>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+        </>
+      )}
+    </SectionCard>
   )
 }

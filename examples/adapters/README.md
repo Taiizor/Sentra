@@ -1,6 +1,8 @@
 # Sentra Subprocess Adapter SDK & Reference Examples
 
-This directory provides production-grade reference implementations and documentation for extending the **Sentra Security Platform** using the **Subprocess Plugin Architecture** (`REQ-F16`, [`docs/EXTENSIONS.md`](../../docs/EXTENSIONS.md)).
+This directory contains protocol examples and documentation for extending the **Sentra Security Platform** with the **Subprocess Plugin Architecture** (`REQ-F16`, [`docs/EXTENSIONS.md`](../../docs/EXTENSIONS.md)).
+
+> **These adapters are examples, not production integrations.** When the real tool (Semgrep, Snyk, Ollama) is not installed, they return simulated or synthetic results, including placeholder evidence references. The web console never loads them implicitly. To try them, point `SENTRA_PLUGIN_DIR` at this directory. Treat their output as test data. Declared memory, time and egress limits are written into the manifests but are not enforced by an isolation profile.
 
 ---
 
