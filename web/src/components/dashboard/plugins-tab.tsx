@@ -41,6 +41,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  fetchDiscoveredPlugins,
+  probePluginAdapter,
+  runPluginCapability,
+} from '@/lib/api-client'
 import type {
   DiscoveredPluginView,
   PluginProbeResult,
@@ -108,18 +113,12 @@ export function PluginsTab({ currentWorkspace, currentRole }: PluginsTabProps) {
   async function fetchPlugins() {
     setIsLoading(true)
     try {
-      const res = await fetch('/api/plugins')
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      if (Array.isArray(data.plugins)) {
-        setPlugins(data.plugins)
-      } else {
-        setPlugins([])
-      }
+      const list = await fetchDiscoveredPlugins()
+      setPlugins(list)
     } catch (err: any) {
       console.error('Failed to load plugins:', err)
       toast.error('Failed to load plugins', {
-        description: 'Ensure Sentra web bridge is active on port 3001.',
+        description: 'Ensure Sentra web API bridge is running (bun run --cwd web dev).',
       })
     } finally {
       setIsLoading(false)
@@ -138,16 +137,8 @@ export function PluginsTab({ currentWorkspace, currentRole }: PluginsTabProps) {
     }))
 
     try {
-      const res = await fetch('/api/plugins/probe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: plugin.id,
-          workspace: currentWorkspace,
-        }),
-      })
-
-      const data = await res.json()
+      const data = await probePluginAdapter(plugin.id, currentWorkspace)
+      if (!data) throw new Error('No probe response from adapter')
       setProbeResults((prev) => ({
         ...prev,
         [plugin.id]: { loading: false, result: data },
@@ -201,18 +192,14 @@ export function PluginsTab({ currentWorkspace, currentRole }: PluginsTabProps) {
         .map((s) => s.trim())
         .filter(Boolean)
 
-      const res = await fetch('/api/plugins/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: activeRunPlugin.id,
-          capability: selectedCapability,
-          workspace: currentWorkspace,
-          arguments: parsedArgs.length > 0 ? parsedArgs : undefined,
-        }),
-      })
+      const data = await runPluginCapability(
+        activeRunPlugin.id,
+        selectedCapability,
+        currentWorkspace,
+        parsedArgs
+      )
 
-      const data = await res.json()
+      if (!data) throw new Error('No execution output from adapter subprocess')
       setExecResult(data)
 
       if (data.exit_code === 0) {
@@ -221,7 +208,7 @@ export function PluginsTab({ currentWorkspace, currentRole }: PluginsTabProps) {
         })
       } else {
         toast.error(`Execution Finished with Exit Code ${data.exit_code}`, {
-          description: data.summary || data.error || 'Subprocess exited with non-zero status.',
+          description: data.summary || (data as any).error || 'Subprocess exited with non-zero status.',
         })
       }
     } catch (err: any) {

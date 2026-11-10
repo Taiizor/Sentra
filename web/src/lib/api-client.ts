@@ -538,3 +538,57 @@ export async function runPhase1Reconnaissance(): Promise<import('@/types/sentra'
     return null
   }
 }
+
+export async function fetchDiscoveredPlugins(): Promise<import('@/types/sentra').DiscoveredPluginView[]> {
+  try {
+    const res = await fetch(`${API_BASE}/plugins`)
+    if (!res.ok) return []
+    const data = await res.json()
+    return Array.isArray(data.plugins) ? data.plugins : []
+  } catch (err) {
+    console.error('Failed to fetch discovered plugins:', err)
+    return []
+  }
+}
+
+export async function probePluginAdapter(
+  pluginId: string,
+  workspace: string
+): Promise<import('@/types/sentra').PluginProbeResult | null> {
+  try {
+    const res = await fetch(`${API_BASE}/plugins/probe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: pluginId, workspace }),
+    })
+    return await res.json()
+  } catch (err) {
+    console.error(`Failed to probe plugin ${pluginId}:`, err)
+    return null
+  }
+}
+
+export async function runPluginCapability(
+  pluginId: string,
+  capability: string,
+  workspace: string,
+  args?: string[]
+): Promise<import('@/types/sentra').PluginExecutionResult | null> {
+  try {
+    const res = await fetch(`${API_BASE}/plugins/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: pluginId,
+        capability,
+        workspace,
+        arguments: args && args.length > 0 ? args : undefined,
+      }),
+    })
+    return await res.json()
+  } catch (err) {
+    console.error(`Failed to run capability ${capability} for ${pluginId}:`, err)
+    return null
+  }
+}
+
