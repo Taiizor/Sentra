@@ -32,6 +32,10 @@ pub enum RuleCategory {
     Misconfiguration,
     /// Smart contract vulnerabilities and decentralized ledger flaws (Solidity).
     SmartContract,
+    /// Server-Side Request Forgery and cloud metadata service abuse.
+    Ssrf,
+    /// Mass assignment and unvalidated object property modification.
+    MassAssignment,
 }
 
 impl RuleCategory {
@@ -50,6 +54,8 @@ impl RuleCategory {
             Self::AgentSkillSecurity => "AGENT_SKILL_SECURITY",
             Self::Misconfiguration => "SECURITY_MISCONFIGURATION",
             Self::SmartContract => "SMART_CONTRACT",
+            Self::Ssrf => "SSRF",
+            Self::MassAssignment => "MASS_ASSIGNMENT",
         }
     }
 }
@@ -389,6 +395,93 @@ pub static BUILTIN_RULES: &[SastRule] = &[
         cwe_id: "CWE-841",
         description: "Solidity low-level call `.call{value:` executed without adhering to Checks-Effects-Interactions (CEI) pattern or ReentrancyGuard. Attackers can re-enter the contract before state balances update.",
         recommendation: "Update internal balances before initiating external Ether transfers (Checks-Effects-Interactions) or guard the function with OpenZeppelin `ReentrancyGuard`.",
+    },
+    // CI/CD Action Pinning (ci-cd-security skill)
+    SastRule {
+        id: "SENTRA-CICD-005",
+        name: "WorkflowUnpinnedActionBranchRef",
+        category: RuleCategory::CiCdWorkflow,
+        severity: Severity::Medium,
+        cwe_id: "CWE-829",
+        description: "GitHub Actions workflow references an action via a mutable branch (e.g. `@main`, `@master`, `@dev`) instead of an immutable 40-character commit SHA. Upstream branch updates flow into CI runs immediately without operator review.",
+        recommendation: "Pin action references to immutable commit SHAs with an inline tag comment (e.g. `uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2`).",
+    },
+    // Go Injection & Crypto Safety (golang-security skill)
+    SastRule {
+        id: "SENTRA-GO-002",
+        name: "GoCommandInjectionShellWrapper",
+        category: RuleCategory::CommandInjection,
+        severity: Severity::Critical,
+        cwe_id: "CWE-78",
+        description: "Go process execution invokes shell wrappers `exec.Command(\"sh\", \"-c\", ...)` or `exec.Command(\"bash\", \"-c\", ...)` with dynamic or formatted arguments. This enables arbitrary shell command injection.",
+        recommendation: "Execute binaries directly without shell interpreters (e.g. `exec.Command(\"git\", \"log\", arg)`), passing arguments as discrete slice elements.",
+    },
+    SastRule {
+        id: "SENTRA-GO-003",
+        name: "GoSqlInjectionFormattedQuery",
+        category: RuleCategory::SqlInjection,
+        severity: Severity::Critical,
+        cwe_id: "CWE-89",
+        description: "Go SQL query dynamically formatted with `fmt.Sprintf` or string concatenation into `db.Query`, `db.Exec`, or `db.QueryRow`. Unsanitized user parameters allow SQL injection.",
+        recommendation: "Use parameterized queries with placeholder bindings (e.g. `db.Query(\"SELECT * FROM users WHERE id = $1\", userID)`).",
+    },
+    SastRule {
+        id: "SENTRA-GO-004",
+        name: "GoWeakCryptoOrPrng",
+        category: RuleCategory::Cryptographic,
+        severity: Severity::Medium,
+        cwe_id: "CWE-338",
+        description: "Go code uses `math/rand` or `crypto/md5` in security-sensitive or token generation contexts. `math/rand` is predictable and `md5` is vulnerable to collisions.",
+        recommendation: "Use `crypto/rand` for token and nonce generation, and `crypto/sha256` or `golang.org/x/crypto` for secure cryptographic hashing.",
+    },
+    // Authentication, Cookies & JWT (auth-implementation-patterns skill)
+    SastRule {
+        id: "SENTRA-AUTH-004",
+        name: "InsecureCookieFlags",
+        category: RuleCategory::Authentication,
+        severity: Severity::Medium,
+        cwe_id: "CWE-614",
+        description: "Session or authentication cookie configured with `httpOnly: false`, `secure: false`, or `sameSite: 'none'` without `secure`. This exposes cookies to XSS exfiltration and network sniffing.",
+        recommendation: "Always set `httpOnly: true`, `secure: true`, and `sameSite: 'lax'` or `'strict'` on sensitive cookies.",
+    },
+    SastRule {
+        id: "SENTRA-AUTH-005",
+        name: "HardcodedJwtSecretKey",
+        category: RuleCategory::Secret,
+        severity: Severity::High,
+        cwe_id: "CWE-798",
+        description: "Hardcoded, predictable, or trivial symmetric secret used for JWT signing/verification (e.g. 'secret', 'jwt_secret', 'shhhhh'). Attackers can forge arbitrary JWT authentication claims.",
+        recommendation: "Load cryptographically random JWT signing keys (minimum 256 bits) from secure environment variables or a secret vault.",
+    },
+    // Cloud SSRF & Metadata Security (google-cloud-waf-security skill)
+    SastRule {
+        id: "SENTRA-CLOUD-001",
+        name: "CloudMetadataServiceSsrfTarget",
+        category: RuleCategory::Ssrf,
+        severity: Severity::High,
+        cwe_id: "CWE-918",
+        description: "Hardcoded or dynamically targeted cloud instance metadata endpoint (`169.254.169.254` or `metadata.google.internal`). In SSRF scenarios, this exposes cloud instance identity credentials and tokens.",
+        recommendation: "Block link-local addresses (`169.254.0.0/16`) in outgoing HTTP clients, validate destination IPs against allowlists, and enforce IMDSv2 / Metadata-Flavor headers.",
+    },
+    // API Security & Mass Assignment (api-security-testing skill)
+    SastRule {
+        id: "SENTRA-API-001",
+        name: "ApiMassAssignmentUpdate",
+        category: RuleCategory::MassAssignment,
+        severity: Severity::High,
+        cwe_id: "CWE-915",
+        description: "Direct unvalidated assignment of `req.body` or `request.body` into database update or creation methods (`.update(req.body)`, `.create(req.body)`). Attackers can overwrite unauthorized fields such as roles or privileges.",
+        recommendation: "Validate input using explicit schemas/DTOs (e.g. Zod, Joi) or pick only permitted fields explicitly.",
+    },
+    // Supply Chain & Script Safety (ci-cd-security & owasp-top-10-testing skills)
+    SastRule {
+        id: "SENTRA-SUPPLY-001",
+        name: "InsecureCurlPipeToShell",
+        category: RuleCategory::CiCdWorkflow,
+        severity: Severity::High,
+        cwe_id: "CWE-494",
+        description: "Download and pipe to shell execution (`curl | bash`, `curl | sh`, `wget | sh`) detected in script or workflow. If the transport or remote server is compromised, arbitrary code executes directly.",
+        recommendation: "Download packages via verified package managers or verify the SHA-256 checksum of downloaded scripts before execution.",
     },
 ];
 

@@ -260,11 +260,9 @@ impl SastScanner {
             // 13. AI Agent & Skill Safety (SENTRA-SKILL-001 to 002)
             matches.extend(self.check_agent_skill_security(rel_path, line_num, line));
 
-            // 14. Go Path Traversal Scoping (SENTRA-GO-001)
-            if rel_path.ends_with(".go")
-                && let Some(m) = self.check_go_path_clean(rel_path, line_num, line)
-            {
-                matches.push(m);
+            // 14. Go Security & Path Traversal (SENTRA-GO-001 to 004)
+            if rel_path.ends_with(".go") {
+                matches.extend(self.check_go_security(rel_path, line_num, line));
             }
 
             // 15. Django Security Misconfigurations (SENTRA-DJANGO-001 to 003)
@@ -300,6 +298,21 @@ impl SastScanner {
             // 19. Solidity Smart Contract Flaws (SENTRA-SOLIDITY-001 to 002)
             if rel_path.ends_with(".sol") {
                 matches.extend(self.check_solidity_security(rel_path, line_num, line));
+            }
+
+            // 20. Cloud Metadata SSRF Target (SENTRA-CLOUD-001)
+            if let Some(m) = self.check_cloud_metadata_ssrf(rel_path, line_num, line) {
+                matches.push(m);
+            }
+
+            // 21. API Security & Mass Assignment (SENTRA-API-001)
+            if rel_path.ends_with(".js") || rel_path.ends_with(".ts") || rel_path.ends_with(".py") {
+                matches.extend(self.check_api_security(rel_path, line_num, line));
+            }
+
+            // 22. Insecure Download Pipe to Shell (SENTRA-SUPPLY-001)
+            if let Some(m) = self.check_supply_chain_security(rel_path, line_num, line) {
+                matches.push(m);
             }
         }
 
@@ -872,6 +885,25 @@ impl SastScanner {
             });
         }
 
+        // 5. Unpinned Action using mutable branch (SENTRA-CICD-005)
+        if (trimmed.starts_with("uses:") || trimmed.starts_with("- uses:"))
+            && !trimmed.contains("./")
+            && (trimmed.ends_with("@main")
+                || trimmed.ends_with("@master")
+                || trimmed.ends_with("@dev"))
+        {
+            let rule = find_rule_by_id("SENTRA-CICD-005").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "GitHub Action referenced via mutable branch instead of immutable commit SHA"
+                        .to_string(),
+            });
+        }
+
         results
     }
 
@@ -955,6 +987,47 @@ impl SastScanner {
             });
         }
 
+        // 4. Insecure cookie flags (SENTRA-AUTH-004)
+        if (lower.contains("httponly: false") || lower.contains("httponly:false"))
+            || (lower.contains("secure: false") || lower.contains("secure:false"))
+            || (lower.contains("samesite: 'none'") && !lower.contains("secure: true"))
+            || (lower.contains("samesite: \"none\"") && !lower.contains("secure: true"))
+        {
+            let rule = find_rule_by_id("SENTRA-AUTH-004").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Insecure cookie flags (httpOnly: false, secure: false, or unencrypted sameSite: none) expose cookies to theft"
+                        .to_string(),
+            });
+        }
+
+        // 5. Hardcoded JWT secret key (SENTRA-AUTH-005)
+        if (lower.contains("jwt.sign(") || lower.contains("jwt.verify("))
+            && (lower.contains("\"secret\"")
+                || lower.contains("'secret'")
+                || lower.contains("\"jwt_secret\"")
+                || lower.contains("'jwt_secret'")
+                || lower.contains("\"shhhhh\"")
+                || lower.contains("'shhhhh'")
+                || lower.contains("\"123456\"")
+                || lower.contains("'123456'"))
+        {
+            let rule = find_rule_by_id("SENTRA-AUTH-005").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Trivial or hardcoded JWT symmetric secret allows token forgery and unauthorized authentication claims"
+                        .to_string(),
+            });
+        }
+
         results
     }
 
@@ -1015,7 +1088,11 @@ impl SastScanner {
         results
     }
 
-    fn check_go_path_clean(&self, path: &str, line_num: u32, line: &str) -> Option<SastMatch> {
+    fn check_go_security(&self, path: &str, line_num: u32, line: &str) -> Vec<SastMatch> {
+        let mut results = Vec::new();
+        let trimmed = line.trim();
+
+        // 1. Path Clean without root containment (SENTRA-GO-001)
         if line.contains("filepath.Clean(")
             && (line.contains("req.")
                 || line.contains("input")
@@ -1024,18 +1101,82 @@ impl SastScanner {
             && !line.contains("filepath.Rel(")
             && !line.contains("os.Root")
         {
-            let rule = find_rule_by_id("SENTRA-GO-001")?.clone();
-            return Some(SastMatch {
-                rule,
+            let rule = find_rule_by_id("SENTRA-GO-001").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
                 file_path: path.to_string(),
                 line_number: line_num,
-                snippet: line.trim().to_string(),
+                snippet: trimmed.to_string(),
                 rationale:
                     "Go filepath.Clean used on user input without root directory boundary containment (filepath.Rel or os.Root)"
                         .to_string(),
             });
         }
-        None
+
+        // 2. Command injection shell wrapper (SENTRA-GO-002)
+        let is_shell_command = line.contains("exec.Command(\"sh\", \"-c\",")
+            || line.contains("exec.Command(\"bash\", \"-c\",")
+            || (line.contains("exec.CommandContext(")
+                && (line.contains(", \"sh\", \"-c\",") || line.contains(", \"bash\", \"-c\",")));
+        if is_shell_command && (line.contains("fmt.Sprintf(") || line.contains("+")) {
+            let rule = find_rule_by_id("SENTRA-GO-002").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Go process execution invokes shell wrapper (sh -c / bash -c) with dynamic arguments"
+                        .to_string(),
+            });
+        }
+
+        // 3. SQL injection formatted query (SENTRA-GO-003)
+        let is_db_query = line.contains("db.Query(")
+            || line.contains("db.Exec(")
+            || line.contains("db.QueryRow(")
+            || line.contains("tx.Query(")
+            || line.contains("tx.Exec(");
+        let is_sql_format = line.contains("fmt.Sprintf(")
+            && (line.contains("SELECT ")
+                || line.contains("select ")
+                || line.contains("INSERT ")
+                || line.contains("UPDATE ")
+                || line.contains("DELETE "));
+        if (is_db_query && (line.contains("fmt.Sprintf(") || line.contains(" + "))) || is_sql_format
+        {
+            let rule = find_rule_by_id("SENTRA-GO-003").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Go SQL query dynamically formatted with fmt.Sprintf or concatenation instead of parameterized query"
+                        .to_string(),
+            });
+        }
+
+        // 4. Weak crypto or PRNG (SENTRA-GO-004)
+        if (line.contains("md5.New()")
+            || line.contains("md5.Sum(")
+            || line.contains("sha1.New()")
+            || line.contains("sha1.Sum("))
+            && !path.contains("test")
+        {
+            let rule = find_rule_by_id("SENTRA-GO-004").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale:
+                    "Go code uses obsolete or broken cryptographic hash (MD5 or SHA1) vulnerable to collisions"
+                        .to_string(),
+            });
+        }
+
+        results
     }
 
     fn check_django_security(&self, path: &str, line_num: u32, line: &str) -> Vec<SastMatch> {
@@ -1211,5 +1352,90 @@ impl SastScanner {
         }
 
         results
+    }
+
+    fn check_cloud_metadata_ssrf(
+        &self,
+        path: &str,
+        line_num: u32,
+        line: &str,
+    ) -> Option<SastMatch> {
+        if path.ends_with("scanner.rs") || path.ends_with("rule.rs") {
+            return None;
+        }
+        if (line.contains("169.254.169.254") || line.contains("metadata.google.internal"))
+            && !path.contains("test")
+        {
+            let rule = find_rule_by_id("SENTRA-CLOUD-001").expect("builtin rule");
+            return Some(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: line.trim().to_string(),
+                rationale: "Cloud metadata service endpoint referenced (potential SSRF credential exfiltration target)"
+                    .to_string(),
+            });
+        }
+        None
+    }
+
+    fn check_api_security(&self, path: &str, line_num: u32, line: &str) -> Vec<SastMatch> {
+        let mut results = Vec::new();
+        if path.ends_with("scanner.rs") || path.ends_with("rule.rs") {
+            return results;
+        }
+        let trimmed = line.trim();
+
+        // 1. Direct mass assignment update (SENTRA-API-001)
+        if (trimmed.contains(".update(req.body)")
+            || trimmed.contains(".update(request.body)")
+            || trimmed.contains(".create(req.body)")
+            || trimmed.contains(".create(request.body)"))
+            && !path.contains("test")
+        {
+            let rule = find_rule_by_id("SENTRA-API-001").expect("builtin rule");
+            results.push(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale: "Direct mass assignment of unvalidated request body into model mutation"
+                    .to_string(),
+            });
+        }
+
+        results
+    }
+
+    fn check_supply_chain_security(
+        &self,
+        path: &str,
+        line_num: u32,
+        line: &str,
+    ) -> Option<SastMatch> {
+        if path.ends_with("scanner.rs") || path.ends_with("rule.rs") {
+            return None;
+        }
+        let trimmed = line.trim();
+        let is_curl_or_wget = trimmed.contains("curl ") || trimmed.contains("wget ");
+        let is_piped_to_sh = trimmed.contains("| sh")
+            || trimmed.contains("| bash")
+            || trimmed.contains("|sh")
+            || trimmed.contains("|bash")
+            || trimmed.contains("| sudo sh")
+            || trimmed.contains("| sudo bash");
+
+        if is_curl_or_wget && is_piped_to_sh && !path.contains("test") {
+            let rule = find_rule_by_id("SENTRA-SUPPLY-001").expect("builtin rule");
+            return Some(SastMatch {
+                rule: rule.clone(),
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale: "Unverified remote download piped directly into shell execution"
+                    .to_string(),
+            });
+        }
+        None
     }
 }

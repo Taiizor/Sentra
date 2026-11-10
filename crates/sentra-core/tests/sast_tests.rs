@@ -406,3 +406,116 @@ fn test_detect_solidity_smart_contract_flaws() {
     assert!(ids.contains(&"SENTRA-SOLIDITY-001"));
     assert!(ids.contains(&"SENTRA-SOLIDITY-002"));
 }
+
+#[test]
+fn test_detect_cicd_unpinned_action_ref() {
+    let scanner = SastScanner::new();
+    let workflow = r#"
+name: CI
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@main
+      - run: cargo test
+"#;
+    let matches = scanner.scan_content(".github/workflows/ci.yml", workflow);
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].rule.id, "SENTRA-CICD-005");
+    assert_eq!(matches[0].rule.category, RuleCategory::CiCdWorkflow);
+}
+
+#[test]
+fn test_detect_go_advanced_security_rules() {
+    let scanner = SastScanner::new();
+    let go_code = r#"
+package main
+
+import (
+    "crypto/md5"
+    "database/sql"
+    "fmt"
+    "os/exec"
+)
+
+func run(db *sql.DB, input string) {
+    cmd := exec.Command("sh", "-c", fmt.Sprintf("echo %s", input))
+    _ = cmd.Run()
+
+    query := fmt.Sprintf("SELECT * FROM users WHERE name = '%s'", input)
+    _, _ = db.Query(query)
+
+    h := md5.New()
+    h.Write([]byte(input))
+}
+"#;
+    let matches = scanner.scan_content("handler.go", go_code);
+    assert!(matches.len() >= 3);
+    let ids: Vec<&str> = matches.iter().map(|m| m.rule.id).collect();
+    assert!(ids.contains(&"SENTRA-GO-002"));
+    assert!(ids.contains(&"SENTRA-GO-003"));
+    assert!(ids.contains(&"SENTRA-GO-004"));
+}
+
+#[test]
+fn test_detect_auth_cookies_and_jwt_secret() {
+    let scanner = SastScanner::new();
+    let auth_code = r#"
+        const token = jwt.sign(payload, "secret");
+        res.cookie('session', token, { httpOnly: false, secure: false });
+    "#;
+    let matches = scanner.scan_content("routes/auth.js", auth_code);
+    let ids: Vec<&str> = matches.iter().map(|m| m.rule.id).collect();
+    assert!(ids.contains(&"SENTRA-AUTH-004"));
+    assert!(ids.contains(&"SENTRA-AUTH-005"));
+}
+
+#[test]
+fn test_detect_cloud_metadata_ssrf() {
+    let scanner = SastScanner::new();
+    let ssrf_code = r#"
+        const url = "http://169.254.169.254/latest/meta-data/iam/security-credentials/";
+        const metadataUrl = "http://metadata.google.internal/computeMetadata/v1/";
+    "#;
+    let matches = scanner.scan_content("services/fetcher.js", ssrf_code);
+    assert_eq!(matches.len(), 2);
+    assert_eq!(matches[0].rule.id, "SENTRA-CLOUD-001");
+    assert_eq!(matches[0].rule.category, RuleCategory::Ssrf);
+    assert_eq!(matches[1].rule.id, "SENTRA-CLOUD-001");
+}
+
+#[test]
+fn test_detect_api_mass_assignment() {
+    let scanner = SastScanner::new();
+    let api_code = r#"
+        app.post("/users", async (req, res) => {
+            const user = await User.create(req.body);
+            res.json(user);
+        });
+        app.put("/users/:id", async (req, res) => {
+            await User.update(req.body);
+            res.sendStatus(200);
+        });
+    "#;
+    let matches = scanner.scan_content("controllers/user.ts", api_code);
+    assert_eq!(matches.len(), 2);
+    assert_eq!(matches[0].rule.id, "SENTRA-API-001");
+    assert_eq!(matches[0].rule.category, RuleCategory::MassAssignment);
+    assert_eq!(matches[1].rule.id, "SENTRA-API-001");
+}
+
+#[test]
+fn test_detect_supply_chain_curl_pipe() {
+    let scanner = SastScanner::new();
+    let script = r#"
+        #!/usr/bin/env bash
+        curl -fsSL https://get.example.com/install.sh | bash
+        wget -qO- https://test.org/setup.sh | sh
+    "#;
+    let matches = scanner.scan_content("scripts/setup.sh", script);
+    assert_eq!(matches.len(), 2);
+    assert_eq!(matches[0].rule.id, "SENTRA-SUPPLY-001");
+    assert_eq!(matches[0].rule.category, RuleCategory::CiCdWorkflow);
+    assert_eq!(matches[1].rule.id, "SENTRA-SUPPLY-001");
+}
