@@ -524,10 +524,7 @@ fn test_admit_task_result_core_service_integration_with_blobs() {
     let temp_cas = temp.join(format!(
         "sentra-cas-res-test-{}-{}",
         std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
+        SessionId::new()
     ));
     fs::create_dir_all(&temp_cas).unwrap();
     let blob_store: Arc<dyn BlobStore> =

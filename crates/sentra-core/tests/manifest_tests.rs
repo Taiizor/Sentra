@@ -34,10 +34,7 @@ impl WorkspaceFixture {
         let base = temp.join(format!(
             "sentra-manifest-test-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
+            SessionId::new()
         ));
         let root = base.join("workspace");
         let db_dir = base.join("db");

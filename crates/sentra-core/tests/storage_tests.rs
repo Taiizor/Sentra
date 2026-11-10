@@ -26,10 +26,7 @@ impl StorageTestFixture {
         let base = temp.join(format!(
             "sentra-storage-test-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
+            SessionId::new()
         ));
         fs::create_dir_all(&base).unwrap();
         Self { root: base }
