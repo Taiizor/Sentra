@@ -263,6 +263,33 @@ impl SastScanner {
                     matches.push(m);
                 }
             }
+
+            // 15. Django Security Misconfigurations (SENTRA-DJANGO-001 to 003)
+            if rel_path.ends_with(".py") {
+                matches.extend(self.check_django_security(rel_path, line_num, line));
+            }
+
+            // 16. Laravel Misconfigurations (SENTRA-LARAVEL-001 to 002)
+            if rel_path.ends_with(".php") || rel_path.ends_with(".env") || rel_path.ends_with(".env.example") {
+                matches.extend(self.check_laravel_security(rel_path, line_num, line));
+            }
+
+            // 17. Spring Boot Misconfigurations (SENTRA-SPRING-001 to 002)
+            if rel_path.ends_with(".java") || rel_path.ends_with(".properties") || rel_path.ends_with(".yml") {
+                matches.extend(self.check_spring_security(rel_path, line_num, line));
+            }
+
+            // 18. Firebase Rules Permissive Access (SENTRA-FIREBASE-001)
+            if rel_path.ends_with(".rules") || rel_path.contains("firestore") || rel_path.contains("firebase") {
+                if let Some(m) = self.check_firebase_rules(rel_path, line_num, line) {
+                    matches.push(m);
+                }
+            }
+
+            // 19. Solidity Smart Contract Flaws (SENTRA-SOLIDITY-001 to 002)
+            if rel_path.ends_with(".sol") {
+                matches.extend(self.check_solidity_security(rel_path, line_num, line));
+            }
         }
 
         // 11. In-Engine Pure-Rust Semantic Taint Tracking
@@ -1007,5 +1034,178 @@ impl SastScanner {
             });
         }
         None
+    }
+
+    fn check_django_security(&self, path: &str, line_num: u32, line: &str) -> Vec<SastMatch> {
+        let mut results = Vec::new();
+        let trimmed = line.trim();
+
+        // 1. DEBUG = True (SENTRA-DJANGO-001)
+        if (trimmed == "DEBUG = True"
+            || trimmed.starts_with("DEBUG = True #")
+            || trimmed == "DEBUG=True")
+            && !path.contains("test")
+        {
+            if let Some(rule) = find_rule_by_id("SENTRA-DJANGO-001") {
+                results.push(SastMatch {
+                    rule: rule.clone(),
+                    file_path: path.to_string(),
+                    line_number: line_num,
+                    snippet: trimmed.to_string(),
+                    rationale: "Django DEBUG mode explicitly enabled disclosing diagnostics in responses".to_string(),
+                });
+            }
+        }
+
+        // 2. ALLOWED_HOSTS = ['*'] (SENTRA-DJANGO-002)
+        if trimmed.contains("ALLOWED_HOSTS") && trimmed.contains("'*'") {
+            if let Some(rule) = find_rule_by_id("SENTRA-DJANGO-002") {
+                results.push(SastMatch {
+                    rule: rule.clone(),
+                    file_path: path.to_string(),
+                    line_number: line_num,
+                    snippet: trimmed.to_string(),
+                    rationale: "Wildcard in ALLOWED_HOSTS enables HTTP Host header poisoning".to_string(),
+                });
+            }
+        }
+
+        // 3. @csrf_exempt (SENTRA-DJANGO-003)
+        if trimmed.starts_with("@csrf_exempt") || trimmed.contains(" @csrf_exempt") {
+            if let Some(rule) = find_rule_by_id("SENTRA-DJANGO-003") {
+                results.push(SastMatch {
+                    rule: rule.clone(),
+                    file_path: path.to_string(),
+                    line_number: line_num,
+                    snippet: trimmed.to_string(),
+                    rationale: "View disables CSRF validation allowing cross-site request forgery".to_string(),
+                });
+            }
+        }
+
+        results
+    }
+
+    fn check_laravel_security(&self, path: &str, line_num: u32, line: &str) -> Vec<SastMatch> {
+        let mut results = Vec::new();
+        let trimmed = line.trim();
+
+        // 1. APP_DEBUG=true (SENTRA-LARAVEL-001)
+        let lower = line.to_ascii_lowercase();
+        if (lower.starts_with("app_debug=true")
+            || (lower.contains("'debug'") && lower.contains("true")))
+            && !path.contains("test")
+        {
+            if let Some(rule) = find_rule_by_id("SENTRA-LARAVEL-001") {
+                results.push(SastMatch {
+                    rule: rule.clone(),
+                    file_path: path.to_string(),
+                    line_number: line_num,
+                    snippet: trimmed.to_string(),
+                    rationale: "Laravel debug mode enabled in configuration exposing detailed stack traces".to_string(),
+                });
+            }
+        }
+
+        // 2. protected $guarded = [] (SENTRA-LARAVEL-002)
+        if trimmed.contains("$guarded") && trimmed.contains("[]") {
+            if let Some(rule) = find_rule_by_id("SENTRA-LARAVEL-002") {
+                results.push(SastMatch {
+                    rule: rule.clone(),
+                    file_path: path.to_string(),
+                    line_number: line_num,
+                    snippet: trimmed.to_string(),
+                    rationale: "Empty $guarded array permits mass assignment vulnerability".to_string(),
+                });
+            }
+        }
+
+        results
+    }
+
+    fn check_spring_security(&self, path: &str, line_num: u32, line: &str) -> Vec<SastMatch> {
+        let mut results = Vec::new();
+        let trimmed = line.trim();
+
+        // 1. allowedOrigins("*") (SENTRA-SPRING-001)
+        if trimmed.contains(".allowedOrigins(\"*\")") || trimmed.contains(".allowedOrigins('*')") {
+            if let Some(rule) = find_rule_by_id("SENTRA-SPRING-001") {
+                results.push(SastMatch {
+                    rule: rule.clone(),
+                    file_path: path.to_string(),
+                    line_number: line_num,
+                    snippet: trimmed.to_string(),
+                    rationale: "Spring CORS configured with wildcard allowedOrigins granting cross-origin credential access".to_string(),
+                });
+            }
+        }
+
+        // 2. management.endpoints.web.exposure.include=* (SENTRA-SPRING-002)
+        if trimmed.contains("management.endpoints.web.exposure.include") && trimmed.contains('*') {
+            if let Some(rule) = find_rule_by_id("SENTRA-SPRING-002") {
+                results.push(SastMatch {
+                    rule: rule.clone(),
+                    file_path: path.to_string(),
+                    line_number: line_num,
+                    snippet: trimmed.to_string(),
+                    rationale: "Broad Spring Boot Actuator endpoint exposure leaks sensitive system metrics".to_string(),
+                });
+            }
+        }
+
+        results
+    }
+
+    fn check_firebase_rules(&self, path: &str, line_num: u32, line: &str) -> Option<SastMatch> {
+        let trimmed = line.trim();
+        let lower = line.to_ascii_lowercase();
+
+        // allow read, write: if true; (SENTRA-FIREBASE-001)
+        if lower.contains("allow read") && lower.contains("if true;") {
+            let rule = find_rule_by_id("SENTRA-FIREBASE-001")?.clone();
+            return Some(SastMatch {
+                rule,
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: trimmed.to_string(),
+                rationale: "Firebase rule allows unauthenticated public read/write access".to_string(),
+            });
+        }
+        None
+    }
+
+    fn check_solidity_security(&self, path: &str, line_num: u32, line: &str) -> Vec<SastMatch> {
+        let mut results = Vec::new();
+        let trimmed = line.trim();
+
+        // 1. tx.origin used for authentication (SENTRA-SOLIDITY-001)
+        if trimmed.contains("tx.origin")
+            && (trimmed.contains("==") || trimmed.contains("require(") || trimmed.contains("assert("))
+        {
+            if let Some(rule) = find_rule_by_id("SENTRA-SOLIDITY-001") {
+                results.push(SastMatch {
+                    rule: rule.clone(),
+                    file_path: path.to_string(),
+                    line_number: line_num,
+                    snippet: trimmed.to_string(),
+                    rationale: "Solidity authorization checks tx.origin instead of msg.sender, vulnerable to phishing contract delegation".to_string(),
+                });
+            }
+        }
+
+        // 2. call{value: ...} external call (SENTRA-SOLIDITY-002)
+        if trimmed.contains(".call{value:") || trimmed.contains(".call.value(") {
+            if let Some(rule) = find_rule_by_id("SENTRA-SOLIDITY-002") {
+                results.push(SastMatch {
+                    rule: rule.clone(),
+                    file_path: path.to_string(),
+                    line_number: line_num,
+                    snippet: trimmed.to_string(),
+                    rationale: "Low-level Ether transfer via call{value:} susceptible to reentrancy attacks if state is not updated beforehand".to_string(),
+                });
+            }
+        }
+
+        results
     }
 }

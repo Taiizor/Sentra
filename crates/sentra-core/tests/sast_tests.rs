@@ -311,3 +311,98 @@ fn test_detect_go_path_clean_unvalidated() {
     assert_eq!(matches.len(), 1);
     assert_eq!(matches[0].rule.id, "SENTRA-GO-001");
 }
+
+#[test]
+fn test_detect_django_security_misconfigurations() {
+    let scanner = SastScanner::new();
+    let django_code = r#"
+        DEBUG = True
+        ALLOWED_HOSTS = ['*']
+
+        @csrf_exempt
+        def api_view(request):
+            pass
+    "#;
+
+    let matches = scanner.scan_content("mysite/settings.py", django_code);
+    assert_eq!(matches.len(), 3);
+    let ids: Vec<&str> = matches.iter().map(|m| m.rule.id).collect();
+    assert!(ids.contains(&"SENTRA-DJANGO-001"));
+    assert!(ids.contains(&"SENTRA-DJANGO-002"));
+    assert!(ids.contains(&"SENTRA-DJANGO-003"));
+}
+
+#[test]
+fn test_detect_laravel_security_flaws() {
+    let scanner = SastScanner::new();
+    let env_content = "APP_DEBUG=true\nAPP_NAME=Laravel\n";
+    let matches_env = scanner.scan_content(".env", env_content);
+    assert_eq!(matches_env.len(), 1);
+    assert_eq!(matches_env[0].rule.id, "SENTRA-LARAVEL-001");
+
+    let model_code = r#"
+        <?php
+        namespace App\Models;
+        use Illuminate\Database\Eloquent\Model;
+
+        class User extends Model {
+            protected $guarded = [];
+        }
+    "#;
+    let matches_model = scanner.scan_content("app/Models/User.php", model_code);
+    assert_eq!(matches_model.len(), 1);
+    assert_eq!(matches_model[0].rule.id, "SENTRA-LARAVEL-002");
+}
+
+#[test]
+fn test_detect_spring_and_firebase_rules() {
+    let scanner = SastScanner::new();
+    let spring_java = r#"
+        @Configuration
+        public class CorsConfig {
+            public void configure() {
+                registry.addMapping("/**").allowedOrigins("*");
+            }
+        }
+    "#;
+    let matches_spring = scanner.scan_content("src/main/java/CorsConfig.java", spring_java);
+    assert_eq!(matches_spring.len(), 1);
+    assert_eq!(matches_spring[0].rule.id, "SENTRA-SPRING-001");
+
+    let firebase_rules = r#"
+        service cloud.firestore {
+          match /databases/{database}/documents {
+            match /{document=**} {
+              allow read, write: if true;
+            }
+          }
+        }
+    "#;
+    let matches_fb = scanner.scan_content("firestore.rules", firebase_rules);
+    assert_eq!(matches_fb.len(), 1);
+    assert_eq!(matches_fb[0].rule.id, "SENTRA-FIREBASE-001");
+}
+
+#[test]
+fn test_detect_solidity_smart_contract_flaws() {
+    let scanner = SastScanner::new();
+    let sol_code = r#"
+        pragma solidity ^0.8.0;
+
+        contract Vault {
+            address public owner;
+
+            function withdraw(uint256 amount) public {
+                require(tx.origin == owner, "Unauthorized");
+                (bool sent, ) = msg.sender.call{value: amount}("");
+                require(sent, "Failed");
+            }
+        }
+    "#;
+
+    let matches = scanner.scan_content("contracts/Vault.sol", sol_code);
+    assert_eq!(matches.len(), 2);
+    let ids: Vec<&str> = matches.iter().map(|m| m.rule.id).collect();
+    assert!(ids.contains(&"SENTRA-SOLIDITY-001"));
+    assert!(ids.contains(&"SENTRA-SOLIDITY-002"));
+}

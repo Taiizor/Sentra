@@ -28,6 +28,10 @@ pub enum RuleCategory {
     Cryptographic,
     /// Agent skill, prompt injection, and plugin safety risks.
     AgentSkillSecurity,
+    /// Framework and deployment misconfigurations (Django, Laravel, Spring Boot, Firebase).
+    Misconfiguration,
+    /// Smart contract vulnerabilities and decentralized ledger flaws (Solidity).
+    SmartContract,
 }
 
 impl RuleCategory {
@@ -44,6 +48,8 @@ impl RuleCategory {
             Self::Authentication => "AUTHENTICATION",
             Self::Cryptographic => "CRYPTOGRAPHIC",
             Self::AgentSkillSecurity => "AGENT_SKILL_SECURITY",
+            Self::Misconfiguration => "SECURITY_MISCONFIGURATION",
+            Self::SmartContract => "SMART_CONTRACT",
         }
     }
 }
@@ -288,6 +294,101 @@ pub static BUILTIN_RULES: &[SastRule] = &[
         cwe_id: "CWE-22",
         description: "Go `filepath.Clean()` used on untrusted path input without verifying root directory enclosure. `filepath.Clean` removes lexical dot-dots but does not prevent filesystem root escape.",
         recommendation: "In Go 1.24+, use `os.Root` for scoped filesystem operations. In earlier versions, verify containment using `filepath.Rel` and explicit path prefix boundary checks.",
+    },
+    // Django Framework Security (django-security skill)
+    SastRule {
+        id: "SENTRA-DJANGO-001",
+        name: "DjangoDebugTrueInProduction",
+        category: RuleCategory::Misconfiguration,
+        severity: Severity::Critical,
+        cwe_id: "CWE-200",
+        description: "Django `DEBUG = True` detected. Running with debug mode enabled discloses full stack traces, environment variables, local file paths, and database query parameters upon errors.",
+        recommendation: "Set `DEBUG = False` in production environments and source configuration from environment variables (e.g. `DEBUG = os.environ.get('DJANGO_DEBUG', 'False').lower() == 'true'`).",
+    },
+    SastRule {
+        id: "SENTRA-DJANGO-002",
+        name: "DjangoWildcardAllowedHosts",
+        category: RuleCategory::Misconfiguration,
+        severity: Severity::High,
+        cwe_id: "CWE-346",
+        description: "Django `ALLOWED_HOSTS = ['*']` wildcard host validation detected. Wildcard host headers allow HTTP Host header poisoning, password reset token theft, and cache poisoning.",
+        recommendation: "Explicitly allowlist only verified domain names and subdomains in `ALLOWED_HOSTS`.",
+    },
+    SastRule {
+        id: "SENTRA-DJANGO-003",
+        name: "DjangoCsrfExemptBypass",
+        category: RuleCategory::Misconfiguration,
+        severity: Severity::High,
+        cwe_id: "CWE-352",
+        description: "Django `@csrf_exempt` decorator applied to view. Disabling CSRF protection allows third-party origins to forge cross-site state-changing requests.",
+        recommendation: "Remove `@csrf_exempt` and pass CSRF tokens via headers (`X-CSRFToken`) or cookies (`CSRF_COOKIE_HTTPONLY = False` with SameSite=Lax).",
+    },
+    // Laravel Framework Security (laravel-security skill)
+    SastRule {
+        id: "SENTRA-LARAVEL-001",
+        name: "LaravelDebugModeEnabled",
+        category: RuleCategory::Misconfiguration,
+        severity: Severity::Critical,
+        cwe_id: "CWE-200",
+        description: "Laravel `APP_DEBUG=true` detected. Debug mode exposes Ignition or Whoops error pages with full system environment variables, database passwords, and API secrets.",
+        recommendation: "Set `APP_DEBUG=false` in `.env` and production configuration files.",
+    },
+    SastRule {
+        id: "SENTRA-LARAVEL-002",
+        name: "LaravelMassAssignmentUnguarded",
+        category: RuleCategory::Misconfiguration,
+        severity: Severity::High,
+        cwe_id: "CWE-915",
+        description: "Laravel model defines `protected $guarded = []` disabling mass assignment protection. Attackers can overwrite sensitive attributes such as `is_admin` or `role`.",
+        recommendation: "Use `$fillable` allowlists or specify guarded attributes explicitly (e.g. `protected $guarded = ['id', 'is_admin']`).",
+    },
+    // Spring Boot Security (springboot-security skill)
+    SastRule {
+        id: "SENTRA-SPRING-001",
+        name: "SpringBootOverlyPermissiveCors",
+        category: RuleCategory::Misconfiguration,
+        severity: Severity::High,
+        cwe_id: "CWE-942",
+        description: "Spring Boot CORS configured with wildcard origin `.allowedOrigins(\"*\")` while allowing credentials (`allowCredentials(true)`). This combination allows arbitrary web origins to read authenticated responses.",
+        recommendation: "Specify explicit trusted origins using `.allowedOriginPatterns(...)` and avoid combining wildcards with credentials.",
+    },
+    SastRule {
+        id: "SENTRA-SPRING-002",
+        name: "SpringBootActuatorExposure",
+        category: RuleCategory::Misconfiguration,
+        severity: Severity::High,
+        cwe_id: "CWE-200",
+        description: "Spring Boot Actuator endpoints exposed broadly via `management.endpoints.web.exposure.include=*`. Actuators can leak heap dumps, environment properties, and thread dumps.",
+        recommendation: "Limit exposed actuator endpoints to `health,info` and require authentication for sensitive diagnostics.",
+    },
+    // Firebase Security Rules (firebase-security-rules-auditor skill)
+    SastRule {
+        id: "SENTRA-FIREBASE-001",
+        name: "FirebasePermissiveRule",
+        category: RuleCategory::Misconfiguration,
+        severity: Severity::Critical,
+        cwe_id: "CWE-284",
+        description: "Firebase security rule configured with `allow read, write: if true;`. This grants unauthenticated public read/write access to the entire database or storage bucket.",
+        recommendation: "Enforce user authentication (e.g. `allow read, write: if request.auth != null;`) and validate role-based resource ownership.",
+    },
+    // Solidity Smart Contract Security (solidity-security skill)
+    SastRule {
+        id: "SENTRA-SOLIDITY-001",
+        name: "SolidityTxOriginAuth",
+        category: RuleCategory::SmartContract,
+        severity: Severity::Critical,
+        cwe_id: "CWE-287",
+        description: "Solidity smart contract uses `tx.origin` for authorization instead of `msg.sender`. Phishing contracts can intermediate transactions and trick users into authorizing unintended actions.",
+        recommendation: "Replace `tx.origin` with `msg.sender` for authorization checks.",
+    },
+    SastRule {
+        id: "SENTRA-SOLIDITY-002",
+        name: "SolidityReentrancyExternalCall",
+        category: RuleCategory::SmartContract,
+        severity: Severity::High,
+        cwe_id: "CWE-841",
+        description: "Solidity low-level call `.call{value:` executed without adhering to Checks-Effects-Interactions (CEI) pattern or ReentrancyGuard. Attackers can re-enter the contract before state balances update.",
+        recommendation: "Update internal balances before initiating external Ether transfers (Checks-Effects-Interactions) or guard the function with OpenZeppelin `ReentrancyGuard`.",
     },
 ];
 
