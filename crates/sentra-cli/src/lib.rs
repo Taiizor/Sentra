@@ -2258,14 +2258,17 @@ fn render_plugin_list(plugins: &[DiscoveredPlugin], json: bool) -> Response {
                     .map(|c| format!("\"{}\"", c.as_str()))
                     .collect();
                 format!(
-                    "{{\"id\":\"{}\",\"name\":\"{}\",\"version\":\"{}\",\"family\":\"{}\",\"manifest_path\":\"{}\",\"capabilities\":[{}],\"egress_policy\":\"{:?}\"}}",
+                    "{{\"id\":\"{}\",\"name\":\"{}\",\"version\":\"{}\",\"family\":\"{}\",\"manifest_path\":\"{}\",\"executable_path\":\"{}\",\"capabilities\":[{}],\"egress_policy\":\"{:?}\",\"quotas\":{{\"max_memory_mib\":{},\"max_execution_time_secs\":{}}}}}",
                     p.manifest.id,
                     p.manifest.name,
                     p.manifest.version,
                     p.manifest.family.as_str(),
                     p.manifest_path.display().to_string().replace('\\', "/"),
+                    p.manifest.executable_path.replace('\\', "/"),
                     caps.join(","),
-                    p.manifest.egress_policy
+                    p.manifest.egress_policy,
+                    p.manifest.quotas.max_memory_mib,
+                    p.manifest.quotas.max_execution_time_secs
                 )
             })
             .collect();

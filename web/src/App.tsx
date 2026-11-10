@@ -31,6 +31,7 @@ import { ResearchTab } from '@/components/dashboard/research-tab'
 import { WorkerFleetTab } from '@/components/dashboard/worker-fleet-tab'
 import { AuditTab } from '@/components/dashboard/audit-tab'
 import { WebhookTab } from '@/components/dashboard/webhook-tab'
+import { PluginsTab } from '@/components/dashboard/plugins-tab'
 import { ScannerConsole } from '@/components/dashboard/scanner-console'
 import { LiveStreamModal } from '@/components/dashboard/live-stream-modal'
 import { AiPatchModal } from '@/components/dashboard/ai-patch-modal'
@@ -204,6 +205,8 @@ export function App() {
         return 'Remote-Worker Fleet Coordinator & Sandboxes'
       case 'webhooks':
         return 'Continuous Integration Webhook Intake & Automated Proposals'
+      case 'plugins':
+        return 'Plugin & Tool Adapter Ecosystem'
       case 'audit':
         return 'Tamper-Resistant Immutable Audit Trail'
       case 'settings':
@@ -825,6 +828,10 @@ export function App() {
             {activeTab === 'fleet' && <WorkerFleetTab workers={workers} />}
 
             {activeTab === 'webhooks' && <WebhookTab currentRole={currentRole} />}
+
+            {activeTab === 'plugins' && (
+              <PluginsTab currentWorkspace={currentWorkspace} currentRole={currentRole} />
+            )}
 
             {activeTab === 'audit' && <AuditTab auditLogs={tenantAuditLogs} />}
             {activeTab === 'settings' && <SettingsTab currentRole={currentRole} />}

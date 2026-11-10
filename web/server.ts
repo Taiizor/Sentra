@@ -2550,6 +2550,130 @@ Target: Sentra (Pure-Rust Security Platform)
       }
     }
 
+    // GET /api/plugins - Discover registered plugin adapters (REQ-F16)
+    if (url.pathname === "/api/plugins" && req.method === "GET") {
+      try {
+        const res = await runSentra(["plugin", "list", "--json"], REPO_ROOT);
+        if (res.code === 0 && res.data) {
+          return new Response(JSON.stringify(res.data), { headers: corsHeaders });
+        }
+        return new Response(
+          JSON.stringify({ error: res.stderr || "Failed to list plugins", code: res.code, plugins: [] }),
+          { status: 500, headers: corsHeaders }
+        );
+      } catch (err: any) {
+        return new Response(JSON.stringify({ error: err.message, plugins: [] }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // POST /api/plugins/probe - Probe plugin health and workspace applicability (REQ-F16)
+    if (url.pathname === "/api/plugins/probe" && req.method === "POST") {
+      try {
+        const body = (await req.json()) as { id?: string; manifest?: string; workspace?: string };
+        if (!body.id && !body.manifest) {
+          return new Response(JSON.stringify({ error: "Missing 'id' or 'manifest' parameter" }), {
+            status: 400,
+            headers: corsHeaders,
+          });
+        }
+        const targetWs = body.workspace || REPO_ROOT;
+        const args = ["plugin", "probe"];
+        if (body.id) {
+          args.push("--id", body.id);
+        } else if (body.manifest) {
+          args.push("--manifest", body.manifest);
+        }
+        args.push("--workspace", targetWs, "--json");
+
+        const res = await runSentra(args, REPO_ROOT);
+        if (res.data) {
+          return new Response(JSON.stringify(res.data), { headers: corsHeaders });
+        }
+        return new Response(
+          JSON.stringify({
+            plugin_id: body.id || "unknown",
+            applicable: false,
+            details: res.stderr || res.stdout || "Probe invocation failed",
+            error: res.stderr,
+          }),
+          { status: res.code === 0 ? 200 : 500, headers: corsHeaders }
+        );
+      } catch (err: any) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // POST /api/plugins/run - Execute authorized capability under supervised sandboxing (REQ-F16)
+    if (url.pathname === "/api/plugins/run" && req.method === "POST") {
+      try {
+        const body = (await req.json()) as {
+          id?: string;
+          manifest?: string;
+          capability: string;
+          workspace?: string;
+          arguments?: string[];
+        };
+        if ((!body.id && !body.manifest) || !body.capability) {
+          return new Response(JSON.stringify({ error: "Missing 'id'/'manifest' or 'capability' parameter" }), {
+            status: 400,
+            headers: corsHeaders,
+          });
+        }
+        const targetWs = body.workspace || REPO_ROOT;
+        const args = ["plugin", "run"];
+        if (body.id) {
+          args.push("--id", body.id);
+        } else if (body.manifest) {
+          args.push("--manifest", body.manifest);
+        }
+        args.push("--capability", body.capability);
+        if (body.workspace) {
+          args.push("--workspace", targetWs);
+        }
+        if (body.arguments && body.arguments.length > 0) {
+          for (const arg of body.arguments) {
+            args.push("--arg", arg);
+          }
+        }
+        args.push("--json");
+
+        const res = await runSentra(args, REPO_ROOT);
+
+        // Record in immutable audit trail (REQ-F08, ADR-0001)
+        const dbPath = getWorkspaceDbPath(targetWs);
+        recordAuditEvent(
+          "PLUGIN_CAPABILITY_EXECUTION",
+          {
+            plugin_id: body.id,
+            capability: body.capability,
+            workspace: targetWs,
+            exit_code: res.code,
+            success: res.code === 0,
+            output_summary: res.data?.summary || res.stdout.slice(0, 200),
+          },
+          dbPath
+        );
+
+        if (res.data) {
+          return new Response(JSON.stringify(res.data), { headers: corsHeaders });
+        }
+        return new Response(
+          JSON.stringify({
+            action: "run",
+            plugin_id: body.id || "unknown",
+            capability: body.capability,
+            exit_code: res.code,
+            stdout: res.stdout,
+            stderr: res.stderr,
+            summary: res.stdout || res.stderr || "Execution completed",
+          }),
+          { status: res.code === 0 ? 200 : 500, headers: corsHeaders }
+        );
+      } catch (err: any) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
     return new Response(JSON.stringify({ error: "Not Found" }), { status: 404, headers: corsHeaders });
   },
 });

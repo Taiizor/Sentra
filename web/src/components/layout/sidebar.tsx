@@ -13,6 +13,7 @@ import {
   Building2,
   Shield,
   Settings,
+  Blocks,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { SentraLogo } from '@/components/ui/sentra-logo'
@@ -139,6 +140,11 @@ function SidebarContent({
           id: 'webhooks',
           label: 'CI/CD Webhooks',
           icon: Webhook,
+        },
+        {
+          id: 'plugins',
+          label: 'Plugins & Adapters',
+          icon: Blocks,
         },
         {
           id: 'audit',

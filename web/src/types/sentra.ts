@@ -295,3 +295,42 @@ export interface DashboardOverview {
   auditEventCount: number
   lastActivityTimestamp: string
 }
+
+export interface PluginQuotasView {
+  max_memory_mib: number
+  max_execution_time_secs: number
+}
+
+export interface DiscoveredPluginView {
+  id: string
+  name: string
+  version: string
+  family: string
+  manifest_path: string
+  executable_path?: string
+  capabilities: string[]
+  egress_policy: string
+  quotas?: PluginQuotasView
+}
+
+export interface PluginProbeResult {
+  plugin_id: string
+  name?: string
+  applicable: boolean
+  details: string
+  unsupported_reason?: string | null
+  capabilities: string[]
+}
+
+export interface PluginExecutionResult {
+  action: string
+  plugin_id: string
+  task_id?: string
+  capability: string
+  exit_code: number
+  summary: string
+  evidence_refs?: string[]
+  stdout?: string
+  stderr?: string
+}
+

@@ -12,6 +12,7 @@ import {
   Terminal,
   Webhook,
   Settings,
+  Blocks,
 } from 'lucide-react'
 import {
   CommandDialog,
@@ -155,6 +156,15 @@ export function CommandPalette({
           >
             <Webhook data-icon="inline-start" />
             <span>CI/CD Webhook Intakes &amp; Pipeline Automation</span>
+          </CommandItem>
+          <CommandItem
+            onSelect={() => {
+              onSelectTab('plugins')
+              onOpenChange(false)
+            }}
+          >
+            <Blocks data-icon="inline-start" />
+            <span>Plugin &amp; Tool Adapter Ecosystem (ADR-0004)</span>
           </CommandItem>
           <CommandItem
             onSelect={() => {

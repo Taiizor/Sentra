@@ -10,6 +10,7 @@ export const VALID_TABS = [
   'research',
   'fleet',
   'webhooks',
+  'plugins',
   'audit',
   'settings',
 ] as const
