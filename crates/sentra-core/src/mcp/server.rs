@@ -403,7 +403,7 @@ impl McpServer {
                 })?;
 
                 let target = crate::skills::AgentTarget::parse(target_str).ok_or_else(|| {
-                    McpErrorObject::invalid_params(format!("Unknown agent target: '{target_str}'. Expected claude, antigravity, cursor, windsurf, cline, codex, copilot, zed, opencode, trae, kimi, or all"))
+                    McpErrorObject::invalid_params(format!("Unknown agent target: '{target_str}'. Expected claude, antigravity, cursor, windsurf, cline, roo, continue, aider, amazonq, cody, devin, codex, copilot, zed, opencode, trae, kimi, augment, or all"))
                 })?;
 
                 let is_global = args

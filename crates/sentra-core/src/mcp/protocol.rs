@@ -239,13 +239,18 @@ pub fn canonical_tool_definitions() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "sentra_install_skills".to_string(),
-            description: "Installs Sentra's built-in AppSec security skills directly into Claude Code, Antigravity, Cursor, Windsurf, Cline, Codex, Copilot, Zed, OpenCode, Trae, or Kimi environments (REQ-F17).".to_string(),
+            description: "Installs Sentra's built-in AppSec security skills directly into Claude Code, Antigravity, Cursor, Windsurf, Cline, Roo Code, Continue.dev, Aider, Amazon Q, Cody, Devin, Codex, Copilot, Zed, OpenCode, Trae, Kimi, or Augment environments (REQ-F17).".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
                     "target": {
                         "type": "string",
-                        "enum": ["claude", "antigravity", "cursor", "windsurf", "cline", "codex", "copilot", "zed", "opencode", "trae", "kimi", "all"],
+                        "enum": [
+                            "claude", "antigravity", "cursor", "windsurf", "cline",
+                            "roo", "continue", "aider", "amazonq", "cody", "devin",
+                            "codex", "copilot", "zed", "opencode", "trae", "kimi",
+                            "augment", "all"
+                        ],
                         "description": "Target agent or IDE ecosystem to install skills for"
                     },
                     "global": {

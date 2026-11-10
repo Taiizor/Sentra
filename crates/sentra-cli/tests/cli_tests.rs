@@ -1676,6 +1676,46 @@ fn binary_install_claude_and_antigravity_skills() {
         .join("instructions")
         .join("ci-cd-security.instructions.md");
     assert!(copilot_instr.exists());
+
+    // 6. Install Roo Code rules
+    let install_roo = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "install",
+            "roo",
+            "--workspace",
+            tmp_path,
+            "--skill",
+            "solidity-security",
+        ])
+        .output()
+        .unwrap();
+    assert!(install_roo.status.success());
+    let roo_rule = f
+        .workspace
+        .join(".roo")
+        .join("rules")
+        .join("solidity-security.md");
+    assert!(roo_rule.exists());
+
+    // 7. Install Continue.dev rules
+    let install_continue = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "install",
+            "continue",
+            "--workspace",
+            tmp_path,
+            "--skill",
+            "springboot-security",
+        ])
+        .output()
+        .unwrap();
+    assert!(install_continue.status.success());
+    let continue_rule = f
+        .workspace
+        .join(".continue")
+        .join("rules")
+        .join("springboot-security.md");
+    assert!(continue_rule.exists());
 }
 
 #[test]

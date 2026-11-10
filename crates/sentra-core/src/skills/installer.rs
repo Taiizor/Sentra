@@ -1,8 +1,8 @@
 //! Cross-Platform Skill Installer for Agent Environments (REQ-F17, EXTENSIONS.md).
 //!
 //! Installs built-in AppSec skills into Claude Code, Antigravity, Cursor, Windsurf,
-//! Cline, Codex, Copilot, Zed, OpenCode, Trae, or Kimi environments
-//! in either local workspace or global user scope.
+//! Cline, Roo Code, Continue.dev, Aider, Amazon Q, Cody, Devin, Codex, Copilot,
+//! Zed, OpenCode, Trae, Kimi, or Augment environments in local or global scope.
 
 use std::{
     fs,
@@ -20,10 +20,22 @@ pub enum AgentTarget {
     Antigravity,
     /// Cursor IDE (`.cursor/rules/`).
     Cursor,
-    /// Windsurf (`.windsurf/rules/`).
+    /// Windsurf / Cascade (`.windsurf/rules/`).
     Windsurf,
     /// Cline (`.cline/skills/`).
     Cline,
+    /// Roo Code (`.roo/rules/`).
+    Roo,
+    /// Continue.dev (`.continue/rules/`).
+    ContinueDev,
+    /// Aider (`.aider/conventions/`).
+    Aider,
+    /// Amazon Q Developer (`.amazonq/rules/`).
+    AmazonQ,
+    /// Sourcegraph Cody (`.cody/rules/`).
+    Cody,
+    /// Cognition AI Devin (`.devin/rules/`).
+    Devin,
     /// OpenAI Codex CLI (`.codex/skills/`).
     Codex,
     /// GitHub Copilot (`.github/instructions/`).
@@ -36,6 +48,8 @@ pub enum AgentTarget {
     Trae,
     /// Kimi CLI (`.agents/skills/` or `~/.config/agents/skills/`).
     Kimi,
+    /// Augment Code (`.augment/rules/`).
+    Augment,
     /// All supported agent ecosystems simultaneously.
     All,
 }
@@ -49,12 +63,19 @@ impl AgentTarget {
             "cursor" | ".cursor" => Some(Self::Cursor),
             "windsurf" | "codeium" | ".windsurf" => Some(Self::Windsurf),
             "cline" | ".cline" => Some(Self::Cline),
+            "roo" | "roo-code" | "roocode" | ".roo" => Some(Self::Roo),
+            "continue" | "continue-dev" | "continuedev" | ".continue" => Some(Self::ContinueDev),
+            "aider" | ".aider" => Some(Self::Aider),
+            "amazonq" | "amazon-q" | "q" | "aws-q" | ".amazonq" => Some(Self::AmazonQ),
+            "cody" | "sourcegraph" | "sourcegraph-cody" | ".cody" => Some(Self::Cody),
+            "devin" | "cognition" | ".devin" => Some(Self::Devin),
             "codex" | "openai-codex" | ".codex" => Some(Self::Codex),
             "copilot" | "github-copilot" | ".copilot" => Some(Self::Copilot),
             "zed" | ".zed" => Some(Self::Zed),
             "opencode" | "open-code" | ".opencode" => Some(Self::OpenCode),
             "trae" | ".trae" => Some(Self::Trae),
             "kimi" | "kimi-code" => Some(Self::Kimi),
+            "augment" | "augment-code" | ".augment" => Some(Self::Augment),
             "all" | "*" => Some(Self::All),
             _ => None,
         }
@@ -68,12 +89,19 @@ impl AgentTarget {
             Self::Cursor => "cursor",
             Self::Windsurf => "windsurf",
             Self::Cline => "cline",
+            Self::Roo => "roo",
+            Self::ContinueDev => "continue",
+            Self::Aider => "aider",
+            Self::AmazonQ => "amazonq",
+            Self::Cody => "cody",
+            Self::Devin => "devin",
             Self::Codex => "codex",
             Self::Copilot => "copilot",
             Self::Zed => "zed",
             Self::OpenCode => "opencode",
             Self::Trae => "trae",
             Self::Kimi => "kimi",
+            Self::Augment => "augment",
             Self::All => "all",
         }
     }
@@ -98,6 +126,18 @@ impl AgentTarget {
             Self::Cursor => base.join(".cursor").join("rules"),
             Self::Windsurf => base.join(".windsurf").join("rules"),
             Self::Cline => base.join(".cline").join("skills"),
+            Self::Roo => base.join(".roo").join("rules"),
+            Self::ContinueDev => base.join(".continue").join("rules"),
+            Self::Aider => base.join(".aider").join("conventions"),
+            Self::AmazonQ => base.join(".amazonq").join("rules"),
+            Self::Cody => base.join(".cody").join("rules"),
+            Self::Devin => {
+                if global {
+                    base.join(".config").join("devin").join("skills")
+                } else {
+                    base.join(".devin").join("rules")
+                }
+            }
             Self::Codex => base.join(".codex").join("skills"),
             Self::Copilot => {
                 if global {
@@ -130,6 +170,7 @@ impl AgentTarget {
                     base.join(".agents").join("skills")
                 }
             }
+            Self::Augment => base.join(".augment").join("rules"),
             Self::All => base.join(".agents").join("skills"),
         }
     }
@@ -177,12 +218,19 @@ pub fn install_single_skill(
             AgentTarget::Cursor,
             AgentTarget::Windsurf,
             AgentTarget::Cline,
+            AgentTarget::Roo,
+            AgentTarget::ContinueDev,
+            AgentTarget::Aider,
+            AgentTarget::AmazonQ,
+            AgentTarget::Cody,
+            AgentTarget::Devin,
             AgentTarget::Codex,
             AgentTarget::Copilot,
             AgentTarget::Zed,
             AgentTarget::OpenCode,
             AgentTarget::Trae,
             AgentTarget::Kimi,
+            AgentTarget::Augment,
         ];
         let mut last_path = PathBuf::new();
         for t in targets {
@@ -199,8 +247,16 @@ pub fn install_single_skill(
             let file_path = base_dir.join(format!("{}.mdc", skill.id));
             (file_path, skill.content.to_string())
         }
-        AgentTarget::Zed | AgentTarget::Windsurf => {
-            // Zed and Windsurf prefer `.zed/rules/<skill_id>.md` or `.windsurf/rules/<skill_id>.md`
+        AgentTarget::Zed
+        | AgentTarget::Windsurf
+        | AgentTarget::Roo
+        | AgentTarget::ContinueDev
+        | AgentTarget::Aider
+        | AgentTarget::AmazonQ
+        | AgentTarget::Cody
+        | AgentTarget::Devin
+        | AgentTarget::Augment => {
+            // Rule-based markdown targets: `<base_dir>/<skill_id>.md`
             let file_path = base_dir.join(format!("{}.md", skill.id));
             (file_path, skill.content.to_string())
         }

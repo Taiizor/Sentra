@@ -1,7 +1,8 @@
 //! Zero-dependency embedded AppSec Skill Catalog and Cross-Platform Agent Installer (REQ-F17, EXTENSIONS.md).
 //!
 //! Exposes built-in AppSec skills and automated installation to Claude, Antigravity,
-//! Cursor, Windsurf, Cline, Codex, Copilot, Zed, OpenCode, Trae, and Kimi environments.
+//! Cursor, Windsurf, Cline, Roo, Continue, Aider, Amazon Q, Cody, Devin, Codex,
+//! Copilot, Zed, OpenCode, Trae, Kimi, and Augment environments.
 
 pub mod catalog;
 pub mod installer;
