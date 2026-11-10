@@ -1857,9 +1857,29 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
         await fs.rm(patchTmpFile, { force: true }).catch(() => {});
 
         if (cliRes.code !== 0 || !cliRes.data || cliRes.data.status !== "success") {
+          let errCode = cliRes.data?.error;
+          if (!errCode && cliRes.stderr) {
+            try {
+              const parsed = JSON.parse(cliRes.stderr.trim());
+              errCode = parsed.error;
+            } catch {
+              errCode = cliRes.stderr.trim();
+            }
+          }
+          let userFriendlyMessage = errCode || "Patch application failed in core engine";
+          if (errCode === "invalid_workspace") {
+            const targetFullPath = path.resolve(workspace, relLocation);
+            const targetExists = fsSync.existsSync(targetFullPath);
+            if (!targetExists) {
+              userFriendlyMessage = `Target file does not exist on disk: "${relLocation}". In-memory studio snippets and simulated demo findings cannot be patched to disk unless the physical file exists in the workspace.`;
+            } else {
+              userFriendlyMessage = `Workspace boundary validation failed for "${workspace}". Ensure target file is strictly inside the workspace root.`;
+            }
+          }
           return new Response(
             JSON.stringify({
-              error: cliRes.data?.error || cliRes.stderr || "Patch application failed in core engine",
+              error: userFriendlyMessage,
+              code: cliRes.code,
             }),
             { status: 422, headers: corsHeaders }
           );

@@ -41,6 +41,7 @@ interface AiPatchModalProps {
   onOpenChange: (open: boolean) => void
   finding: FindingView | null
   currentRole: UserRole
+  currentWorkspace?: string
   onAdmitPatch: (patch: PatchBundleView) => void
   onNavigateToPatches: () => void
 }
@@ -52,6 +53,7 @@ export function AiPatchModal({
   onOpenChange,
   finding,
   currentRole,
+  currentWorkspace,
   onAdmitPatch,
   onNavigateToPatches,
 }: AiPatchModalProps) {
@@ -126,6 +128,7 @@ export function AiPatchModal({
         patchId: patchResult.bundleId,
         diff: patchResult.diff,
         targetLocation: finding!.targetLocation,
+        workspace: currentWorkspace,
       })
       setBackupPath(res.backupPath)
       setIsApplied(true)
@@ -149,6 +152,7 @@ export function AiPatchModal({
         patchId: patchResult.bundleId,
         backupPath,
         targetLocation: finding!.targetLocation,
+        workspace: currentWorkspace,
       })
       setIsApplied(false)
       toast.info('Patch Rolled Back', {

@@ -942,6 +942,7 @@ export function App() {
           onOpenChange={(open) => !open && setSelectedPatchFinding(null)}
           finding={selectedPatchFinding}
           currentRole={currentRole}
+          currentWorkspace={currentWorkspace}
           onAdmitPatch={handleAdmitPatch}
           onNavigateToPatches={() => setActiveTab('remediation')}
         />
