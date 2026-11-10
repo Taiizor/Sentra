@@ -551,6 +551,95 @@ try {
   }
 } catch (e) {}
 
+interface ResolvedGitHubAuth {
+  authSource: "gh_cli" | "pat_token" | "simulated";
+  token: string;
+  owner: string;
+  repo: string;
+  defaultBranch: string;
+  ghUser?: string;
+  isAvailable: boolean;
+  message: string;
+}
+
+// Dual Authentication Strategy: Automatically detects GitHub CLI (`gh`) if logged in,
+// or seamlessly falls back to manually configured Personal Access Token (PAT).
+function resolveGitHubAuth(): ResolvedGitHubAuth {
+  // 1. Priority 1: GitHub CLI (`gh`) auto-detection
+  try {
+    const tokenProc = Bun.spawnSync(["gh", "auth", "token"], { windowsHide: true });
+    const ghToken = tokenProc.stdout.toString().trim();
+    if (tokenProc.exitCode === 0 && ghToken.startsWith("gh")) {
+      let detectedOwner = "Taiizor";
+      let detectedRepo = "Sentra";
+      let detectedBranch = "develop";
+      let ghUser = "Taiizor";
+
+      try {
+        const statusProc = Bun.spawnSync(["gh", "auth", "status"], { windowsHide: true });
+        const statusOutput = statusProc.stdout.toString() + statusProc.stderr.toString();
+        const userMatch = statusOutput.match(/account\s+([A-Za-z0-9_-]+)/i);
+        if (userMatch && userMatch[1]) {
+          ghUser = userMatch[1];
+        }
+      } catch (e) {}
+
+      try {
+        const repoProc = Bun.spawnSync(
+          ["gh", "repo", "view", "--json", "nameWithOwner,defaultBranchRef"],
+          { cwd: REPO_ROOT, windowsHide: true }
+        );
+        if (repoProc.exitCode === 0) {
+          const repoJson = JSON.parse(repoProc.stdout.toString());
+          if (repoJson.nameWithOwner) {
+            const parts = repoJson.nameWithOwner.split("/");
+            detectedOwner = parts[0];
+            detectedRepo = parts[1];
+          }
+          if (repoJson.defaultBranchRef?.name) {
+            detectedBranch = repoJson.defaultBranchRef.name;
+          }
+        }
+      } catch (e) {}
+
+      return {
+        authSource: "gh_cli",
+        token: ghToken,
+        owner: githubConfig.owner && githubConfig.owner !== "sentra-security" ? githubConfig.owner : detectedOwner,
+        repo: githubConfig.repo && githubConfig.repo !== "sentra" ? githubConfig.repo : detectedRepo,
+        defaultBranch: githubConfig.defaultBranch && githubConfig.defaultBranch !== "main" ? githubConfig.defaultBranch : detectedBranch,
+        ghUser,
+        isAvailable: true,
+        message: `Connected via GitHub CLI session (@${ghUser})`,
+      };
+    }
+  } catch (e) {}
+
+  // 2. Priority 2: Configured Personal Access Token (PAT)
+  if (githubConfig.token && githubConfig.token.trim()) {
+    return {
+      authSource: "pat_token",
+      token: githubConfig.token.trim(),
+      owner: githubConfig.owner || "sentra-security",
+      repo: githubConfig.repo || "sentra",
+      defaultBranch: githubConfig.defaultBranch || "main",
+      isAvailable: true,
+      message: "Connected via Personal Access Token (PAT)",
+    };
+  }
+
+  // 3. Fallback: Safe local simulation mode
+  return {
+    authSource: "simulated",
+    token: "",
+    owner: githubConfig.owner || "sentra-security",
+    repo: githubConfig.repo || "sentra",
+    defaultBranch: githubConfig.defaultBranch || "main",
+    isAvailable: false,
+    message: "Operating in local safe simulation sandbox (No gh CLI or PAT token detected)",
+  };
+}
+
 let nextPrSequence = 43;
 
 const activePullRequests: ServerPrItem[] = [
@@ -1618,6 +1707,47 @@ const server = Bun.serve({
       }
     }
 
+    // Structured JSON parser and field normalizer for LLM AppSec responses
+    function extractStructuredJson(rawText: string): any {
+      let cleaned = rawText.trim();
+      if (cleaned.startsWith("```")) {
+        const firstNewline = cleaned.indexOf("\n");
+        if (firstNewline !== -1) {
+          cleaned = cleaned.slice(firstNewline + 1);
+        }
+        if (cleaned.endsWith("```")) {
+          cleaned = cleaned.slice(0, -3);
+        }
+        cleaned = cleaned.trim();
+      }
+      try {
+        return JSON.parse(cleaned);
+      } catch {}
+
+      const start = cleaned.indexOf("{");
+      const end = cleaned.lastIndexOf("}");
+      if (start !== -1 && end > start) {
+        const sub = cleaned.slice(start, end + 1);
+        try {
+          return JSON.parse(sub);
+        } catch {}
+      }
+      throw new Error("Failed to parse structured JSON from model response");
+    }
+
+    function mapStructuredPatch(parsed: any) {
+      return {
+        rootCauseAnalysis: parsed.rootCauseAnalysis || parsed.root_cause || parsed.root_cause_analysis || "",
+        reproductionTestCode: parsed.reproductionTestCode || parsed.tier1_reproduction_test || parsed.reproduction_test_code || "",
+        originalSnippet: parsed.originalSnippet || parsed.original_snippet || "",
+        patchedSnippet: parsed.patchedSnippet || parsed.patched_snippet || "",
+        diff: parsed.diff || parsed.tier2_unified_diff || "",
+        regressionOracleProof: parsed.regressionOracleProof || parsed.tier3_invariant_proof || parsed.regression_oracle_proof || "",
+        branchName: parsed.branchName || parsed.branch_name || "",
+        commitMessage: parsed.commitMessage || parsed.commit_message || "",
+      };
+    }
+
     // POST /api/ai/generate-patch - Autonomous LLM & Semantic Patch Generation Engine
     if (url.pathname === "/api/ai/generate-patch" && req.method === "POST") {
       try {
@@ -1679,21 +1809,22 @@ const server = Bun.serve({
         let externalSuccess = false;
         if (providerCfg.apiKey || (providerCfg.endpoint && providerCfg.provider === "local")) {
           try {
-            const systemPrompt = `You are Sentra's Autonomous Security Verification Engineer. 
-Analyze this vulnerability finding and generate a Three-Tier Verified Patch bundle.
+            const systemPrompt = `You are an Autonomous Remediation Application Security Engineer (Sentra AppSec Persona: PatchAuthor).
+Your objective is to synthesize a minimal, clean unified git diff (Tier 2 patch) that remediates the root cause invariant rather than masking symptoms. Do not introduce breaking API changes, behavioral regressions, or disable security checks.
+
 Target Rule: ${ruleId} (${cwe})
 File: ${fileLoc}:${lineNum}
 Title: ${findingTitle}
 Description: ${finding.description || ""}
 
-Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backticks) containing:
+Respond STRICTLY with a valid JSON object matching the ADR-0004 Three-Tier Verification Contract:
 {
   "rootCauseAnalysis": "concise explanation of vulnerability and exploitability",
-  "reproductionTestCode": "executable unit test reproducing the vulnerability (Tier 1 Baseline Oracle)",
+  "reproductionTestCode": "executable unit test reproducing the vulnerability on unpatched code (Tier 1 Baseline Oracle)",
   "originalSnippet": "vulnerable code snippet before patch",
   "patchedSnippet": "safe remediated code snippet",
-  "diff": "unified git diff for the file",
-  "regressionOracleProof": "proof that patch fixes issue without breaking existing invariants (Tier 3)",
+  "diff": "unified git diff for the file (Tier 2 Patch)",
+  "regressionOracleProof": "proof that patch fixes issue without breaking existing invariants (Tier 3 Zero-Regression)",
   "branchName": "git branch name (e.g. sentra/patch/cwe-89-...)",
   "commitMessage": "conventional commit message (e.g. fix(security): ...)"
 }`;
@@ -1727,16 +1858,15 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
               if (resp.ok) {
                 const jsonResp: any = await resp.json();
                 const contentText = jsonResp.choices?.[0]?.message?.content?.trim() || "";
-                const cleanJson = contentText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
-                const parsed = JSON.parse(cleanJson);
-                rootCauseAnalysis = parsed.rootCauseAnalysis;
-                reproductionTestCode = parsed.reproductionTestCode;
-                originalSnippet = parsed.originalSnippet;
-                patchedSnippet = parsed.patchedSnippet;
-                diff = parsed.diff;
-                regressionOracleProof = parsed.regressionOracleProof;
-                branchName = parsed.branchName;
-                commitMessage = parsed.commitMessage;
+                const mapped = mapStructuredPatch(extractStructuredJson(contentText));
+                rootCauseAnalysis = mapped.rootCauseAnalysis;
+                reproductionTestCode = mapped.reproductionTestCode;
+                originalSnippet = mapped.originalSnippet;
+                patchedSnippet = mapped.patchedSnippet;
+                diff = mapped.diff;
+                regressionOracleProof = mapped.regressionOracleProof;
+                branchName = mapped.branchName;
+                commitMessage = mapped.commitMessage;
                 modelUsed = `${providerCfg.provider}:${modelName}`;
                 externalSuccess = true;
               }
@@ -1756,16 +1886,15 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
               if (resp.ok) {
                 const jsonResp: any = await resp.json();
                 const contentText = jsonResp.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
-                const cleanJson = contentText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
-                const parsed = JSON.parse(cleanJson);
-                rootCauseAnalysis = parsed.rootCauseAnalysis;
-                reproductionTestCode = parsed.reproductionTestCode;
-                originalSnippet = parsed.originalSnippet;
-                patchedSnippet = parsed.patchedSnippet;
-                diff = parsed.diff;
-                regressionOracleProof = parsed.regressionOracleProof;
-                branchName = parsed.branchName;
-                commitMessage = parsed.commitMessage;
+                const mapped = mapStructuredPatch(extractStructuredJson(contentText));
+                rootCauseAnalysis = mapped.rootCauseAnalysis;
+                reproductionTestCode = mapped.reproductionTestCode;
+                originalSnippet = mapped.originalSnippet;
+                patchedSnippet = mapped.patchedSnippet;
+                diff = mapped.diff;
+                regressionOracleProof = mapped.regressionOracleProof;
+                branchName = mapped.branchName;
+                commitMessage = mapped.commitMessage;
                 modelUsed = `gemini:${modelName}`;
                 externalSuccess = true;
               }
@@ -1790,16 +1919,15 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
               if (resp.ok) {
                 const jsonResp: any = await resp.json();
                 const contentText = jsonResp.content?.[0]?.text?.trim() || "";
-                const cleanJson = contentText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
-                const parsed = JSON.parse(cleanJson);
-                rootCauseAnalysis = parsed.rootCauseAnalysis;
-                reproductionTestCode = parsed.reproductionTestCode;
-                originalSnippet = parsed.originalSnippet;
-                patchedSnippet = parsed.patchedSnippet;
-                diff = parsed.diff;
-                regressionOracleProof = parsed.regressionOracleProof;
-                branchName = parsed.branchName;
-                commitMessage = parsed.commitMessage;
+                const mapped = mapStructuredPatch(extractStructuredJson(contentText));
+                rootCauseAnalysis = mapped.rootCauseAnalysis;
+                reproductionTestCode = mapped.reproductionTestCode;
+                originalSnippet = mapped.originalSnippet;
+                patchedSnippet = mapped.patchedSnippet;
+                diff = mapped.diff;
+                regressionOracleProof = mapped.regressionOracleProof;
+                branchName = mapped.branchName;
+                commitMessage = mapped.commitMessage;
                 modelUsed = `anthropic:${modelName}`;
                 externalSuccess = true;
               }
@@ -1828,16 +1956,15 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
                 const messageObj = jsonResp.choices?.[0]?.message;
                 const contentText = messageObj?.content?.trim() || "";
                 const reasoning = messageObj?.reasoning_content;
-                const cleanJson = contentText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
-                const parsed = JSON.parse(cleanJson);
-                rootCauseAnalysis = parsed.rootCauseAnalysis;
-                reproductionTestCode = parsed.reproductionTestCode;
-                originalSnippet = parsed.originalSnippet;
-                patchedSnippet = parsed.patchedSnippet;
-                diff = parsed.diff;
-                regressionOracleProof = parsed.regressionOracleProof + (reasoning ? `\n\nDeepSeek R1 Reasoning Trace:\n${reasoning}` : "");
-                branchName = parsed.branchName;
-                commitMessage = parsed.commitMessage;
+                const mapped = mapStructuredPatch(extractStructuredJson(contentText));
+                rootCauseAnalysis = mapped.rootCauseAnalysis;
+                reproductionTestCode = mapped.reproductionTestCode;
+                originalSnippet = mapped.originalSnippet;
+                patchedSnippet = mapped.patchedSnippet;
+                diff = mapped.diff;
+                regressionOracleProof = mapped.regressionOracleProof + (reasoning ? `\n\nDeepSeek R1 Reasoning Trace:\n${reasoning}` : "");
+                branchName = mapped.branchName;
+                commitMessage = mapped.commitMessage;
                 modelUsed = `deepseek:${modelName}`;
                 externalSuccess = true;
               }
@@ -1864,16 +1991,15 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
               if (resp.ok) {
                 const jsonResp: any = await resp.json();
                 const contentText = jsonResp.choices?.[0]?.message?.content?.trim() || "";
-                const cleanJson = contentText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
-                const parsed = JSON.parse(cleanJson);
-                rootCauseAnalysis = parsed.rootCauseAnalysis;
-                reproductionTestCode = parsed.reproductionTestCode;
-                originalSnippet = parsed.originalSnippet;
-                patchedSnippet = parsed.patchedSnippet;
-                diff = parsed.diff;
-                regressionOracleProof = parsed.regressionOracleProof;
-                branchName = parsed.branchName;
-                commitMessage = parsed.commitMessage;
+                const mapped = mapStructuredPatch(extractStructuredJson(contentText));
+                rootCauseAnalysis = mapped.rootCauseAnalysis;
+                reproductionTestCode = mapped.reproductionTestCode;
+                originalSnippet = mapped.originalSnippet;
+                patchedSnippet = mapped.patchedSnippet;
+                diff = mapped.diff;
+                regressionOracleProof = mapped.regressionOracleProof;
+                branchName = mapped.branchName;
+                commitMessage = mapped.commitMessage;
                 modelUsed = `xai:${modelName}`;
                 externalSuccess = true;
               }
@@ -1902,16 +2028,15 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
               if (resp.ok) {
                 const jsonResp: any = await resp.json();
                 const contentText = jsonResp.choices?.[0]?.message?.content?.trim() || "";
-                const cleanJson = contentText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
-                const parsed = JSON.parse(cleanJson);
-                rootCauseAnalysis = parsed.rootCauseAnalysis;
-                reproductionTestCode = parsed.reproductionTestCode;
-                originalSnippet = parsed.originalSnippet;
-                patchedSnippet = parsed.patchedSnippet;
-                diff = parsed.diff;
-                regressionOracleProof = parsed.regressionOracleProof;
-                branchName = parsed.branchName;
-                commitMessage = parsed.commitMessage;
+                const mapped = mapStructuredPatch(extractStructuredJson(contentText));
+                rootCauseAnalysis = mapped.rootCauseAnalysis;
+                reproductionTestCode = mapped.reproductionTestCode;
+                originalSnippet = mapped.originalSnippet;
+                patchedSnippet = mapped.patchedSnippet;
+                diff = mapped.diff;
+                regressionOracleProof = mapped.regressionOracleProof;
+                branchName = mapped.branchName;
+                commitMessage = mapped.commitMessage;
                 modelUsed = `openrouter:${modelName}`;
                 externalSuccess = true;
               }
@@ -1938,16 +2063,15 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
               if (resp.ok) {
                 const jsonResp: any = await resp.json();
                 const contentText = jsonResp.choices?.[0]?.message?.content?.trim() || "";
-                const cleanJson = contentText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
-                const parsed = JSON.parse(cleanJson);
-                rootCauseAnalysis = parsed.rootCauseAnalysis;
-                reproductionTestCode = parsed.reproductionTestCode;
-                originalSnippet = parsed.originalSnippet;
-                patchedSnippet = parsed.patchedSnippet;
-                diff = parsed.diff;
-                regressionOracleProof = parsed.regressionOracleProof;
-                branchName = parsed.branchName;
-                commitMessage = parsed.commitMessage;
+                const mapped = mapStructuredPatch(extractStructuredJson(contentText));
+                rootCauseAnalysis = mapped.rootCauseAnalysis;
+                reproductionTestCode = mapped.reproductionTestCode;
+                originalSnippet = mapped.originalSnippet;
+                patchedSnippet = mapped.patchedSnippet;
+                diff = mapped.diff;
+                regressionOracleProof = mapped.regressionOracleProof;
+                branchName = mapped.branchName;
+                commitMessage = mapped.commitMessage;
                 modelUsed = `opencode:${modelName}`;
                 externalSuccess = true;
               }
@@ -2166,6 +2290,51 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
           status: 500,
           headers: corsHeaders,
         });
+      }
+    }
+
+    // POST /api/prompt/generate - AppSec Cognitive Prompt Engine & Skill Injector
+    if (url.pathname === "/api/prompt/generate" && req.method === "POST") {
+      try {
+        const body = (await req.json()) as {
+          workflow?: string;
+          scope?: string;
+          skills?: string[] | string;
+        };
+
+        const workflow = body.workflow || "stride";
+        const scope = body.scope || "workspace";
+        let skillsList: string[] = [];
+        if (Array.isArray(body.skills)) {
+          skillsList = body.skills;
+        } else if (typeof body.skills === "string" && body.skills.trim()) {
+          skillsList = body.skills.split(",").map((s) => s.trim()).filter(Boolean);
+        }
+
+        const args = ["prompt", workflow, "--scope", scope];
+        if (skillsList.length > 0) {
+          args.push("--skills", skillsList.join(","));
+        }
+        args.push("--json");
+
+        const res = await runSentra(args);
+        if (res.code === 0 && res.data) {
+          return new Response(JSON.stringify(res.data), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response(
+          JSON.stringify({
+            error: res.stderr || `Sentra prompt CLI exited with code ${res.code}`,
+          }),
+          { status: 400, headers: corsHeaders }
+        );
+      } catch (err: any) {
+        return new Response(
+          JSON.stringify({ error: err.message || "Failed to generate prompt" }),
+          { status: 500, headers: corsHeaders }
+        );
       }
     }
 
@@ -2489,16 +2658,21 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
     // GET /api/github/config - Status & settings of GitHub connection
     if (url.pathname === "/api/github/config" && req.method === "GET") {
       try {
-        const masked = githubConfig.token
-          ? `${githubConfig.token.slice(0, 4)}••••••••${githubConfig.token.slice(-4)}`
+        const auth = resolveGitHubAuth();
+        const masked = auth.token
+          ? `${auth.token.slice(0, 4)}••••••••${auth.token.slice(-4)}`
           : "";
         return new Response(
           JSON.stringify({
-            owner: githubConfig.owner,
-            repo: githubConfig.repo,
-            defaultBranch: githubConfig.defaultBranch,
-            isConfigured: !!githubConfig.token,
+            authMethod: auth.authSource,
+            ghUser: auth.ghUser,
+            owner: auth.owner,
+            repo: auth.repo,
+            defaultBranch: auth.defaultBranch,
+            isConfigured: auth.isAvailable,
+            ghCliAvailable: auth.authSource === "gh_cli",
             maskedToken: masked,
+            message: auth.message,
           }),
           { headers: corsHeaders }
         );
@@ -2546,17 +2720,22 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
           has_token: !!githubConfig.token,
         });
 
-        const masked = githubConfig.token
-          ? `${githubConfig.token.slice(0, 4)}••••••••${githubConfig.token.slice(-4)}`
+        const auth = resolveGitHubAuth();
+        const masked = auth.token
+          ? `${auth.token.slice(0, 4)}••••••••${auth.token.slice(-4)}`
           : "";
         return new Response(
           JSON.stringify({
             success: true,
-            owner: githubConfig.owner,
-            repo: githubConfig.repo,
-            defaultBranch: githubConfig.defaultBranch,
-            isConfigured: !!githubConfig.token,
+            authMethod: auth.authSource,
+            ghUser: auth.ghUser,
+            owner: auth.owner,
+            repo: auth.repo,
+            defaultBranch: auth.defaultBranch,
+            isConfigured: auth.isAvailable,
+            ghCliAvailable: auth.authSource === "gh_cli",
             maskedToken: masked,
+            message: auth.message,
           }),
           { headers: corsHeaders }
         );
@@ -2565,18 +2744,33 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
       }
     }
 
-    // POST /api/github/test-connection - Test credentials with GitHub API
+    // POST /api/github/test-connection - Test credentials with GitHub API or gh CLI
     if (url.pathname === "/api/github/test-connection" && req.method === "POST") {
       try {
+        const auth = resolveGitHubAuth();
         const body = (await req.json().catch(() => ({}))) || {};
-        const testToken = (body.token || githubConfig.token || "").trim();
-        const testOwner = (body.owner || githubConfig.owner || "").trim();
-        const testRepo = (body.repo || githubConfig.repo || "").trim();
+        const testToken = (body.token || auth.token || "").trim();
+        const testOwner = (body.owner || auth.owner || "").trim();
+        const testRepo = (body.repo || auth.repo || "").trim();
+
+        if (auth.authSource === "gh_cli" && !body.token) {
+          return new Response(
+            JSON.stringify({
+              connected: true,
+              authSource: "gh_cli",
+              ghUser: auth.ghUser,
+              repository: `${testOwner}/${testRepo}`,
+              message: `Connected via GitHub CLI session (@${auth.ghUser}). Zero manual token configuration required.`,
+            }),
+            { headers: corsHeaders }
+          );
+        }
 
         if (!testToken) {
           return new Response(
             JSON.stringify({
               connected: true,
+              authSource: "simulated",
               simulated: true,
               repository: `${testOwner}/${testRepo}`,
               message: "Simulated sandbox connection verified. Operating in local safe mode.",
@@ -2609,11 +2803,13 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
         return new Response(
           JSON.stringify({
             connected: true,
+            authSource: "pat_token",
             simulated: false,
             repository: repoData.full_name,
             private: repoData.private,
             defaultBranch: repoData.default_branch,
             permissions: repoData.permissions,
+            message: `Successfully connected to ${repoData.full_name} via Personal Access Token.`,
           }),
           { headers: corsHeaders }
         );
@@ -2625,13 +2821,63 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
     // GET /api/github/pulls - List Open Pull Requests with Security Enriched Metadata
     if (url.pathname === "/api/github/pulls" && req.method === "GET") {
       try {
-        if (githubConfig.token) {
+        const auth = resolveGitHubAuth();
+
+        if (auth.authSource === "gh_cli") {
+          try {
+            const ghProc = Bun.spawnSync(
+              ["gh", "pr", "list", "--json", "number,title,state,isDraft,headRefName,baseRefName,author,updatedAt,url"],
+              { cwd: REPO_ROOT, windowsHide: true }
+            );
+            if (ghProc.exitCode === 0) {
+              const livePulls = JSON.parse(ghProc.stdout.toString() || "[]");
+              if (livePulls && livePulls.length > 0) {
+                const mapped: ServerPrItem[] = livePulls.map((pr: any) => ({
+                  number: pr.number,
+                  title: pr.title,
+                  state: pr.state?.toLowerCase() === "open" ? "open" : "closed",
+                  isDraft: !!pr.isDraft,
+                  author: {
+                    login: pr.author?.login || "unknown",
+                  },
+                  headRef: pr.headRefName || "head",
+                  headSha: "0000000000000000000000000000000000000000",
+                  baseRef: pr.baseRefName || auth.defaultBranch,
+                  htmlUrl: pr.url,
+                  createdAt: pr.updatedAt || new Date().toISOString(),
+                  updatedAt: pr.updatedAt || new Date().toISOString(),
+                  filesCount: 1,
+                  additions: 10,
+                  deletions: 2,
+                  securityStatus: pr.title.includes("Security") ? "clean" : "pending",
+                  findingsCount: 0,
+                  criticalCount: 0,
+                  isSentraRemediation: pr.headRefName?.startsWith("sentra/remediate"),
+                  workflowStats: { total: 2, successful: 2, failed: 0, inProgress: 0 },
+                }));
+
+                return new Response(
+                  JSON.stringify({
+                    pulls: mapped,
+                    source: "gh_cli",
+                    authMethod: auth.authSource,
+                    repository: `${auth.owner}/${auth.repo}`,
+                    ghUser: auth.ghUser,
+                  }),
+                  { headers: corsHeaders }
+                );
+              }
+            }
+          } catch (ghErr) {
+            console.warn("Failed fetching PRs via gh CLI, falling back to local registry:", ghErr);
+          }
+        } else if (auth.token) {
           try {
             const ghRes = await fetch(
-              `https://api.github.com/repos/${githubConfig.owner}/${githubConfig.repo}/pulls?state=open&per_page=30`,
+              `https://api.github.com/repos/${auth.owner}/${auth.repo}/pulls?state=open&per_page=30`,
               {
                 headers: {
-                  Authorization: `Bearer ${githubConfig.token}`,
+                  Authorization: `Bearer ${auth.token}`,
                   "User-Agent": "Sentra-AppSec-Platform",
                   Accept: "application/vnd.github.v3+json",
                 },
@@ -2666,7 +2912,15 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
                   workflowStats: { total: 2, successful: 2, failed: 0, inProgress: 0 },
                 }));
 
-                return new Response(JSON.stringify({ pulls: mapped, source: "live_github" }), { headers: corsHeaders });
+                return new Response(
+                  JSON.stringify({
+                    pulls: mapped,
+                    source: "pat_token",
+                    authMethod: auth.authSource,
+                    repository: `${auth.owner}/${auth.repo}`,
+                  }),
+                  { headers: corsHeaders }
+                );
               }
             }
           } catch (ghErr) {
@@ -2674,9 +2928,18 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
           }
         }
 
-        return new Response(JSON.stringify({ pulls: activePullRequests, source: "sentra_registry" }), {
-          headers: corsHeaders,
-        });
+        return new Response(
+          JSON.stringify({
+            pulls: activePullRequests,
+            source: auth.authSource,
+            authMethod: auth.authSource,
+            repository: `${auth.owner}/${auth.repo}`,
+            ghUser: auth.ghUser,
+          }),
+          {
+            headers: corsHeaders,
+          }
+        );
       } catch (err: any) {
         return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
       }
@@ -2687,14 +2950,56 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
       try {
         const parts = url.pathname.split("/");
         const prNumber = parseInt(parts[4], 10);
+        const auth = resolveGitHubAuth();
 
-        if (githubConfig.token) {
+        if (auth.authSource === "gh_cli") {
+          try {
+            const runProc = Bun.spawnSync(
+              ["gh", "run", "list", "--json", "status,conclusion,name,workflowName,headBranch,headSha,event,url,databaseId"],
+              { cwd: REPO_ROOT, windowsHide: true }
+            );
+            if (runProc.exitCode === 0) {
+              const liveRuns = JSON.parse(runProc.stdout.toString() || "[]");
+              if (liveRuns && liveRuns.length > 0) {
+                const mappedRuns = liveRuns.slice(0, 5).map((r: any) => ({
+                  id: r.databaseId || Math.floor(Math.random() * 100000),
+                  name: r.name,
+                  workflowName: r.workflowName || "ci.yml",
+                  event: r.event || "pull_request",
+                  status: r.status,
+                  conclusion: r.conclusion,
+                  htmlUrl: r.url,
+                  headSha: r.headSha || "0000000000000000000000000000000000000000",
+                  runStartedAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                  jobs: [
+                    {
+                      id: (r.databaseId || 100) * 10 + 1,
+                      name: r.name,
+                      status: r.status,
+                      conclusion: r.conclusion,
+                      steps: [
+                        { name: "Set up runner environment", status: "completed", conclusion: "success" },
+                        { name: "Execute workflow jobs & test suites", status: r.status, conclusion: r.conclusion },
+                      ],
+                    },
+                  ],
+                }));
+
+                return new Response(
+                  JSON.stringify({ prNumber, workflows: mappedRuns, source: "gh_cli" }),
+                  { headers: corsHeaders }
+                );
+              }
+            }
+          } catch (e) {}
+        } else if (auth.token) {
           try {
             const runsRes = await fetch(
-              `https://api.github.com/repos/${githubConfig.owner}/${githubConfig.repo}/actions/runs?event=pull_request&per_page=10`,
+              `https://api.github.com/repos/${auth.owner}/${auth.repo}/actions/runs?per_page=10`,
               {
                 headers: {
-                  Authorization: `Bearer ${githubConfig.token}`,
+                  Authorization: `Bearer ${auth.token}`,
                   "User-Agent": "Sentra-AppSec-Platform",
                   Accept: "application/vnd.github.v3+json",
                 },
@@ -2745,7 +3050,7 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
             event: "pull_request",
             status: "completed",
             conclusion: "success",
-            htmlUrl: `https://github.com/${githubConfig.owner}/${githubConfig.repo}/actions/runs/${100000 + prNumber}`,
+            htmlUrl: `https://github.com/${auth.owner}/${auth.repo}/actions/runs/${100000 + prNumber}`,
             headSha: "53454ff5ec0247b68000000000000000abcdef12",
             runStartedAt: new Date(Date.now() - 3600 * 1000).toISOString(),
             updatedAt: new Date(Date.now() - 3500 * 1000).toISOString(),
@@ -2767,7 +3072,7 @@ Respond STRICTLY with a valid JSON object (no markdown quotes, no triple backtic
           },
         ];
 
-        return new Response(JSON.stringify({ prNumber, workflows, source: "sentra_registry" }), {
+        return new Response(JSON.stringify({ prNumber, workflows, source: auth.authSource }), {
           headers: corsHeaders,
         });
       } catch (err: any) {

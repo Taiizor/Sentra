@@ -270,5 +270,37 @@ pub fn canonical_tool_definitions() -> Vec<ToolDefinition> {
                 "required": ["target"]
             }),
         },
+        ToolDefinition {
+            name: "sentra_generate_prompt".to_string(),
+            description: "Generates role-grounded AppSec prompts, STRIDE threat models, BOLA analyses, 3-tier patch remediation requests, or skill-injected reasoning templates for LLM agents (REQ-F04, REQ-F17).".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "role": {
+                        "type": "string",
+                        "enum": ["scout", "analyst", "validator", "patch_author", "verifier"],
+                        "description": "AppSec research persona/role. Defaults to analyst."
+                    },
+                    "workflow": {
+                        "type": "string",
+                        "enum": ["threat-model", "api-bola", "patch-remediation", "skill-audit", "general"],
+                        "description": "Target AppSec reasoning workflow. Defaults to general."
+                    },
+                    "scope": {
+                        "type": "string",
+                        "description": "Optional file path, endpoint, or component under evaluation"
+                    },
+                    "skills": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Optional skill IDs to inject into the system prompt (e.g. ['golang-security', 'auth-implementation-patterns'])"
+                    },
+                    "context": {
+                        "type": "string",
+                        "description": "Optional architectural description, code snippet, or test evidence"
+                    }
+                }
+            }),
+        },
     ]
 }

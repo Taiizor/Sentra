@@ -1780,6 +1780,46 @@ fn binary_prompt_generation() {
     let patch_str = String::from_utf8(patch_out.stdout).unwrap();
     assert!(patch_str.contains("ADR-0004"));
     assert!(patch_str.contains("Tier 1"));
+
+    // 4. Scout prompt with JSON output
+    let scout_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["prompt", "scout", "--scope", "crates/sentra-core", "--json"])
+        .output()
+        .unwrap();
+    assert!(scout_out.status.success());
+    let scout_str = String::from_utf8(scout_out.stdout).unwrap();
+    assert!(scout_str.contains("\"workflow\": \"scout\""));
+    assert!(scout_str.contains("\"role\": \"scout\""));
+    assert!(scout_str.contains("Senior Application Security Scout"));
+
+    // 5. Dual-state verification prompt
+    let verify_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["prompt", "verify", "--scope", "src/auth.rs"])
+        .output()
+        .unwrap();
+    assert!(verify_out.status.success());
+    let verify_str = String::from_utf8(verify_out.stdout).unwrap();
+    assert!(verify_str.contains("Independent Dual-State Verification"));
+    assert!(verify_str.contains("Independent AppSec Verification Oracle"));
+
+    // 6. Dynamic skill injection via --skills
+    let skill_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "prompt",
+            "patch-remediation",
+            "--scope",
+            "src/service.go",
+            "--skills",
+            "golang-security",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(skill_out.status.success());
+    let skill_str = String::from_utf8(skill_out.stdout).unwrap();
+    assert!(skill_str.contains("golang-security"));
+    assert!(skill_str.contains("Golang Security Best Practices"));
+    assert!(skill_str.contains("Activated Domain Security Guidelines"));
 }
 
 #[test]

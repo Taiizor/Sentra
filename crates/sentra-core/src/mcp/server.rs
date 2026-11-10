@@ -442,6 +442,132 @@ impl McpServer {
                     "installed_files": report.installed_files.iter().map(|p| p.display().to_string()).collect::<Vec<_>>()
                 }))
             }
+            "sentra_generate_prompt" => {
+                let role_str = args
+                    .get("role")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("analyst");
+                let workflow = args
+                    .get("workflow")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("general");
+                let scope = args.get("scope").and_then(|v| v.as_str()).unwrap_or(".");
+                let context = args.get("context").and_then(|v| v.as_str()).unwrap_or("");
+                let skill_ids: Vec<&str> = args
+                    .get("skills")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| arr.iter().filter_map(|s| s.as_str()).collect())
+                    .unwrap_or_default();
+
+                let role = match role_str.to_ascii_lowercase().as_str() {
+                    "scout" | "recon" => crate::research::ResearchRole::Scout,
+                    "validator" => crate::research::ResearchRole::Validator,
+                    "patch_author" | "patch" => crate::research::ResearchRole::PatchAuthor,
+                    "verifier" | "independent_verifier" => {
+                        crate::research::ResearchRole::IndependentVerifier
+                    }
+                    _ => match workflow {
+                        "scout" => crate::research::ResearchRole::Scout,
+                        "patch-remediation" | "patch" => crate::research::ResearchRole::PatchAuthor,
+                        "verify" | "verification" => {
+                            crate::research::ResearchRole::IndependentVerifier
+                        }
+                        "skill-audit" | "agent-safety" => crate::research::ResearchRole::Validator,
+                        _ => crate::research::ResearchRole::Analyst,
+                    },
+                };
+
+                let prompt = match workflow {
+                    "scout" => crate::research::ScoutPromptBuilder::build_reconnaissance_prompt(
+                        scope,
+                        if context.is_empty() {
+                            "General repository surface mapping"
+                        } else {
+                            context
+                        },
+                    ),
+                    "threat-model" | "stride" => {
+                        crate::research::ThreatModelingPromptBuilder::build_stride_assessment_prompt(
+                            ".",
+                            scope,
+                            if context.is_empty() {
+                                "Target component and surrounding system architecture"
+                            } else {
+                                context
+                            },
+                        )
+                    }
+                    "api-bola" | "bola" | "idor" => {
+                        crate::research::ApiSecurityPromptBuilder::build_bola_audit_prompt(
+                            scope,
+                            "GET/POST",
+                            if context.is_empty() {
+                                "// Route handler under authorization review"
+                            } else {
+                                context
+                            },
+                        )
+                    }
+                    "patch-remediation" | "patch" => {
+                        crate::research::PatchSynthesisPromptBuilder::build_three_tier_patch_prompt(
+                            "Autonomous Security Remediation",
+                            "CWE-Security",
+                            scope,
+                            if context.is_empty() {
+                                "// Vulnerable code segment requiring root cause fix"
+                            } else {
+                                context
+                            },
+                        )
+                    }
+                    "skill-audit" | "agent-safety" => {
+                        crate::research::AgentSkillAuditPromptBuilder::build_skill_safety_prompt(
+                            scope,
+                            context,
+                        )
+                    }
+                    "verify" | "verification" => {
+                        crate::research::VerificationPromptBuilder::build_dual_state_verification_prompt(
+                            scope,
+                            "// Baseline reproduction test",
+                            "// Candidate unified git diff",
+                            if context.is_empty() {
+                                "// Isolated execution evidence"
+                            } else {
+                                context
+                            },
+                        )
+                    }
+                    _ => crate::research::SkillPromptComposer::compose_role_prompt(
+                        role,
+                        &format!("Perform specialized security evaluation on: {scope}"),
+                        &skill_ids,
+                        context,
+                    ),
+                };
+
+                let final_prompt = if !skill_ids.is_empty() && workflow != "general" {
+                    crate::research::SkillPromptComposer::compose_role_prompt(
+                        role,
+                        &prompt.user_prompt,
+                        &skill_ids,
+                        context,
+                    )
+                } else {
+                    prompt
+                };
+
+                Ok(serde_json::json!({
+                    "role": role.as_str(),
+                    "workflow": workflow,
+                    "scope": scope,
+                    "skills": skill_ids,
+                    "system_prompt": final_prompt.system_prompt,
+                    "user_prompt": final_prompt.user_prompt,
+                    "expected_schema": final_prompt.expected_schema,
+                    "composite_prompt": final_prompt.to_composite_prompt(),
+                }))
+            }
             // Sensitive actions requiring explicit human approval ticket
             "sentra_apply_checkout_mutation" => {
                 let ticket = args

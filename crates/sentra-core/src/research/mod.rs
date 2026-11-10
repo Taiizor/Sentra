@@ -26,7 +26,9 @@ pub use fuzzing::{
 pub use hypothesis::{Hypothesis, HypothesisDeduplicator, HypothesisStatus, VulnerabilityCategory};
 pub use prompt::{
     AgentSkillAuditPromptBuilder, ApiSecurityPromptBuilder, AppSecPersona, AppSecPrompt,
-    PatchSynthesisPromptBuilder, ThreatModelingPromptBuilder,
+    BolaAuditResponse, PatchSynthesisPromptBuilder, ScoutPromptBuilder, SkillPromptComposer,
+    SkillSafetyResponse, StructuredResponseParser, ThreatModelingPromptBuilder,
+    ThreeTierPatchResponse, VerificationPromptBuilder,
 };
 pub use role::{
     ResearchRole, RoleCapability, assert_patch_verifier_independent, assert_peer_approval_forbidden,

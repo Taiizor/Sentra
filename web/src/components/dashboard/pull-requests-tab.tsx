@@ -200,9 +200,25 @@ export function PullRequestsTab({ currentRole, onNavigateToRemediation }: PullRe
               {pulls.length} Open PRs
             </Badge>
             {ghConfig && (
-              <span className="text-xs text-muted-foreground font-mono">
-                Repository: <span className="text-foreground font-medium">{ghConfig.owner}/{ghConfig.repo}</span>
-              </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-muted-foreground font-mono">
+                  Repository: <span className="text-foreground font-medium">{ghConfig.owner}/{ghConfig.repo}</span>
+                </span>
+                {ghConfig.authMethod === 'gh_cli' ? (
+                  <Badge variant="outline" className="text-[10px] font-mono border-emerald-500/30 text-emerald-400 bg-emerald-500/10 flex items-center gap-1">
+                    <CheckCircle2 className="size-2.5" />
+                    CLI Active (@{ghConfig.ghUser || 'detected'})
+                  </Badge>
+                ) : ghConfig.isConfigured ? (
+                  <Badge variant="outline" className="text-[10px] font-mono border-blue-500/30 text-blue-400 bg-blue-500/10">
+                    PAT Token
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[10px] font-mono border-amber-500/30 text-amber-400 bg-amber-500/10">
+                    Local Sandbox
+                  </Badge>
+                )}
+              </div>
             )}
           </div>
           <p className="text-xs text-muted-foreground">

@@ -255,3 +255,215 @@ impl AgentSkillAuditPromptBuilder {
         }
     }
 }
+
+/// Prompt builder for reconnaissance and entrypoint discovery (`ResearchRole::Scout`).
+pub struct ScoutPromptBuilder;
+
+impl ScoutPromptBuilder {
+    /// Builds a reconnaissance prompt to discover trust boundaries, external data stores, and entrypoints.
+    pub fn build_reconnaissance_prompt(
+        workspace_scope: &str,
+        tech_stack_hint: &str,
+    ) -> AppSecPrompt {
+        let system_prompt = AppSecPersona::system_prompt_for_role(ResearchRole::Scout).to_string();
+        let user_prompt = format!(
+            "Perform surface reconnaissance on the target workspace scope:\n\n\
+            Target Scope: {}\nTech Stack / Architecture: {}\n\n\
+            Objectives:\n\
+            1. Enumerate unauthenticated entrypoints (HTTP routes, RPC handlers, webhooks, CLI arguments).\n\
+            2. Map trust boundaries (client-to-server, service-to-service, tenant-to-tenant).\n\
+            3. Identify critical sinks (raw SQL/database, file operations, system exec, deserialization).\n\
+            4. Output structured inventory with file paths and line numbers.",
+            workspace_scope, tech_stack_hint
+        );
+
+        AppSecPrompt {
+            system_prompt,
+            user_prompt,
+            expected_schema: Some(
+                r#"{"entrypoints": [{"path": "...", "method": "...", "auth_required": false}], "sinks": [{"file": "...", "line": 0, "type": "..."}], "trust_boundaries": ["..."]}"#.into(),
+            ),
+        }
+    }
+}
+
+/// Prompt builder for independent dual-state verification (`ResearchRole::IndependentVerifier`).
+pub struct VerificationPromptBuilder;
+
+impl VerificationPromptBuilder {
+    /// Builds a dual-state verification evaluation prompt.
+    pub fn build_dual_state_verification_prompt(
+        vulnerability_title: &str,
+        reproduction_test: &str,
+        patch_diff: &str,
+        execution_evidence: &str,
+    ) -> AppSecPrompt {
+        let system_prompt =
+            AppSecPersona::system_prompt_for_role(ResearchRole::IndependentVerifier).to_string();
+        let user_prompt = format!(
+            "Evaluate the dual-state verification oracle for the following candidate remediation:\n\n\
+            Vulnerability: {}\n\n\
+            Tier 1 Reproduction Test Oracle:\n```\n{}\n```\n\n\
+            Tier 2 Proposed Patch Diff:\n```diff\n{}\n```\n\n\
+            Isolated Execution Evidence:\n```\n{}\n```\n\n\
+            Verification Checklist:\n\
+            1. Baseline Failure: Did the reproduction test fail strictly on the unpatched codebase?\n\
+            2. Patch Success: Does the reproduction test pass completely on the patched codebase?\n\
+            3. Zero Regression: Did the patch leave all pre-existing baseline test suites unaffected?\n\
+            4. Invariant Integrity: Does the patch address the root cause rather than weakening assertion checks?",
+            vulnerability_title, reproduction_test, patch_diff, execution_evidence
+        );
+
+        AppSecPrompt {
+            system_prompt,
+            user_prompt,
+            expected_schema: Some(
+                r#"{"verdict": "VERIFIED|REJECTED|INCONCLUSIVE", "invariant_satisfied": true|false, "regression_observed": false, "rationale": "..."}"#.into(),
+            ),
+        }
+    }
+}
+
+/// Dynamic composer that injects cognitive playbooks from built-in skills into role prompts.
+pub struct SkillPromptComposer;
+
+impl SkillPromptComposer {
+    /// Composes an AppSecPrompt for a given ResearchRole, augmenting its system persona
+    /// with rules extracted from built-in AppSec skills.
+    pub fn compose_role_prompt(
+        role: ResearchRole,
+        task_description: &str,
+        skill_ids: &[&str],
+        workspace_context: &str,
+    ) -> AppSecPrompt {
+        let base_system = AppSecPersona::system_prompt_for_role(role);
+        let mut skill_guidance = String::new();
+        for id in skill_ids {
+            if let Some(skill) = crate::skills::find_skill_by_id(id) {
+                skill_guidance.push_str(&format!(
+                    "\n\n### Cognitive Playbook: {} ({})\nCategory: {}\nTags: {}\n\n{}\n",
+                    skill.name,
+                    skill.id,
+                    skill.category,
+                    skill.tags.join(", "),
+                    skill.content
+                ));
+            }
+        }
+
+        let system_prompt = if skill_guidance.is_empty() {
+            base_system.to_string()
+        } else {
+            format!(
+                "{}\n\n## Activated Domain Security Guidelines:{}",
+                base_system, skill_guidance
+            )
+        };
+
+        let user_prompt = if workspace_context.is_empty() {
+            task_description.to_string()
+        } else {
+            format!(
+                "{}\n\n## Target Workspace Context:\n{}",
+                task_description, workspace_context
+            )
+        };
+
+        AppSecPrompt {
+            system_prompt,
+            user_prompt,
+            expected_schema: None,
+        }
+    }
+}
+
+/// Parsed 3-tier autonomous remediation patch response (ADR-0004).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ThreeTierPatchResponse {
+    /// Tier 1: Baseline reproduction test harness that fails on vulnerable target.
+    pub tier1_reproduction_test: String,
+    /// Tier 2: Minimal, safe unified diff addressing root cause.
+    pub tier2_unified_diff: String,
+    /// Tier 3: Invariant proof of zero regression.
+    pub tier3_invariant_proof: String,
+    /// Optional root cause analysis narrative.
+    #[serde(default)]
+    pub root_cause_analysis: Option<String>,
+    /// Optional git branch name for PR proposal.
+    #[serde(default)]
+    pub branch_name: Option<String>,
+    /// Optional conventional commit message.
+    #[serde(default)]
+    pub commit_message: Option<String>,
+}
+
+/// Parsed BOLA/IDOR audit disposition response.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BolaAuditResponse {
+    /// Disposition: VULNERABLE, SAFE, or NEEDS_CONTEXT.
+    pub disposition: String,
+    /// Associated CWE identifier.
+    pub cwe: String,
+    /// Root cause explanation.
+    pub root_cause: String,
+    /// Concrete proof-of-concept request if vulnerable.
+    pub poc_request: Option<String>,
+}
+
+/// Parsed AI agent skill security audit response.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SkillSafetyResponse {
+    /// Whether the skill is safe to execute.
+    pub safe: bool,
+    /// Assessed risk level (CRITICAL, HIGH, MEDIUM, LOW).
+    pub risk_level: String,
+    /// List of identified security threats.
+    pub identified_threats: Vec<String>,
+    /// Actionable recommendation.
+    pub recommendation: String,
+}
+
+/// Utility for parsing structured JSON outputs from LLM completion responses.
+pub struct StructuredResponseParser;
+
+impl StructuredResponseParser {
+    /// Extracts JSON substring from LLM response text, stripping markdown codeblocks.
+    pub fn extract_json_str(raw: &str) -> &str {
+        let trimmed = raw.trim();
+        if let Some(start) = trimmed.find("```json") {
+            let rest = &trimmed[start + 7..];
+            if let Some(end) = rest.find("```") {
+                return rest[..end].trim();
+            }
+        } else if let Some(start) = trimmed.find("```") {
+            let rest = &trimmed[start + 3..];
+            if let Some(end) = rest.find("```") {
+                return rest[..end].trim();
+            }
+        }
+        if let (Some(open), Some(close)) = (trimmed.find('{'), trimmed.rfind('}'))
+            && close > open
+        {
+            return &trimmed[open..=close];
+        }
+        trimmed
+    }
+
+    /// Parses a 3-tier patch response from LLM output.
+    pub fn parse_three_tier_patch(raw: &str) -> Option<ThreeTierPatchResponse> {
+        let json_str = Self::extract_json_str(raw);
+        serde_json::from_str::<ThreeTierPatchResponse>(json_str).ok()
+    }
+
+    /// Parses a BOLA audit response from LLM output.
+    pub fn parse_bola_audit(raw: &str) -> Option<BolaAuditResponse> {
+        let json_str = Self::extract_json_str(raw);
+        serde_json::from_str::<BolaAuditResponse>(json_str).ok()
+    }
+
+    /// Parses a skill safety audit response from LLM output.
+    pub fn parse_skill_safety(raw: &str) -> Option<SkillSafetyResponse> {
+        let json_str = Self::extract_json_str(raw);
+        serde_json::from_str::<SkillSafetyResponse>(json_str).ok()
+    }
+}

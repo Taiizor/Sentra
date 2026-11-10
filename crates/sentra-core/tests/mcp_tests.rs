@@ -74,7 +74,7 @@ fn test_tools_list_returns_canonical_suite() {
         .expect("Expected tools array")
         .clone();
 
-    assert_eq!(tools.len(), 10);
+    assert_eq!(tools.len(), 11);
     let names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
 
     assert!(names.contains(&"sentra_discover_workspace"));
@@ -87,6 +87,7 @@ fn test_tools_list_returns_canonical_suite() {
     assert!(names.contains(&"sentra_codeql_ingest"));
     assert!(names.contains(&"sentra_get_security_guidance"));
     assert!(names.contains(&"sentra_install_skills"));
+    assert!(names.contains(&"sentra_generate_prompt"));
 
     for tool in &tools {
         assert_eq!(tool["inputSchema"]["type"], "object");
@@ -440,4 +441,53 @@ fn test_mcp_get_security_guidance_and_install() {
     assert_eq!(install_result["status"], "Success");
     assert_eq!(install_result["target"], "claude");
     let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
+fn test_mcp_generate_prompt_tool() {
+    let mut server = McpServer::new(SessionId::from_sequence(10));
+    server.initialized = true;
+
+    let req = McpRequest {
+        jsonrpc: "2.0".to_string(),
+        id: Some(RequestId::Number(201)),
+        method: "tools/call".to_string(),
+        params: Some(serde_json::json!({
+            "name": "sentra_generate_prompt",
+            "arguments": {
+                "role": "patch_author",
+                "workflow": "patch-remediation",
+                "scope": "crates/sentra-core/src/db.rs",
+                "skills": ["golang-security"],
+                "context": "PostgreSQL relational query interface"
+            }
+        })),
+    };
+
+    let res = server.handle_request(req);
+    assert!(res.error.is_none());
+    let result = res
+        .result
+        .expect("Expected result from sentra_generate_prompt");
+
+    assert_eq!(result["role"], "patch_author");
+    assert_eq!(result["workflow"], "patch-remediation");
+    assert_eq!(result["scope"], "crates/sentra-core/src/db.rs");
+
+    let system_prompt = result["system_prompt"]
+        .as_str()
+        .expect("system_prompt string");
+    assert!(system_prompt.contains("Autonomous Remediation Application Security Engineer"));
+    assert!(system_prompt.contains("Golang Security Best Practices"));
+    assert!(system_prompt.contains("Activated Domain Security Guidelines"));
+
+    let user_prompt = result["user_prompt"].as_str().expect("user_prompt string");
+    assert!(user_prompt.contains("ADR-0004 Three-Tier Validation"));
+    assert!(user_prompt.contains("PostgreSQL relational query interface"));
+
+    let composite_prompt = result["composite_prompt"]
+        .as_str()
+        .expect("composite_prompt string");
+    assert!(composite_prompt.contains("SYSTEM:"));
+    assert!(composite_prompt.contains("USER:"));
 }

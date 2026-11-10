@@ -63,6 +63,8 @@ export function SettingsTab({ currentRole }: SettingsTabProps) {
   const [ghBranch, setGhBranch] = useState('main')
   const [ghShowToken, setGhShowToken] = useState(false)
   const [ghIsConfigured, setGhIsConfigured] = useState(false)
+  const [ghAuthSource, setGhAuthSource] = useState<'gh_cli' | 'pat_token' | 'simulated'>('simulated')
+  const [ghUser, setGhUser] = useState<string>('')
   const [ghTesting, setGhTesting] = useState(false)
   const [ghTestResult, setGhTestResult] = useState<{ ok: boolean; message: string } | null>(null)
   const [ghSaving, setGhSaving] = useState(false)
@@ -107,6 +109,8 @@ export function SettingsTab({ currentRole }: SettingsTabProps) {
         if (cfg.repo) setGhRepo(cfg.repo)
         if (cfg.defaultBranch) setGhBranch(cfg.defaultBranch)
         setGhIsConfigured(cfg.isConfigured)
+        if (cfg.authMethod) setGhAuthSource(cfg.authMethod)
+        if (cfg.ghUser) setGhUser(cfg.ghUser)
         if (cfg.maskedToken) setGhToken(cfg.maskedToken)
       }
     })
@@ -670,8 +674,13 @@ export function SettingsTab({ currentRole }: SettingsTabProps) {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-foreground">GitHub Repository &amp; CI Integration</span>
-                    {ghIsConfigured ? (
-                      <Badge variant="outline" className="text-[10px] font-mono border-emerald-500/30 text-emerald-400 bg-emerald-500/5">
+                    {ghAuthSource === 'gh_cli' ? (
+                      <Badge variant="outline" className="text-[10px] font-mono border-emerald-500/30 text-emerald-400 bg-emerald-500/10 flex items-center gap-1">
+                        <CheckCircle2 className="size-3" />
+                        GitHub CLI Active (@{ghUser || 'detected'})
+                      </Badge>
+                    ) : ghIsConfigured ? (
+                      <Badge variant="outline" className="text-[10px] font-mono border-blue-500/30 text-blue-400 bg-blue-500/5">
                         PAT Configured
                       </Badge>
                     ) : (
@@ -681,7 +690,7 @@ export function SettingsTab({ currentRole }: SettingsTabProps) {
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Connect Sentra to your remote GitHub repository for one-click Draft PR creation, automated security gate checks, and workflow inspection.
+                    Dual Authentication Engine: Automatically connects via your active GitHub CLI (`gh`) session, or falls back to a fine-grained Personal Access Token (PAT).
                   </p>
                 </div>
               </div>
@@ -705,10 +714,25 @@ export function SettingsTab({ currentRole }: SettingsTabProps) {
                   className="h-8 text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5"
                 >
                   {ghSaving ? <Loader2 className="size-3 animate-spin" /> : <Save className="size-3" />}
-                  <span>{ghSaving ? 'Saving...' : 'Save GitHub Settings'}</span>
+                  <span>{ghSaving ? 'Saving...' : 'Save Settings'}</span>
                 </Button>
               </div>
             </div>
+
+            {/* GitHub CLI Detected Banner */}
+            {ghAuthSource === 'gh_cli' && (
+              <div className="p-3 rounded-md border border-emerald-500/30 bg-emerald-500/10 text-xs flex items-center justify-between gap-3 text-emerald-300">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
+                  <span>
+                    <strong>GitHub CLI (`gh`) session active for @{ghUser}!</strong> Zero token configuration needed. All Draft PR creation, status checks, and workflow inspections are authenticated automatically.
+                  </span>
+                </div>
+                <Badge variant="outline" className="border-emerald-500/40 text-emerald-300 font-mono text-[10px] shrink-0">
+                  Zero Config Active
+                </Badge>
+              </div>
+            )}
 
             {/* Test Result Banner */}
             {ghTestResult && (

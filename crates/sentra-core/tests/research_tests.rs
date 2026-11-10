@@ -6,8 +6,9 @@ use sentra_core::{
     AttackDifficulty, AttackNode, Campaign, CampaignLimits, CampaignStatus, CampaignStopReason,
     Confidence, ControlLayer, ControlType, CostTier, CoverageLedger, DetectionRisk, Hypothesis,
     HypothesisStatus, PatchSynthesisPromptBuilder, ResearchErrorKind, ResearchRole, RoleCapability,
-    SecurityMitigation, SessionId, SkipReason, StrideCategory, TaskId, ThreatMitigationMapping,
-    ThreatModelingPromptBuilder, TimestampUtc, VulnerabilityCategory,
+    ScoutPromptBuilder, SecurityMitigation, SessionId, SkillPromptComposer, SkipReason,
+    StrideCategory, StructuredResponseParser, TaskId, ThreatMitigationMapping,
+    ThreatModelingPromptBuilder, TimestampUtc, VerificationPromptBuilder, VulnerabilityCategory,
     assert_patch_verifier_independent, assert_peer_approval_forbidden,
 };
 
@@ -675,4 +676,138 @@ fn test_agent_skill_safety_audit_prompt_builder() {
     assert!(composite.contains("SYSTEM:"));
     assert!(composite.contains("OUTPUT FORMAT SPECIFICATION:"));
     assert!(composite.contains("USER:"));
+}
+
+#[test]
+fn test_scout_prompt_builder() {
+    let prompt =
+        ScoutPromptBuilder::build_reconnaissance_prompt("crates/sentra-core", "Rust Workspace");
+    assert!(
+        prompt
+            .system_prompt
+            .contains("Senior Application Security Scout")
+    );
+    assert!(
+        prompt
+            .user_prompt
+            .contains("Target Scope: crates/sentra-core")
+    );
+    assert!(
+        prompt
+            .user_prompt
+            .contains("Tech Stack / Architecture: Rust Workspace")
+    );
+    assert!(
+        prompt
+            .user_prompt
+            .contains("Enumerate unauthenticated entrypoints")
+    );
+    assert!(prompt.expected_schema.is_some());
+}
+
+#[test]
+fn test_verification_prompt_builder() {
+    let prompt = VerificationPromptBuilder::build_dual_state_verification_prompt(
+        "SQL Injection in Search Query",
+        "#[test] fn test_exploit() { assert!(run_query(\"' OR 1=1\").is_err()); }",
+        "--- a/query.rs\n+++ b/query.rs\n- query_raw(&input)\n+ query_param(&input)",
+        "Baseline: FAILED (SQL syntax error / bypass succeeded)\nPatched: PASSED (query safely escaped)",
+    );
+    assert!(
+        prompt
+            .system_prompt
+            .contains("Independent AppSec Verification Oracle")
+    );
+    assert!(prompt.user_prompt.contains("SQL Injection in Search Query"));
+    assert!(
+        prompt
+            .user_prompt
+            .contains("Tier 1 Reproduction Test Oracle")
+    );
+    assert!(prompt.user_prompt.contains("Tier 2 Proposed Patch Diff"));
+    assert!(prompt.user_prompt.contains("Isolated Execution Evidence"));
+    assert!(prompt.expected_schema.is_some());
+}
+
+#[test]
+fn test_skill_prompt_composer_injects_guidelines() {
+    let prompt = SkillPromptComposer::compose_role_prompt(
+        ResearchRole::Analyst,
+        "Analyze authentication routes for authorization flaws",
+        &["golang-security", "cloud-infrastructure"],
+        "Target: pkg/auth/handler.go",
+    );
+    assert!(prompt.system_prompt.contains("Vulnerability Analyst"));
+    assert!(
+        prompt
+            .system_prompt
+            .contains("Activated Domain Security Guidelines")
+    );
+    assert!(
+        prompt
+            .system_prompt
+            .contains("Golang Security Best Practices")
+    );
+    assert!(prompt.system_prompt.contains("golang-security"));
+    assert!(prompt.user_prompt.contains("Analyze authentication routes"));
+    assert!(prompt.user_prompt.contains("Target: pkg/auth/handler.go"));
+}
+
+#[test]
+fn test_structured_response_parser() {
+    // 1. Raw JSON Three-Tier Patch
+    let raw_patch = r#"{
+        "root_cause_analysis": "Unsanitized user input interpolated into shell execution",
+        "tier1_reproduction_test": "test_cmd_injection() { assert_fails(); }",
+        "tier2_unified_diff": "--- a/exec.rs\n+++ b/exec.rs\n- exec(&cmd)\n+ exec_safe(&cmd)",
+        "tier3_invariant_proof": "All existing unit tests pass cleanly without regression",
+        "branch_name": "sentra/patch/cwe-78-01",
+        "commit_message": "fix(security): sanitize shell command arguments"
+    }"#;
+    let parsed_patch = StructuredResponseParser::parse_three_tier_patch(raw_patch).unwrap();
+    assert_eq!(
+        parsed_patch.branch_name.as_deref(),
+        Some("sentra/patch/cwe-78-01")
+    );
+    assert!(
+        parsed_patch
+            .tier1_reproduction_test
+            .contains("test_cmd_injection")
+    );
+
+    // 2. Markdown fenced JSON with surrounding commentary
+    let fenced_patch = format!(
+        "Here is the verified remediation:\n```json\n{}\n```\nHope this helps!",
+        raw_patch
+    );
+    let parsed_fenced = StructuredResponseParser::parse_three_tier_patch(&fenced_patch).unwrap();
+    assert_eq!(
+        parsed_fenced.branch_name.as_deref(),
+        Some("sentra/patch/cwe-78-01")
+    );
+
+    // 3. BOLA audit response
+    let bola_json = r#"```json
+    {
+        "disposition": "VULNERABLE",
+        "cwe": "CWE-639",
+        "root_cause": "Missing tenant_id filter in WHERE clause",
+        "poc_request": "GET /api/v1/tenant-b/invoices HTTP/1.1\nAuthorization: Bearer tenant_a_token"
+    }
+    ```"#;
+    let parsed_bola = StructuredResponseParser::parse_bola_audit(bola_json).unwrap();
+    assert_eq!(parsed_bola.disposition, "VULNERABLE");
+    assert_eq!(parsed_bola.cwe, "CWE-639");
+
+    // 4. Skill safety audit response
+    let safety_json = r#"{
+        "safe": false,
+        "risk_level": "HIGH",
+        "identified_threats": ["Credential Exfiltration via webhook"],
+        "recommendation": "Enforce egress network proxy filtering"
+    }"#;
+    let parsed_safety = StructuredResponseParser::parse_skill_safety(safety_json).unwrap();
+    assert!(!parsed_safety.safe);
+    assert_eq!(parsed_safety.risk_level, "HIGH");
+    assert_eq!(parsed_safety.identified_threats.len(), 1);
 }

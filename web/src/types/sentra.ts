@@ -341,6 +341,10 @@ export interface GitHubConfig {
   defaultBranch: string
   isConfigured: boolean
   maskedToken?: string
+  authMethod?: 'gh_cli' | 'pat_token' | 'simulated'
+  ghUser?: string
+  ghCliAvailable?: boolean
+  message?: string
 }
 
 export type PrSecurityStatus = 'clean' | 'warnings' | 'critical' | 'scanning' | 'pending'
