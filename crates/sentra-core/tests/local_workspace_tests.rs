@@ -474,6 +474,45 @@ fn symlink_root_storage_parent_and_database_are_rejected() {
     fs::remove_file(&f.db).unwrap();
 }
 
+/// Unix counterpart of the Windows link tests, for links in an ancestor: a workspace
+/// or storage directory reached through a symbolic link is refused even though the
+/// link resolves to the same ordinary directory, and nothing is created. This is why
+/// macOS paths under `/tmp` or `/var` (links to `/private/tmp` and `/private/var`)
+/// must be given in their canonical form.
+#[cfg(unix)]
+#[test]
+fn symlinked_ancestors_of_root_and_storage_are_rejected_on_unix() {
+    use std::os::unix::fs::symlink;
+    let f = Fixture::new();
+    let alias = f.root.join("alias");
+    symlink(&f.root, &alias).unwrap();
+
+    let workspace_via_alias = alias.join(f.workspace.file_name().unwrap());
+    assert!(workspace_via_alias.is_dir(), "the link resolves");
+    assert_eq!(
+        LocalWorkspace::initialize(&workspace_via_alias, &f.db)
+            .unwrap_err()
+            .kind,
+        LocalWorkspaceErrorKind::Workspace
+    );
+    let db_via_alias = alias.join("storage").join("local.db");
+    assert_eq!(
+        LocalWorkspace::initialize(&f.workspace, &db_via_alias)
+            .unwrap_err()
+            .kind,
+        LocalWorkspaceErrorKind::StorageLocation
+    );
+    assert_eq!(fs::read_dir(f.root.join("storage")).unwrap().count(), 0);
+
+    // The canonical spelling of the same directories is accepted.
+    assert!(
+        LocalWorkspace::initialize(&f.workspace, &f.db)
+            .unwrap()
+            .created
+    );
+    fs::remove_file(alias).unwrap();
+}
+
 #[cfg(windows)]
 #[test]
 fn quarantined_internal_symlinks_are_not_followed_by_initialization() {

@@ -6,10 +6,12 @@
 //!   the handshake additionally bounded by [`HANDSHAKE_TIMEOUT`];
 //! - bounded stdout line reads (`quotas.max_frame_bytes`) and a cumulative
 //!   stdout + stderr ceiling (`quotas.max_total_output_bytes`), with stderr always drained;
-//! - a cleared environment except [`crate::plugin::process::ADAPTER_ENV_ALLOWLIST`];
+//! - a cleared environment except [`crate::plugin::process::ADAPTER_ENV_ALLOWLIST`]
+//!   (plus [`crate::plugin::process::CONTAINMENT_ENV`] on Linux and macOS);
 //! - the process tree is killed on every exit path, before the adapter's stdin is closed;
-//!   on Windows a kill-on-close Job Object also reaches descendants of an adapter that
-//!   already exited (see `process.rs` for the fallback and residual risks).
+//!   descendants of an adapter that already exited are reached through a kill-on-close
+//!   Job Object on Windows and through the process group and the containment marker on
+//!   Linux and macOS (see `process.rs` for the fallbacks and residual risks).
 //!
 //! Memory and egress quotas are declared by the manifest but not enforced.
 

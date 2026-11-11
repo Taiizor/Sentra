@@ -878,6 +878,13 @@ function copyManifest(adapter: string, target: string): void {
   fs.copyFileSync(path.join(REPO_ROOT, "examples", "adapters", adapter, "manifest.json"), path.join(target, "manifest.json"));
 }
 
+/**
+ * These tests start the real core (one or more runs each, every run limited to 30 s), and a cold
+ * start of a freshly built binary can take seconds, so they get their own limit instead of bun's
+ * 5 s default.
+ */
+const REAL_CORE_TEST_TIMEOUT_MS = 60_000;
+
 describe.skipIf(CORE_BIN === null)("with the real core binary", () => {
   const cli = () => new SentraCli(CORE_BIN as string, tempDir("sentra-plugin-cwd-"), 30_000, 2);
 
@@ -898,7 +905,7 @@ describe.skipIf(CORE_BIN === null)("with the real core binary", () => {
     expect(state).toMatchObject({ directory: expected, source: "platform_default", exists: false });
     // Never created by the bridge.
     expect(fs.existsSync(expected)).toBe(false);
-  });
+  }, REAL_CORE_TEST_TIMEOUT_MS);
 
   if (process.platform === "linux") {
     test("Linux: XDG_CONFIG_HOME first, HOME/.config when it is unset or relative", async () => {
@@ -908,7 +915,7 @@ describe.skipIf(CORE_BIN === null)("with the real core binary", () => {
         const state = await new PluginDirectoryResolver({ platform: "linux", environmentDir: null, env, runCli: (a, o) => core.run(a, o), timeoutMs: 30_000, protectedLocations: () => [] }).current();
         expect(state.directory).toBe(path.join(home, ".config", "sentra", "plugins"));
       }
-    });
+    }, REAL_CORE_TEST_TIMEOUT_MS);
   }
 
   test("no platform variables: the core has no default, so none", async () => {
@@ -916,7 +923,7 @@ describe.skipIf(CORE_BIN === null)("with the real core binary", () => {
     const state = await new PluginDirectoryResolver({ platform: process.platform, environmentDir: null, env: {}, runCli: (a, o) => core.run(a, o), timeoutMs: 30_000, protectedLocations: () => [] }).current();
     expect(state).toMatchObject({ directory: null, source: "none" });
     expect(state.diagnostics.map((entry) => entry.code)).toEqual(["plugin_dir_unavailable"]);
-  });
+  }, REAL_CORE_TEST_TIMEOUT_MS);
 
   test("listing a default directory created later: valid, invalid and duplicate manifests", async () => {
     const base = tempDir("sentra-plugin-cfg-");
@@ -957,7 +964,7 @@ describe.skipIf(CORE_BIN === null)("with the real core binary", () => {
     ]);
     expect(after.diagnostics[1].message).toContain("org.sentra.adapter.semgrep");
     expect(after.hint).toContain("Entries with an error are not loaded");
-  });
+  }, REAL_CORE_TEST_TIMEOUT_MS);
 });
 
 // ───────────────────────────── console wording ─────────────────────────────

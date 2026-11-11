@@ -50,8 +50,8 @@ pub use manifest::{
     PluginManifest, PluginQuotas, split_command_line,
 };
 pub use process::{
-    ADAPTER_ENV_ALLOWLIST, AdapterCommand, ContainedRun, STDERR_TAIL_BYTES, adapter_environment,
-    resolve_adapter_command, run_contained, run_contained_cancellable,
+    ADAPTER_ENV_ALLOWLIST, AdapterCommand, CONTAINMENT_ENV, ContainedRun, STDERR_TAIL_BYTES,
+    adapter_environment, resolve_adapter_command, run_contained, run_contained_cancellable,
 };
 pub use protocol::{PluginRequest, PluginResponse, decode_frame, encode_frame};
 pub use sample_adapter::{SampleAdapter, SampleAdapterMode};

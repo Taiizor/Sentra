@@ -9,11 +9,20 @@ import { envValue, nodeArchToCpuArch, splitPathList, type PersistedPathResult } 
  * (os.arch() is the process architecture), a friendly OS name, available (not just free) memory,
  * and the persisted PATH. Detection never executes a discovered tool: the only programs spawned are
  * fixed system binaries addressed by absolute path (Windows PowerShell 5.1 for registry reads,
- * macOS sw_vers/sysctl/vm_stat), asynchronously, with a minimal environment and a short timeout.
+ * macOS sw_vers/sysctl/vm_stat), asynchronously, with a minimal environment and a timeout.
  * Everything else is read from files with bounded reads.
  */
 
+/** Default limit for one system program run (the macOS programs, which start in milliseconds). */
 export const SYSTEM_PROGRAM_TIMEOUT_MS = 5_000;
+/**
+ * Limit for the powershell.exe registry read. Windows PowerShell 5.1 loads the .NET Framework when
+ * it starts, which takes several seconds on a cold or busy host (on GitHub's Windows runners it
+ * exceeded 5 s). The read is asynchronous, started at bridge startup and cached (see
+ * WINDOWS_REGISTRY_TTL_MS), so the limit only bounds how long the first tool search snapshot, and
+ * with it the first response that needs one, may wait.
+ */
+export const WINDOWS_REGISTRY_TIMEOUT_MS = 15_000;
 const MAX_PROGRAM_OUTPUT_BYTES = 256 * 1024;
 const MAX_TEXT_FILE_BYTES = 64 * 1024;
 /**
@@ -48,8 +57,15 @@ export interface SystemProgramResult {
   timedOut: boolean;
 }
 
-/** Starts an allow-listed program; `input`, when given, is written to its standard input. */
-export type SystemProgramRunner = (file: string, args: string[], input?: string) => Promise<SystemProgramResult>;
+export interface SystemProgramRunOptions {
+  /** Written to the program's standard input when given. */
+  input?: string;
+  /** Overrides the runner's default time limit for this run. */
+  timeoutMs?: number;
+}
+
+/** Starts an allow-listed program. */
+export type SystemProgramRunner = (file: string, args: string[], options?: SystemProgramRunOptions) => Promise<SystemProgramResult>;
 
 // ───────────────────────────── pure parsers ─────────────────────────────
 
@@ -342,15 +358,17 @@ async function readBounded(stream: ReadableStream<Uint8Array>, limit: number): P
 
 /**
  * Starts one allow-listed system program asynchronously (never spawnSync), without a shell, with a
- * minimal environment, a system working directory and a timeout.
+ * minimal environment, a system working directory and a timeout (`defaultTimeoutMs` unless the run
+ * sets its own).
  */
 export function createSystemProgramRunner(
   platform: NodeJS.Platform = process.platform,
   env: Readonly<Record<string, string | undefined>> = process.env,
-  timeoutMs = SYSTEM_PROGRAM_TIMEOUT_MS,
+  defaultTimeoutMs = SYSTEM_PROGRAM_TIMEOUT_MS,
 ): SystemProgramRunner {
   const allowed = new Set(allowedSystemPrograms(platform, env));
-  return async (file, args, input) => {
+  return async (file, args, options = {}) => {
+    const { input, timeoutMs = defaultTimeoutMs } = options;
     if (!allowed.has(file)) throw new Error(`Refusing to start ${file}: not an allow-listed system program`);
     const cwd = platform === "win32" ? path.win32.join(windowsSystemRoot(env), "System32") : "/";
     const proc = Bun.spawn([file, ...args], {
@@ -412,6 +430,8 @@ export interface HostPlatformOptions {
   processArch?: string;
   env?: Readonly<Record<string, string | undefined>>;
   run?: SystemProgramRunner;
+  /** Time limit of the powershell.exe registry read (default WINDOWS_REGISTRY_TIMEOUT_MS). */
+  registryTimeoutMs?: number;
   readTextFile?: (file: string) => Promise<string | null>;
   listDirectory?: (dir: string) => Promise<string[] | null>;
   freemem?: () => number;
@@ -432,6 +452,7 @@ export class HostPlatform {
   private readonly rawProcessArch: string;
   private readonly env: Readonly<Record<string, string | undefined>>;
   private readonly run: SystemProgramRunner;
+  private readonly registryTimeoutMs: number;
   private readonly readTextFile: (file: string) => Promise<string | null>;
   private readonly listDirectory: (dir: string) => Promise<string[] | null>;
   private readonly freemem: () => number;
@@ -453,6 +474,7 @@ export class HostPlatform {
     this.processArch = nodeArchToCpuArch(this.rawProcessArch);
     this.env = options.env ?? process.env;
     this.run = options.run ?? createSystemProgramRunner(this.platform, this.env);
+    this.registryTimeoutMs = options.registryTimeoutMs ?? WINDOWS_REGISTRY_TIMEOUT_MS;
     this.readTextFile = options.readTextFile ?? ((file) => readTextFileBounded(file));
     this.listDirectory =
       options.listDirectory ??
@@ -481,11 +503,14 @@ export class HostPlatform {
     const promise = (async () => {
       let result: SystemProgramResult;
       try {
-        result = await this.run(windowsPowerShellPath(this.env), [...WINDOWS_POWERSHELL_ARGS], `${WINDOWS_REGISTRY_SCRIPT}\r\n`);
+        result = await this.run(windowsPowerShellPath(this.env), [...WINDOWS_POWERSHELL_ARGS], {
+          input: `${WINDOWS_REGISTRY_SCRIPT}\r\n`,
+          timeoutMs: this.registryTimeoutMs,
+        });
       } catch (error) {
         throw new Error(`powershell.exe could not be started: ${errorText(error)}`);
       }
-      if (result.timedOut) throw new Error(`powershell.exe did not answer within ${SYSTEM_PROGRAM_TIMEOUT_MS} ms`);
+      if (result.timedOut) throw new Error(`powershell.exe did not answer within ${this.registryTimeoutMs} ms`);
       if (result.code !== 0) throw new Error(`powershell.exe exited with code ${result.code}`);
       try {
         return parseWindowsRegistryJson(result.stdout);

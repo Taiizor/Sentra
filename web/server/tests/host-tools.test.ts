@@ -32,7 +32,7 @@ import {
   type SearchDirectory,
   type SearchEnvironment,
 } from "../executables.ts";
-import { ghEnvironment, GitHubService } from "../github.ts";
+import { GH_TOKEN_TIMEOUT_MS, ghEnvironment, GitHubService } from "../github.ts";
 import {
   createSystemProgramRunner,
   HostPlatform,
@@ -47,12 +47,15 @@ import {
   parseWindowsRegistryJson,
   registryRetryDelayMs,
   resolveNativeArch,
+  SYSTEM_PROGRAM_TIMEOUT_MS,
   WINDOWS_POWERSHELL_ARGS,
   WINDOWS_REGISTRY_SCRIPT,
+  WINDOWS_REGISTRY_TIMEOUT_MS,
   WINDOWS_REGISTRY_TTL_MS,
   windowsOsName,
   windowsPowerShellPath,
   type SystemProgramResult,
+  type SystemProgramRunOptions,
 } from "../host-platform.ts";
 import {
   BUN_MATCHED_NOTE,
@@ -977,13 +980,13 @@ describe("host platform facts", () => {
   });
 
   test("Windows: one allow-listed PowerShell call yields both PATHs and the native architecture", async () => {
-    const calls: { file: string; args: string[]; input: string | undefined }[] = [];
+    const calls: { file: string; args: string[]; options: SystemProgramRunOptions | undefined }[] = [];
     const host = new HostPlatform({
       platform: "win32",
       processArch: "x64",
       env: { SystemRoot: "C:\\Windows", PROCESSOR_ARCHITECTURE: "AMD64" },
-      run: async (file, args, input): Promise<SystemProgramResult> => {
-        calls.push({ file, args, input });
+      run: async (file, args, options): Promise<SystemProgramResult> => {
+        calls.push({ file, args, options });
         return { code: 0, timedOut: false, stdout: JSON.stringify({ userPath: "%USERPROFILE%\\bin;D:\\CodeQL;", systemPath: "C:\\Windows\\system32;D:\\CodeQL", processorArchitecture: "ARM64" }) };
       },
       osVersion: () => "Windows 11 Pro",
@@ -1002,7 +1005,11 @@ describe("host platform facts", () => {
     expect(calls[0].args).toEqual(["-NoProfile", "-NonInteractive", "-NoLogo", "-Command", "-"]);
     expect([...WINDOWS_POWERSHELL_ARGS]).toEqual(calls[0].args);
     expect(calls[0].args.join(" ")).not.toMatch(/EncodedCommand|ExecutionPolicy|Bypass/i);
-    expect(calls[0].input).toBe(`${WINDOWS_REGISTRY_SCRIPT}\r\n`);
+    // Windows PowerShell 5.1 needs more than the default 5 s to start on a cold host (it exceeded
+    // 5 s on GitHub's Windows runners), so the registry read gets its own, longer limit.
+    expect(calls[0].options).toEqual({ input: `${WINDOWS_REGISTRY_SCRIPT}\r\n`, timeoutMs: WINDOWS_REGISTRY_TIMEOUT_MS });
+    expect(WINDOWS_REGISTRY_TIMEOUT_MS).toBeGreaterThanOrEqual(15_000);
+    expect(WINDOWS_REGISTRY_TIMEOUT_MS).toBeGreaterThan(SYSTEM_PROGRAM_TIMEOUT_MS);
     // `-Command -` runs standard input line by line, so the script must be a single line.
     expect(WINDOWS_REGISTRY_SCRIPT).not.toMatch(/[\r\n]/);
   });
@@ -1029,27 +1036,61 @@ describe("host platform facts", () => {
     expect(WINDOWS_REGISTRY_TTL_MS).toBeGreaterThanOrEqual(10 * 60_000);
   });
 
-  test.if(process.platform === "win32")("Windows: the real registry read through stdin works on this host", async () => {
-    // Starts only the allow-listed %SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe.
-    const host = new HostPlatform();
-    const persisted = await host.persistedPaths();
-    expect(persisted.error).toBeNull();
-    expect(persisted.read).toBe(true);
-    expect(persisted.entries.system.length).toBeGreaterThan(0);
-    expect(["x64", "arm64", "ia32", "arm"]).toContain((await host.nativeArch()) as string);
-  });
+  // A cold powershell.exe can take most of WINDOWS_REGISTRY_TIMEOUT_MS to start, so the test may run
+  // longer than bun's 5 s default. Its own limit lies above the product's, so a PowerShell that never
+  // answers fails the expectations below with the product's message instead of a bare test timeout.
+  test.if(process.platform === "win32")(
+    "Windows: the real registry read through stdin works on this host",
+    async () => {
+      // Starts only the allow-listed %SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe.
+      const host = new HostPlatform();
+      const persisted = await host.persistedPaths();
+      expect(persisted.error).toBeNull();
+      expect(persisted.read).toBe(true);
+      expect(persisted.entries.system.length).toBeGreaterThan(0);
+      expect(["x64", "arm64", "ia32", "arm"]).toContain((await host.nativeArch()) as string);
+    },
+    WINDOWS_REGISTRY_TIMEOUT_MS + 15_000,
+  );
+
+  test.if(process.platform === "win32")(
+    "Windows: a run's own time limit overrides the runner's default (the real powershell.exe is stopped)",
+    async () => {
+      const env = { SystemRoot: process.env.SystemRoot ?? process.env.windir };
+      // Without input, `-Command -` reads an empty standard input and exits with code 0 once started,
+      // which takes far longer than 1 ms: the run must end as timed out, not with that exit.
+      const result = await createSystemProgramRunner("win32", env, 60_000)(windowsPowerShellPath(env), [...WINDOWS_POWERSHELL_ARGS], { timeoutMs: 1 });
+      expect(result).toMatchObject({ code: null, timedOut: true });
+    },
+    WINDOWS_REGISTRY_TIMEOUT_MS + 15_000,
+  );
 
   test("Windows: a failed PowerShell call is reported, not thrown, and the env fallback gives the arch", async () => {
+    const timedOut = async () => ({ code: null, stdout: "", timedOut: true });
     const host = new HostPlatform({
       platform: "win32",
       processArch: "x64",
       env: { SystemRoot: "C:\\Windows", PROCESSOR_ARCHITECTURE: "AMD64" },
-      run: async () => ({ code: null, stdout: "", timedOut: true }),
+      run: timedOut,
     });
     const persisted = await host.persistedPaths();
     expect(persisted.read).toBe(false);
-    expect(persisted.error).toContain("did not answer");
+    expect(persisted.error).toStartWith(`powershell.exe did not answer within ${WINDOWS_REGISTRY_TIMEOUT_MS} ms`);
     expect(await host.nativeArch()).toBe("x64");
+    // The limit is configurable, and the message names the one that applied.
+    const options: (SystemProgramRunOptions | undefined)[] = [];
+    const short = new HostPlatform({
+      platform: "win32",
+      processArch: "x64",
+      env: { SystemRoot: "C:\\Windows" },
+      registryTimeoutMs: 1_234,
+      run: async (_file, _args, runOptions) => {
+        options.push(runOptions);
+        return timedOut();
+      },
+    });
+    expect((await short.persistedPaths()).error).toStartWith("powershell.exe did not answer within 1234 ms");
+    expect(options.map((entry) => entry?.timeoutMs)).toEqual([1_234]);
   });
 
   test("Windows: a PowerShell that keeps failing is started again after 1, 2, 4, 8, then every 10 minutes", async () => {
@@ -1582,6 +1623,8 @@ describe("reported tools", () => {
     expect(located).toEqual(["C:\\nowhere\\gh.cmd", null]);
   });
 
+  // Starts real processes: the first gh run may take up to GH_TOKEN_TIMEOUT_MS and the slow one is
+  // allowed 10 s below, so the test's own limit lies above both instead of bun's 5 s default.
   test.if(process.platform !== "win32")("gh runs without the bridge's secrets and is stopped at the timeout", () => {
     const dir = tempDir("gh-run-");
     const db = openWebDb(path.join(dir, "web.db"));
@@ -1607,7 +1650,7 @@ describe("reported tools", () => {
       if (saved.tokens === undefined) delete process.env.SENTRA_WEB_TOKENS;
       else process.env.SENTRA_WEB_TOKENS = saved.tokens;
     }
-  });
+  }, GH_TOKEN_TIMEOUT_MS + 15_000);
 });
 
 // ───────────────────────────── /api/system ─────────────────────────────

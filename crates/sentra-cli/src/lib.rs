@@ -3254,13 +3254,27 @@ fn cancel_when_stdin_closes() -> Arc<AtomicBool> {
     let flag = Arc::new(AtomicBool::new(false));
     let set = Arc::clone(&flag);
     std::thread::spawn(move || {
-        use std::io::Read;
-        let mut stdin = std::io::stdin();
-        let mut buffer = [0_u8; 256];
-        while matches!(stdin.read(&mut buffer), Ok(n) if n > 0) {}
+        drain_until_closed(std::io::stdin());
         set.store(true, Ordering::SeqCst);
     });
     flag
+}
+
+/// Reads and discards `input` until end of file or a read error.
+///
+/// A read interrupted by a signal (`ErrorKind::Interrupted`, `EINTR` on Unix) is
+/// retried as the `Read` contract asks: it is not the end of the input, and treating it
+/// as one would cancel a running analysis because a signal arrived.
+fn drain_until_closed(mut input: impl std::io::Read) {
+    let mut buffer = [0_u8; 256];
+    loop {
+        match input.read(&mut buffer) {
+            Ok(0) => return,
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(_) => return,
+        }
+    }
 }
 
 /// Maps a host analysis failure to its error code, exit status and the partial report.
@@ -4139,6 +4153,46 @@ fn render_plugin_run(
             stderr: String::new(),
             exit_code: 0,
         }
+    }
+}
+
+#[cfg(test)]
+mod stdin_watch_tests {
+    use super::drain_until_closed;
+    use std::io::{self, ErrorKind, Read};
+
+    /// A reader that returns the scripted results in order.
+    struct Scripted(Vec<io::Result<usize>>);
+
+    impl Read for Scripted {
+        fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
+            assert!(!self.0.is_empty(), "read after the end of the script");
+            self.0.remove(0)
+        }
+    }
+
+    #[test]
+    fn interrupted_reads_are_retried_until_end_of_file() {
+        let mut input = Scripted(vec![
+            Ok(3),
+            Err(io::Error::from(ErrorKind::Interrupted)),
+            Err(io::Error::from(ErrorKind::Interrupted)),
+            Ok(1),
+            Ok(0),
+        ]);
+        drain_until_closed(&mut input);
+        assert!(input.0.is_empty(), "stopped before end of file");
+    }
+
+    #[test]
+    fn other_read_errors_end_the_wait() {
+        let mut input = Scripted(vec![
+            Ok(2),
+            Err(io::Error::from(ErrorKind::BrokenPipe)),
+            Ok(5),
+        ]);
+        drain_until_closed(&mut input);
+        assert_eq!(input.0.len(), 1, "kept reading after a read error");
     }
 }
 

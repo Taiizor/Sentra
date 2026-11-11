@@ -75,6 +75,13 @@ sentra plugin list --dir ./examples/adapters
 All `--json` output is a single line on stdout; failures print
 `{"schema_version":1,"error":"<code>"}` on stderr with a non-zero exit code.
 
+`init`, `status`, `session`, `recover`, `audit`, `scan` and `diff` refuse a
+workspace or `--database` path that passes through a symbolic link or junction,
+also in a directory above it (`invalid_workspace` or
+`invalid_storage_location`, exit 4); the path is not resolved first. On macOS
+this includes `/tmp/...` and `/var/...` (links to `/private/...`); see
+[docs/LIMITATIONS.md](https://github.com/Taiizor/Sentra/blob/develop/docs/LIMITATIONS.md).
+
 ### `sentra inventory [--workspace <dir>] [--max-depth <n>] --json`
 
 Discovers supported lockfiles recursively (default depth 6, maximum 32) and

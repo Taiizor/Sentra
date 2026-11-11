@@ -21,6 +21,12 @@ use sentra_core::{
 use serde_json::{Value, json};
 
 /// Unique temporary directory removed on drop.
+///
+/// The directory is created under the canonical temporary directory. The workspace
+/// boundary behind the local store (`LocalWorkspace`) refuses a root or storage path
+/// that passes through a symbolic link in any ancestor, and on macOS the default
+/// temporary directory (`/var/folders/...`) is reached through the `/var` ->
+/// `/private/var` link.
 struct TempDir(PathBuf);
 
 impl TempDir {
@@ -28,8 +34,8 @@ impl TempDir {
         use std::sync::atomic::{AtomicU64, Ordering};
         static COUNTER: AtomicU64 = AtomicU64::new(0);
         let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let path =
-            std::env::temp_dir().join(format!("sentra-mcp-{label}-{}-{n}", std::process::id()));
+        let base = std::fs::canonicalize(std::env::temp_dir()).expect("canonical temp dir");
+        let path = base.join(format!("sentra-mcp-{label}-{}-{n}", std::process::id()));
         let _ = std::fs::remove_dir_all(&path);
         std::fs::create_dir_all(&path).expect("create temp dir");
         Self(path)

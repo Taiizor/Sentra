@@ -1546,9 +1546,14 @@ pub fn import_codeql_sarif(
     })
 }
 
-/// Display form of a path: no Windows `\\?\` verbatim prefix, forward slashes.
+/// Display form of a path: on Windows without the `\\?\` verbatim prefix and with
+/// forward slashes; elsewhere unchanged, because `\` is an ordinary file-name character
+/// there and rewriting it would name a different path.
 pub(crate) fn display_path(path: &Path) -> String {
     let text = path.to_string_lossy();
+    if !cfg!(windows) {
+        return text.into_owned();
+    }
     let plain = if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
         format!(r"\\{rest}")
     } else if let Some(rest) = text.strip_prefix(r"\\?\") {
@@ -1562,6 +1567,22 @@ pub(crate) fn display_path(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn display_path_rewrites_separators_only_on_windows() {
+        if cfg!(windows) {
+            assert_eq!(display_path(Path::new(r"\\?\C:\work\repo")), "C:/work/repo");
+            assert_eq!(
+                display_path(Path::new(r"\\?\UNC\server\share\x")),
+                "//server/share/x"
+            );
+            assert_eq!(display_path(Path::new(r"C:\a\b")), "C:/a/b");
+        } else {
+            // A Unix file name may contain `\`; the reported path must still name it.
+            assert_eq!(display_path(Path::new(r"/srv/a\b/c")), r"/srv/a\b/c");
+            assert_eq!(display_path(Path::new(r"\\?\x")), r"\\?\x");
+        }
+    }
 
     #[test]
     fn severity_thresholds_follow_github() {

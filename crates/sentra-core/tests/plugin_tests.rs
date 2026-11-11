@@ -386,9 +386,10 @@ mod hardening {
     use sentra_core::{
         DiscoveredPlugin, PluginCapability, PluginDriver, PluginErrorKind, PluginManifest,
         plugin::{
-            ADAPTER_ENV_ALLOWLIST, DiagnosticSeverity, PluginHost, adapter_environment,
-            default_plugin_dir_from, is_valid_evidence_ref, resolve_adapter_command,
-            resolve_plugin, scan_plugin_dirs, split_command_line, validate_workspace_root,
+            ADAPTER_ENV_ALLOWLIST, CONTAINMENT_ENV, DiagnosticSeverity, PluginHost,
+            adapter_environment, default_plugin_dir_from, is_valid_evidence_ref,
+            resolve_adapter_command, resolve_plugin, run_contained, scan_plugin_dirs,
+            split_command_line, validate_workspace_root,
         },
     };
 
@@ -449,6 +450,7 @@ import { spawn } from "child_process";
 const ID = __ID__;
 const MODE = __MODE__;
 const HEARTBEAT = __HEARTBEAT__;
+const MARKER = __MARKER__;
 const emit = (frame: object) => process.stdout.write(JSON.stringify(frame) + "\n");
 // Stdin-driven adapters exit as soon as the host closes stdin.
 process.stdin.on("end", () => { if (MODE.startsWith("orphan")) process.exit(0); });
@@ -459,19 +461,30 @@ readline.createInterface({ input: process.stdin }).on("line", (line: string) => 
   if (req.operation === "initialize") {
     if (MODE === "crash") process.exit(3);
     if (MODE === "stderr_flood") {
-      const chunk = "E".repeat(64 * 1024) + "\n";
-      for (let i = 0; i < 32; i++) process.stderr.write(chunk);
+      // Synchronous writes, so every byte is in the pipe before the ack.
+      // process.stderr.write may queue pipe writes inside the runtime and drop what
+      // is still queued when the adapter exits, which no host can count.
+      const chunk = Buffer.from("E".repeat(64 * 1024) + "\n");
+      for (let i = 0; i < 32; i++) {
+        for (let off = 0; off < chunk.length;) {
+          try { off += fs.writeSync(2, chunk, off); } catch (e: any) { if (e?.code !== "EAGAIN") throw e; }
+        }
+      }
     }
     if (MODE === "huge_line") {
       process.stdout.write("A".repeat(8 * 1024 * 1024));
       setInterval(() => {}, 1000);
       return;
     }
-    if (MODE === "orphan_silent" || MODE === "orphan_exit") {
+    if (MODE.startsWith("orphan")) {
+      // `detached: true` starts the child in a new session (`setsid`), outside the
+      // adapter's process group (Node documents this; Bun did so on Linux in CI).
+      const env = { ...process.env };
+      if (MODE.includes("unmarked")) delete env[MARKER];
       const code = "setInterval(() => require('fs').writeFileSync(" + JSON.stringify(HEARTBEAT) + ", String(Date.now())), 50)";
-      spawn(process.execPath, ["-e", code], { stdio: "ignore", detached: true }).unref();
+      spawn(process.execPath, ["-e", code], { stdio: "ignore", detached: true, env }).unref();
       const started = Date.now();
-      const wait = () => (fs.existsSync(HEARTBEAT) || Date.now() - started > 5000) ? (MODE === "orphan_exit" ? ack() : undefined) : setTimeout(wait, 25);
+      const wait = () => (fs.existsSync(HEARTBEAT) || Date.now() - started > 5000) ? (MODE.endsWith("_exit") ? ack() : undefined) : setTimeout(wait, 25);
       wait();
       return;
     }
@@ -516,6 +529,10 @@ readline.createInterface({ input: process.stdin }).on("line", (line: string) => 
             .replace(
                 "__HEARTBEAT__",
                 &serde_json::to_string(&heartbeat.to_string_lossy()).unwrap(),
+            )
+            .replace(
+                "__MARKER__",
+                &serde_json::to_string(CONTAINMENT_ENV).unwrap(),
             );
         std::fs::write(dir.join("adapter.ts"), script).unwrap();
         std::fs::write(
@@ -569,20 +586,29 @@ readline.createInterface({ input: process.stdin }).on("line", (line: string) => 
         if !bun_available() {
             return;
         }
-        // 2 MiB of stderr used to deadlock the host above ~64 KiB.
+        // 2 MiB of stderr used to deadlock the host above ~64 KiB. Every byte the
+        // adapter wrote is counted, also what was still in the pipe when it exited.
+        const FLOOD_BYTES: usize = 32 * (64 * 1024 + 1);
         let (fixture, plugin) = adapter("stderr_flood", 20, MIB, 10 * MIB);
         let mut driver = PluginDriver::new(plugin).unwrap();
         driver.probe(fixture.root.path()).expect("probe completes");
         let session = driver.last_session().unwrap();
-        assert!(session.stderr_bytes >= 2 * MIB, "{}", session.stderr_bytes);
+        assert!(
+            session.stderr_bytes >= FLOOD_BYTES,
+            "{}",
+            session.stderr_bytes
+        );
         assert!(session.stderr_tail.len() <= sentra_core::plugin::STDERR_TAIL_BYTES);
 
-        // The same stderr volume breaches a 1 MiB cumulative quota.
-        let (fixture, plugin) = adapter("stderr_flood", 20, 64 * 1024, MIB);
+        // The same stderr volume breaches a cumulative quota during the handshake. The
+        // adapter acknowledges only after its last write returned, so at least the
+        // flood minus the pipe's capacity (64 KiB by default; an unprivileged process
+        // can enlarge it to 1 MiB on a default Linux) was drained by then: > 512 KiB.
+        let (fixture, plugin) = adapter("stderr_flood", 20, 64 * 1024, MIB / 2);
         let mut driver = PluginDriver::new(plugin).unwrap();
         let err = driver.probe(fixture.root.path()).unwrap_err();
         assert!(
-            matches!(err.kind(), PluginErrorKind::OutputQuotaExceeded { limit, .. } if *limit == MIB),
+            matches!(err.kind(), PluginErrorKind::OutputQuotaExceeded { limit, .. } if *limit == MIB / 2),
             "{err}"
         );
     }
@@ -629,10 +655,15 @@ readline.createInterface({ input: process.stdin }).on("line", (line: string) => 
 
     /// Waits until the heartbeat file stops changing (the writer is dead).
     fn heartbeat_stopped(fixture: &Fixture) -> bool {
+        writer_stopped(&fixture.heartbeat)
+    }
+
+    /// Waits until `file` stops changing (its writer is dead).
+    fn writer_stopped(file: &Path) -> bool {
         std::thread::sleep(Duration::from_millis(500));
-        let before = std::fs::read_to_string(&fixture.heartbeat).unwrap_or_default();
+        let before = std::fs::read_to_string(file).unwrap_or_default();
         std::thread::sleep(Duration::from_millis(700));
-        let after = std::fs::read_to_string(&fixture.heartbeat).unwrap_or_default();
+        let after = std::fs::read_to_string(file).unwrap_or_default();
         before == after
     }
 
@@ -662,12 +693,34 @@ readline.createInterface({ input: process.stdin }).on("line", (line: string) => 
     }
 
     #[test]
+    fn detached_children_without_the_marker_die_while_the_adapter_lives() {
+        if !bun_available() {
+            return;
+        }
+        // The detached child is started without the containment variable. It is still
+        // killed while its parent, the adapter, is alive: Windows through the Job
+        // Object, Linux and macOS through its parent process id. (Once its parent has
+        // exited, such a child is not found on Unix; see docs/LIMITATIONS.md.)
+        let (fixture, plugin) = adapter("orphan_unmarked_silent", 3, MIB, 10 * MIB);
+        let mut driver = PluginDriver::new(plugin).unwrap();
+        let err = driver.probe(fixture.root.path()).unwrap_err();
+        assert_eq!(err.code(), "plugin_timeout", "{err}");
+        assert!(driver.last_session().unwrap().killed_by_host);
+        assert!(fixture.heartbeat.exists(), "detached child never started");
+        assert!(
+            heartbeat_stopped(&fixture),
+            "unmarked detached child survived the timeout"
+        );
+    }
+
+    #[test]
     fn detached_children_of_an_adapter_that_exits_by_itself_die() {
         if !bun_available() {
             return;
         }
         // The adapter acknowledges shutdown and exits on its own; its detached child
-        // must still be terminated (Job Object on Windows, process group on Unix).
+        // (a new session on Unix) must still be terminated: Job Object on Windows, the
+        // containment variable on Linux and macOS.
         let (fixture, plugin) = adapter("orphan_exit", 20, MIB, 10 * MIB);
         let mut driver = PluginDriver::new(plugin).unwrap();
         driver.probe(fixture.root.path()).expect("probe completes");
@@ -679,6 +732,51 @@ readline.createInterface({ input: process.stdin }).on("line", (line: string) => 
     }
 
     #[test]
+    fn run_contained_kills_detached_children_left_behind() {
+        if !bun_available() {
+            return;
+        }
+        // The containment of `run_contained` (used for CodeQL) after a normal exit: the
+        // program starts a detached child and exits 0 without waiting for it.
+        let root = TempDir::new("contained");
+        let heartbeat = root.path().join("heartbeat.txt");
+        let script = r#"const { spawn } = require("child_process");
+const fs = require("fs");
+const HEARTBEAT = __HEARTBEAT__;
+const code = "setInterval(() => require('fs').writeFileSync(" + JSON.stringify(HEARTBEAT) + ", String(Date.now())), 50)";
+spawn(process.execPath, ["-e", code], { stdio: "ignore", detached: true }).unref();
+const started = Date.now();
+const wait = () => (fs.existsSync(HEARTBEAT) || Date.now() - started > 5000) ? process.exit(0) : setTimeout(wait, 25);
+wait();
+"#
+        .replace(
+            "__HEARTBEAT__",
+            &serde_json::to_string(&heartbeat.to_string_lossy()).unwrap(),
+        );
+        std::fs::write(root.path().join("leave-child.js"), script).unwrap();
+        let env = adapter_environment(std::env::vars_os());
+        let bun = resolve_adapter_command(&["bun".to_string()], root.path(), &env)
+            .unwrap()
+            .program;
+        let run = run_contained(
+            &bun,
+            &["leave-child.js".into()],
+            root.path(),
+            &env,
+            Duration::from_secs(20),
+            4096,
+        )
+        .unwrap();
+        assert_eq!(run.exit_code, Some(0), "{run:?}");
+        assert!(!run.timed_out);
+        assert!(heartbeat.exists(), "detached child never started");
+        assert!(
+            writer_stopped(&heartbeat),
+            "detached child outlived the contained run"
+        );
+    }
+
+    #[test]
     fn adapter_environment_is_reduced_to_the_allowlist() {
         if !bun_available() {
             return;
@@ -686,10 +784,19 @@ readline.createInterface({ input: process.stdin }).on("line", (line: string) => 
         let (fixture, plugin) = adapter("env_names", 20, MIB, 10 * MIB);
         let mut driver = PluginDriver::new(plugin).unwrap();
         let report = driver.probe(fixture.root.path()).unwrap();
-        let leaked: Vec<&str> = report
+        let names: Vec<&str> = report
             .details
             .split(',')
             .filter(|name| !name.is_empty())
+            .collect();
+        // The only variable the host adds is its containment marker, on Linux and
+        // macOS only; it carries no host data (see `CONTAINMENT_ENV`).
+        let marked = cfg!(any(target_os = "linux", target_os = "macos"));
+        assert_eq!(names.contains(&CONTAINMENT_ENV), marked, "{names:?}");
+        let leaked: Vec<&str> = names
+            .iter()
+            .copied()
+            .filter(|name| !(marked && *name == CONTAINMENT_ENV))
             .filter(|name| {
                 !ADAPTER_ENV_ALLOWLIST
                     .iter()

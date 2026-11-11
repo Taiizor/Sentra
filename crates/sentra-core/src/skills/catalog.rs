@@ -763,26 +763,98 @@ mod tests {
         }
     }
 
-    /// Parses the numbered NOTICE entries into `field -> value` maps plus the
+    /// One numbered NOTICE entry: its `field -> value` map plus the
     /// `- <skill>` list that follows `Skills:`.
-    fn notice_entries() -> Vec<(BTreeMap<&'static str, &'static str>, Vec<&'static str>)> {
+    type NoticeEntry<'a> = (BTreeMap<&'a str, &'a str>, Vec<&'a str>);
+
+    fn notice_entries() -> Vec<NoticeEntry<'static>> {
+        parse_notice(NOTICE)
+    }
+
+    /// Parses the numbered NOTICE entries, which are separated by blank lines.
+    ///
+    /// `NOTICE` is an ordinary `text=auto` file, so Git checks it out with
+    /// CRLF on Windows hosts that set `core.autocrlf` (GitHub-hosted Windows
+    /// runners do). Lines therefore come from `str::lines`, which ends a line
+    /// at LF or CRLF, and a blank or whitespace-only line ends an entry;
+    /// splitting on a literal `"\n\n"` would never match CRLF text and would
+    /// merge the whole file into one block. A field repeated inside one entry
+    /// fails the test instead of silently overwriting the earlier value, so
+    /// entries that run together cannot misattribute a skill.
+    fn parse_notice(text: &str) -> Vec<NoticeEntry<'_>> {
+        let lines: Vec<&str> = text.lines().map(str::trim).collect();
         let mut entries = Vec::new();
-        for block in NOTICE.split("\n\n") {
+        for block in lines.split(|line| line.is_empty()) {
             let mut fields = BTreeMap::new();
+            let mut repeated = Vec::new();
             let mut skills = Vec::new();
-            for line in block.lines() {
-                let line = line.trim();
+            for &line in block {
                 if let Some(skill) = line.strip_prefix("- ") {
                     skills.push(skill.trim());
                 } else if let Some((key, value)) = line.split_once(':') {
-                    fields.insert(key.trim(), value.trim());
+                    let key = key.trim();
+                    if fields.insert(key, value.trim()).is_some() {
+                        repeated.push(key);
+                    }
                 }
             }
             if fields.contains_key("Source") && !skills.is_empty() {
+                assert!(
+                    repeated.is_empty(),
+                    "NOTICE entry for {} repeats field(s) {repeated:?}; \
+                     separate entries with a blank line",
+                    fields["Source"]
+                );
                 entries.push((fields, skills));
             }
         }
         entries
+    }
+
+    #[test]
+    fn notice_parser_is_line_ending_agnostic() {
+        // The checked-in NOTICE, whatever line endings this checkout has,
+        // must parse identically as LF and as CRLF text.
+        let lf = NOTICE.replace("\r\n", "\n");
+        let crlf = lf.replace('\n', "\r\n");
+        let lf_entries = parse_notice(&lf);
+        assert!(!lf_entries.is_empty(), "NOTICE has no skill entries");
+        assert_eq!(parse_notice(&crlf), lf_entries);
+        assert_eq!(parse_notice(NOTICE), lf_entries);
+    }
+
+    #[test]
+    fn notice_parser_separates_crlf_entries() {
+        let text = "1. a/one\r\n   Source:    https://github.com/a/one\r\n   \
+                    License:   MIT\r\n   Skills:\r\n   - one\r\n   - uno\r\n\r\n\
+                    2. b/two\r\n   Source:    https://github.com/b/two\r\n   \
+                    License:   Apache-2.0\r\n   Skills:\r\n   - two\r\n   \r\n\
+                    3. c/three\n   Source:    https://github.com/c/three\n   \
+                    License:   MIT\n   Skills:\n   - three\n";
+        let entries = parse_notice(text);
+        let summary: Vec<(&str, &str, &[&str])> = entries
+            .iter()
+            .map(|(fields, skills)| (fields["Source"], fields["License"], skills.as_slice()))
+            .collect();
+        assert_eq!(
+            summary,
+            [
+                ("https://github.com/a/one", "MIT", &["one", "uno"][..]),
+                ("https://github.com/b/two", "Apache-2.0", &["two"][..]),
+                ("https://github.com/c/three", "MIT", &["three"][..]),
+            ]
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "repeats field(s) [\"Source\", \"License\", \"Skills\"]")]
+    fn notice_parser_rejects_entries_that_run_together() {
+        parse_notice(
+            "1. a/one\r\n   Source:    https://github.com/a/one\r\n   License:   MIT\r\n   \
+             Skills:\r\n   - one\r\n\
+             2. b/two\r\n   Source:    https://github.com/b/two\r\n   License:   MIT\r\n   \
+             Skills:\r\n   - two\r\n",
+        );
     }
 
     #[test]

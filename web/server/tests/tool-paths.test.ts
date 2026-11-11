@@ -9,7 +9,7 @@ import { describeBinary, parseExecutableHeader, windowsScriptNote, type HostArch
 import { ConfigError, loadConfig, parseTokenGrants, resolveGhBinary, type GhBinaryProbes, type ServerConfig } from "../config.ts";
 import { openWebDb } from "../db.ts";
 import { ExecutableLocator } from "../executables.ts";
-import { GitHubService } from "../github.ts";
+import { GH_TOKEN_TIMEOUT_MS, GitHubService } from "../github.ts";
 import { HostPlatform } from "../host-platform.ts";
 import { codeqlLauncherChoice, describeTools, GH_PINNED_NOTE, hostToolsDeps, normalizeStoredTool, reportedToolLocation, TOOL_NAMES, type HostToolsDeps } from "../host-tools.ts";
 import type { Router } from "../http.ts";
@@ -582,6 +582,7 @@ describe("SENTRA_GH_BIN", () => {
     expect(lookups).toBe(1);
   });
 
+  // Starts a real process with GH_TOKEN_TIMEOUT_MS as its limit, so the test's own limit lies above it.
   test.if(process.platform !== "win32")("POSIX: the pinned gh is the one whose token is used", () => {
     const db = openWebDb(path.join(tempDir("gh-pin-run-"), "web.db"));
     openDbs.push(db);
@@ -592,7 +593,7 @@ describe("SENTRA_GH_BIN", () => {
     const other = path.join(tempDir("gh-other-"), "gh");
     fs.writeFileSync(other, "#!/bin/sh\necho ghp_otherotherotherotherother0123456789\n", { mode: 0o755 });
     expect(new GitHubService(secrets, null, TEST_ROOT, { ghBin: pinned, locateGh: () => other }).resolveAuth()).toEqual({ source: "gh_cli", token });
-  });
+  }, GH_TOKEN_TIMEOUT_MS + 10_000);
 });
 
 // ───────────────────────────── tools table ─────────────────────────────
