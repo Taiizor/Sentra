@@ -6,13 +6,13 @@ import { log } from "./logger.ts";
  * are only read here, and core state changes go through the `sentra` CLI.
  */
 
-interface Migration {
+export interface Migration {
   version: number;
   name: string;
   sql: string;
 }
 
-const MIGRATIONS: Migration[] = [
+export const MIGRATIONS: readonly Migration[] = [
   {
     version: 1,
     name: "initial web bridge schema",
@@ -249,6 +249,59 @@ const MIGRATIONS: Migration[] = [
     sql: `
       DELETE FROM web_sessions;
       ALTER TABLE web_sessions ADD COLUMN grant_fingerprint TEXT NOT NULL DEFAULT '';
+    `,
+  },
+  {
+    version: 3,
+    name: "codeql findings with an origin",
+    // SQLite cannot change a CHECK constraint, so the table is rebuilt. Existing rows keep every
+    // value and get origin NULL (only CodeQL findings carry an origin; the last CHECK holds both ways).
+    sql: `
+      CREATE TABLE findings_v3 (
+        finding_id TEXT PRIMARY KEY NOT NULL,
+        tenant_id TEXT NOT NULL,
+        workspace TEXT NOT NULL,
+        fingerprint TEXT NOT NULL,
+        source TEXT NOT NULL CHECK(source IN ('sast','dependency','codeql')),
+        origin TEXT CHECK(origin IS NULL OR origin IN ('host_analysis','sarif_import','github_code_scanning')),
+        rule_id TEXT NOT NULL,
+        rule_name TEXT NOT NULL,
+        cwe TEXT,
+        severity TEXT NOT NULL CHECK(severity IN ('Critical','High','Medium','Low','Informational','Unknown')),
+        category TEXT,
+        file_path TEXT,
+        line INTEGER,
+        snippet TEXT,
+        rationale TEXT,
+        package_name TEXT,
+        package_version TEXT,
+        advisory_id TEXT,
+        details_json TEXT CHECK(details_json IS NULL OR json_valid(details_json)),
+        first_seen_run TEXT NOT NULL,
+        last_seen_run TEXT NOT NULL,
+        first_seen_at TEXT NOT NULL,
+        last_seen_at TEXT NOT NULL,
+        state TEXT NOT NULL CHECK(state IN ('open','resolved')),
+        resolved_run TEXT,
+        resolved_at TEXT,
+        triage_verdict TEXT CHECK(triage_verdict IS NULL OR triage_verdict IN ('confirmed','needs_validation','rejected')),
+        triage_reason TEXT,
+        triaged_by TEXT,
+        triaged_at TEXT,
+        UNIQUE(tenant_id, workspace, fingerprint),
+        CHECK((source = 'codeql') = (origin IS NOT NULL))
+      );
+      INSERT INTO findings_v3 (finding_id, tenant_id, workspace, fingerprint, source, origin, rule_id, rule_name, cwe, severity,
+        category, file_path, line, snippet, rationale, package_name, package_version, advisory_id, details_json, first_seen_run,
+        last_seen_run, first_seen_at, last_seen_at, state, resolved_run, resolved_at, triage_verdict, triage_reason, triaged_by, triaged_at)
+      SELECT finding_id, tenant_id, workspace, fingerprint, source, NULL, rule_id, rule_name, cwe, severity,
+        category, file_path, line, snippet, rationale, package_name, package_version, advisory_id, details_json, first_seen_run,
+        last_seen_run, first_seen_at, last_seen_at, state, resolved_run, resolved_at, triage_verdict, triage_reason, triaged_by, triaged_at
+      FROM findings;
+      DROP TABLE findings;
+      ALTER TABLE findings_v3 RENAME TO findings;
+      CREATE INDEX idx_findings_tenant_state ON findings(tenant_id, state);
+      CREATE INDEX idx_findings_scope ON findings(tenant_id, workspace, source, origin, state);
     `,
   },
 ];

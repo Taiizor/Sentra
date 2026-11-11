@@ -35,11 +35,13 @@ Acceptance:
 - Reject expired, replayed, out-of-scope, and revision-mismatched approval records. Bound tasks, output, and storage; show cancellation reaches a process tree in the platform spike.
 - Meet or explain/revise Q-05 with measured hardware, repeated runs, and raw results. A failed performance target is recorded rather than concealed.
 - Demonstrate an authenticated control-channel prototype to a disposable Linux VM candidate, or record a blocking prerequisite before any untrusted execution feature is enabled.
-- Incomplete initialization recovery is resolved under [ADR-0010](docs/adr/0010-explicit-initialization-recovery.md) via explicit operator recovery and atomic session reconciliation. Current CLI inspection is domain-state read-only with [SQLite/storage side effects and write-permission requirements](README.md#inspection-storage-permissions).
+- Incomplete initialization recovery is resolved under [ADR-0010](docs/adr/0010-explicit-initialization-recovery.md) via explicit operator recovery and atomic session reconciliation. Current CLI inspection is domain-state read-only with [SQLite/storage side effects and write-permission requirements](docs/LIMITATIONS.md#5-storage-durability-and-file-modification-semantics).
 
 ## Phase 2 — Continuous Security Review pilot
 
 Status: Completed. Delivered local immutable base/head review, surrounding context, pure-Rust AST and taint analysis engines, Cargo.lock/RustSec advisory analysis, local Markdown/SARIF reports, provider abstractions, and three-tier patch verification. Private local snapshots use the same workflow without public upload.
+
+Correction (2026-11-11): the delivered pieces are narrower than the status line above says. SAST uses heuristic line-based rules with intra-procedural lexical taint tracking and builds no syntax tree. The advisory analysis matches lockfiles against a 6-record bundled sample, not a synchronized RustSec or OSV feed. Three-tier verification bundles are modelled, but no isolated runner executes them, so no patch has been verified that way. See [docs/LIMITATIONS.md](docs/LIMITATIONS.md#6-web-console-and-pinned-core-commands).
 
 Acceptance:
 

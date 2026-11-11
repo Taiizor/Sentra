@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { MAX_HEADER_BYTES, NATIVE_FORMATS, osLabel, parseExecutableHeader } from "./binary-info.ts";
+import { CODEQL_BIN_VARIABLE, resolveCodeqlBinary, type CodeqlLauncherProbes } from "./codeql-launcher.ts";
 import { findOnProcessPathForExecution, pathApi } from "./executables.ts";
 
 /** Server-side roles. The UI labels them Viewer / Operator / SecurityAdmin. */
@@ -39,6 +40,12 @@ export interface ServerConfig {
    * runs: a gh path cannot be set in the web console.
    */
   ghBin: string | null;
+  /**
+   * CodeQL launcher pinned by the host operator (SENTRA_CODEQL_BIN); null to use the locator's
+   * execution choice. Validated once at startup (resolveCodeqlBinary in codeql-launcher.ts) and
+   * again before every analysis. Run only when CodeQL host analysis is enabled in the console.
+   */
+  codeqlBin: string | null;
   dataDir: string;
   /** Core-owned SQLite store that holds the tenant/workspace registry. */
   registryDbPath: string;
@@ -63,7 +70,11 @@ export interface ServerConfig {
   trustProxy: boolean;
   /** Optional allowlist of parent directories under which workspaces may be registered. */
   workspaceRoots: string[];
-  /** Directory of plugin adapter manifests (SENTRA_PLUGIN_DIR); null disables plugin discovery. */
+  /**
+   * Directory of plugin adapter manifests from SENTRA_PLUGIN_DIR, validated at startup; null when
+   * unset, in which case the plugin routes use the core's platform default directory (see
+   * plugin-directory.ts). Never settable from the web console: adapters in it are executed.
+   */
   pluginDir: string | null;
   /** Bridge-private scratch space (PR checkouts, temporary patch files). */
   tmpDir: string;
@@ -259,6 +270,13 @@ export function resolveGhBinary(input: string | null, platform: NodeJS.Platform 
   return file;
 }
 
+/** SENTRA_CODEQL_BIN checked at startup; the bridge refuses to start when it is set but refused. */
+export function codeqlBinaryOrThrow(input: string | null, platform: NodeJS.Platform = process.platform, probes?: CodeqlLauncherProbes): string | null {
+  const result = resolveCodeqlBinary(input, platform, probes);
+  if ("problem" in result) throw new ConfigError(result.problem);
+  return result.file;
+}
+
 function loadSecretKey(dataDir: string): Buffer {
   const raw = env("SENTRA_WEB_SECRET_KEY");
   if (raw) {
@@ -405,6 +423,7 @@ export function loadConfig(): ServerConfig {
     staticDir,
     sentraBin: resolveSentraBinary(repoRoot),
     ghBin: resolveGhBinary(env("SENTRA_GH_BIN")),
+    codeqlBin: codeqlBinaryOrThrow(env(CODEQL_BIN_VARIABLE)),
     dataDir,
     registryDbPath: path.join(dataDir, "sentra.db"),
     webDbPath: path.join(dataDir, "sentra-web.db"),

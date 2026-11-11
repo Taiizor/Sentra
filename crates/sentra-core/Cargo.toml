@@ -9,7 +9,7 @@ homepage.workspace = true
 readme = "README.md"
 # Embeds every assets/skills/<id>/ directory (see build.rs).
 build = "build.rs"
-description = "Core security analysis, taint tracking, advisory auditing, and verification engine for Sentra"
+description = "Core security analysis, lexical taint tracking, advisory auditing, and verification models for Sentra"
 documentation = "https://docs.rs/sentra-core"
 keywords = ["security", "sast", "taint-analysis", "vulnerability", "audit"]
 categories = ["development-tools", "command-line-utilities"]

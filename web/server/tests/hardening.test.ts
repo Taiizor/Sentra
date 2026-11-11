@@ -205,15 +205,24 @@ describe("core process queue", () => {
     expect(fs.readFileSync(counter, "utf8")).toBe("x");
     await cli.runShared(args, { ttlMs: 0 });
     expect(fs.readFileSync(counter, "utf8")).toBe("xx");
+    // Regression: an explicit refresh (the Plugins tab's Rediscover) returned the kept result for
+    // the whole TTL. `fresh` starts a new process, and its result replaces the kept one.
+    await cli.runShared(args, { ttlMs: 60_000, fresh: true });
+    expect(fs.readFileSync(counter, "utf8")).toBe("xxx");
+    await cli.runShared(args, { ttlMs: 60_000 });
+    expect(fs.readFileSync(counter, "utf8")).toBe("xxx");
     // A caller that goes away stops waiting; the shared run is unaffected.
     const controller = new AbortController();
     const slow = ["-e", `setTimeout(() => { require("fs").appendFileSync(${JSON.stringify(counter)}, "y"); console.log("{}"); }, 300)`];
     const waiting = cli.runShared(slow, { ttlMs: 60_000, signal: controller.signal });
     const other = cli.runShared(slow, { ttlMs: 60_000 });
+    // A refresh joins a run still in progress instead of starting a second one.
+    const refreshing = cli.runShared(slow, { ttlMs: 60_000, fresh: true });
     controller.abort();
     await expect(waiting).rejects.toMatchObject({ status: 499 });
     expect((await other).code).toBe(0);
-    expect(fs.readFileSync(counter, "utf8")).toBe("xxy");
+    expect((await refreshing).code).toBe(0);
+    expect(fs.readFileSync(counter, "utf8")).toBe("xxxy");
   }, 30_000);
 });
 
@@ -315,6 +324,7 @@ function appConfig(): ServerConfig {
     staticDir: null,
     sentraBin: path.join(dataDir, "missing-sentra-binary"),
     ghBin: null,
+    codeqlBin: null,
     dataDir,
     registryDbPath: path.join(dataDir, "sentra.db"),
     webDbPath: path.join(dataDir, "sentra-web.db"),

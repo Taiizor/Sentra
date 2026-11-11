@@ -1,16 +1,25 @@
+import os from "node:os";
 import path from "node:path";
-import type { PluginProbeView, PluginRunView, PluginsView, PluginView } from "../../src/types/api.ts";
+import type { PluginDiagnosticView, PluginDirectorySource, PluginProbeView, PluginRunView, PluginsView, PluginView } from "../../src/types/api.ts";
 import type { AppContext } from "../app-context.ts";
 import { HttpError, json, type Router } from "../http.ts";
 import { isWithin } from "../paths.ts";
+import {
+  mapCoreDiagnostics,
+  PluginDirectoryResolver,
+  type PluginDirectoryState,
+  type ProtectedLocation,
+} from "../plugin-directory.ts";
 import { cliFailure, cliValue, type CliResult } from "../sentra-cli.ts";
 import { requiredString } from "../validate.ts";
 import { audited } from "./helpers.ts";
 
 /**
- * Plugin adapters discovered by the core (`sentra plugin list/probe/run`) from the directory
- * configured in SENTRA_PLUGIN_DIR. Adapters are third-party subprocesses: everything they
- * return (applicability, exit code, summary, evidence references) is adapter-reported.
+ * Plugin adapters discovered by the core (`sentra plugin list/probe/run`) from the plugin
+ * directory: SENTRA_PLUGIN_DIR, otherwise the core's platform default (plugin-directory.ts).
+ * Every core call names the directory with --dir. Adapters are third-party subprocesses:
+ * everything they return (applicability, exit code, summary, evidence references) is
+ * adapter-reported.
  */
 
 export const PLUGIN_ID_PATTERN = /^[A-Za-z0-9._-]{1,128}$/;
@@ -19,10 +28,11 @@ export const MAX_PLUGIN_ARGS_BYTES = 16 * 1024;
 const MAX_STREAM_CHARS = 64 * 1024;
 
 export const PLUGINS_NOT_CONFIGURED_NOTE =
-  "Set SENTRA_PLUGIN_DIR to a directory of adapter manifests. The example adapters in examples/adapters return simulated output and are never loaded by default.";
+  "No plugin directory is in use: SENTRA_PLUGIN_DIR is not set and the core's platform default plugin directory is unavailable or was refused. The example adapters in examples/adapters are never loaded by default; the Snyk and Ollama examples return simulated output.";
 
-const PLUGINS_CONFIGURED_NOTE =
-  "Adapters are discovered from SENTRA_PLUGIN_DIR (a manifest.json in that directory or in its immediate subdirectories). " +
+const DISCOVERY_RULE = "a manifest.json in that directory or in its immediate subdirectories";
+
+const EXECUTION_NOTE =
   "Probe and run start the adapter as a subprocess on the Sentra host with an allowlisted environment; no isolation profile is applied. " +
   "The core enforces the time limit and frame/output quotas and kills the adapter process tree when a session ends; " +
   "the declared egress policy and memory quota are not enforced. Results are reported by the adapter itself.";
@@ -46,20 +56,33 @@ export function pluginIdParam(value: string | undefined): string {
   return value;
 }
 
-/** Maps `plugin list --json`, keeping only manifests located inside the configured directory. */
-export function mapPluginList(document: unknown, pluginDir: string): { plugins: PluginView[]; ignored: number } {
+/**
+ * Maps `plugin list --json`, keeping only manifests located inside the plugin directory. Entries
+ * the bridge drops (malformed, or a manifest outside the directory) come back as diagnostics.
+ */
+export function mapPluginList(document: unknown, pluginDir: string): { plugins: PluginView[]; ignored: PluginDiagnosticView[] } {
   const doc = asRecord(document);
   if (!doc || !Array.isArray(doc.plugins)) throw invalidOutput("plugin list", "no plugins array");
   const plugins: PluginView[] = [];
-  let ignored = 0;
+  const ignored: PluginDiagnosticView[] = [];
   for (const raw of doc.plugins) {
     const entry = asRecord(raw);
     if (!entry || typeof entry.id !== "string" || typeof entry.manifest_path !== "string") {
-      ignored += 1;
+      ignored.push({
+        severity: "warning",
+        code: "plugin_entry_ignored",
+        message: "The core listed an entry without an id or manifest path; the bridge ignored it.",
+        path: null,
+      });
       continue;
     }
     if (!isWithin(pluginDir, path.resolve(entry.manifest_path))) {
-      ignored += 1;
+      ignored.push({
+        severity: "warning",
+        code: "plugin_entry_ignored",
+        message: `The manifest of '${entry.id}' is outside the plugin directory; the bridge ignored it.`,
+        path: entry.manifest_path,
+      });
       continue;
     }
     const quotas = asRecord(entry.quotas);
@@ -140,21 +163,84 @@ export function mapRun(document: unknown, plugin: PluginView, capability: string
   };
 }
 
-/** Plugin listings are read views; one `sentra plugin list` run is reused for this long. */
+export function pluginsNote(source: PluginDirectorySource): string {
+  if (source === "environment") return `Adapters are discovered from SENTRA_PLUGIN_DIR (${DISCOVERY_RULE}). ${EXECUTION_NOTE}`;
+  if (source === "platform_default") {
+    return `SENTRA_PLUGIN_DIR is not set, so adapters are discovered from the core's platform default plugin directory (${DISCOVERY_RULE}). ${EXECUTION_NOTE}`;
+  }
+  return PLUGINS_NOT_CONFIGURED_NOTE;
+}
+
+/** What the host operator can do next; null when the directory is in use and loaded cleanly. */
+export function pluginsHint(state: Pick<PluginDirectoryState, "directory" | "source" | "exists" | "refusedDirectory">, pluginCount: number, hasErrors: boolean): string | null {
+  if (state.directory === null) {
+    return state.refusedDirectory !== null
+      ? "Set SENTRA_PLUGIN_DIR on the bridge host to a directory outside the bridge data and temporary directories, the repository and every registered workspace, then restart the bridge."
+      : "Set SENTRA_PLUGIN_DIR on the bridge host to an absolute directory of adapter manifests, then restart the bridge.";
+  }
+  if (!state.exists) {
+    return state.source === "environment"
+      ? `SENTRA_PLUGIN_DIR points to ${state.directory}, which no longer exists. Recreate it, or set SENTRA_PLUGIN_DIR to another directory and restart the bridge.`
+      : `Set SENTRA_PLUGIN_DIR on the bridge host and restart, or create ${state.directory} and add adapters (one subdirectory with a manifest.json each).`;
+  }
+  if (hasErrors) return "Entries with an error are not loaded. Fix or remove the manifests named in the diagnostics, then select Rediscover.";
+  if (pluginCount === 0) return `Add adapters to ${state.directory} (one subdirectory with a manifest.json each), then select Rediscover.`;
+  return null;
+}
+
+/** Locations a platform default plugin directory must not overlap (see plugin-directory.ts). */
+export function protectedLocations(app: Pick<AppContext, "config" | "workspaces">): ProtectedLocation[] {
+  return [
+    { label: "the bridge data directory", path: app.config.dataDir },
+    { label: "the bridge temporary directory", path: app.config.tmpDir },
+    { label: "the system temporary directory", path: os.tmpdir() },
+    { label: "the repository checkout", path: app.config.repoRoot },
+    ...app.workspaces.list().map((tenant) => ({ label: `the workspace of '${tenant.tenantId}'`, path: tenant.workspace })),
+  ];
+}
+
+export function createPluginDirectoryResolver(app: AppContext): PluginDirectoryResolver {
+  return new PluginDirectoryResolver({
+    platform: process.platform,
+    environmentDir: app.config.pluginDir,
+    env: process.env,
+    runCli: (args, options) => app.cli.run(args, options),
+    timeoutMs: app.config.cliTimeoutMs,
+    protectedLocations: () => protectedLocations(app),
+  });
+}
+
+const resolvers = new WeakMap<AppContext, PluginDirectoryResolver>();
+
+/** The one resolver of an app, shared by the plugin routes and the console's `plugins` command. */
+export function pluginDirectoryResolver(app: AppContext): PluginDirectoryResolver {
+  let resolver = resolvers.get(app);
+  if (!resolver) {
+    resolver = createPluginDirectoryResolver(app);
+    resolvers.set(app, resolver);
+  }
+  return resolver;
+}
+
+/**
+ * Plugin listings are read views; one `sentra plugin list` run is reused for this long. Rediscover
+ * (`GET /api/plugins?refresh=1`) and the listing before a probe or run never reuse a completed run.
+ */
 const PLUGIN_LIST_TTL_MS = 15_000;
 
 /**
- * Runs a `sentra plugin ...` command and returns the CLI result with parsed JSON. `sharedTtlMs`
- * marks a read-only command whose run may be shared with concurrent callers (SentraCli.runShared).
+ * Runs a `sentra plugin ...` command and returns the CLI result with parsed JSON. `shared` marks a
+ * read-only command whose run may be shared with concurrent callers (SentraCli.runShared); with
+ * `fresh`, a completed run is not reused.
  */
 async function runPluginCommand(
   app: AppContext,
   args: string[],
   timeoutMs: number,
-  sharedTtlMs?: number,
+  shared?: { ttlMs: number; fresh: boolean },
 ): Promise<CliResult & { document: unknown }> {
   const command = `plugin ${args[1] ?? ""}`.trim();
-  const result = sharedTtlMs === undefined ? await app.cli.run(args, { timeoutMs }) : await app.cli.runShared(args, { ttlMs: sharedTtlMs, timeoutMs });
+  const result = shared === undefined ? await app.cli.run(args, { timeoutMs }) : await app.cli.runShared(args, { ttlMs: shared.ttlMs, timeoutMs, fresh: shared.fresh });
   if (result.timedOut) throw new HttpError(504, "core_timeout", `sentra ${command} timed out after ${Math.round(timeoutMs / 1000)} s`);
   if (result.code !== 0) throw cliFailure(command, result);
   if (result.json === undefined) {
@@ -164,48 +250,82 @@ async function runPluginCommand(
   return { ...result, document: result.json };
 }
 
-function requirePluginDir(app: AppContext): string {
-  if (!app.config.pluginDir) {
-    throw new HttpError(412, "plugins_not_configured", PLUGINS_NOT_CONFIGURED_NOTE);
-  }
-  return app.config.pluginDir;
+function pluginsView(state: PluginDirectoryState, plugins: PluginView[], listingDiagnostics: PluginDiagnosticView[], coreHasErrors: boolean): PluginsView {
+  const diagnostics = [...state.diagnostics, ...listingDiagnostics];
+  const hasErrors = coreHasErrors || diagnostics.some((diagnostic) => diagnostic.severity === "error");
+  return {
+    directory: state.directory,
+    directorySource: state.source,
+    directoryExists: state.exists,
+    pluginDir: state.directory,
+    configured: state.directory !== null,
+    plugins,
+    diagnostics,
+    hasErrors,
+    hint: pluginsHint(state, plugins.length, hasErrors),
+    note: pluginsNote(state.source),
+  };
 }
 
-async function listPlugins(app: AppContext): Promise<PluginsView> {
-  const pluginDir = app.config.pluginDir;
-  if (!pluginDir) return { pluginDir: null, configured: false, plugins: [], note: PLUGINS_NOT_CONFIGURED_NOTE };
+/** `fresh`: list again instead of reusing a listing completed within PLUGIN_LIST_TTL_MS. */
+async function listPlugins(app: AppContext, directories: PluginDirectoryResolver, options: { fresh: boolean }): Promise<PluginsView> {
+  const state = await directories.current();
+  // A missing directory is reported without starting the core; it is checked again next time.
+  if (state.directory === null || !state.exists) return pluginsView(state, [], [], false);
   const result = await runPluginCommand(
     app,
-    ["plugin", "list", "--dir", cliValue(pluginDir, "pluginDir"), "--json"],
+    ["plugin", "list", "--dir", cliValue(state.directory, "pluginDir"), "--json"],
     app.config.cliTimeoutMs,
-    PLUGIN_LIST_TTL_MS,
+    { ttlMs: PLUGIN_LIST_TTL_MS, fresh: options.fresh },
   );
-  const { plugins, ignored } = mapPluginList(result.document, pluginDir);
-  const note = ignored > 0 ? `${PLUGINS_CONFIGURED_NOTE} ${ignored} discovered entr${ignored === 1 ? "y was" : "ies were"} ignored (outside SENTRA_PLUGIN_DIR or malformed).` : PLUGINS_CONFIGURED_NOTE;
-  return { pluginDir, configured: true, plugins, note };
+  const { plugins, ignored } = mapPluginList(result.document, state.directory);
+  const core = mapCoreDiagnostics(result.document);
+  // The directory can disappear between the existence check and the core's scan.
+  const exists = !core.diagnostics.some((diagnostic) => diagnostic.code === "plugin_dir_not_found");
+  return pluginsView({ ...state, exists }, plugins, [...core.diagnostics, ...ignored], core.hasErrors);
 }
 
-async function findPlugin(app: AppContext, pluginId: string): Promise<PluginView> {
-  const listing = await listPlugins(app);
+/** The plugin directory in use (it may not exist yet); 412 when there is none. */
+export async function requirePluginDirectory(directories: PluginDirectoryResolver): Promise<string> {
+  const state = await directories.current();
+  if (state.directory === null) {
+    throw new HttpError(412, "plugins_not_configured", `No plugin directory is in use. ${pluginsHint(state, 0, false) ?? ""}`.trim());
+  }
+  return state.directory;
+}
+
+/**
+ * The plugin as currently listed. The listing is always fresh, so an adapter added or a manifest
+ * changed a moment ago is found and checked against its current declaration.
+ */
+async function findPlugin(app: AppContext, directories: PluginDirectoryResolver, pluginId: string): Promise<{ plugin: PluginView; directory: string }> {
+  const listing = await listPlugins(app, directories, { fresh: true });
   const plugin = listing.plugins.find((candidate) => candidate.id === pluginId);
-  if (!plugin) throw new HttpError(404, "plugin_not_found", `Plugin '${pluginId}' is not in SENTRA_PLUGIN_DIR`);
-  return plugin;
+  if (!plugin || listing.directory === null) throw new HttpError(404, "plugin_not_found", `Plugin '${pluginId}' is not in the plugin directory`);
+  return { plugin, directory: listing.directory };
 }
 
-export function registerPluginRoutes(router: Router, app: AppContext): void {
-  router.get("/api/plugins", { auth: "session", permission: "read" }, async () => json(await listPlugins(app)));
+/** `options.directories` replaces the app's resolver (tests inject platform, environment and probes). */
+export function registerPluginRoutes(router: Router, app: AppContext, options: { directories?: PluginDirectoryResolver } = {}): void {
+  if (options.directories) resolvers.set(app, options.directories);
+  const directories = pluginDirectoryResolver(app);
+
+  // `?refresh=1` (Rediscover) lists again instead of reusing a listing from the last 15 seconds.
+  router.get("/api/plugins", { auth: "session", permission: "read" }, async (ctx) =>
+    json(await listPlugins(app, directories, { fresh: ctx.url.searchParams.get("refresh") === "1" })),
+  );
 
   router.post("/api/plugins/:pluginId/probe", { auth: "session", permission: "plugin:probe", maxBodyBytes: 4096 }, async (ctx) => {
     const pluginId = pluginIdParam(ctx.params.pluginId);
     const body = await ctx.readJson();
     const tenant = app.workspaces.get(requiredString(body, "tenantId", { max: 64 }));
-    const pluginDir = requirePluginDir(app);
+    await requirePluginDirectory(directories);
     const view = await audited(
       app,
       ctx.principal,
       { action: "plugin_probed", tenantId: tenant.tenantId, target: pluginId },
       async () => {
-        const plugin = await findPlugin(app, pluginId);
+        const { plugin, directory } = await findPlugin(app, directories, pluginId);
         const root = app.workspaces.workspaceRoot(tenant);
         const result = await runPluginCommand(
           app,
@@ -215,7 +335,7 @@ export function registerPluginRoutes(router: Router, app: AppContext): void {
             "--id",
             cliValue(plugin.id, "pluginId"),
             "--dir",
-            cliValue(pluginDir, "pluginDir"),
+            cliValue(directory, "pluginDir"),
             "--workspace",
             cliValue(root, "workspace"),
             "--json",
@@ -235,7 +355,7 @@ export function registerPluginRoutes(router: Router, app: AppContext): void {
     const tenant = app.workspaces.get(requiredString(body, "tenantId", { max: 64 }));
     const requestedCapability = requiredString(body, "capability", { max: 64 });
     const args = serializePluginArgs(body.args);
-    const pluginDir = requirePluginDir(app);
+    await requirePluginDirectory(directories);
     const view = await audited(
       app,
       ctx.principal,
@@ -246,7 +366,7 @@ export function registerPluginRoutes(router: Router, app: AppContext): void {
         details: { capability: requestedCapability, argsBytes: Buffer.byteLength(args, "utf8") },
       },
       async () => {
-        const plugin = await findPlugin(app, pluginId);
+        const { plugin, directory } = await findPlugin(app, directories, pluginId);
         const capability = requireDeclaredCapability(plugin, requestedCapability);
         const root = app.workspaces.workspaceRoot(tenant);
         const result = await runPluginCommand(
@@ -257,7 +377,7 @@ export function registerPluginRoutes(router: Router, app: AppContext): void {
             "--id",
             cliValue(plugin.id, "pluginId"),
             "--dir",
-            cliValue(pluginDir, "pluginDir"),
+            cliValue(directory, "pluginDir"),
             "--capability",
             cliValue(capability, "capability"),
             "--args",

@@ -1,7 +1,9 @@
 # ADR-0004: Disposable VM Boundary for Untrusted Execution
 
-- Status: Accepted (Security Invariant Enforced via FailClosedBackend)
+- Status: Accepted (Security Invariant Enforced via FailClosedBackend); partially superseded by [ADR-0011](0011-opt-in-host-codeql-analysis.md) for one case
 - Date: 2026-11-05
+
+> Note (2026-11-11): [ADR-0011](0011-opt-in-host-codeql-analysis.md) narrowly supersedes the "no host execution exception" of this ADR for a single case: CodeQL analysis on the host that runs the Sentra core, using `codeql database create --build-mode=none` and `codeql database analyze` for actions, cpp, javascript, python and ruby, under the containment that ADR-0011 lists. There are two ways in: in the web console an administrator enables it in a setting that records the CodeQL licence acknowledgement, and the core CLI runs it for anyone who runs `sentra codeql analyze --accept-codeql-terms` on the host (an operator, a script or a coding agent with shell access). The CLI flag is a licence acknowledgement, not an authorisation check. CodeQL's extractors then parse untrusted code on the host. Builds, tests, PoCs, other build modes, other languages, other scanners and plugins remain under this ADR, and the rest of this ADR is unchanged.
 
 ## Context
 

@@ -157,7 +157,7 @@ export function registerCoreRoutes(router: Router, app: AppContext): void {
       remoteWorkers: {
         registry: "not_available",
         note:
-          "The Sentra core has no persisted remote-worker registry, so no remote workers exist. Scans parse workspace files without executing them; plugin adapters from SENTRA_PLUGIN_DIR, when configured, run as unsandboxed subprocesses on this host.",
+          "The Sentra core has no persisted remote-worker registry, so no remote workers exist. Scans parse workspace files without executing them; plugin adapters from the plugin directory (SENTRA_PLUGIN_DIR, otherwise the core's platform default), when one is in use, run as unsandboxed subprocesses on this host.",
       },
     };
     return json(body);

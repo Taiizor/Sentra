@@ -27,9 +27,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { AiPatchModal } from '@/components/dashboard/ai-patch-modal'
 import { FindingDetail } from '@/components/dashboard/findings-detail'
-import { findingLocation, formatTimestamp, SEVERITY_RANK } from '@/components/dashboard/findings-format'
+import { CodeqlIngestActions } from '@/components/dashboard/codeql-ingest-actions'
+import { FINDING_ORIGIN_LABEL, findingLocation, findingSourceLabel, formatTimestamp, SEVERITY_RANK } from '@/components/dashboard/findings-format'
 import { ErrorAlert, SeverityBadge, Timestamp, TriageBadge } from '@/components/dashboard/findings-shared'
-import { SEVERITIES, type FindingSource, type FindingState, type FindingView, type ScanRunView, type Severity } from '@/types/api'
+import { FINDING_ORIGINS, FINDING_SOURCES, SEVERITIES, type FindingOrigin, type FindingSource, type FindingState, type FindingView, type ScanRunView, type Severity } from '@/types/api'
 
 type StateFilter = FindingState | 'all'
 type SourceFilter = FindingSource | 'all'
@@ -44,7 +45,7 @@ const STATE_OPTIONS: { id: StateFilter; label: string }[] = [
   { id: 'all', label: 'All' },
 ]
 
-const SOURCE_LABEL: Record<SourceFilter, string> = { all: 'All sources', sast: 'SAST', dependency: 'Dependencies' }
+const SOURCE_LABEL: Record<SourceFilter, string> = { all: 'All sources', sast: 'SAST', dependency: 'Dependencies', codeql: 'CodeQL' }
 
 function matchesSearch(finding: FindingView, query: string): boolean {
   if (!query) return true
@@ -57,6 +58,8 @@ function matchesSearch(finding: FindingView, query: string): boolean {
     finding.dependency?.packageName,
     finding.dependency?.advisoryId,
     ...(finding.dependency?.aliases ?? []),
+    finding.origin ? FINDING_ORIGIN_LABEL[finding.origin] : null,
+    finding.codeql?.language,
   ]
   return haystack.some((value) => value?.toLowerCase().includes(query))
 }
@@ -132,9 +135,10 @@ export function FindingsTab() {
 }
 
 function FindingsWorkspace({ tenantId }: { tenantId: string }) {
-  const { can, navigate, selectedFindingId, setSelectedFindingId } = useConsole()
+  const { can, navigate, selectedFindingId, setSelectedFindingId, tenant } = useConsole()
   const [stateFilter, setStateFilter] = useState<StateFilter>('open')
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
+  const [originFilter, setOriginFilter] = useState<FindingOrigin | 'all'>('all')
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all')
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<{ field: SortField; desc: boolean }>({ field: 'severity', desc: true })
@@ -145,9 +149,11 @@ function FindingsWorkspace({ tenantId }: { tenantId: string }) {
   const filter = {
     state: stateFilter,
     source: sourceFilter === 'all' ? undefined : sourceFilter,
+    origin: sourceFilter === 'codeql' && originFilter !== 'all' ? originFilter : undefined,
     severity: severityFilter === 'all' ? undefined : severityFilter,
   }
-  const list = useResource(`findings:${tenantId}:${stateFilter}:${sourceFilter}:${severityFilter}`, (signal) =>
+  const originKey = sourceFilter === 'codeql' ? originFilter : 'all'
+  const list = useResource(`findings:${tenantId}:${stateFilter}:${sourceFilter}:${originKey}:${severityFilter}`, (signal) =>
     api.findings.list(tenantId, filter, signal),
   )
   const scans = useResource(`scans:${tenantId}:recent`, (signal) => api.scans.list(tenantId, 20, signal))
@@ -174,7 +180,7 @@ function FindingsWorkspace({ tenantId }: { tenantId: string }) {
   }, [findings])
 
   // Any filter or search change returns to the first page.
-  const filterKey = `${stateFilter}|${sourceFilter}|${severityFilter}|${query}`
+  const filterKey = `${stateFilter}|${sourceFilter}|${originKey}|${severityFilter}|${query}`
   const page = pageState.filterKey === filterKey ? pageState.page : 0
   const setPage = (next: number) => setPageState({ filterKey, page: next })
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE))
@@ -194,7 +200,7 @@ function FindingsWorkspace({ tenantId }: { tenantId: string }) {
   )
   const lastRun = runs[0] ?? null
   const lastCompleted = runs.find((run) => run.status === 'completed') ?? null
-  const filtersActive = sourceFilter !== 'all' || severityFilter !== 'all' || stateFilter !== 'open'
+  const filtersActive = sourceFilter !== 'all' || originKey !== 'all' || severityFilter !== 'all' || stateFilter !== 'open'
 
   function toggleSort(field: SortField) {
     setSort((current) => (current.field === field ? { field, desc: !current.desc } : { field, desc: field !== 'rule' && field !== 'location' }))
@@ -217,8 +223,8 @@ function FindingsWorkspace({ tenantId }: { tenantId: string }) {
         <div className="flex flex-col gap-0.5">
           <h2 className="text-base font-bold tracking-tight text-zinc-100 sm:text-lg">Findings</h2>
           <p className="text-xs text-zinc-400">
-            Candidates reported by the SAST scanner and OSV dependency lookups for this workspace. Every entry is an
-            unverified candidate; a triage verdict records an operator decision.
+            Candidates reported by the SAST scanner, OSV dependency lookups and CodeQL (host analysis, imported SARIF or GitHub code
+            scanning) for this workspace. Every entry is an unverified candidate; a triage verdict records an operator decision.
           </p>
           <p className="text-[11px] text-zinc-500">
             {scans.loading && !scans.data
@@ -230,7 +236,8 @@ function FindingsWorkspace({ tenantId }: { tenantId: string }) {
                   : 'No scan has run for this workspace yet.'}
           </p>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <CodeqlIngestActions tenantId={tenantId} hasRepository={!!tenant?.githubRepository} />
           <Button variant="outline" size="sm" onClick={list.reload} disabled={list.loading}>
             <RotateCw className={cn(list.loading && 'animate-spin')} /> Refresh
           </Button>
@@ -260,7 +267,7 @@ function FindingsWorkspace({ tenantId }: { tenantId: string }) {
         <Select
           value={sourceFilter}
           onValueChange={(value) => {
-            if (value === 'all' || value === 'sast' || value === 'dependency') setSourceFilter(value)
+            if (value === 'all' || FINDING_SOURCES.includes(value as FindingSource)) setSourceFilter(value as SourceFilter)
           }}
         >
           <SelectTrigger className="h-7.5 w-[140px] border-zinc-800 bg-zinc-950/80 text-xs">
@@ -276,6 +283,28 @@ function FindingsWorkspace({ tenantId }: { tenantId: string }) {
             </SelectGroup>
           </SelectContent>
         </Select>
+        {sourceFilter === 'codeql' && (
+          <Select
+            value={originFilter}
+            onValueChange={(value) => {
+              if (value === 'all' || FINDING_ORIGINS.includes(value as FindingOrigin)) setOriginFilter(value as FindingOrigin | 'all')
+            }}
+          >
+            <SelectTrigger className="h-7.5 w-[170px] border-zinc-800 bg-zinc-950/80 text-xs" aria-label="CodeQL origin">
+              <SelectValue>{(value: string | null) => (!value || value === 'all' ? 'All CodeQL origins' : (FINDING_ORIGIN_LABEL[value as FindingOrigin] ?? value))}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="all">All CodeQL origins</SelectItem>
+                {FINDING_ORIGINS.map((origin) => (
+                  <SelectItem key={origin} value={origin}>
+                    {FINDING_ORIGIN_LABEL[origin]}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        )}
         <Select
           value={severityFilter}
           onValueChange={(value) => {
@@ -314,6 +343,7 @@ function FindingsWorkspace({ tenantId }: { tenantId: string }) {
             onClick={() => {
               setStateFilter('open')
               setSourceFilter('all')
+              setOriginFilter('all')
               setSeverityFilter('all')
               setSearch('')
             }}
@@ -397,7 +427,7 @@ function FindingsWorkspace({ tenantId }: { tenantId: string }) {
             <Empty className="py-12">
               <EmptyHeader>
                 <EmptyTitle>No findings match “{search.trim()}”</EmptyTitle>
-                <EmptyDescription>The search covers rule, CWE, category, file, package and advisory IDs.</EmptyDescription>
+                <EmptyDescription>The search covers rule, CWE, category, file, package, advisory IDs and the CodeQL origin and language.</EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (
@@ -409,7 +439,7 @@ function FindingsWorkspace({ tenantId }: { tenantId: string }) {
                       <SortHead field="severity" label="Severity" sort={sort} onToggle={toggleSort} className="w-[110px]" />
                       <SortHead field="rule" label="Rule" sort={sort} onToggle={toggleSort} />
                       <SortHead field="location" label="Location" sort={sort} onToggle={toggleSort} />
-                      <TableHead className="w-[100px] text-xs font-semibold text-zinc-300">Source</TableHead>
+                      <TableHead className="w-[140px] text-xs font-semibold text-zinc-300">Source</TableHead>
                       <TableHead className="w-[130px] text-xs font-semibold text-zinc-300">Triage</TableHead>
                       {stateFilter === 'all' && (
                         <TableHead className="w-[90px] text-xs font-semibold text-zinc-300">State</TableHead>
@@ -453,7 +483,7 @@ function FindingsWorkspace({ tenantId }: { tenantId: string }) {
                           </span>
                         </TableCell>
                         <TableCell className="text-[11px] text-zinc-400">
-                          {finding.source === 'sast' ? 'SAST' : 'Dependency'}
+                          {findingSourceLabel(finding)}
                         </TableCell>
                         <TableCell>
                           <TriageBadge triage={finding.triage} />

@@ -1,6 +1,6 @@
 # Architecture
 
-Sentra is an autonomous AI security research and remediation platform built with a modular, local-first control plane in Safe Rust (`#![forbid(unsafe_code)]`). Policy enforcement, state transitions, and evidence admission are strictly handled by deterministic application services. Scoped AI agents propose actions; they never obtain direct authority over the host, approvals, or verified finding status.
+Sentra is a security review and remediation toolkit built with a modular, local-first control plane in Safe Rust (`#![forbid(unsafe_code)]`). Autonomous research, a worker fleet and independent patch verification are design goals, not implemented features (see [docs/LIMITATIONS.md](docs/LIMITATIONS.md)). Policy enforcement, state transitions, and evidence admission are strictly handled by deterministic application services. Scoped AI agents propose actions; they never obtain direct authority over the host, approvals, or verified finding status.
 
 Inspection is **domain-state read-only**: the SQLite metadata repository operates under WAL mode (`BEGIN IMMEDIATE` transactions and integrity PRAGMAs) with deterministic state management. Admission uses OS-level atomic locks, and storage boundaries fail closed. See [user-facing storage semantics](README.md#inspection-storage-permissions).
 
@@ -76,7 +76,7 @@ An event contains actor, session/task, sequence, timestamp, input/output digests
 
 ## Execution and trust boundaries
 
-For curated trusted development fixtures, a hardened container is a convenience profile. Real untrusted target builds, tests, native scanners, and PoCs require a disposable VM worker with approved egress, no operator-home mounts, no Docker socket, no provider secrets, and explicit resource limits. Containers inside that VM provide additional process organization, not the sole hostile-code boundary.
+For curated trusted development fixtures, a hardened container is a convenience profile. Real untrusted target builds, tests, native scanners, and PoCs require a disposable VM worker with approved egress, no operator-home mounts, no Docker socket, no provider secrets, and explicit resource limits. Containers inside that VM provide additional process organization, not the sole hostile-code boundary. The one reviewed exception is opt-in CodeQL analysis in build mode `none` on the host ([ADR-0011](docs/adr/0011-opt-in-host-codeql-analysis.md)): CodeQL parses, but does not build or run, the workspace, for a fixed set of languages.
 
 The Windows control plane initially targets Linux user-space execution through a dedicated Linux VM worker. Hyper-V is the first local backend candidate; a separately approved dedicated Linux VM endpoint is an alternative if local prerequisites fail. Containers inside that VM provide additional process organization. See [Threat Model](docs/THREAT_MODEL.md) and [Limitations](docs/LIMITATIONS.md).
 

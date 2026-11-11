@@ -8,19 +8,22 @@ import type { SettingsStore } from "./services/settings-store.ts";
 
 /**
  * Tool paths set by an admin in the web console (Host & workers > tools), for tools automatic
- * detection cannot find, such as a CodeQL bundle extracted to D:\CodeQL or a semgrep installed
- * into a virtual environment that is not on any PATH.
+ * detection cannot find, such as a semgrep installed into a virtual environment that is not on any
+ * PATH.
  *
- * A configured path is used for REPORTING only: the tools table, the CodeQL presence message of
- * scans, and the tools listed in topology reports. It is never passed to anything that starts a
- * program: ExecutableLocator (executables.ts), the gh credential lookup (github.ts) and the sentra
- * binary resolution (config.ts) do not import this module, so a path typed into the web console
- * can never become a program the bridge runs. The legacy bridge's "command execution through
- * client-supplied paths" was a critical issue; this module must not reintroduce it.
+ * A configured path is used for REPORTING only: the tools table and the tools listed in topology
+ * reports. It is never passed to anything that starts a program: ExecutableLocator
+ * (executables.ts), the gh credential lookup (github.ts), the CodeQL launcher choice
+ * (codeql-launcher.ts) and the sentra binary resolution (config.ts) do not import this module, so a
+ * path typed into the web console can never become a program the bridge runs. The legacy bridge's
+ * "command execution through client-supplied paths" was a critical issue; this module must not
+ * reintroduce it.
  *
  * For the same reason only tools the bridge never runs are configurable. gh is run by the bridge
- * (`gh auth token`), so it is pinned by the HOST operator through SENTRA_GH_BIN instead; bun runs
- * the bridge itself and is always the running executable.
+ * (`gh auth token`), so it is pinned by the HOST operator through SENTRA_GH_BIN instead; codeql is
+ * run when CodeQL host analysis is enabled, so it is pinned through SENTRA_CODEQL_BIN (a codeql path
+ * stored in the console by an earlier bridge is ignored, see ignoredStoredToolPaths); bun runs the
+ * bridge itself and is always the running executable.
  *
  * Validation only reads: it checks that the path exists, follows links, lists at most one
  * directory (plus two subdirectories for a suggestion), checks execute permission on macOS and
@@ -31,7 +34,7 @@ import type { SettingsStore } from "./services/settings-store.ts";
  */
 
 /** Tools whose path an admin may set in the console: none of them is ever run by the bridge. */
-export const CONFIGURABLE_TOOLS = ["git", "cargo", "codeql", "semgrep", "osv-scanner", "docker"] as const satisfies readonly ToolName[];
+export const CONFIGURABLE_TOOLS = ["git", "cargo", "semgrep", "osv-scanner", "docker"] as const satisfies readonly ToolName[];
 export type ConfigurableTool = (typeof CONFIGURABLE_TOOLS)[number];
 
 export function isConfigurableTool(name: string): name is ConfigurableTool {
@@ -46,11 +49,24 @@ export const MAX_TOOL_PATH_LENGTH = 1024;
 export const GH_PATH_HINT = "Set SENTRA_GH_BIN on the bridge host, or store a GitHub token in Settings.";
 /** How the gh row says its path can be changed while SENTRA_GH_BIN is set. */
 export const GH_PINNED_HINT = "Pinned by SENTRA_GH_BIN on the bridge host; change it there and restart the bridge.";
+/** How the codeql row says its path can be set while SENTRA_CODEQL_BIN is unset. */
+export const CODEQL_PATH_HINT =
+  "codeql is run when CodeQL host analysis is enabled, so its path cannot be set in the console. Set SENTRA_CODEQL_BIN on the bridge host to the codeql launcher of a CodeQL distribution and restart the bridge.";
+/** How the codeql row says its path can be changed while SENTRA_CODEQL_BIN is set. */
+export const CODEQL_PINNED_HINT = "Pinned by SENTRA_CODEQL_BIN on the bridge host; change it there and restart the bridge.";
+
+/** Appended to the codeql row's hint when an earlier bridge stored a console path for it. */
+export function ignoredCodeqlPathHint(stored: { path: string }): string {
+  return `The path set earlier in the console (${stored.path}) is ignored: codeql is now run by the bridge when CodeQL host analysis is enabled, and a path entered in the web console never becomes a program the bridge runs.`;
+}
 
 /** Why a tool's path cannot be set in the console (the 409 message of PUT /api/system/tools/:name). */
 export function notConfigurableReason(name: ToolName): string {
   if (name === "gh") {
     return "The path of gh cannot be set in the web console: the bridge runs gh (`gh auth token`), and a path entered in the web console must never become a program the bridge runs. Set SENTRA_GH_BIN to the absolute path of the gh executable on the bridge host and restart the bridge, or store a GitHub token in Settings.";
+  }
+  if (name === "codeql") {
+    return "The path of codeql cannot be set in the web console: the bridge runs codeql when CodeQL host analysis is enabled (Settings > CodeQL), and a path entered in the web console must never become a program the bridge runs. Set SENTRA_CODEQL_BIN to the codeql launcher of a CodeQL distribution on the bridge host and restart the bridge.";
   }
   if (name === "bun") {
     return "The path of bun cannot be set: bun runs the bridge itself, so the reported path is always the running executable.";
@@ -72,9 +88,32 @@ export type StoredToolPaths = Partial<Record<ConfigurableTool, StoredToolPath>>;
 /** Read access to the configured paths, as the reporting layer needs it. */
 export interface ConfiguredToolPaths {
   list(): StoredToolPaths;
+  /** Stored entries of tools that are no longer configurable (reported as ignored, never used). */
+  ignored?(): Partial<Record<FormerlyConfigurableTool, StoredToolPath>>;
 }
 
 export const NO_CONFIGURED_TOOL_PATHS: ConfiguredToolPaths = { list: () => ({}) };
+
+/** Tools that were configurable in earlier bridges and are now run by the bridge (their stored paths are ignored). */
+export const FORMERLY_CONFIGURABLE_TOOLS = ["codeql"] as const satisfies readonly ToolName[];
+export type FormerlyConfigurableTool = (typeof FORMERLY_CONFIGURABLE_TOOLS)[number];
+
+/**
+ * Entries an earlier bridge stored for tools that are no longer configurable (codeql). They are
+ * reported as ignored and never used for anything else.
+ */
+export function ignoredStoredToolPaths(raw: unknown): Partial<Record<FormerlyConfigurableTool, StoredToolPath>> {
+  const out: Partial<Record<FormerlyConfigurableTool, StoredToolPath>> = {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  for (const tool of FORMERLY_CONFIGURABLE_TOOLS) {
+    const value = (raw as Record<string, unknown>)[tool];
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const entry = value as Record<string, unknown>;
+    if (!isStorablePath(entry.path)) continue;
+    out[tool] = { path: entry.path, setAt: typeof entry.setAt === "string" ? entry.setAt : "", setBy: typeof entry.setBy === "string" ? entry.setBy : "" };
+  }
+  return out;
+}
 
 /** True for a path the store keeps; anything else is dropped when the setting is read. */
 function isStorablePath(value: unknown): value is string {
@@ -112,6 +151,10 @@ export class ToolPathStore implements ConfiguredToolPaths {
 
   list(): StoredToolPaths {
     return parseStoredToolPaths(this.settings.get<unknown>(TOOL_PATHS_SETTING, {}));
+  }
+
+  ignored(): Partial<Record<FormerlyConfigurableTool, StoredToolPath>> {
+    return ignoredStoredToolPaths(this.settings.get<unknown>(TOOL_PATHS_SETTING, {}));
   }
 
   /**

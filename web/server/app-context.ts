@@ -8,6 +8,7 @@ import type { HostPlatform } from "./host-platform.ts";
 import type { LlmGateway } from "./llm.ts";
 import type { SecretStore } from "./secrets.ts";
 import type { SentraCli } from "./sentra-cli.ts";
+import type { CodeqlService } from "./services/codeql.ts";
 import type { CoreStoreReader } from "./services/core-store.ts";
 import type { SettingsStore } from "./services/settings-store.ts";
 import type { OsvService, ScanService } from "./services/types.ts";
@@ -36,4 +37,6 @@ export interface AppContext {
   hostPlatform: HostPlatform;
   /** Tool paths set by an admin in the console; reporting only, never used to run a program. */
   toolPaths: ToolPathStore;
+  /** CodeQL host analysis settings (off by default), the bridge-wide analysis lock and the pack cache. */
+  codeql: CodeqlService;
 }

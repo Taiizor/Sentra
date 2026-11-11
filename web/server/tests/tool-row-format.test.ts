@@ -135,13 +135,12 @@ describe("tool path wording", () => {
   test("Settings → System says the search, not running a tool, is what a console path replaces", () => {
     const summary = toolDetectionSummary(SEARCH, "linux");
     expect(summary).toBe(
-      "Found automatically by searching the bridge process PATH, the persisted PATH (/etc/environment) and standard install locations, unless a path was set in the console (or SENTRA_GH_BIN for gh). Finding a tool never runs it.",
+      "Found automatically by searching the bridge process PATH, the persisted PATH (/etc/environment) and standard install locations, unless a path was set in the console (or SENTRA_GH_BIN for gh, SENTRA_CODEQL_BIN for codeql). Finding a tool never runs it.",
     );
     expect(summary).not.toMatch(/without running any tool, unless/);
   });
 
-  test("the dialog names a scan message only for codeql", () => {
-    expect(toolPathUsageText("codeql")).toContain("in the CodeQL stage message of scans");
+  test("the dialog names no scan message (codeql, whose stage message used to, is no longer settable)", () => {
     for (const tool of ["git", "cargo", "semgrep", "osv-scanner", "docker"]) {
       const text = toolPathUsageText(tool);
       expect(text).not.toMatch(/\bscans?\b|scan message/i);

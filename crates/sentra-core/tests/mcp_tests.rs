@@ -808,6 +808,35 @@ fn codeql_ingest_reports_invalid_sarif_as_tool_error() {
 }
 
 #[test]
+fn codeql_ingest_reports_parsed_candidates_not_admitted_findings() {
+    // Regression: the tool reported `findings_admitted`, although the parsed results are neither
+    // admitted as evidence nor stored.
+    let tmp = TempDir::new("codeql-ok");
+    let mut server = initialized_server(tmp.path());
+    let sarif = json!({
+        "version": "2.1.0",
+        "runs": [{
+            "tool": { "driver": { "name": "CodeQL", "rules": [{ "id": "js/xss", "properties": { "security-severity": "6.1" } }] } },
+            "results": [{
+                "ruleId": "js/xss",
+                "level": "warning",
+                "message": { "text": "Cross-site scripting." },
+                "locations": [{ "physicalLocation": { "artifactLocation": { "uri": "app.js" }, "region": { "startLine": 3 } } }]
+            }]
+        }]
+    });
+    let result = call_tool(
+        &mut server,
+        "sentra_codeql_ingest",
+        json!({ "sarif_content": sarif.to_string() }),
+    );
+    let payload = assert_tool_ok(&result);
+    assert_eq!(payload["candidate_findings_parsed"], 1);
+    assert_eq!(payload["persisted"], false);
+    assert!(payload.get("findings_admitted").is_none());
+}
+
+#[test]
 fn security_guidance_lookup_and_search() {
     let tmp = TempDir::new("guidance");
     let mut server = initialized_server(tmp.path());

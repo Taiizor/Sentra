@@ -74,7 +74,7 @@ import { createApp, handleRequest } from "../main.ts";
 import { SecretStore } from "../secrets.ts";
 import { CHOCOLATEY_SHIM_NOTE, isChocolateyShim, parseScoopShim, scoopShimFile } from "../shims.ts";
 import { latestTopologyReport, saveTopologyReport } from "../services/topology.ts";
-import { NO_CONFIGURED_TOOL_PATHS } from "../tool-paths.ts";
+import { CODEQL_PATH_HINT, NO_CONFIGURED_TOOL_PATHS } from "../tool-paths.ts";
 
 // Canonical (links and 8.3 short names resolved, e.g. /private/var on macOS or RUNNER~1 on Windows CI
 // runners), so paths built here compare equal to the real paths the code under test reports.
@@ -1556,8 +1556,9 @@ describe("reported tools", () => {
         selection: "automatic",
         configuredPath: null,
         configuredPathProblem: null,
-        pathConfigurable: true,
-        pathHint: null,
+        // codeql is no longer settable in the console (it is executed when host analysis is enabled).
+        pathConfigurable: false,
+        pathHint: CODEQL_PATH_HINT,
       },
     ]);
     expect(normalizeStoredTool(null)).toBeNull();
@@ -1657,6 +1658,7 @@ describe("configured grants", () => {
       staticDir: null,
       sentraBin: path.join(dataDir, "missing-sentra-binary"),
       ghBin: null,
+      codeqlBin: null,
       dataDir,
       registryDbPath: path.join(dataDir, "sentra.db"),
       webDbPath: path.join(dataDir, "sentra-web.db"),

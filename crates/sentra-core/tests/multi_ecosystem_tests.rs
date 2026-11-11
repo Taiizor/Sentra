@@ -254,6 +254,9 @@ fn test_local_workspace_discovers_npm_and_bun_lockfiles() {
 
     assert_eq!(audit_report.audit_result.packages_audited, 1);
     assert_eq!(audit_report.audit_result.vulnerable_packages, 1);
+    assert_eq!(audit_report.lockfiles, ["package-lock.json"]);
+    assert!(audit_report.unparsed_lockfiles.is_empty());
+    assert_eq!(audit_report.match_lockfiles, ["package-lock.json"]);
     assert_eq!(audit_report.candidate_findings.len(), 1);
     assert_eq!(
         audit_report.candidate_findings[0].title(),
@@ -264,6 +267,90 @@ fn test_local_workspace_discovers_npm_and_bun_lockfiles() {
             .location()
             .map(|l| l.path.as_str()),
         Some("package-lock.json")
+    );
+
+    let _ = fs::remove_dir_all(&temp_root);
+}
+
+#[cfg(any(windows, unix))]
+#[test]
+fn test_local_workspace_attributes_shared_package_to_each_lockfile() {
+    // Regression: a match was mapped to the first lockfile listing the same package name and
+    // version, so two lockfiles listing lodash 4.17.11 produced two findings located at
+    // package-lock.json and two identical propose-pr previews (same proposal id and body file).
+    let temp = fs::canonicalize(std::env::temp_dir()).unwrap_or_else(|_| std::env::temp_dir());
+    let temp_root = temp.join(format!("sentra_shared_lock_test_{}", std::process::id()));
+    let workspace = temp_root.join("polyglot");
+    let storage = temp_root.join("storage");
+    fs::create_dir_all(&workspace).unwrap();
+    fs::create_dir_all(&storage).unwrap();
+
+    fs::write(
+        workspace.join("package-lock.json"),
+        r#"{
+            "name": "demo",
+            "lockfileVersion": 3,
+            "packages": {
+                "": { "name": "demo" },
+                "node_modules/lodash": { "version": "4.17.11" }
+            }
+        }"#,
+    )
+    .unwrap();
+    fs::write(
+        workspace.join("yarn.lock"),
+        "# yarn lockfile v1\n\nlodash@^4.17.0:\n  version \"4.17.11\"\n",
+    )
+    .unwrap();
+
+    let db_path = storage.join("audit.db");
+    assert!(
+        LocalWorkspace::initialize(&workspace, &db_path)
+            .unwrap()
+            .initialized
+    );
+    let advisory_db =
+        AdvisoryDatabase::new(AdvisoryDatabase::pinned_advisories(), TimestampUtc::now());
+
+    let audit_report =
+        LocalWorkspace::audit_dependencies(&workspace, &db_path, &advisory_db).unwrap();
+    assert_eq!(audit_report.lockfiles, ["package-lock.json", "yarn.lock"]);
+    assert_eq!(
+        audit_report.match_lockfiles,
+        ["package-lock.json", "yarn.lock"]
+    );
+    assert_eq!(audit_report.audit_result.packages_audited, 2);
+    // One distinct vulnerable package name, matched once per lockfile.
+    assert_eq!(audit_report.audit_result.vulnerable_packages, 1);
+    assert_eq!(audit_report.audit_result.matches.len(), 2);
+    let locations: Vec<_> = audit_report
+        .candidate_findings
+        .iter()
+        .map(|f| f.location().map(|l| l.path.clone()))
+        .collect();
+    assert_eq!(
+        locations,
+        [
+            Some("package-lock.json".to_string()),
+            Some("yarn.lock".to_string())
+        ]
+    );
+
+    let proposals =
+        LocalWorkspace::propose_remediations(&workspace, &db_path, &advisory_db, "a test sample")
+            .unwrap();
+    assert_eq!(proposals.len(), 2);
+    assert_ne!(proposals[0].proposal_id, proposals[1].proposal_id);
+    assert!(
+        proposals[0]
+            .patch_diff
+            .starts_with("--- a/package-lock.json")
+    );
+    assert!(proposals[1].patch_diff.starts_with("--- a/yarn.lock"));
+    assert!(
+        proposals[1]
+            .gh_command
+            .ends_with(&format!("--body-file \"{}.md\"", proposals[1].proposal_id))
     );
 
     let _ = fs::remove_dir_all(&temp_root);

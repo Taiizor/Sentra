@@ -36,9 +36,9 @@ const COMMANDS: { command: ConsoleCommand; template: string; description: string
   { command: 'skills', template: 'sentra skills list --json', description: 'Skill catalog embedded in the core binary.' },
   {
     command: 'plugins',
-    template: 'sentra plugin list --dir <SENTRA_PLUGIN_DIR> --json',
+    template: 'sentra plugin list --dir <plugin directory> --json',
     description:
-      'Adapter manifests in the plugin directory configured on the bridge host (refused when SENTRA_PLUGIN_DIR is not set). Lists manifests only; no adapter is started.',
+      "Adapter manifests in the bridge's plugin directory (SENTRA_PLUGIN_DIR, otherwise the core's platform default; refused when there is none, see the Plugins tab). Lists manifests only; no adapter is started.",
   },
 ]
 

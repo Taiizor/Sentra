@@ -1,11 +1,11 @@
 import { useState, type ReactNode } from 'react'
-import { ArrowRight, ExternalLink, FileLock2, KeyRound, Package, Sparkles } from 'lucide-react'
+import { ArrowRight, ExternalLink, FileLock2, KeyRound, Package, Search, Sparkles } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useConsole } from '@/lib/console-context'
 import { useResource } from '@/lib/use-resource'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { isSecretFinding } from '@/components/dashboard/findings-format'
+import { FINDING_ORIGIN_LABEL, findingSourceLabel, isSecretFinding } from '@/components/dashboard/findings-format'
 import {
   CopyButton,
   DetailSection,
@@ -19,7 +19,7 @@ import { FindingTriageForm } from '@/components/dashboard/findings-triage-form'
 import { PATCH_STATE_LABEL } from '@/components/dashboard/patch-format'
 import { requestRemediationFocus } from '@/components/dashboard/remediation-focus'
 import { SourceViewer } from '@/components/dashboard/source-viewer'
-import type { DependencyFindingDetails, FindingView, TaintStepView } from '@/types/api'
+import type { CodeqlFindingDetails, DependencyFindingDetails, FindingView, TaintStepView } from '@/types/api'
 
 const SEVERITY_SOURCE_LABEL: Record<DependencyFindingDetails['severitySource'], string> = {
   database_specific: 'Advisory database severity (database_specific)',
@@ -213,6 +213,22 @@ function RemediationGuidance({ finding, onGeneratePatch }: { finding: FindingVie
     )
   }
 
+  if (finding.source === 'codeql') {
+    return (
+      <div className="flex items-start gap-2 rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2 text-xs text-zinc-300">
+        <Search className="mt-0.5 size-3.5 shrink-0 text-zinc-400" />
+        <span>
+          Review the query help{finding.codeql?.helpUri ? ' linked above' : ''} and fix the code. Model patch candidates are offered only for
+          SAST findings. {finding.origin === 'host_analysis'
+            ? 'The next scan with CodeQL host analysis resolves the finding when the same rule ran and no longer reports it (a rule left out by another query suite does not resolve it).'
+            : finding.origin === 'sarif_import'
+              ? 'A later import resolves it when that SARIF ran the same rule and no longer reports the result (CodeQL lists every query it ran, also those without results); a SARIF that did not run this rule leaves it open.'
+              : 'Sync GitHub code scanning again after the alert is closed on GitHub to resolve it here.'}
+        </span>
+      </div>
+    )
+  }
+
   if (isSecretFinding(finding)) {
     return (
       <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-zinc-300">
@@ -262,6 +278,55 @@ function RemediationGuidance({ finding, onGeneratePatch }: { finding: FindingVie
   )
 }
 
+function CodeqlDetails({ details }: { details: CodeqlFindingDetails }) {
+  const range =
+    details.startLine !== null
+      ? `line ${details.startLine}${details.endLine !== null && details.endLine !== details.startLine ? `-${details.endLine}` : ''}${details.startColumn !== null ? `, column ${details.startColumn}${details.endColumn !== null ? `-${details.endColumn}` : ''}` : ''}`
+      : null
+  return (
+    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+      <Field label="Origin">
+        {FINDING_ORIGIN_LABEL[details.origin] ?? details.origin}
+        {details.origin === 'host_analysis' && <span className="text-zinc-500"> (Sentra ran CodeQL on the bridge host, build mode none)</span>}
+      </Field>
+      {details.language && <Field label="Language">{details.language}</Field>}
+      {details.securitySeverity !== null && <Field label="security-severity">{details.securitySeverity.toFixed(1)} (query metadata)</Field>}
+      {details.problemSeverity && <Field label="Problem severity">{details.problemSeverity}</Field>}
+      {details.precision && <Field label="Precision">{details.precision}</Field>}
+      {range && <Field label="Range">{range}</Field>}
+      {details.toolName && (
+        <Field label="Tool">
+          {details.toolName}
+          {details.toolVersion ? ` ${details.toolVersion}` : ''}
+        </Field>
+      )}
+      {details.repository && <Field label="Repository">{details.repository}</Field>}
+      {details.alertUrl && (
+        <Field label="GitHub alert">
+          <ExternalAnchor href={details.alertUrl}>#{details.alertNumber ?? ''}</ExternalAnchor>
+        </Field>
+      )}
+      {details.helpUri && (
+        <Field label="Query help">
+          <ExternalAnchor href={details.helpUri}>{details.helpUri}</ExternalAnchor>
+        </Field>
+      )}
+      {details.tags.length > 0 && (
+        <Field label="Tags">
+          <span className="font-mono text-[11px]">{details.tags.join(', ')}</span>
+        </Field>
+      )}
+      <Field label="Severity mapping">
+        <span className="text-zinc-500">
+          {details.origin === 'github_code_scanning'
+            ? 'From the alert rule: security severity level when set, else error=Medium, warning=Low, note=Informational.'
+            : 'security-severity >= 9.0 Critical, >= 7.0 High, >= 4.0 Medium, > 0 Low; without it problem.severity error=Medium, warning=Low, recommendation/note=Informational.'}
+        </span>
+      </Field>
+    </dl>
+  )
+}
+
 function SourceContext({ finding, tenantId }: { finding: FindingView; tenantId: string }) {
   const secret = isSecretFinding(finding)
   const [revealed, setRevealed] = useState(!secret)
@@ -295,7 +360,7 @@ export function FindingDetail({ finding, onGeneratePatch }: { finding: FindingVi
         <div className="flex flex-wrap items-center gap-1.5">
           <SeverityBadge severity={finding.severity} />
           <Badge variant="outline" className="border-zinc-700 text-[10px] text-zinc-400">
-            {finding.source === 'sast' ? 'SAST' : 'Dependency'}
+            {findingSourceLabel(finding)}
           </Badge>
           <Badge
             variant="outline"
@@ -384,7 +449,13 @@ export function FindingDetail({ finding, onGeneratePatch }: { finding: FindingVi
         </DetailSection>
       )}
 
-      {tenant && finding.filePath && finding.source === 'sast' && (
+      {finding.codeql && (
+        <DetailSection title="CodeQL result">
+          <CodeqlDetails details={finding.codeql} />
+        </DetailSection>
+      )}
+
+      {tenant && finding.filePath && finding.source !== 'dependency' && (
         <DetailSection title="Source context">
           <SourceContext key={finding.findingId} finding={finding} tenantId={tenant.tenantId} />
         </DetailSection>

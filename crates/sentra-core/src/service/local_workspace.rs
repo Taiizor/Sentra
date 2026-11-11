@@ -13,7 +13,7 @@ use crate::{
     advisory::{
         AdvisoryAuditResult, AdvisoryDatabase, InventoryLimits, MAX_INVENTORY_DEPTH,
         WorkspaceInventory, collect_lockfile_inventory, discover_workspace_lockfiles,
-        parse_cargo_lock, parse_lockfile_content,
+        parse_lockfile_content,
     },
     diff::{
         DiffError, DiffErrorKind, MAX_PATCH_BYTES, PatchFileResult, PatchPlan, PatchRollbackResult,
@@ -166,8 +166,17 @@ pub struct LocalAuditReport {
     pub task_id: TaskId,
     /// Consolidated audit result.
     pub audit_result: AdvisoryAuditResult,
-    /// Authoritative candidate findings.
+    /// Authoritative candidate findings, each located at the lockfile its package was read from.
     pub candidate_findings: Vec<Finding>,
+    /// Workspace-root lockfiles (file names) that were read and parsed, in discovery order.
+    pub lockfiles: Vec<String>,
+    /// Workspace-root lockfiles that were found but could not be read or parsed; their
+    /// packages were not audited.
+    pub unparsed_lockfiles: Vec<String>,
+    /// For each entry of `audit_result.matches`, in order, the lockfile its package record was
+    /// read from. Each lockfile is audited separately, so a package name and version listed by
+    /// two lockfiles yields one match per lockfile.
+    pub match_lockfiles: Vec<String>,
 }
 
 /// Result returned after running a SAST and secret code scan on the workspace (Requirement F-05).
@@ -295,7 +304,12 @@ impl LocalWorkspace {
         Self::run(workspace, database, Operation::Recover)
     }
 
-    /// Runs a dependency security advisory audit against the workspace's Cargo.lock (Requirement F-07).
+    /// Runs a dependency advisory audit of the lockfiles at the workspace root against
+    /// `advisory_db` (Requirement F-07) and records it as a completed task in the store.
+    ///
+    /// Lockfiles are discovered at the workspace root only (see
+    /// [`discover_workspace_lockfiles`]); one that cannot be read or parsed is reported in
+    /// [`LocalAuditReport::unparsed_lockfiles`] instead of failing the audit.
     pub fn audit_dependencies(
         workspace: &Path,
         database: &Path,
@@ -355,34 +369,47 @@ impl LocalWorkspace {
             return Err(LocalWorkspaceError::new(Kind::WorkspaceMismatch));
         }
 
-        let discovered_lockfiles = discover_workspace_lockfiles(boundary.root().canonical_path());
-        let mut packages = Vec::new();
-        let mut primary_lockfile = "Cargo.lock".to_string();
-
-        if !discovered_lockfiles.is_empty() {
-            primary_lockfile = discovered_lockfiles[0].1.clone();
-            for (kind, filename) in &discovered_lockfiles {
-                let lock_path = boundary.root().canonical_path().join(filename);
-                if let Ok(content) = fs::read_to_string(&lock_path)
-                    && let Ok(pkgs) = parse_lockfile_content(*kind, &content)
-                {
-                    packages.extend(pkgs);
-                }
-            }
-        } else {
-            let lock_path = boundary.root().canonical_path().join("Cargo.lock");
-            if lock_path.is_file() {
-                let content = fs::read_to_string(&lock_path)
-                    .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
-                packages = parse_cargo_lock(&content)
-                    .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
+        let root = boundary.root().canonical_path();
+        let mut parsed_lockfiles = Vec::new();
+        let mut unparsed_lockfiles = Vec::new();
+        for (kind, filename) in discover_workspace_lockfiles(root) {
+            let parsed = fs::read_to_string(root.join(&filename))
+                .ok()
+                .and_then(|content| parse_lockfile_content(kind, &content).ok());
+            match parsed {
+                Some(pkgs) => parsed_lockfiles.push((filename, pkgs)),
+                None => unparsed_lockfiles.push(filename),
             }
         }
 
+        // Each lockfile is audited on its own, so every match stays attributed to the lockfile
+        // its package record was read from, even when several lockfiles list the same package
+        // name and version. The per-lockfile results are then merged in discovery order.
         let now = clock.now();
-        let audit_result = advisory_db
-            .audit_packages(&packages, now, 30)
+        let mut audit_result = advisory_db
+            .audit_packages(&[], now, 30)
             .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
+        let mut match_lockfiles = Vec::new();
+        let mut vulnerable_package_names = std::collections::HashSet::new();
+        for (filename, pkgs) in &parsed_lockfiles {
+            let partial = advisory_db
+                .audit_packages(pkgs, now, 30)
+                .map_err(|_| LocalWorkspaceError::new(Kind::Workspace))?;
+            audit_result.packages_audited += partial.packages_audited;
+            audit_result
+                .unknown_version_packages
+                .extend(partial.unknown_version_packages);
+            for m in partial.matches {
+                vulnerable_package_names.insert(m.package.clone());
+                match_lockfiles.push(filename.clone());
+                audit_result.matches.push(m);
+            }
+        }
+        audit_result.vulnerable_packages = vulnerable_package_names.len();
+        let lockfiles: Vec<String> = parsed_lockfiles
+            .into_iter()
+            .map(|(filename, _)| filename)
+            .collect();
 
         let task_id = TaskId::new();
         let existing_tasks = repository
@@ -390,7 +417,10 @@ impl LocalWorkspace {
             .map_err(LocalWorkspaceError::persistence)?;
         let sequence_number = (existing_tasks.len() as u64) + 1;
 
-        let task_title = format!("{primary_lockfile} Dependency Advisory Audit");
+        let task_title = match lockfiles.first() {
+            Some(first) => format!("{first} Dependency Advisory Audit"),
+            None => "Dependency Advisory Audit (no lockfile parsed)".to_string(),
+        };
         repository
             .create_task(
                 record.metadata.session_id,
@@ -421,11 +451,11 @@ impl LocalWorkspace {
             )
             .map_err(LocalWorkspaceError::persistence)?;
 
-        let candidate_findings = audit_result.to_candidate_findings_for_lockfile(
+        let candidate_findings = audit_result.to_candidate_findings_per_lockfile(
             record.metadata.session_id,
             task_id,
             now,
-            &primary_lockfile,
+            &match_lockfiles,
         );
 
         let report = LocalAuditReport {
@@ -433,6 +463,9 @@ impl LocalWorkspace {
             task_id,
             audit_result,
             candidate_findings,
+            lockfiles,
+            unparsed_lockfiles,
+            match_lockfiles,
         };
 
         match manager.shutdown() {
@@ -441,7 +474,9 @@ impl LocalWorkspace {
         }
     }
 
-    /// Exports dependency security advisory audit results to an OASIS SARIF v2.1.0 document (REQ-F07, EXTENSIONS.md).
+    /// Runs [`Self::audit_dependencies`] and exports its dependency advisory results (only)
+    /// as an OASIS SARIF v2.1.0 document (REQ-F07, EXTENSIONS.md). SAST results are exported
+    /// by [`Self::export_scan_sarif`]. Nothing is uploaded anywhere.
     pub fn export_audit_sarif(
         workspace: &Path,
         database: &Path,
@@ -603,23 +638,33 @@ impl LocalWorkspace {
             .map_err(|_| LocalWorkspaceError::new(LocalWorkspaceErrorKind::Service))
     }
 
-    /// Generates automated remediation PR proposals for all identified vulnerabilities in the workspace.
+    /// Runs [`Self::audit_dependencies`] and builds one local draft pull request preview per
+    /// advisory match (see [`crate::remediation::RemediationPrPackage`]).
+    ///
+    /// `advisory_source` describes `advisory_db` and is written into each preview body. Each
+    /// preview names the lockfile the matched package was read from. No branch, commit or
+    /// pull request is created, and the suggested `gh` command is not run.
     pub fn propose_remediations(
         workspace: &Path,
         database: &Path,
         advisory_db: &AdvisoryDatabase,
+        advisory_source: &str,
     ) -> Result<Vec<crate::remediation::RemediationPrPackage>, LocalWorkspaceError> {
         let audit = Self::audit_dependencies(workspace, database, advisory_db)?;
-        let mut proposals = Vec::new();
-        for m in &audit.audit_result.matches {
-            proposals.push(
+        let proposals = audit
+            .audit_result
+            .matches
+            .iter()
+            .zip(&audit.match_lockfiles)
+            .map(|(m, lockfile)| {
                 crate::remediation::RemediationPrPackage::from_advisory_match(
                     m,
-                    "Cargo.lock",
+                    lockfile,
                     "HEAD",
-                ),
-            );
-        }
+                    advisory_source,
+                )
+            })
+            .collect();
         Ok(proposals)
     }
 

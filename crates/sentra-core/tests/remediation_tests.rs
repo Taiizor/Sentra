@@ -31,7 +31,12 @@ fn test_remediation_pr_from_advisory_match() {
     };
 
     let base_sha = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678";
-    let pkg = RemediationPrPackage::from_advisory_match(&advisory_match, "package.json", base_sha);
+    let pkg = RemediationPrPackage::from_advisory_match(
+        &advisory_match,
+        "package.json",
+        base_sha,
+        "a test advisory fixture",
+    );
 
     assert!(pkg.proposal_id.starts_with("prop-"));
     assert_eq!(pkg.branch_name, "sentra/remediate-ghsa-p6mc-m468-83gw");
@@ -48,6 +53,83 @@ fn test_remediation_pr_from_advisory_match() {
     assert!(pkg.body_markdown.contains("PRESENT_ONLY"));
     assert!(pkg.gh_command.starts_with("gh pr create --draft"));
     assert!(pkg.is_draft_only);
+
+    // Regression: the body names the advisory source it was given and never ticks a check
+    // that did not happen (it used to claim a "canonical OSV/RustSec/GHSA database" match,
+    // "reachability confirmed" and a contained host execution).
+    let body = &pkg.body_markdown;
+    assert!(body.contains(
+        "- [x] The package name and version were matched against: a test advisory fixture."
+    ));
+    assert!(
+        body.contains("- [ ] Reachability was not analysed; the match records `PRESENT_ONLY`.")
+    );
+    assert!(body.contains("- [ ] The version bump was not applied, built or tested"));
+    assert!(body.contains("| **Lockfile** | `package.json` |"));
+    assert!(body.contains("https://github.com/Taiizor/Sentra"));
+    for claim in [
+        "canonical",
+        "OSV",
+        "RustSec",
+        "Reachability confirmed",
+        "FailClosedBackend",
+        "sentra-sec",
+    ] {
+        assert!(!body.contains(claim), "body must not contain {claim:?}");
+    }
+}
+
+#[test]
+fn test_suggested_gh_command_is_safe_to_paste() {
+    // Regression: the command inlined the Markdown body and the lockfile version inside double
+    // quotes, so pasting it into a shell expanded backticks and `$(...)` from a scanned lockfile.
+    let advisory = Advisory {
+        id: "GHSA-p6mc-m468-83gw".to_string(),
+        package: "lodash".to_string(),
+        title: "Prototype Pollution in lodash".to_string(),
+        description: "Uses `merge` with $HOME and \"quotes\".".to_string(),
+        severity: Severity::Critical,
+        affected_version_reqs: vec!["< 4.17.21".to_string()],
+        patched_versions: vec!["4.17.21".to_string()],
+        published_at: "2020-07-16T00:00:00Z".to_string(),
+        aliases: vec![],
+    };
+    let advisory_match = AdvisoryMatch {
+        advisory,
+        package: "lodash".to_string(),
+        installed_version: "4.17.11-$(whoami)`id`%PATH%!x&calc|y;'z'\\\u{e7}".to_string(),
+        reachability: Reachability::PresentOnly,
+        recommended_patch: Some("4.17.21".to_string()),
+    };
+
+    let pkg = RemediationPrPackage::from_advisory_match(
+        &advisory_match,
+        "package-lock.json",
+        "HEAD",
+        "a test advisory fixture",
+    );
+
+    // The title keeps the raw version; only the suggested command is sanitized.
+    assert!(pkg.title.contains("4.17.11-$(whoami)"));
+    assert_eq!(
+        pkg.gh_command,
+        format!(
+            "gh pr create --draft --title \"[Security] Remediate GHSA-p6mc-m468-83gw: Bump lodash from 4.17.11-__whoami__id__PATH__x_calc_y__z___ to 4.17.21\" --head \"sentra/remediate-ghsa-p6mc-m468-83gw\" --body-file \"{}.md\"",
+            pkg.proposal_id
+        )
+    );
+    assert_eq!(pkg.gh_command.matches('"').count(), 6);
+    let quoted = pkg.gh_command.replace(" \"", " ").replace("\" ", " ");
+    for metacharacter in [
+        '$', '`', '\\', '!', '%', '&', '|', ';', '\'', '(', ')', '^', '\n',
+    ] {
+        assert!(
+            !quoted.contains(metacharacter),
+            "the suggested command must not contain {metacharacter:?}: {}",
+            pkg.gh_command
+        );
+    }
+    assert!(!pkg.gh_command.contains("Prototype Pollution"));
 }
 
 #[test]
@@ -85,4 +167,12 @@ fn test_remediation_pr_from_static_finding() {
     assert!(pkg.patch_diff.contains("--- a/src/config.rs"));
     assert!(pkg.patch_diff.contains("@@ -42,1 +42,1 @@"));
     assert!(pkg.is_draft_only);
+
+    // The finding carries no fix: the body says so instead of ticking verification checks.
+    assert!(
+        pkg.body_markdown
+            .contains("- [ ] No fix was written, applied, built or tested")
+    );
+    assert!(!pkg.body_markdown.contains("- [x]"));
+    assert!(!pkg.body_markdown.contains("FailClosedBackend"));
 }

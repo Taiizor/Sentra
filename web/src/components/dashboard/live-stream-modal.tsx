@@ -58,7 +58,7 @@ const MAX_LOG_ENTRIES = 4000
 const STAGE_LABEL: Record<StageName, string> = {
   sast: 'Static analysis',
   dependency: 'Dependency audit',
-  codeql: 'CodeQL language probe',
+  codeql: 'CodeQL (language probe, host analysis when enabled)',
   persist: 'Persist run and reconcile findings',
 }
 
@@ -86,15 +86,16 @@ const KIND_OPTIONS: { kind: ScanKind; label: string; icon: typeof Layers; descri
   },
   {
     kind: 'codeql',
-    label: 'CodeQL language probe',
+    label: 'CodeQL',
     icon: Code2,
-    description: 'Counts files per CodeQL language (`sentra codeql`). CodeQL itself is not run.',
+    description:
+      'Counts files per CodeQL language (`sentra codeql`). When an admin enabled CodeQL host analysis (Settings > CodeQL), also runs `sentra codeql analyze` on the bridge host with build mode none; otherwise CodeQL is not run and the stage says why.',
   },
   {
     kind: 'all',
     label: 'All stages',
     icon: Layers,
-    description: 'Runs static analysis, the dependency audit and the CodeQL probe in one run.',
+    description: 'Runs static analysis, the dependency audit and the CodeQL stage in one run.',
   },
 ]
 

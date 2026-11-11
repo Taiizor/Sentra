@@ -15,7 +15,7 @@ Before installing and compiling Sentra from source, verify that your development
 - Paths must use forward slashes (`/`) consistently across all tooling.
 
 ### 1.2 Toolchain & Compilers
-- **Rust & Cargo:** Version 1.80+ (tested on stable 1.99.0 x64 MSVC).
+- **Rust & Cargo:** Version 1.88+ (edition 2024 with let-chains; tested on stable 1.99.0 x64 MSVC).
   ```powershell
   rustc --version
   cargo --version
@@ -57,7 +57,7 @@ The compiled binaries will be placed in `target/debug/sentra.exe` (or `target/re
 Sentra includes extensive integration test suites ensuring 100% fail-closed containment, memory safety, and cross-platform determinism.
 
 ### 3.1 Host Test Execution (Windows 11 MSVC)
-Run the complete workspace test suite (461 tests + 7 compile-fail doctests):
+Run the complete workspace test suite (on Windows 11 x64 on 2026-11-11: 780 tests and 7 compile-fail doctests passed, 5 tests ignored):
 
 ```powershell
 # Run all workspace unit and integration tests
@@ -104,8 +104,8 @@ Query workspace health, active session, and discovery metadata:
 sentra status --workspace ./my-project --database ./sentra.db --json
 ```
 
-### 4.4 Audit Dependency Advisories (Zero-Dependency)
-Scan package dependencies across 12 lockfile formats against OSV/RustSec advisories:
+### 4.4 Audit Dependency Advisories (Bundled Sample Only)
+Match the packages of the lockfiles at the workspace root (12 formats) against the small advisory sample bundled with Sentra (6 hand-written records, curated 2026-11-08). It is not a synchronized OSV or RustSec feed, so a clean result says nothing about advisories outside the sample; advisories are matched by package name and version only, without comparing ecosystems. `sentra sync-advisories` only checks that local OSV JSON parses and persists nothing. See [LIMITATIONS.md](LIMITATIONS.md#6-web-console-and-pinned-core-commands).
 ```powershell
 sentra audit --workspace ./my-project --database ./sentra.db --json
 ```

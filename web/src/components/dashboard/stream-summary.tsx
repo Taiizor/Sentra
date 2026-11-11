@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { SEVERITIES, type LockfileView, type ScanRunView } from '@/types/api'
 import { formatCount, formatDateTime } from './console-format'
 import { CopyButton, KeyValue, SeverityBadge } from './console-kit'
+import { codeqlAnalysisOutcome, codeqlOutcomeLabel } from './findings-format'
 
 /** Renders the persisted result of one scan run exactly as the bridge reported it. */
 export function ScanRunSummaryView({ run }: { run: ScanRunView }) {
@@ -119,7 +120,7 @@ export function ScanRunSummaryView({ run }: { run: ScanRunView }) {
               {(summary.codeql.suggestedCreateCommand || summary.codeql.suggestedAnalyzeCommand) && (
                 <div className="flex flex-col gap-1.5">
                   <span className="text-[11px] text-muted-foreground">
-                    Suggested commands (Sentra counts files by extension; it never runs CodeQL):
+                    Suggested commands printed by the language probe (the probe counts files by extension and does not run CodeQL):
                   </span>
                   {[summary.codeql.suggestedCreateCommand, summary.codeql.suggestedAnalyzeCommand]
                     .filter((command): command is string => !!command)
@@ -133,6 +134,41 @@ export function ScanRunSummaryView({ run }: { run: ScanRunView }) {
                       </div>
                     ))}
                 </div>
+              )}
+            </SummarySection>
+          )}
+
+          {summary.codeqlAnalysis && (
+            <SummarySection icon={<Code2 className="size-3.5 text-violet-400" />} title="CodeQL host analysis">
+              <div className="flex flex-wrap gap-4">
+                <KeyValue label="Outcome">
+                  <span className={codeqlAnalysisOutcome(summary.codeqlAnalysis, summary.stageErrors) === 'failed' ? 'text-rose-300' : undefined}>
+                    {codeqlOutcomeLabel(summary.codeqlAnalysis, summary.stageErrors)}
+                  </span>
+                </KeyValue>
+                {summary.codeqlAnalysis.codeqlVersion && <KeyValue label="CodeQL">{summary.codeqlAnalysis.codeqlVersion}</KeyValue>}
+                {summary.codeqlAnalysis.suite && <KeyValue label="Suite">{summary.codeqlAnalysis.suite}</KeyValue>}
+                {codeqlAnalysisOutcome(summary.codeqlAnalysis, summary.stageErrors) === 'analyzed' && (
+                  <KeyValue label="Results">{formatCount(summary.codeqlAnalysis.resultsTotal)}</KeyValue>
+                )}
+              </div>
+              <p className="text-xs text-zinc-300">{summary.codeqlAnalysis.message}</p>
+              {summary.codeqlAnalysis.languages.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {summary.codeqlAnalysis.languages.map((entry) => (
+                    <Badge key={entry.language} variant="outline" className="font-mono text-[10px]" title={entry.reason ?? undefined}>
+                      {entry.language}: {entry.status}
+                      {entry.status === 'analyzed' ? ` (${entry.results})` : ''}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              {summary.codeqlAnalysis.warnings.length > 0 && (
+                <ul className="list-disc pl-4 text-[11px] text-amber-300/90">
+                  {summary.codeqlAnalysis.warnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
               )}
             </SummarySection>
           )}

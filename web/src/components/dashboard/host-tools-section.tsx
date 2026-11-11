@@ -11,7 +11,7 @@ import type { SystemStatus, ToolAvailability } from '@/types/api'
 import {
   describeToolPath,
   describeToolSearchScope,
-  EXECUTABLE_SOURCE_LABEL,
+  toolSourceLabel,
   formatDateTime,
   hasConfiguredPath,
   isChosenPath,
@@ -225,7 +225,7 @@ function ToolRow({ tool, search, actions }: { tool: ToolAvailability; search: To
               <span className="truncate font-mono text-[11px] text-zinc-300">{tool.path}</span>
               <span className="truncate text-[10px] text-muted-foreground">
                 {tool.source ? (
-                  <span className={chosen ? 'text-sky-300' : undefined}>{EXECUTABLE_SOURCE_LABEL[tool.source] ?? tool.source}</span>
+                  <span className={chosen ? 'text-sky-300' : undefined}>{toolSourceLabel(tool)}</span>
                 ) : (
                   'outside the searched directories'
                 )}

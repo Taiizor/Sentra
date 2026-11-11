@@ -32,7 +32,8 @@ import { buildSarif, readRepositoryUrl, SARIF_FINGERPRINT_KEY, sarifLevel } from
 import { createScanService, mapCodeqlProbe } from "../services/scans.ts";
 import { SettingsStore } from "../services/settings-store.ts";
 import type { TenantRecord } from "../services/workspaces.ts";
-import { ToolPathStore } from "../tool-paths.ts";
+import { TOOL_PATHS_SETTING, ToolPathStore } from "../tool-paths.ts";
+import { createCodeqlService } from "../services/codeql.ts";
 import { hostExecutableName, hostNativeHeader } from "./native-header.ts";
 
 const cleanup: { dirs: string[]; dbs: Database[] } = { dirs: [], dbs: [] };
@@ -272,7 +273,7 @@ describe("reconciliation", () => {
     const counts = findingCounts(db, "t1", "C:/ws");
     expect(counts.openTotal).toBe(2);
     expect(counts.bySeverity).toMatchObject({ Critical: 0, High: 1, Medium: 1 });
-    expect(counts.bySource).toEqual({ sast: 1, dependency: 1 });
+    expect(counts.bySource).toEqual({ sast: 1, dependency: 1, codeql: 0 });
     expect(counts.byTriage).toEqual({ untriaged: 2, confirmed: 0, needs_validation: 0, rejected: 1 });
     expect(riskScoreValue(counts.bySeverity)).toBe(100 - 7 - 3);
     expect(listFindings(db, "t1", "C:/ws", { state: "all" }).find((finding) => finding.fingerprint === "c1")?.triage).toEqual({
@@ -429,6 +430,8 @@ function pipelineHarness(handler: CliHandler, fetcher?: OsvFetcher, executables:
   const toolPaths = new ToolPathStore(settings);
   const audit = new AuditLog(db, crypto.randomBytes(32));
   const workspace = tempDir("sentra-scans-ws-");
+  const dataDir = tempDir("sentra-scans-data-");
+  const codeql = createCodeqlService(settings, { dataDir }, { cpus: 8, memoryMb: 16_384 });
   const tenant: TenantRecord = {
     tenantId: "t1",
     name: "Test",
@@ -443,6 +446,7 @@ function pipelineHarness(handler: CliHandler, fetcher?: OsvFetcher, executables:
   };
   const calls: string[][] = [];
   const cli = {
+    available: () => true,
     run: async (args: string[], options: CliRunOptions = {}) => {
       calls.push(args);
       return handler(args, options);
@@ -461,7 +465,8 @@ function pipelineHarness(handler: CliHandler, fetcher?: OsvFetcher, executables:
     audit,
     cli,
     osv,
-    config: { cliLongTimeoutMs: 5_000, cliTimeoutMs: 5_000, ghBin: null },
+    config: { cliLongTimeoutMs: 5_000, cliTimeoutMs: 5_000, ghBin: null, codeqlBin: null, tmpDir: path.join(dataDir, "tmp"), dataDir },
+    codeql,
     executables,
     hostPlatform: new HostPlatform({ run: async () => ({ code: 1, stdout: "", timedOut: false }), readTextFile: async () => null }),
     toolPaths,
@@ -476,10 +481,16 @@ function pipelineHarness(handler: CliHandler, fetcher?: OsvFetcher, executables:
     },
   } as unknown as Omit<AppContext, "scans">;
   const service = createScanService(app, { osvFetcher: fetcher });
-  return { db, audit, settings, service, calls, workspace, osv, toolPaths };
+  return { db, audit, settings, service, calls, workspace, osv, toolPaths, codeql, dataDir };
 }
 
 const actor = { label: "alice", role: "operator" };
+
+/** Message of the completed codeql stage event. */
+function stageMessage(events: ScanStreamEvent[]): string {
+  const event = events.find((entry) => entry.type === "stage" && entry.stage === "codeql" && entry.status === "completed");
+  return event && "message" in event ? event.message : "";
+}
 
 function codeqlJson() {
   return { primary_language: "typescript", detected_languages: [{ language: "typescript", files_count: 2 }], database_create_command: null, database_analyze_command: null };
@@ -544,13 +555,13 @@ describe("scan pipeline", () => {
     );
   });
 
-  test("the codeql presence message uses the path set in the console, and says when it no longer works", async () => {
-    // Nothing on the searched PATH: only the configured folder can supply codeql.
+  test("a codeql path stored in the console is never run: with host analysis enabled the stage still finds no launcher", async () => {
+    // Nothing on the searched PATH: only the stored console folder could supply codeql.
     const emptyPath = tempDir("sentra-scans-empty-path-");
     const hostLocator = new ExecutableLocator({ env: { PATH: emptyPath, PATHEXT: ".EXE;.CMD" }, homedir: emptyPath, isDirectory: () => false });
     const harness = pipelineHarness(
       (args) => {
-        if (args[0] === "scan") return cliResult(scanJson([]));
+        if (args[0] === "codeql" && args[1] === "analyze") throw new Error("codeql analyze must not run");
         if (args[0] === "codeql") return cliResult(codeqlJson());
         throw new Error(`unexpected command ${args[0]}`);
       },
@@ -558,27 +569,19 @@ describe("scan pipeline", () => {
       hostLocator,
     );
     const bundle = tempDir("sentra-codeql-bundle-");
-    const codeqlFile = path.join(bundle, hostExecutableName("codeql"));
-    fs.writeFileSync(codeqlFile, hostNativeHeader(), { mode: 0o755 });
-    harness.toolPaths.set("codeql", bundle, "alice");
-    const stageMessage = (events: ScanStreamEvent[]) => {
-      const event = events.find((entry) => entry.type === "stage" && entry.stage === "codeql" && entry.status === "completed");
-      return event && "message" in event ? event.message : "";
-    };
-
+    fs.writeFileSync(path.join(bundle, hostExecutableName("codeql")), hostNativeHeader(), { mode: 0o755 });
+    fs.mkdirSync(path.join(bundle, "tools"));
+    fs.writeFileSync(path.join(bundle, ".codeqlmanifest.json"), "{}");
+    harness.settings.set(TOOL_PATHS_SETTING, { codeql: { path: bundle, setAt: "2026-11-10T00:00:00.000Z", setBy: "alice" } }, "alice");
+    harness.codeql.update({ enabled: true, acceptTerms: true }, "admin");
     const events: ScanStreamEvent[] = [];
     const run = await harness.service.run({ tenantId: "t1", kind: "codeql", trigger: "operator", actor, onEvent: (event) => events.push(event) });
-    expect(run.summary?.codeql?.codeqlInstalled).toBe(true);
-    expect(stageMessage(events)).toContain(`codeql is installed at ${codeqlFile} (path set in the console).`);
-
-    fs.rmSync(codeqlFile);
-    // The check is shared per search snapshot (like the tools table row); a new snapshot checks again.
-    await hostLocator.refresh();
-    const later: ScanStreamEvent[] = [];
-    const second = await harness.service.run({ tenantId: "t1", kind: "codeql", trigger: "operator", actor, onEvent: (event) => later.push(event) });
-    expect(second.summary?.codeql?.codeqlInstalled).toBe(false);
-    expect(stageMessage(later)).toContain("codeql is not found (searched");
-    expect(stageMessage(later)).toContain(`The codeql path set in the console cannot be used: No codeql executable in ${bundle}`);
+    expect(run.status).toBe("completed");
+    expect(run.summary?.codeql?.codeqlInstalled).toBe(false);
+    expect(run.summary?.codeqlAnalysis).toMatchObject({ attempted: false, skipReason: "launcher_unavailable" });
+    expect(stageMessage(events)).toContain("CodeQL host analysis did not run: No codeql launcher can be run");
+    expect(stageMessage(events)).toContain("codeql is not found (searched");
+    expect(harness.calls.some((args) => args[1] === "analyze")).toBe(false);
   });
 
   test("a failed stage marks the run failed and resolves nothing", async () => {

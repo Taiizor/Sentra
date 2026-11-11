@@ -25,7 +25,27 @@ export interface CliRunOptions {
   signal?: AbortSignal;
   /** Called with each decoded stdout/stderr chunk while the process runs. */
   onOutput?: (stream: "stdout" | "stderr", text: string) => void;
+  /**
+   * For commands started with `--cancel-on-stdin-eof` (`sentra codeql analyze`): stdin stays open
+   * while the core runs, and cancelling or timing out closes it instead of killing the core, so
+   * the core can kill its own process tree (on Unix CodeQL runs in a separate process group that
+   * a signal to the core would not reach). The core is killed only if it is still running
+   * `gracefulStopMs` later. The run settles once the core has exited, so a caller holding a lock
+   * for the duration of the command keeps it until the tree is gone. Cannot be combined with stdin.
+   */
+  cancelViaStdinEof?: boolean;
+  /** Grace period between closing stdin and killing the core (default GRACEFUL_STOP_MS). */
+  gracefulStopMs?: number;
+  /**
+   * Variables to set (a string) or remove (undefined) on top of the allowlisted environment. Only
+   * for variables the core itself reads, such as the ones it derives its default plugin directory
+   * from. Never pass credentials: the core forwards its environment to the adapters it starts.
+   */
+  env?: Readonly<Record<string, string | undefined>>;
 }
+
+/** Time the core gets to stop its own process tree after its stdin was closed. */
+export const GRACEFUL_STOP_MS = 30_000;
 
 export function cancelledBeforeStart(): HttpError {
   return new HttpError(499, "aborted", "The request was cancelled before the core process started");
@@ -156,11 +176,16 @@ const ENV_ALLOWLIST = [
   "LC_ALL",
 ];
 
-function childEnv(): Record<string, string> {
+/** The allowlisted bridge environment with `overrides` applied (undefined removes a variable). */
+export function childEnv(overrides: Readonly<Record<string, string | undefined>> = {}): Record<string, string> {
   const env: Record<string, string> = { NO_COLOR: "1" };
   for (const name of ENV_ALLOWLIST) {
     const value = process.env[name];
     if (value !== undefined) env[name] = value;
+  }
+  for (const [name, value] of Object.entries(overrides)) {
+    if (value === undefined) delete env[name];
+    else env[name] = value;
   }
   return env;
 }
@@ -198,12 +223,14 @@ export class SentraCli {
    * this so repeated or parallel page loads cannot each start a core process. The shared process
    * is not tied to one caller: a caller's `signal` only stops that caller from waiting, and the
    * run itself is bounded by its timeout. Failures to start (busy, missing binary) are not cached.
+   * `fresh` (an explicit refresh) never reuses a completed result: it joins a run still in
+   * progress, or starts a new one whose result replaces the kept one for later callers.
    */
-  async runShared(args: string[], options: { ttlMs: number; timeoutMs?: number; signal?: AbortSignal }): Promise<CliResult> {
+  async runShared(args: string[], options: { ttlMs: number; timeoutMs?: number; signal?: AbortSignal; fresh?: boolean }): Promise<CliResult> {
     const key = args.join("\u0000");
     const now = Date.now();
     const existing = this.shared.get(key);
-    if (existing && (existing.settledAt === null || now - existing.settledAt < options.ttlMs)) {
+    if (existing && (existing.settledAt === null || (!options.fresh && now - existing.settledAt < options.ttlMs))) {
       return untilAborted(existing.promise, options.signal);
     }
     if (this.shared.size >= MAX_SHARED_ENTRIES) {
@@ -243,14 +270,15 @@ export class SentraCli {
     try {
       // The caller may have gone away while the run waited for a slot.
       if (options.signal?.aborted) throw cancelledBeforeStart();
+      const keepStdinOpen = options.cancelViaStdinEof === true && options.stdin === undefined;
       const child = Bun.spawn([this.binaryPath, ...args], {
         cwd: this.cwd,
-        stdin: options.stdin !== undefined ? "pipe" : "ignore",
+        stdin: options.stdin !== undefined || keepStdinOpen ? "pipe" : "ignore",
         stdout: "pipe",
         stderr: "pipe",
         windowsHide: true,
         // Credentials (GitHub tokens, provider keys) never reach the core or plugin adapters.
-        env: childEnv(),
+        env: childEnv(options.env),
       });
       if (options.stdin !== undefined && child.stdin) {
         child.stdin.write(options.stdin);
@@ -265,11 +293,23 @@ export class SentraCli {
           // process already exited
         }
       };
+      let graceTimer: ReturnType<typeof setTimeout> | null = null;
+      // Asks the core to stop (closes its stdin) and kills it only if it is still running later.
+      const stop = () => {
+        if (!keepStdinOpen) return kill();
+        if (graceTimer) return;
+        try {
+          void Promise.resolve(child.stdin?.end()).catch(() => {});
+        } catch {
+          // stdin already closed
+        }
+        graceTimer = setTimeout(kill, options.gracefulStopMs ?? GRACEFUL_STOP_MS);
+      };
       const timer = setTimeout(() => {
         timedOut = true;
-        kill();
+        stop();
       }, timeoutMs);
-      const onAbort = () => kill();
+      const onAbort = () => stop();
       options.signal?.addEventListener("abort", onAbort, { once: true });
 
       const collect = async (stream: ReadableStream<Uint8Array>, name: "stdout" | "stderr"): Promise<string> => {
@@ -297,6 +337,14 @@ export class SentraCli {
       const [stdout, stderr] = await Promise.all([collect(child.stdout, "stdout"), collect(child.stderr, "stderr")]);
       const code = await child.exited;
       clearTimeout(timer);
+      if (graceTimer) clearTimeout(graceTimer);
+      if (keepStdinOpen) {
+        try {
+          void Promise.resolve(child.stdin?.end()).catch(() => {});
+        } catch {
+          // already closed
+        }
+      }
       options.signal?.removeEventListener("abort", onAbort);
       const durationMs = Math.round(performance.now() - started);
 
@@ -339,26 +387,55 @@ export function requireJson<T = Record<string, unknown>>(command: string, result
   return result.json as T;
 }
 
-/** Builds an HttpError from a failed CLI invocation without echoing unbounded output. */
-export function cliFailure(command: string, result: CliResult): HttpError {
-  let coreCode: string | undefined;
-  for (const candidate of [result.stdout, result.stderr]) {
+/** Longest core error message passed on to clients (the core already strips control characters). */
+export const MAX_CORE_MESSAGE_CHARS = 500;
+
+/**
+ * A core- or adapter-supplied message made safe to show: control characters become spaces,
+ * whitespace is collapsed and the text is cut at MAX_CORE_MESSAGE_CHARS. Null when nothing is left.
+ */
+export function sanitizeCoreMessage(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  // oxlint-disable-next-line no-control-regex -- intentional: removes C0/C1 control characters from a core message
+  const text = value.replace(/[\u0000-\u001f\u007f-\u009f]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!text) return null;
+  return text.length > MAX_CORE_MESSAGE_CHARS ? `${text.slice(0, MAX_CORE_MESSAGE_CHARS)}…` : text;
+}
+
+/** The core's JSON error document (`{schema_version, error, message, ...}`) printed on stderr or stdout, if any. */
+export function coreErrorDocument(result: Pick<CliResult, "stdout" | "stderr">): { code: string; message: string | null; details: Record<string, unknown> } | null {
+  for (const candidate of [result.stderr, result.stdout]) {
     const trimmed = candidate.trim();
     if (!trimmed.startsWith("{")) continue;
     try {
       const parsed = JSON.parse(trimmed) as Record<string, unknown>;
       const value = parsed.error ?? parsed.code;
       if (typeof value === "string") {
-        coreCode = value;
-        break;
+        // `reason` carries the plugin adapter's own (sanitized) error text; `message` the core's explanation.
+        return { code: value, message: sanitizeCoreMessage(parsed.message) ?? sanitizeCoreMessage(parsed.reason), details: parsed };
       }
     } catch {
       // not JSON
     }
   }
+  return null;
+}
+
+/**
+ * Builds an HttpError from a failed CLI invocation without echoing unbounded output. The core's
+ * error code and its message (for plugin failures the adapter's reported reason) are passed on,
+ * bounded and with control characters removed.
+ */
+export function cliFailure(command: string, result: CliResult): HttpError {
+  const core = coreErrorDocument(result);
   const stderrLine = result.stderr.trim().split(/\r?\n/).slice(0, 3).join(" ").slice(0, 400);
-  const message = coreCode
-    ? `sentra ${command} failed: ${coreCode}`
+  const message = core
+    ? `sentra ${command} failed: ${core.code}${core.message ? `: ${core.message}` : ""}`
     : `sentra ${command} exited with code ${result.code}${stderrLine ? `: ${stderrLine}` : ""}`;
-  return new HttpError(422, "core_command_failed", message, { command, exitCode: result.code, coreError: coreCode ?? null });
+  return new HttpError(422, "core_command_failed", message, {
+    command,
+    exitCode: result.code,
+    coreError: core?.code ?? null,
+    coreMessage: core?.message ?? null,
+  });
 }

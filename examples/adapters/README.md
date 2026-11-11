@@ -2,11 +2,11 @@
 
 This directory contains protocol examples and documentation for extending the **Sentra Security Platform** with the **Subprocess Plugin Architecture** (`REQ-F16`, [`docs/EXTENSIONS.md`](../../docs/EXTENSIONS.md)).
 
-> **These adapters are examples, not production integrations.** They return simulated or synthetic results, including placeholder evidence labels; the Snyk example always reports the same two sample vulnerabilities and never calls Snyk. Treat their output as test data.
+> **These adapters are examples, not production integrations.** The Snyk and Ollama examples return simulated or synthetic results with placeholder evidence labels: the Snyk example always reports the same two sample vulnerabilities and never calls Snyk, and the Ollama example returns a fixed sample patch when its local daemon does not answer. Treat their output as test data. The Semgrep example runs a locally installed Semgrep CLI on the workspace with local rules only and never fabricates findings; it has been tested with a stand-in `semgrep` executable, not with a real Semgrep (see [its README](./sentra-adapter-semgrep/README.md)).
 >
 > **Nothing loads them implicitly.** To try them, pass this directory explicitly (`sentra plugin list --dir examples/adapters`) or point `SENTRA_PLUGIN_DIR` at it. Running `probe` or `run` starts the adapter process with your user's privileges.
 >
-> **What the host enforces:** the session deadline (`max_execution_time_secs`), the frame size (`max_frame_bytes`), the cumulative stdout + stderr volume (`max_total_output_bytes`), a cleared environment and process-tree termination. `max_memory_mib` and `egress_policy` are declared only and are **not enforced**; the Semgrep example's `p/security-audit` ruleset is downloaded from the Semgrep registry despite `strictly_denied`. See [`docs/PLUGINS_GUIDE.md`](../../docs/PLUGINS_GUIDE.md#7-security-model-and-residual-risks).
+> **What the host enforces:** the session deadline (`max_execution_time_secs`), the frame size (`max_frame_bytes`), the cumulative stdout + stderr volume (`max_total_output_bytes`), a cleared environment and process-tree termination. `max_memory_mib` and `egress_policy` are declared only and are **not enforced**. The Semgrep example keeps its `strictly_denied` declaration by refusing registry rulesets and URLs and turning Semgrep's metrics and version check off; nothing in the host stops it from using the network. See [`docs/PLUGINS_GUIDE.md`](../../docs/PLUGINS_GUIDE.md#7-security-model-and-residual-risks).
 
 ---
 
@@ -25,9 +25,9 @@ This directory contains protocol examples and documentation for extending the **
 
 | Adapter | Language / Runtime | Family | Declared Capabilities | Use Case |
 | :--- | :--- | :--- | :--- | :--- |
-| [**`sentra-adapter-semgrep`**](./sentra-adapter-semgrep/) | Python 3 | `analysis_tool` | `source_discovery`, `static_analysis` | Static taint analysis & rule matching via Semgrep CLI |
-| [**`sentra-adapter-snyk`**](./sentra-adapter-snyk/) | TypeScript ([Bun](https://bun.sh)) | `analysis_tool` | `dependency_audit` | Software composition analysis (SCA) via Snyk CLI |
-| [**`sentra-adapter-ollama`**](./sentra-adapter-ollama/) | Python 3 | `ai_provider` | `patch_generation` | Local LLM inference (Llama 3, DeepSeek) via a loopback Ollama daemon |
+| [**`sentra-adapter-semgrep`**](./sentra-adapter-semgrep/) | Python 3 (standard library) | `analysis_tool` | `static_analysis` | Runs a locally installed Semgrep CLI with local rules on the workspace and summarizes its findings |
+| [**`sentra-adapter-snyk`**](./sentra-adapter-snyk/) | TypeScript ([Bun](https://bun.sh)) | `analysis_tool` | `dependency_audit` | Protocol example: always reports the same two sample vulnerabilities; never calls Snyk or reads a lockfile |
+| [**`sentra-adapter-ollama`**](./sentra-adapter-ollama/) | Python 3 | `ai_provider` | `patch_generation` | Protocol example: asks a loopback Ollama daemon for a patch and returns only its size (a fixed sample when the daemon does not answer) |
 
 ---
 

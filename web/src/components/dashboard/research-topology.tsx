@@ -7,7 +7,7 @@ import { api } from '@/lib/api'
 import { useConsole } from '@/lib/console-context'
 import { useResource } from '@/lib/use-resource'
 import type { TenantView, ToolAvailability, TopologyReportView } from '@/types/api'
-import { EXECUTABLE_SOURCE_LABEL, formatDateTime, TOOL_USAGE_LABEL } from './console-format'
+import { formatDateTime, TOOL_USAGE_LABEL, toolSourceLabel } from './console-format'
 import { EmptyBlock, ErrorAlert, GatedButton, KeyValue, LoadingBlock, SectionCard } from './console-kit'
 import { LockfileList } from './stream-summary'
 
@@ -225,7 +225,7 @@ function Muted({ children }: { children: ReactNode }) {
  */
 function topologyToolTitle(tool: ToolAvailability): string {
   const lines = [tool.path ?? 'not found']
-  if (tool.path && tool.source) lines.push(`Found via: ${EXECUTABLE_SOURCE_LABEL[tool.source] ?? tool.source}`)
+  if (tool.path && tool.source) lines.push(`Found via: ${toolSourceLabel(tool)}`)
   if (tool.usage) lines.push(`Used by the bridge: ${TOOL_USAGE_LABEL[tool.usage]}`)
   return lines.join('\n')
 }

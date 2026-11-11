@@ -16,11 +16,15 @@ import {
 } from "./executables.ts";
 import { isArchEmulated, type HostPlatform } from "./host-platform.ts";
 import { CHOCOLATEY_SHIM_NOTE, isChocolateyShim, readScoopShimTarget } from "./shims.ts";
+import { chooseCodeqlLauncher, type CodeqlLauncherProbes, type LauncherChoice } from "./codeql-launcher.ts";
 import {
   accessProblem,
   checkToolPath,
+  CODEQL_PATH_HINT,
+  CODEQL_PINNED_HINT,
   GH_PATH_HINT,
   GH_PINNED_HINT,
+  ignoredCodeqlPathHint,
   hostToolPathProbes,
   isConfigurableTool,
   slowPathProblem,
@@ -60,8 +64,9 @@ export const TOOL_USAGE: Record<ToolName, { usage: ToolUsage; note: string }> = 
     note: "Runs this bridge process.",
   },
   codeql: {
+    // The default: CodeQL host analysis is off until an admin enables it (see describeTools).
     usage: "presence_only",
-    note: "Never executed. Scans and topology reports only record whether it is installed; their language probe is `sentra codeql`, which counts files by extension.",
+    note: "Not executed while CodeQL host analysis is disabled (the default): scans run the language probe `sentra codeql`, which counts files by extension, and topology reports record whether codeql is installed. An admin can enable host analysis in Settings > CodeQL after accepting the CodeQL licence terms; scans then run `sentra codeql analyze`, which runs codeql with --build-mode=none.",
   },
   semgrep: {
     usage: "not_used",
@@ -91,6 +96,12 @@ export interface HostToolsDeps extends HostFactsDeps {
   toolPaths: ConfiguredToolPaths;
   /** gh pinned by the host operator with SENTRA_GH_BIN (validated at startup); null when unset. */
   ghBin: string | null;
+  /** codeql pinned by the host operator with SENTRA_CODEQL_BIN (validated at startup); null or absent when unset. */
+  codeqlBin?: string | null;
+  /** True while CodeQL host analysis is enabled with accepted terms (the codeql row then says it is executed). */
+  codeqlAnalysisEnabled?: boolean;
+  /** File-system probes for the codeql launcher check; defaults to the real host. */
+  codeqlProbes?: CodeqlLauncherProbes;
   /** File-system probes for configured paths; defaults to the real host (tests inject their own). */
   toolPathProbes?: (host: HostArch) => ToolPathProbes;
   /** Bound on one row from a configured path or SENTRA_GH_BIN (default TOOL_PATH_CHECK_TIMEOUT_MS; tests shorten it). */
@@ -98,8 +109,15 @@ export interface HostToolsDeps extends HostFactsDeps {
 }
 
 /** Reporting dependencies of the app. */
-export function hostToolsDeps(app: Pick<AppContext, "executables" | "hostPlatform" | "toolPaths" | "config">): HostToolsDeps {
-  return { executables: app.executables, hostPlatform: app.hostPlatform, toolPaths: app.toolPaths, ghBin: app.config.ghBin };
+export function hostToolsDeps(app: Pick<AppContext, "executables" | "hostPlatform" | "toolPaths" | "config"> & Partial<Pick<AppContext, "codeql">>): HostToolsDeps {
+  return {
+    executables: app.executables,
+    hostPlatform: app.hostPlatform,
+    toolPaths: app.toolPaths,
+    ghBin: app.config.ghBin,
+    codeqlBin: app.config.codeqlBin ?? null,
+    codeqlAnalysisEnabled: app.codeql?.analysisEnabled() ?? false,
+  };
 }
 
 export async function hostArch(deps: Pick<HostFactsDeps, "hostPlatform">): Promise<HostArch> {
@@ -262,11 +280,16 @@ export function ghExecutionNote(located: LocatedExecutable, choice: ExecutionCho
 }
 
 /** Whether and how a tool's path can be set (independent of the host). */
-function pathControl(name: ToolName, ghBin: string | null): Pick<ToolAvailability, "pathConfigurable" | "pathHint"> {
+function pathControl(name: ToolName, ghBin: string | null, codeqlBin: string | null = null): Pick<ToolAvailability, "pathConfigurable" | "pathHint"> {
   if (isConfigurableTool(name)) return { pathConfigurable: true, pathHint: null };
   if (name === "gh") return { pathConfigurable: false, pathHint: ghBin ? GH_PINNED_HINT : GH_PATH_HINT };
+  if (name === "codeql") return { pathConfigurable: false, pathHint: codeqlBin ? CODEQL_PINNED_HINT : CODEQL_PATH_HINT };
   return { pathConfigurable: false, pathHint: null };
 }
+
+/** Usage note of the codeql row while CodeQL host analysis is enabled. */
+export const CODEQL_EXECUTED_NOTE =
+  "Executed: CodeQL host analysis is enabled in Settings > CodeQL, so the codeql stage of scans runs `sentra codeql analyze`, which runs codeql on the bridge host with --build-mode=none only (no autobuild, no build command, no tracing; languages that need a build are skipped). At most one analysis runs on the bridge at a time. The file run is SENTRA_CODEQL_BIN when the host operator sets it, otherwise a match on the process PATH or the persisted PATH (on Windows only codeql.exe), never a standard install location or a path set in the console.";
 
 /** The tool row from automatic detection alone (no configured path, no SENTRA_GH_BIN). */
 async function describeAutomaticTool(name: ToolName, deps: HostFactsDeps, snapshot: SearchSnapshot, host: HostArch, execPath: string): Promise<ToolAvailability> {
@@ -321,6 +344,10 @@ async function describeAutomaticTool(name: ToolName, deps: HostFactsDeps, snapsh
 export const GH_PINNED_NOTE =
   "The file run is the one SENTRA_GH_BIN names (set by the host operator); automatic detection is not used for gh while it is set.";
 
+/** Appended to the codeql usage note while SENTRA_CODEQL_BIN is set. */
+export const CODEQL_PINNED_NOTE =
+  "The file run (when host analysis is enabled) is the one SENTRA_CODEQL_BIN names (set by the host operator); automatic detection is not used for codeql while it is set.";
+
 /** Located copies that are not `file` (by path or file identity), at most four. */
 async function otherCopies(matches: readonly ExecutableMatch[], file: string, platform: NodeJS.Platform): Promise<string[]> {
   const identity = await fileIdentity(file);
@@ -365,12 +392,17 @@ async function selectedFileRow(
   };
 }
 
-/** The gh row while SENTRA_GH_BIN is set but its file cannot be used. */
-function brokenPinnedGhRow(base: ToolAvailability, ghBin: string, problem: string): ToolAvailability {
+/** Tools the host operator can pin with an environment variable, and that variable. */
+const PIN_VARIABLE = { gh: "SENTRA_GH_BIN", codeql: "SENTRA_CODEQL_BIN" } as const;
+type PinnableTool = keyof typeof PIN_VARIABLE;
+
+/** A pinned row (SENTRA_GH_BIN, SENTRA_CODEQL_BIN) whose file cannot be used. */
+function brokenPinnedRow(base: ToolAvailability, tool: PinnableTool, file: string, problem: string): ToolAvailability {
+  const variable = PIN_VARIABLE[tool];
   return {
     ...base,
     available: false,
-    path: ghBin,
+    path: file,
     resolvedPath: null,
     resolvedVia: null,
     source: "environment",
@@ -378,28 +410,79 @@ function brokenPinnedGhRow(base: ToolAvailability, ghBin: string, problem: strin
     onProcessPath: false,
     binary: null,
     shadowed: [],
-    configuredPathProblem: `SENTRA_GH_BIN: ${problem} gh cannot be run until this is fixed; automatic detection is not used for gh while SENTRA_GH_BIN is set.`,
+    configuredPathProblem: `${variable}: ${problem} ${tool} cannot be run until this is fixed; automatic detection is not used for ${tool} while ${variable} is set.`,
   };
 }
 
-function pinnedGhBase(row: ToolAvailability, ghBin: string): ToolAvailability {
-  return { ...row, usageNote: `${TOOL_USAGE.gh.note} ${GH_PINNED_NOTE}`, ...pathControl("gh", ghBin) };
+function pinnedBase(row: ToolAvailability, tool: PinnableTool, file: string): ToolAvailability {
+  if (tool === "gh") return { ...row, usageNote: `${TOOL_USAGE.gh.note} ${GH_PINNED_NOTE}`, ...pathControl("gh", file) };
+  return { ...row, ...pathControl("codeql", null, file) };
 }
 
 /**
- * The gh row while SENTRA_GH_BIN is set. There is no fallback to automatic detection: the bridge
- * runs the pinned file or nothing, and the row says so when the file is no longer usable.
+ * The row of a tool pinned by the host operator (SENTRA_GH_BIN, SENTRA_CODEQL_BIN). There is no
+ * fallback to automatic detection: the bridge runs the pinned file or nothing, and the row says so
+ * when the file is no longer usable.
  */
-async function pinnedGhRow(row: ToolAvailability, ghBin: string, deps: HostToolsDeps, snapshot: SearchSnapshot, host: HostArch): Promise<ToolAvailability> {
-  const base = pinnedGhBase(row, ghBin);
+async function pinnedRow(row: ToolAvailability, tool: PinnableTool, file: string, deps: HostToolsDeps, snapshot: SearchSnapshot, host: HostArch): Promise<ToolAvailability> {
+  const base = pinnedBase(row, tool, file);
   let problem: string | null = null;
   try {
-    if ((await toolPathProbesFor(deps, host).kind(ghBin)) !== "file") problem = `${ghBin} is not a regular file.`;
+    if ((await toolPathProbesFor(deps, host).kind(file)) !== "file") problem = `${file} is not a regular file.`;
   } catch (error) {
-    problem = accessProblem(ghBin, error);
+    problem = accessProblem(file, error);
   }
-  if (problem === null) return selectedFileRow(base, ghBin, "environment", deps, snapshot, host);
-  return brokenPinnedGhRow(base, ghBin, problem);
+  if (problem === null) return selectedFileRow(base, file, "environment", deps, snapshot, host);
+  return brokenPinnedRow(base, tool, file, problem);
+}
+
+/** The pinned file of a row, when the host operator set one. */
+function pinnedFile(name: ToolName, deps: HostToolsDeps): { tool: PinnableTool; file: string } | null {
+  if (name === "gh" && deps.ghBin) return { tool: "gh", file: deps.ghBin };
+  if (name === "codeql" && deps.codeqlBin) return { tool: "codeql", file: deps.codeqlBin };
+  return null;
+}
+
+const codeqlChoiceCache = new WeakMap<SearchSnapshot, Map<string, LauncherChoice>>();
+
+/** The codeql launcher choice for a snapshot (cached: it reads the launcher's directory). */
+export function codeqlLauncherChoice(deps: Pick<HostToolsDeps, "executables" | "codeqlBin" | "codeqlProbes">, snapshot: SearchSnapshot): LauncherChoice {
+  let entries = codeqlChoiceCache.get(snapshot);
+  if (!entries) {
+    entries = new Map();
+    codeqlChoiceCache.set(snapshot, entries);
+  }
+  const key = deps.codeqlBin ?? "";
+  const cached = entries.get(key);
+  if (cached) return cached;
+  const choice = chooseCodeqlLauncher(deps.codeqlBin ?? null, deps.executables, snapshot, deps.codeqlProbes);
+  entries.set(key, choice);
+  return choice;
+}
+
+/**
+ * The codeql row's usage (executed while host analysis is enabled, presence only otherwise), which
+ * file would be run, and why a path stored in the console by an earlier bridge is ignored.
+ */
+function finishCodeqlRow(row: ToolAvailability, deps: HostToolsDeps, snapshot: SearchSnapshot): ToolAvailability {
+  const choice = codeqlLauncherChoice(deps, snapshot);
+  const enabled = deps.codeqlAnalysisEnabled === true;
+  const runNote = deps.codeqlBin
+    ? choice.problem
+      ? `${CODEQL_PINNED_NOTE} It cannot be run now: ${choice.problem}`
+      : CODEQL_PINNED_NOTE
+    : choice.path
+      ? `The file ${enabled ? "run" : "that would be run"} is ${choice.path}.`
+      : `No file qualifies to be run: ${choice.problem ?? "no launcher was found"}`;
+  const ignored = deps.toolPaths.ignored?.().codeql ?? null;
+  const control = pathControl("codeql", null, deps.codeqlBin ?? null);
+  return {
+    ...row,
+    usage: enabled ? "executed" : "presence_only",
+    usageNote: `${enabled ? CODEQL_EXECUTED_NOTE : TOOL_USAGE.codeql.note} ${runNote}`,
+    pathConfigurable: false,
+    pathHint: ignored ? `${control.pathHint} ${ignoredCodeqlPathHint(ignored)}` : control.pathHint,
+  };
 }
 
 /**
@@ -466,10 +549,11 @@ async function boundedRow(compute: Promise<ToolAvailability>, ms: number, target
  */
 function applyPathSelection(row: ToolAvailability, deps: HostToolsDeps, snapshot: SearchSnapshot, host: HostArch, configured: StoredToolPaths): Promise<ToolAvailability> {
   const ms = selectionTimeout(deps);
-  const ghBin = deps.ghBin;
-  if (row.name === "gh" && ghBin) {
-    return perSnapshot(snapshot, `gh\0${ghBin}`, () =>
-      boundedRow(pinnedGhRow(row, ghBin, deps, snapshot, host), ms, ghBin, (problem) => brokenPinnedGhRow(pinnedGhBase(row, ghBin), ghBin, problem)),
+  const pinned = pinnedFile(row.name as ToolName, deps);
+  if (pinned) {
+    const { tool, file } = pinned;
+    return perSnapshot(snapshot, `${tool}\0${file}`, () =>
+      boundedRow(pinnedRow(row, tool, file, deps, snapshot, host), ms, file, (problem) => brokenPinnedRow(pinnedBase(row, tool, file), tool, file, problem)),
     );
   }
   if (!isConfigurableTool(row.name)) return Promise.resolve(row);
@@ -548,10 +632,22 @@ export async function describeTools(deps: HostToolsDeps, options: { snapshot?: S
   const execPath = options.execPath ?? process.execPath;
   const automatic = await automaticTools(deps, snapshot, execPath);
   const configured = deps.toolPaths.list();
-  if (deps.ghBin === null && Object.keys(configured).length === 0) return automatic;
-  const host = await hostArch(deps);
-  return Promise.all(automatic.map((row) => applyPathSelection(row, deps, snapshot, host, configured)));
+  const finish = (rows: ToolAvailability[]) => rows.map((row) => (row.name === "codeql" ? finishCodeqlRow(row, deps, snapshot) : row));
+  if (deps.ghBin !== null || deps.codeqlBin || Object.keys(configured).length > 0) {
+    const host = await hostArch(deps);
+    return finish(await Promise.all(automatic.map((row) => applyPathSelection(row, deps, snapshot, host, configured))));
+  }
+  // Without chosen paths the finished rows depend only on the snapshot's rows and the codeql
+  // state, so repeated requests of a snapshot share them.
+  const key = `${deps.codeqlAnalysisEnabled === true}\0${deps.toolPaths.ignored?.().codeql?.path ?? ""}`;
+  const cached = finishedCache.get(automatic);
+  if (cached && cached.key === key) return cached.rows;
+  const rows = finish(automatic);
+  finishedCache.set(automatic, { key, rows });
+  return rows;
 }
+
+const finishedCache = new WeakMap<ToolAvailability[], { key: string; rows: ToolAvailability[] }>();
 
 /** Where the reporting layer finds a tool: its configured path when usable, else automatic detection. */
 export interface ReportedToolLocation {

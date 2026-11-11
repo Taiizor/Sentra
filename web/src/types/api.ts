@@ -119,8 +119,19 @@ export interface SessionInfo {
  *   configuredPath, configuredPathProblem, pathConfigurable and pathHint; PUT and DELETE
  *   /api/system/tools/:name set and clear a console-configured tool path (SetToolPathRequest,
  *   SetToolPathResponse).
+ * - 4: PluginsView adds directory, directorySource, directoryExists, diagnostics, hasErrors and
+ *   hint (pluginDir stays as a deprecated alias of directory). Without SENTRA_PLUGIN_DIR the bridge
+ *   now uses the core's platform default plugin directory, so configured can be true while
+ *   SENTRA_PLUGIN_DIR is unset.
+ * - 5: CodeQL results. FindingSource adds 'codeql'; FindingView adds origin and codeql;
+ *   OverviewView.openFindings.bySource adds codeql; ScanRunSummary adds codeqlAnalysis;
+ *   codeql is no longer a console-configurable tool (it is executed when CodeQL host analysis is
+ *   enabled; SENTRA_CODEQL_BIN pins it) and its row uses selection 'environment' for that
+ *   variable; GET/PUT /api/settings/codeql, POST /api/tenants/:id/codeql/import and
+ *   POST /api/tenants/:id/codeql/github-sync are new; CodeqlAnalysisView.outcome and
+ *   OverviewView.openFindings.codeqlByOrigin report a failed analysis and the per-origin counts.
  */
-export const API_CONTRACT_VERSION = 3
+export const API_CONTRACT_VERSION = 5
 
 export interface HealthResponse {
   status: 'ok'
@@ -172,7 +183,7 @@ export interface HostInfo {
  * Where a reported executable came from: a directory of the bridge's automatic search order
  * (process_path, persisted_system_path, persisted_user_path, well_known), a path an admin set in
  * the console (configured; reporting only, never run), or a path the host operator pinned with an
- * environment variable (environment; SENTRA_GH_BIN for gh).
+ * environment variable (environment; SENTRA_GH_BIN for gh, SENTRA_CODEQL_BIN for codeql).
  */
 export type ExecutableSource =
   | 'process_path'
@@ -199,7 +210,8 @@ export type ToolUsage = 'executed' | 'runtime' | 'presence_only' | 'not_used'
 
 /**
  * How a tool row's path was chosen: automatic detection, a path an admin set in the console, or
- * an environment variable set by the host operator (SENTRA_GH_BIN for gh).
+ * an environment variable set by the host operator (SENTRA_GH_BIN for gh, SENTRA_CODEQL_BIN for
+ * codeql).
  */
 export type ToolPathSelection = 'automatic' | 'configured' | 'environment'
 
@@ -241,11 +253,14 @@ export interface ToolAvailability {
   configuredPathProblem: string | null
   /**
    * True when an admin may set this tool's path in the console (PUT /api/system/tools/:name).
-   * False for tools the bridge runs (gh) or that run the bridge (bun): a path entered in the web
-   * console never becomes a program the bridge runs.
+   * False for tools the bridge runs (gh, codeql) or that run the bridge (bun): a path entered in
+   * the web console never becomes a program the bridge runs.
    */
   pathConfigurable: boolean
-  /** For a tool whose path cannot be set in the console: how it can be set instead; null otherwise. */
+  /**
+   * For a tool whose path cannot be set in the console: how it can be set instead (and, for codeql,
+   * that a path stored in the console by an older bridge is ignored); null otherwise.
+   */
   pathHint: string | null
 }
 
@@ -473,10 +488,174 @@ export interface DependencyInventoryView {
 export interface CodeqlProbeView {
   primaryLanguage: string | null
   detectedLanguages: { language: string; filesCount: number }[]
-  /** Suggested commands only — CodeQL is never executed by Sentra. */
+  /** Suggested commands printed by the language probe; the probe itself never runs CodeQL. */
   suggestedCreateCommand: string | null
   suggestedAnalyzeCommand: string | null
   codeqlInstalled: boolean
+}
+
+// ───────────────────────────── CodeQL ─────────────────────────────
+
+/**
+ * How a CodeQL finding reached the bridge: host_analysis (Sentra ran `sentra codeql analyze` on the
+ * bridge host, build mode none), sarif_import (a CodeQL SARIF file produced elsewhere and uploaded
+ * by an operator) or github_code_scanning (open alerts of tool CodeQL read from the GitHub code
+ * scanning API for the tenant's repository). Each origin is reconciled on its own.
+ */
+export type FindingOrigin = 'host_analysis' | 'sarif_import' | 'github_code_scanning'
+export const FINDING_ORIGINS: readonly FindingOrigin[] = ['host_analysis', 'sarif_import', 'github_code_scanning']
+
+export type CodeqlSuite = 'code-scanning' | 'security-extended'
+
+/** Why CodeQL host analysis did not run in a scan (or would not run now). */
+export type CodeqlSkipReason =
+  | 'disabled'
+  | 'terms_not_accepted'
+  | 'launcher_unavailable'
+  | 'core_unavailable'
+  | 'analysis_busy'
+  | 'packs_missing'
+  | 'languages_need_build'
+  | 'no_languages'
+
+/** Per-language outcome reported by `sentra codeql analyze` / `sentra codeql import`. */
+export interface CodeqlLanguageResultView {
+  language: string
+  status: 'analyzed' | 'skipped' | 'failed'
+  reason: string | null
+  results: number
+  durationMs: number | null
+}
+
+/** Outcome of the CodeQL stage of a scan (ScanRunSummary.codeqlAnalysis). */
+/** What a scan's CodeQL host analysis did: analyzed at least one language, did not analyze any (skipReason says why), or failed. */
+export type CodeqlAnalysisOutcome = 'analyzed' | 'skipped' | 'failed'
+
+export interface CodeqlAnalysisView {
+  /**
+   * Absent in runs stored before this field existed; derive it from attempted, skipReason and the
+   * scan's stageErrors (see codeqlOutcome in the console).
+   */
+  outcome?: CodeqlAnalysisOutcome
+  /** True when `sentra codeql analyze` was started for this run (also when it then failed). */
+  attempted: boolean
+  /** Set when host analysis did not run (or reported no analyzed language); null when it analyzed at least one language. */
+  skipReason: CodeqlSkipReason | null
+  /** Why, in words, including what to change. */
+  message: string
+  codeqlVersion: string | null
+  suite: CodeqlSuite | null
+  packDownloadAllowed: boolean
+  languages: CodeqlLanguageResultView[]
+  resultsTotal: number
+  /** Results dropped because their path was absolute or left the workspace. */
+  resultsOutsideWorkspace: number
+  /** True when --max-results cut the result list; open host-analysis findings are then not resolved. */
+  truncated: boolean
+  warnings: string[]
+  durationMs: number | null
+}
+
+/** Stored per CodeQL finding (FindingView.codeql). */
+export interface CodeqlFindingDetails {
+  origin: FindingOrigin
+  language: string | null
+  /** CVSS-like `security-severity` from the query metadata (0.0-10.0); null when absent. */
+  securitySeverity: number | null
+  /** `problem.severity` of the query (error, warning, recommendation, note). */
+  problemSeverity: string | null
+  precision: string | null
+  cwes: string[]
+  tags: string[]
+  helpUri: string | null
+  startLine: number | null
+  endLine: number | null
+  startColumn: number | null
+  endColumn: number | null
+  /** Tool that produced the result (name and version as reported). */
+  toolName: string | null
+  toolVersion: string | null
+  /** GitHub code scanning only: owner/repo, alert number and web URL of the alert. */
+  repository: string | null
+  alertNumber: number | null
+  alertUrl: string | null
+  /** How the stored identity was derived. */
+  fingerprintSource: 'sarif_partial_fingerprint' | 'cli_digest' | 'github_alert_number'
+}
+
+/** Bridge setting `codeql_analysis`: CodeQL host analysis, off by default. */
+export interface CodeqlSettings {
+  enabled: boolean
+  termsAcceptedBy: string | null
+  termsAcceptedAt: string | null
+  allowPackDownload: boolean
+  suite: CodeqlSuite
+  timeoutMinutes: number
+  threads: number
+  ramMb: number | null
+}
+
+export interface CodeqlLauncherView {
+  available: boolean
+  /** The file `sentra codeql analyze --codeql` would receive; null when none qualifies. */
+  path: string | null
+  /** environment: SENTRA_CODEQL_BIN; otherwise the search source of the automatic choice. */
+  source: 'environment' | 'process_path' | 'persisted_system_path' | 'persisted_user_path' | null
+  /** Why no launcher qualifies, or why the pinned one cannot be used. */
+  problem: string | null
+  /** LICENSE.md next to the launcher (the CodeQL terms shipped with the distribution), when it exists. */
+  licenseFile: string | null
+}
+
+/** GET/PUT /api/settings/codeql. */
+export interface CodeqlSettingsView {
+  settings: CodeqlSettings
+  updatedAt: string | null
+  updatedBy: string | null
+  bounds: {
+    timeoutMinutes: { min: number; max: number }
+    threads: { min: number; max: number }
+    ramMb: { min: number; max: number }
+  }
+  launcher: CodeqlLauncherView
+  /** Explicit pack cache passed as --pack-cache (inside the bridge data directory). */
+  packCache: string
+  /** Null when a scan's CodeQL stage would start host analysis now; otherwise why not. */
+  skipReason: CodeqlSkipReason | null
+  skipMessage: string | null
+  /** The analysis running on this bridge (at most one at a time), if any. */
+  running: { tenantId: string; startedAt: string } | null
+  terms: { summary: string[]; location: string; referenceUrl: string }
+  isolationNote: string
+}
+
+export interface UpdateCodeqlSettingsRequest {
+  enabled?: boolean
+  /** Required (true) in the same request that sets enabled: true. */
+  acceptTerms?: boolean
+  allowPackDownload?: boolean
+  suite?: CodeqlSuite
+  timeoutMinutes?: number
+  threads?: number
+  ramMb?: number | null
+}
+
+/** Response of POST /api/tenants/:id/codeql/import and /codeql/github-sync. */
+export interface CodeqlIngestView {
+  origin: Exclude<FindingOrigin, 'host_analysis'>
+  tenantId: string
+  receivedAt: string
+  /** sarif_import: the SARIF tool; github_code_scanning: the repository read. */
+  sourceTool: { name: string; version: string | null } | null
+  repository: string | null
+  resultsTotal: number
+  resultsOutsideWorkspace: number
+  truncated: boolean
+  languages: CodeqlLanguageResultView[]
+  warnings: string[]
+  findings: { created: number; reopened: number; stillOpen: number; resolved: number }
+  /** What was reconciled and what was not resolved, in words. */
+  note: string
 }
 
 export interface ScanRunSummary {
@@ -492,6 +671,8 @@ export interface ScanRunSummary {
   /** Set when the dependency stage was skipped (e.g. OSV lookups disabled by policy). */
   dependencySkippedReason: string | null
   codeql: CodeqlProbeView | null
+  /** CodeQL host analysis outcome of the codeql stage; null when the stage did not run (absent on runs stored before contract 5). */
+  codeqlAnalysis: CodeqlAnalysisView | null
   newFindings: number
   resolvedFindings: number
   stillOpen: number
@@ -530,7 +711,8 @@ export type ScanStreamEvent =
   /** `status` is the HTTP status the same failure would have had as a JSON response (500 when unexpected). */
   | { type: 'error'; status: number; code: string; message: string }
 
-export type FindingSource = 'sast' | 'dependency'
+export type FindingSource = 'sast' | 'dependency' | 'codeql'
+export const FINDING_SOURCES: readonly FindingSource[] = ['sast', 'dependency', 'codeql']
 export type FindingState = 'open' | 'resolved'
 export type TriageVerdict = 'confirmed' | 'needs_validation' | 'rejected'
 
@@ -582,6 +764,10 @@ export interface FindingView {
   rationale: string | null
   taintTrace: TaintStepView[] | null
   dependency: DependencyFindingDetails | null
+  /** CodeQL findings only: how the result reached the bridge; null for SAST and dependency findings. */
+  origin: FindingOrigin | null
+  /** CodeQL findings only. */
+  codeql: CodeqlFindingDetails | null
   state: FindingState
   firstSeenAt: string
   lastSeenAt: string
@@ -617,6 +803,12 @@ export interface OverviewView {
     total: number
     bySeverity: Record<Severity, number>
     bySource: Record<FindingSource, number>
+    /**
+     * Open CodeQL findings per origin; they add up to bySource.codeql. Every origin is stored and
+     * counted on its own, so one CodeQL result reported by host analysis, a SARIF import and
+     * GitHub code scanning counts once per origin.
+     */
+    codeqlByOrigin: Record<FindingOrigin, number>
     /**
      * Every open finding by triage verdict. `rejected` counts open findings triaged as rejected,
      * which are excluded from `total`, so untriaged + confirmed + needs_validation = total.
@@ -1119,10 +1311,45 @@ export interface PluginView {
   declaredQuotas: { maxMemoryMib: number; maxExecutionTimeSecs: number } | null
 }
 
+/**
+ * Where the plugin directory in use comes from: SENTRA_PLUGIN_DIR in the bridge environment, the
+ * core's platform default (used only while SENTRA_PLUGIN_DIR is unset), or none.
+ */
+export type PluginDirectorySource = 'environment' | 'platform_default' | 'none'
+
+export type PluginDiagnosticSeverity = 'error' | 'warning' | 'info'
+
+/**
+ * One discovery diagnostic. Diagnostics from `sentra plugin list` are passed through unchanged
+ * (the core reports 'error' for a skipped entry and 'warning' for a loaded entry with a problem);
+ * the bridge adds its own about the directory itself (codes starting with plugin_dir_) and about
+ * listing entries it ignored (plugin_entry_ignored).
+ */
+export interface PluginDiagnosticView {
+  severity: PluginDiagnosticSeverity
+  /** Stable machine-readable code, for example manifest_invalid_json or duplicate_plugin_id. */
+  code: string
+  message: string
+  /** Directory or manifest the diagnostic is about, as reported; null when it names none. */
+  path: string | null
+}
+
 export interface PluginsView {
+  /** Plugin directory in use; null when there is none (directorySource 'none'). */
+  directory: string | null
+  directorySource: PluginDirectorySource
+  /** Whether the directory exists, checked on every listing (the bridge never creates it). */
+  directoryExists: boolean
+  /** @deprecated Same value as `directory`; kept for API clients written against contract 3. */
   pluginDir: string | null
+  /** True when a plugin directory is in use (directory is not null), even if it does not exist yet. */
   configured: boolean
   plugins: PluginView[]
+  diagnostics: PluginDiagnosticView[]
+  /** True when an entry was skipped (core has_errors) or a diagnostic has severity 'error'. */
+  hasErrors: boolean
+  /** What the host operator can do next; null when nothing is needed. */
+  hint: string | null
   note: string
 }
 

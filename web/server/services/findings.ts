@@ -1,7 +1,9 @@
 import type { Database } from "bun:sqlite";
 import crypto from "node:crypto";
 import type {
+  CodeqlFindingDetails,
   DependencyFindingDetails,
+  FindingOrigin,
   FindingSource,
   FindingState,
   FindingView,
@@ -215,6 +217,10 @@ export function findingIdFor(tenantId: string, workspace: string, fingerprint: s
 export interface CandidateFinding {
   fingerprint: string;
   source: FindingSource;
+  /** CodeQL candidates only: how the result reached the bridge. Null (or absent) for SAST and dependency candidates. */
+  origin?: FindingOrigin | null;
+  /** CodeQL candidates only. */
+  codeql?: CodeqlFindingDetails | null;
   ruleId: string;
   ruleName: string;
   cwe: string | null;
@@ -286,6 +292,7 @@ export interface FindingRow {
   workspace: string;
   fingerprint: string;
   source: FindingSource;
+  origin: FindingOrigin | null;
   rule_id: string;
   rule_name: string;
   cwe: string | null;
@@ -323,15 +330,25 @@ export const LEGACY_FIXED_VERSIONS_NOTE =
 function detailsJson(candidate: CandidateFinding): string | null {
   if (candidate.source === "dependency" && candidate.dependency) return JSON.stringify(candidate.dependency);
   if (candidate.source === "sast" && candidate.taintTrace) return JSON.stringify({ taintTrace: candidate.taintTrace });
+  if (candidate.source === "codeql" && candidate.codeql) return JSON.stringify(candidate.codeql);
   return null;
+}
+
+/** Stored CodeQL details, or null when the column is missing or not an object. */
+export function parseCodeqlDetails(raw: string | null): CodeqlFindingDetails | null {
+  const parsed = parseJsonColumn<CodeqlFindingDetails | null>(raw, null);
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
 }
 
 export function rowToFinding(row: FindingRow): StoredFinding {
   let taintTrace: TaintStepView[] | null = null;
   let dependency: DependencyFindingDetails | null = null;
+  let codeql: CodeqlFindingDetails | null = null;
   if (row.source === "sast") {
     const parsed = parseJsonColumn<{ taintTrace?: TaintStepView[] } | null>(row.details_json, null);
     taintTrace = Array.isArray(parsed?.taintTrace) ? parsed.taintTrace : null;
+  } else if (row.source === "codeql") {
+    codeql = parseCodeqlDetails(row.details_json);
   } else {
     dependency = parseJsonColumn<DependencyFindingDetails | null>(row.details_json, null);
     if (dependency && dependency.fixedVersionsNote === undefined) {
@@ -355,6 +372,8 @@ export function rowToFinding(row: FindingRow): StoredFinding {
     rationale: row.rationale,
     taintTrace,
     dependency,
+    origin: row.origin ?? null,
+    codeql,
     state: row.state,
     firstSeenAt: row.first_seen_at,
     lastSeenAt: row.last_seen_at,
@@ -375,6 +394,25 @@ export function toFindingView(finding: StoredFinding): FindingView {
   return view;
 }
 
+/**
+ * One reconciliation scope: a source and, for CodeQL, an origin. Candidates outside every scope are
+ * ignored, and only open findings of a scope can be resolved, so one origin never closes another's
+ * findings (a SARIF import never resolves a host-analysis finding, and the reverse).
+ */
+export interface ReconcileScope {
+  source: FindingSource;
+  /** Null for SAST and dependency findings. */
+  origin: FindingOrigin | null;
+  /**
+   * Which open findings of the scope this run covered (for example the languages and rules a
+   * CodeQL analysis ran, or the repository a GitHub sync read). Findings it does not cover are
+   * never resolved. Absent: the whole scope.
+   */
+  covers?: (finding: { details: unknown; ruleId: string }) => boolean;
+  /** False when the run saw only part of the scope (a truncated result list): nothing is resolved. Default true. */
+  resolve?: boolean;
+}
+
 export interface ReconcileInput {
   tenantId: string;
   /** The tenant's registered (canonical) workspace path; part of the finding identity. */
@@ -382,8 +420,14 @@ export interface ReconcileInput {
   runId: string;
   at: string;
   candidates: CandidateFinding[];
-  /** Sources whose stage completed in this run. Only these can be resolved. */
-  completedSources: FindingSource[];
+  /** Sources whose stage completed in this run (SAST and dependency; origin null). Only these can be resolved. */
+  completedSources?: FindingSource[];
+  /** Further completed scopes (CodeQL origins). */
+  scopes?: ReconcileScope[];
+}
+
+function scopeKey(source: FindingSource, origin: FindingOrigin | null | undefined): string {
+  return `${source}\u0000${origin ?? ""}`;
 }
 
 export interface ReconcileResult {
@@ -400,23 +444,28 @@ export interface ReconcileResult {
 /**
  * Reconciles one run's candidates against stored findings in a single transaction:
  * new → inserted open; seen again → last_seen refreshed (reopened when resolved);
- * open but not seen by a COMPLETED stage of the same source → resolved. Findings of a
- * source whose stage failed or was skipped are never resolved.
+ * open but not seen by a COMPLETED scope (source, and for CodeQL the origin) → resolved, limited
+ * to the findings the scope covered. Findings of a source whose stage failed or was skipped, of
+ * another origin, or outside what the scope covered are never resolved.
  */
 export function reconcileFindings(db: Database, input: ReconcileInput): ReconcileResult {
-  const completed = new Set(input.completedSources);
+  const scopes: ReconcileScope[] = [
+    ...(input.completedSources ?? []).map((source): ReconcileScope => ({ source, origin: null })),
+    ...(input.scopes ?? []),
+  ];
+  const completed = new Set(scopes.map((scope) => scopeKey(scope.source, scope.origin)));
   const unique = new Map<string, CandidateFinding>();
   for (const candidate of input.candidates) {
-    if (completed.has(candidate.source) && !unique.has(candidate.fingerprint)) unique.set(candidate.fingerprint, candidate);
+    if (completed.has(scopeKey(candidate.source, candidate.origin)) && !unique.has(candidate.fingerprint)) unique.set(candidate.fingerprint, candidate);
   }
   const apply = db.transaction((): ReconcileResult => {
     const result: ReconcileResult = { created: 0, reopened: 0, stillOpen: 0, resolved: 0 };
     const select = db.query("SELECT finding_id, state FROM findings WHERE tenant_id = ? AND workspace = ? AND fingerprint = ?");
     const insert = db.query(
-      `INSERT INTO findings (finding_id, tenant_id, workspace, fingerprint, source, rule_id, rule_name, cwe, severity, category,
+      `INSERT INTO findings (finding_id, tenant_id, workspace, fingerprint, source, origin, rule_id, rule_name, cwe, severity, category,
          file_path, line, snippet, rationale, package_name, package_version, advisory_id, details_json,
          first_seen_run, last_seen_run, first_seen_at, last_seen_at, state)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')`,
     );
     const update = db.query(
       `UPDATE findings SET rule_name = ?, cwe = ?, severity = ?, category = ?, file_path = ?, line = ?, snippet = ?, rationale = ?,
@@ -434,6 +483,7 @@ export function reconcileFindings(db: Database, input: ReconcileInput): Reconcil
           input.workspace,
           candidate.fingerprint,
           candidate.source,
+          candidate.source === "codeql" ? (candidate.origin ?? null) : null,
           candidate.ruleId,
           candidate.ruleName,
           candidate.cwe,
@@ -475,12 +525,26 @@ export function reconcileFindings(db: Database, input: ReconcileInput): Reconcil
       if (existing.state === "resolved") result.reopened += 1;
       else result.stillOpen += 1;
     }
-    const openOfSource = db.query("SELECT finding_id, fingerprint FROM findings WHERE tenant_id = ? AND workspace = ? AND source = ? AND state = 'open'");
+    const openOfScope = db.query(
+      "SELECT finding_id, fingerprint, rule_id, details_json FROM findings WHERE tenant_id = ? AND workspace = ? AND source = ? AND origin IS ? AND state = 'open'",
+    );
     const resolve = db.query("UPDATE findings SET state = 'resolved', resolved_run = ?, resolved_at = ? WHERE finding_id = ?");
-    for (const source of completed) {
-      const rows = openOfSource.all(input.tenantId, input.workspace, source) as { finding_id: string; fingerprint: string }[];
+    const resolvedScopes = new Set<string>();
+    for (const scope of scopes) {
+      if (scope.resolve === false) continue;
+      const key = scopeKey(scope.source, scope.origin);
+      // A scope listed twice is resolved once (the first entry wins).
+      if (resolvedScopes.has(key)) continue;
+      resolvedScopes.add(key);
+      const rows = openOfScope.all(input.tenantId, input.workspace, scope.source, scope.origin ?? null) as {
+        finding_id: string;
+        fingerprint: string;
+        rule_id: string;
+        details_json: string | null;
+      }[];
       for (const row of rows) {
         if (unique.has(row.fingerprint)) continue;
+        if (scope.covers && !scope.covers({ details: parseJsonColumn<unknown>(row.details_json, null), ruleId: row.rule_id })) continue;
         resolve.run(input.runId, input.at, row.finding_id);
         result.resolved += 1;
       }
@@ -495,6 +559,8 @@ export function reconcileFindings(db: Database, input: ReconcileInput): Reconcil
 export interface FindingFilter {
   state: FindingState | "all";
   source?: FindingSource;
+  /** CodeQL origin; only CodeQL findings have one. */
+  origin?: FindingOrigin;
   severity?: Severity;
 }
 
@@ -508,6 +574,10 @@ export function listFindings(db: Database, tenantId: string, workspace: string, 
   if (filter.source) {
     clauses.push("source = ?");
     params.push(filter.source);
+  }
+  if (filter.origin) {
+    clauses.push("origin = ?");
+    params.push(filter.origin);
   }
   if (filter.severity) {
     clauses.push("severity = ?");
@@ -574,6 +644,12 @@ export interface FindingCounts {
   openTotal: number;
   bySeverity: Record<Severity, number>;
   bySource: Record<FindingSource, number>;
+  /**
+   * Open CodeQL findings (not triaged as rejected) per origin; they add up to bySource.codeql.
+   * Each origin is stored and counted on its own, so one CodeQL result reported by host
+   * analysis, a SARIF import and GitHub code scanning counts once per origin.
+   */
+  codeqlByOrigin: Record<FindingOrigin, number>;
   byTriage: { untriaged: number; confirmed: number; needs_validation: number; rejected: number };
   resolved: number;
 }
@@ -581,12 +657,13 @@ export interface FindingCounts {
 /** Open totals exclude findings triaged as rejected; byTriage covers every open finding. */
 export function findingCounts(db: Database, tenantId: string, workspace: string): FindingCounts {
   const rows = db
-    .query("SELECT state, severity, source, triage_verdict FROM findings WHERE tenant_id = ? AND workspace = ?")
-    .all(tenantId, workspace) as { state: FindingState; severity: Severity; source: FindingSource; triage_verdict: TriageVerdict | null }[];
+    .query("SELECT state, severity, source, origin, triage_verdict FROM findings WHERE tenant_id = ? AND workspace = ?")
+    .all(tenantId, workspace) as { state: FindingState; severity: Severity; source: FindingSource; origin: FindingOrigin | null; triage_verdict: TriageVerdict | null }[];
   const counts: FindingCounts = {
     openTotal: 0,
     bySeverity: emptySeverityCounts(),
-    bySource: { sast: 0, dependency: 0 },
+    bySource: { sast: 0, dependency: 0, codeql: 0 },
+    codeqlByOrigin: { host_analysis: 0, sarif_import: 0, github_code_scanning: 0 },
     byTriage: { untriaged: 0, confirmed: 0, needs_validation: 0, rejected: 0 },
     resolved: 0,
   };
@@ -600,6 +677,7 @@ export function findingCounts(db: Database, tenantId: string, workspace: string)
     counts.openTotal += 1;
     counts.bySeverity[row.severity in counts.bySeverity ? row.severity : "Unknown"] += 1;
     counts.bySource[row.source] += 1;
+    if (row.source === "codeql" && row.origin && row.origin in counts.codeqlByOrigin) counts.codeqlByOrigin[row.origin] += 1;
   }
   return counts;
 }

@@ -1,15 +1,15 @@
 <div align="center">
   <img src="https://raw.githubusercontent.com/Taiizor/Sentra/develop/assets/sentra-logo.svg" width="100" height="100" alt="Sentra Logo" />
   <h1>sentra-cli</h1>
-  <p><strong>Command-Line Interface for Autonomous Security Research</strong></p>
+  <p><strong>Command-Line Interface for Sentra</strong></p>
 
   [![Crates.io](https://img.shields.io/crates/v/sentra-cli.svg)](https://crates.io/crates/sentra-cli)
   [![Documentation](https://docs.rs/sentra-cli/badge.svg)](https://docs.rs/sentra-cli)
-  [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+  [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](../../LICENSE)
   [![Safety](https://img.shields.io/badge/Unsafe-Forbidden-success.svg)](https://github.com/Taiizor/Sentra)
 </div>
 
-Command-line interface and terminal tools for [Sentra](https://github.com/Taiizor/Sentra) — an autonomous AI security research and independently verified remediation platform.
+Command-line interface and terminal tools for [Sentra](https://github.com/Taiizor/Sentra), an AI-assisted security research and remediation platform. Remediation output is a local preview; no patch is built, tested or verified (see [docs/LIMITATIONS.md](https://github.com/Taiizor/Sentra/blob/develop/docs/LIMITATIONS.md)).
 
 Provides the `sentra` binary.
 
@@ -66,7 +66,7 @@ sentra mcp --workspace ./my-project [--database ./sentra.db]
 sentra install claude --skill golang-security --workspace ./my-project --json
 sentra install mcp cursor --workspace ./my-project
 
-# Plugins load only from --dir or SENTRA_PLUGIN_DIR
+# Plugins load only from --dir or the default plugin directory (SENTRA_PLUGIN_DIR, else the platform plugin directory)
 sentra plugin list --dir ./examples/adapters
 ```
 

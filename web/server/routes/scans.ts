@@ -14,7 +14,7 @@ import type {
   SnippetScanView,
   TriageVerdict,
 } from "../../src/types/api.ts";
-import { SEVERITIES } from "../../src/types/api.ts";
+import { FINDING_ORIGINS, SEVERITIES } from "../../src/types/api.ts";
 import type { AppContext } from "../app-context.ts";
 import { nowIso } from "../db.ts";
 import { HttpError, json, sseResponse, type AuthedContext, type Router } from "../http.ts";
@@ -38,10 +38,11 @@ import { buildSarif, readRepositoryUrl } from "../services/sarif.ts";
 import { findRun, lastCompletedRunAt, lastResultRunAt, listRuns } from "../services/scans.ts";
 import { asObject, oneOf, requiredString } from "../validate.ts";
 import { actorOf, audited, intParam, tenantParam } from "./helpers.ts";
+import { pluginDirectoryResolver, requirePluginDirectory } from "./plugins.ts";
 
 const SCAN_KINDS: readonly ScanKind[] = ["sast", "dependency", "codeql", "all"];
 const FINDING_STATES: readonly (FindingState | "all")[] = ["open", "resolved", "all"];
-const FINDING_SOURCES: readonly FindingSource[] = ["sast", "dependency"];
+const FINDING_SOURCES: readonly FindingSource[] = ["sast", "dependency", "codeql"];
 const TRIAGE_VERDICTS: readonly TriageVerdict[] = ["confirmed", "needs_validation", "rejected"];
 const CONSOLE_COMMANDS: readonly ConsoleCommand[] = ["version", "status", "scan", "codeql", "inventory", "skills", "plugins"];
 
@@ -317,8 +318,9 @@ export function registerScanRoutes(router: Router, app: AppContext): void {
     const params = ctx.url.searchParams;
     const state = oneOf(params.get("state") ?? "open", "state", FINDING_STATES);
     const source = params.get("source") ? oneOf(params.get("source"), "source", FINDING_SOURCES) : undefined;
+    const origin = params.get("origin") ? oneOf(params.get("origin"), "origin", FINDING_ORIGINS) : undefined;
     const severity = params.get("severity") ? oneOf(params.get("severity"), "severity", SEVERITIES) : undefined;
-    const findings = listFindings(app.db, tenant.tenantId, tenant.workspace, { state, source, severity }).map(toFindingView);
+    const findings = listFindings(app.db, tenant.tenantId, tenant.workspace, { state, source, origin, severity }).map(toFindingView);
     return json({ findings });
   });
 
@@ -407,7 +409,7 @@ export function registerScanRoutes(router: Router, app: AppContext): void {
       lastRun: listRuns(app, tenant.tenantId, tenant.workspace, 1)[0] ?? null,
       lastCompletedRunAt: lastCompletedRunAt(app, tenant.tenantId, tenant.workspace),
       lastResultRunAt: lastResult,
-      openFindings: { total: counts.openTotal, bySeverity: counts.bySeverity, bySource: counts.bySource, byTriage: counts.byTriage },
+      openFindings: { total: counts.openTotal, bySeverity: counts.bySeverity, bySource: counts.bySource, codeqlByOrigin: counts.codeqlByOrigin, byTriage: counts.byTriage },
       resolvedFindings: counts.resolved,
       patches: patchCounts(app, tenant.tenantId),
       core: { ...session, taskCount: coreCounts.tasks, auditEventCount: coreCounts.auditEvents },
@@ -521,10 +523,8 @@ export function registerScanRoutes(router: Router, app: AppContext): void {
             args = ["skills", "list", "--json"];
             break;
           case "plugins":
-            if (!app.config.pluginDir) {
-              throw new HttpError(412, "plugins_not_configured", "No plugin directory is configured. An admin can set SENTRA_PLUGIN_DIR and restart the bridge.");
-            }
-            args = ["plugin", "list", "--dir", cliValue(app.config.pluginDir, "pluginDir"), "--json"];
+            // The same directory as the Plugins tab: SENTRA_PLUGIN_DIR, otherwise the core's platform default.
+            args = ["plugin", "list", "--dir", cliValue(await requirePluginDirectory(pluginDirectoryResolver(app)), "pluginDir"), "--json"];
             break;
         }
         const result = await app.cli.run(args, { timeoutMs: app.config.cliLongTimeoutMs, signal: ctx.req.signal });

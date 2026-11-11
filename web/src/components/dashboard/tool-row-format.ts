@@ -14,10 +14,22 @@ export const EXECUTABLE_SOURCE_LABEL: Record<ExecutableSource, string> = {
   persisted_user_path: 'user PATH (persisted)',
   well_known: 'standard install location',
   configured: 'set in console',
-  environment: 'SENTRA_GH_BIN',
+  environment: 'host environment variable',
 }
 
-/** True when the row's path was chosen (in the console or through SENTRA_GH_BIN) rather than found by the search. */
+/** The variable that pins a tool's path on the bridge host (selection 'environment'). */
+export function pinVariable(toolName: string): string {
+  return toolName === 'codeql' ? 'SENTRA_CODEQL_BIN' : 'SENTRA_GH_BIN'
+}
+
+/** Source label of a row: the pinning variable for an environment row, else the search source. */
+export function toolSourceLabel(tool: Pick<ToolAvailability, 'name' | 'source'>): string | null {
+  if (!tool.source) return null
+  if (tool.source === 'environment') return pinVariable(tool.name)
+  return EXECUTABLE_SOURCE_LABEL[tool.source] ?? tool.source
+}
+
+/** True when the row's path was chosen (in the console, or through SENTRA_GH_BIN / SENTRA_CODEQL_BIN) rather than found by the search. */
 export function isChosenPath(tool: ToolAvailability): boolean {
   return tool.selection === 'configured' || tool.selection === 'environment'
 }
@@ -70,10 +82,10 @@ export interface ToolStatus {
 
 /**
  * The chosen path of a row whose configuredPathProblem is set: a path set in the console, or, when
- * the row has none, SENTRA_GH_BIN (the only path set through the bridge environment, for gh).
+ * the row has none, the variable that pins it on the bridge host (SENTRA_GH_BIN, SENTRA_CODEQL_BIN).
  */
 function brokenPathName(tool: ToolAvailability): string {
-  return hasConfiguredPath(tool) ? `The path set in the console (${tool.configuredPath})` : 'The SENTRA_GH_BIN path'
+  return hasConfiguredPath(tool) ? `The path set in the console (${tool.configuredPath})` : `The ${pinVariable(tool.name)} path`
 }
 
 /** What the row shows instead of a broken chosen path, including when that file cannot run here either. */
@@ -83,7 +95,7 @@ function brokenPathFallback(tool: ToolAvailability): string {
     if (!cannotRunHere(tool.binary)) return found
     return `${found} Its header says it cannot run on this host:\n${describeCannotRun(tool.binary)}`
   }
-  return hasConfiguredPath(tool) ? 'Automatic detection did not find it either.' : `${tool.name} is reported as not found until SENTRA_GH_BIN is fixed.`
+  return hasConfiguredPath(tool) ? 'Automatic detection did not find it either.' : `${tool.name} is reported as not found until ${pinVariable(tool.name)} is fixed.`
 }
 
 function brokenPathDetail(tool: ToolAvailability): string {
@@ -100,7 +112,7 @@ export function toolStatus(tool: ToolAvailability): ToolStatus {
   if (tool.configuredPathProblem) {
     return {
       kind: 'configured_broken',
-      label: hasConfiguredPath(tool) ? 'configured path broken' : 'SENTRA_GH_BIN path broken',
+      label: hasConfiguredPath(tool) ? 'configured path broken' : `${pinVariable(tool.name)} path broken`,
       detail: brokenPathDetail(tool),
       title: `${brokenPathName(tool)} cannot be used: ${tool.configuredPathProblem}\n${brokenPathFallback(tool)}`,
     }
@@ -119,7 +131,7 @@ export function toolStatus(tool: ToolAvailability): ToolStatus {
 
 /** Example shown in the tool path field, in the bridge host's path syntax. */
 export function toolPathPlaceholder(tool: string, platform: string): string {
-  if (platform === 'win32') return tool === 'codeql' ? 'D:\\CodeQL' : `C:\\Tools\\${tool}\\${tool}.exe`
+  if (platform === 'win32') return `C:\\Tools\\${tool}\\${tool}.exe`
   if (platform === 'darwin') return `/opt/homebrew/bin/${tool}`
   return `/usr/local/bin/${tool}`
 }
@@ -140,7 +152,7 @@ export function describeToolSearchScope(toolSearch: ToolSearchStatus, platform: 
  * search; nothing about finding a tool runs it.
  */
 export function toolDetectionSummary(toolSearch: ToolSearchStatus, platform: string): string {
-  return `Found automatically by searching ${describeToolSearchScope(toolSearch, platform)}, unless a path was set in the console (or SENTRA_GH_BIN for gh). Finding a tool never runs it.`
+  return `Found automatically by searching ${describeToolSearchScope(toolSearch, platform)}, unless a path was set in the console (or SENTRA_GH_BIN for gh, SENTRA_CODEQL_BIN for codeql). Finding a tool never runs it.`
 }
 
 /** Context for tool tooltips; absent for stored topology reports, which do not record the search. */
@@ -164,7 +176,7 @@ export function otherCopiesLabel(tool: ToolAvailability): string | null {
 
 function otherCopiesHeading(tool: ToolAvailability): string {
   if (tool.usage === 'runtime') return 'Other installations (not the running executable):'
-  if (tool.selection === 'environment') return 'Other copies found by automatic detection (not run while SENTRA_GH_BIN is set):'
+  if (tool.selection === 'environment') return `Other copies found by automatic detection (not run while ${pinVariable(tool.name)} is set):`
   if (tool.selection === 'configured') return 'Other copies found by automatic detection (not reported while a path is set in the console):'
   return 'Later matches in search order:'
 }
@@ -196,7 +208,7 @@ export function describeToolPath(tool: ToolAvailability, search?: ToolSearchCont
     if (tool.source === 'configured') {
       lines.push('Path set in the console. The bridge checks that the file exists and can run on this host; it never runs it.')
     } else if (tool.source === 'environment') {
-      lines.push('Path set by SENTRA_GH_BIN in the bridge environment.')
+      lines.push(`Path set by ${pinVariable(tool.name)} in the bridge environment.`)
     } else if (tool.source) {
       lines.push(`Found via: ${EXECUTABLE_SOURCE_LABEL[tool.source] ?? tool.source}`)
       lines.push(tool.onProcessPath ? 'Visible on the bridge process PATH' : 'Not on the bridge process PATH')
@@ -230,7 +242,7 @@ export interface ToolActions {
   hint: string | null
 }
 
-/** Path actions an administrator gets for a row. gh (executed by the bridge) and bun (runs it) have none. */
+/** Path actions an administrator gets for a row. gh and codeql (executed by the bridge) and bun (runs it) have none. */
 export function toolActions(tool: ToolAvailability): ToolActions {
   if (!tool.pathConfigurable) return { edit: null, reset: null, hint: tool.pathHint ?? null }
   const configured = hasConfiguredPath(tool)
@@ -242,14 +254,7 @@ export function toolActions(tool: ToolAvailability): ToolActions {
   return { edit, reset, hint: null }
 }
 
-/**
- * Where a path set in the console is used, as the tool path dialog says it. Only codeql appears in
- * a scan message (the CodeQL stage); every tool appears in topology reports.
- */
+/** Where a path set in the console is used, as the tool path dialog says it (every tool appears in topology reports). */
 export function toolPathUsageText(tool: string): string {
-  const where =
-    tool === 'codeql'
-      ? 'on this page, in Settings → System, in the CodeQL stage message of scans and in topology reports'
-      : 'on this page, in Settings → System and in topology reports'
-  return `The path is used ${where}. Programs the bridge starts (the core CLI and plugin adapters) still look ${tool} up on the bridge process PATH.`
+  return `The path is used on this page, in Settings → System and in topology reports. Programs the bridge starts (the core CLI and plugin adapters) still look ${tool} up on the bridge process PATH.`
 }

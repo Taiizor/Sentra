@@ -1,6 +1,6 @@
 # Sentra Adapter: Snyk Dependency Auditor
 
-A reference subprocess adapter connecting Snyk Software Composition Analysis (SCA) with the **Sentra Security Platform**.
+A protocol example of a dependency-audit subprocess adapter for the **Sentra Security Platform**. It does not perform software composition analysis: it never starts the Snyk CLI, never contacts Snyk and never reads a lockfile's contents. Its results are fixed sample data.
 
 Authored in **TypeScript** and executed natively with [Bun](https://bun.sh).
 
@@ -8,7 +8,7 @@ Authored in **TypeScript** and executed natively with [Bun](https://bun.sh).
 
 ## Capabilities
 
-- **`dependency_audit`**: Inspects dependency lockfiles (npm, Yarn, pnpm, Cargo, pip, Composer) and evaluates known vulnerability databases.
+- **`dependency_audit`**: `probe` reports whether one of `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `Cargo.lock`, `requirements.txt`, `go.sum` or `composer.lock` exists at the workspace root (it only checks that the file exists). `execute` always returns the same summary, `Snyk audit detected 2 vulnerable package(s).`, built from two hard-coded sample vulnerabilities (axios 0.21.1 and lodash 4.17.15), and the placeholder evidence label `sha256:snyk-audit-<task id>`, whatever the workspace contains. Treat the output as test data.
 
 ---
 

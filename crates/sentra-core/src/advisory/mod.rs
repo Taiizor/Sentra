@@ -54,8 +54,8 @@ pub use multi_lock::{
 };
 pub use nuget_lock::parse_nuget_lock;
 pub use osv::{
-    OsvAffected, OsvPackage, OsvRange, OsvRecord, OsvSeverity, ingest_osv_directory,
-    parse_osv_payload,
+    OsvAffected, OsvDirectoryIngest, OsvPackage, OsvRange, OsvRecord, OsvSeverity,
+    ingest_osv_directory, ingest_osv_directory_report, parse_osv_payload,
 };
 pub use package_lock::parse_package_lock;
 pub use pnpm_lock::parse_pnpm_lock;

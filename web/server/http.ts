@@ -212,17 +212,41 @@ export interface SseChannel {
 }
 
 /**
+ * Interval of the SSE comment line (`: keep-alive`) written while a stream is open. Reverse proxies
+ * close a response that sends nothing for their read timeout (nginx 60 s by default, Cloudflare
+ * 100 s, IIS ARR 120 s); a CodeQL host analysis can be silent for many minutes, and a closed stream
+ * cancels the scan.
+ */
+export const SSE_KEEPALIVE_MS = 15_000;
+
+/**
  * Builds a Server-Sent Events response. `run` receives a channel and an AbortSignal that
- * fires when the client disconnects; the stream closes when `run` settles.
+ * fires when the client disconnects; the stream closes when `run` settles. A comment line is
+ * written every `keepAliveMs` while the stream is open (clients ignore comment lines).
  */
 export function sseResponse(
   request: Request,
   run: (channel: SseChannel, signal: AbortSignal) => Promise<void>,
+  options: { keepAliveMs?: number } = {},
 ): Response {
   const encoder = new TextEncoder();
   let closed = false;
+  let keepAlive: ReturnType<typeof setInterval> | null = null;
+  const stopKeepAlive = () => {
+    if (keepAlive) clearInterval(keepAlive);
+    keepAlive = null;
+  };
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      keepAlive = setInterval(() => {
+        if (closed) return stopKeepAlive();
+        try {
+          controller.enqueue(encoder.encode(": keep-alive\n\n"));
+        } catch {
+          closed = true;
+          stopKeepAlive();
+        }
+      }, options.keepAliveMs ?? SSE_KEEPALIVE_MS);
       const channel: SseChannel = {
         send(event, data) {
           if (closed) return;
@@ -250,6 +274,7 @@ export function sseResponse(
         channel.send(event.type, event);
       } finally {
         closed = true;
+        stopKeepAlive();
         try {
           controller.close();
         } catch {
@@ -259,6 +284,7 @@ export function sseResponse(
     },
     cancel() {
       closed = true;
+      stopKeepAlive();
     },
   });
   return new Response(stream, {

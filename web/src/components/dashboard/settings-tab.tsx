@@ -1,14 +1,15 @@
 import { useState } from 'react'
-import { Bot, FolderGit2, GitPullRequest, Globe, Server, Settings, UserRound } from 'lucide-react'
+import { Bot, FolderGit2, GitPullRequest, Globe, ScanSearch, Server, Settings, UserRound } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { SettingsAiProviders } from './settings-ai-providers'
+import { SettingsCodeql } from './settings-codeql'
 import { SettingsGitHub } from './settings-github'
 import { SettingsIntel } from './settings-intel'
 import { SettingsSession } from './settings-session'
 import { SettingsSystem } from './settings-system'
 import { SettingsWorkspaces } from './settings-workspaces'
 
-type SettingsSection = 'session' | 'workspaces' | 'ai' | 'github' | 'intel' | 'system'
+type SettingsSection = 'session' | 'workspaces' | 'ai' | 'github' | 'intel' | 'codeql' | 'system'
 
 const SECTIONS: { id: SettingsSection; label: string; icon: typeof Settings; description: string }[] = [
   { id: 'session', label: 'Session', icon: UserRound, description: 'Who you are signed in as and what this session may do.' },
@@ -16,6 +17,12 @@ const SECTIONS: { id: SettingsSection; label: string; icon: typeof Settings; des
   { id: 'ai', label: 'AI providers', icon: Bot, description: 'Model providers, write-only API keys and the default provider.' },
   { id: 'github', label: 'GitHub credential', icon: GitPullRequest, description: 'The credential the bridge uses for GitHub API calls.' },
   { id: 'intel', label: 'Threat intelligence', icon: Globe, description: 'Whether dependency scans may query OSV.dev.' },
+  {
+    id: 'codeql',
+    label: 'CodeQL',
+    icon: ScanSearch,
+    description: 'CodeQL host analysis (off by default; requires accepting the CodeQL licence terms) and its options.',
+  },
   { id: 'system', label: 'System', icon: Server, description: 'Bridge, core binary, storage, access and tool status.' },
 ]
 
@@ -63,6 +70,9 @@ export function SettingsTab() {
         </TabsContent>
         <TabsContent value="intel" className="pt-2">
           <SettingsIntel />
+        </TabsContent>
+        <TabsContent value="codeql" className="pt-2">
+          <SettingsCodeql />
         </TabsContent>
         <TabsContent value="system" className="pt-2">
           <SettingsSystem />

@@ -12,6 +12,12 @@ use crate::advisory::{
 };
 
 /// Parses a `yarn.lock` content string into a deduplicated list of package records.
+///
+/// Every unindented line must be a comment or a `<specifiers>:` block header, and every
+/// block (except Berry's `__metadata:`) must carry a `version` line; otherwise the content is
+/// rejected as [`AdvisoryErrorKind::MalformedLockfile`], so a truncated block is not dropped
+/// silently. Indented lines inside a block other than `version`, `resolved`/`resolution`
+/// and `integrity`/`checksum` are ignored.
 pub fn parse_yarn_lock(content: &str) -> Result<Vec<PackageRecord>, AdvisoryError> {
     let mut packages_map: BTreeMap<(String, String), PackageRecord> = BTreeMap::new();
 
@@ -20,30 +26,43 @@ pub fn parse_yarn_lock(content: &str) -> Result<Vec<PackageRecord>, AdvisoryErro
     let mut current_resolved: Option<String> = None;
     let mut current_integrity: Option<String> = None;
     let mut in_block = false;
+    // 1-based line number of the header of the block being read.
+    let mut block_line = 0;
 
-    let flush_block = |names: &mut Vec<String>,
+    // Records the block that ends here. A block without a non-empty version is rejected, so
+    // a truncated block is never dropped silently.
+    let flush_block = |block_line: usize,
+                       names: &mut Vec<String>,
                        ver: &mut Option<String>,
                        res: &mut Option<String>,
                        integ: &mut Option<String>,
-                       map: &mut BTreeMap<(String, String), PackageRecord>| {
-        if let Some(version) = ver.take() {
-            let v = version
-                .trim()
-                .trim_matches('"')
-                .trim_matches('\'')
-                .to_string();
-            if !v.is_empty() {
-                for name in names.drain(..) {
-                    let mut record = PackageRecord::new(&name, &v);
-                    record.source = res.clone();
-                    record.checksum = integ.clone();
-                    map.insert((name, v.clone()), record);
-                }
-            }
+                       map: &mut BTreeMap<(String, String), PackageRecord>|
+     -> Result<(), AdvisoryError> {
+        let v = ver
+            .take()
+            .map(|version| {
+                version
+                    .trim()
+                    .trim_matches('"')
+                    .trim_matches('\'')
+                    .to_string()
+            })
+            .unwrap_or_default();
+        if v.is_empty() {
+            return Err(AdvisoryError::new(
+                AdvisoryErrorKind::MalformedLockfile,
+                format!("the block that starts on line {block_line} has no version"),
+            ));
         }
-        names.clear();
+        for name in names.drain(..) {
+            let mut record = PackageRecord::new(&name, &v);
+            record.source = res.clone();
+            record.checksum = integ.clone();
+            map.insert((name, v.clone()), record);
+        }
         *res = None;
         *integ = None;
+        Ok(())
     };
 
     for (line_no, raw_line) in content.lines().enumerate() {
@@ -57,6 +76,16 @@ pub fn parse_yarn_lock(content: &str) -> Result<Vec<PackageRecord>, AdvisoryErro
 
         // Skip yarn berry metadata
         if trimmed.starts_with("__metadata:") {
+            if in_block {
+                flush_block(
+                    block_line,
+                    &mut current_names,
+                    &mut current_version,
+                    &mut current_resolved,
+                    &mut current_integrity,
+                    &mut packages_map,
+                )?;
+            }
             in_block = false;
             continue;
         }
@@ -66,15 +95,17 @@ pub fn parse_yarn_lock(content: &str) -> Result<Vec<PackageRecord>, AdvisoryErro
             // Flush previous entry if any
             if in_block {
                 flush_block(
+                    block_line,
                     &mut current_names,
                     &mut current_version,
                     &mut current_resolved,
                     &mut current_integrity,
                     &mut packages_map,
-                );
+                )?;
             }
 
             in_block = true;
+            block_line = line_no + 1;
             let header = line.trim_end_matches(':');
 
             // Header can contain multiple comma-separated specifiers:
@@ -132,12 +163,13 @@ pub fn parse_yarn_lock(content: &str) -> Result<Vec<PackageRecord>, AdvisoryErro
     // Flush last block
     if in_block {
         flush_block(
+            block_line,
             &mut current_names,
             &mut current_version,
             &mut current_resolved,
             &mut current_integrity,
             &mut packages_map,
-        );
+        )?;
     }
 
     Ok(packages_map.into_values().collect())
@@ -201,6 +233,45 @@ lodash@^4.17.21, lodash@~4.17.15:
         // A project without dependencies has a header-only lockfile.
         assert!(
             parse_yarn_lock("# THIS IS AN AUTOGENERATED FILE.\n# yarn lockfile v1\n\n")
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn a_block_without_a_version_is_rejected() {
+        // Regression: a block without a `version` line (for example a file truncated inside
+        // its last block) was dropped silently, so the lockfile was reported as audited.
+        for (content, line) in [
+            (
+                "express@^4.0.0:\n  version \"4.17.1\"\n\nlodash@^4.17.0:\n  resol",
+                4,
+            ),
+            ("x:\n  y z\n", 1),
+            ("lodash@^4.17.0:\n  version \"\"\n", 1),
+            ("lodash@^4.17.0:\n  version\n", 1),
+            (
+                "lodash@^4.17.0:\n  resolved \"https://r/lodash.tgz\"\n\nexpress@^4.0.0:\n  version \"4.17.1\"\n",
+                1,
+            ),
+        ] {
+            let error = parse_yarn_lock(content).unwrap_err();
+            assert_eq!(
+                error.kind(),
+                AdvisoryErrorKind::MalformedLockfile,
+                "{content}"
+            );
+            assert!(
+                error.message().contains(&format!(
+                    "the block that starts on line {line} has no version"
+                )),
+                "{content}: {}",
+                error.message()
+            );
+        }
+        // Berry's `__metadata:` block carries no package version and is not a package block.
+        assert!(
+            parse_yarn_lock("__metadata:\n  version: 6\n  cacheKey: 8\n")
                 .unwrap()
                 .is_empty()
         );

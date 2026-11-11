@@ -143,8 +143,9 @@ export function PluginRunDialog({
                   <code className="break-all font-mono text-[11px]">{plugin.executablePath ?? '(executable resolved by the core)'}</code>{' '}
                   as a subprocess under the bridge's user account (minimal environment, normal network access) and ask it
                   to run{' '}
-                  <code className="font-mono text-[11px]">{capability}</code>. It is not sandboxed: the declared quotas and
-                  egress policy are not enforced.
+                  <code className="font-mono text-[11px]">{capability}</code>. It is not sandboxed. The core enforces the
+                  manifest's execution time limit and its frame and output quotas and kills the adapter's process tree
+                  when the session ends; the declared memory quota and egress policy are not enforced.
                 </p>
                 <p>Whatever the adapter reports is shown as-is and is not admitted as evidence.</p>
               </div>

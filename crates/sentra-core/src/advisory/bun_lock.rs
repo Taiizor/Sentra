@@ -187,4 +187,24 @@ mod tests {
         let types_node = pkgs.iter().find(|p| p.name == "@types/node").unwrap();
         assert_eq!(types_node.raw_version, "18.11.18");
     }
+
+    #[test]
+    fn a_text_lockfile_with_a_block_without_a_version_is_rejected() {
+        // Regression: the text form (read by the yarn.lock reader) dropped such blocks
+        // silently, so a truncated or non-lockfile `bun.lock` was reported as audited.
+        for content in [
+            "x:\n  y z\n",
+            "lodash@^4.17.0:\n  version \"4.17.11\"\n\nexpress@^4.0.0:\n  resol",
+        ] {
+            let error = parse_bun_lock(content).unwrap_err();
+            assert_eq!(
+                error.kind(),
+                crate::advisory::error::AdvisoryErrorKind::MalformedLockfile,
+                "{content}"
+            );
+        }
+        let pkgs = parse_bun_lock("lodash@^4.17.0:\n  version \"4.17.11\"\n").unwrap();
+        assert_eq!(pkgs.len(), 1);
+        assert_eq!(pkgs[0].raw_version, "4.17.11");
+    }
 }

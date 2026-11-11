@@ -4,8 +4,9 @@ import type { StoredFinding } from "./findings.ts";
 
 /**
  * SARIF 2.1.0 export of stored findings (OASIS SARIF v2.1.0). Only facts the bridge holds are
- * emitted: dependency findings point at their lockfile without an invented region, SAST
- * findings carry the line reported by the core, and every result is labelled a candidate.
+ * emitted: dependency findings point at their lockfile without an invented region, SAST and
+ * CodeQL findings carry the line that was reported (CodeQL results keep their origin as a
+ * property), and every result is labelled a candidate.
  */
 
 export const SARIF_SCHEMA = "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json";
@@ -36,6 +37,8 @@ export interface SarifResult {
     findingId: string;
     severity: Severity;
     source: StoredFinding["source"];
+    /** CodeQL findings only: host_analysis, sarif_import or github_code_scanning. */
+    origin?: NonNullable<StoredFinding["origin"]>;
     triage: string | null;
     status: "candidate";
     firstSeenAt: string;
@@ -143,7 +146,11 @@ export function buildSarif(findings: StoredFinding[], tool: SarifToolInfo, tenan
         shortDescription: { text: finding.ruleName },
         properties: { tags, category: finding.category },
       };
-      if (finding.source === "sast") rule.name = finding.ruleName;
+      if (finding.source === "sast" || finding.source === "codeql") rule.name = finding.ruleName;
+      if (finding.source === "codeql" && finding.codeql) {
+        if (finding.codeql.helpUri) rule.helpUri = finding.codeql.helpUri;
+        if (typeof finding.codeql.securitySeverity === "number") rule.properties["security-severity"] = finding.codeql.securitySeverity.toFixed(1);
+      }
       if (finding.source === "dependency") {
         rule.helpUri = `https://osv.dev/vulnerability/${encodeURIComponent(finding.ruleId)}`;
         const score = finding.dependency?.cvssScore;
@@ -157,7 +164,7 @@ export function buildSarif(findings: StoredFinding[], tool: SarifToolInfo, tenan
       level: sarifLevel(finding.severity),
       message: { text: message(finding) },
       locations: finding.filePath
-        ? [{ physicalLocation: location(finding.filePath, finding.source === "sast" ? finding.line : null) }]
+        ? [{ physicalLocation: location(finding.filePath, finding.source === "dependency" ? null : finding.line) }]
         : [],
       partialFingerprints: { [SARIF_FINGERPRINT_KEY]: finding.fingerprint },
       properties: {
@@ -170,6 +177,7 @@ export function buildSarif(findings: StoredFinding[], tool: SarifToolInfo, tenan
         lastSeenAt: finding.lastSeenAt,
       },
     };
+    if (finding.source === "codeql" && finding.origin) result.properties.origin = finding.origin;
     if (finding.source === "sast" && finding.taintTrace && finding.taintTrace.length > 0 && finding.filePath) {
       const filePath = finding.filePath;
       result.codeFlows = [
@@ -202,7 +210,7 @@ export function buildSarif(findings: StoredFinding[], tool: SarifToolInfo, tenan
         properties: {
           tenantId,
           generatedAt,
-          note: "Exported from stored Sentra findings that are open and not triaged as rejected. Results are unvalidated scanner/advisory candidates.",
+          note: "Exported from stored Sentra findings that are open and not triaged as rejected. Results are unvalidated scanner/advisory candidates; CodeQL results are re-exported as stored (see properties.origin); each origin is stored on its own, so a result reported by host analysis, a SARIF import and GitHub code scanning appears once per origin.",
         },
       },
     ],

@@ -14,7 +14,7 @@ Semgrep's CE engine and maintained rule sets have distinct licenses and usage re
 
 The project owner explicitly selected **Apache License 2.0** on 2026-11-09 as the official open-source license for Sentra. The canonical `LICENSE` file and third-party attribution `NOTICE` have been incorporated into the repository.
 
-Review each exact integration component independently. Do not bundle Semgrep-maintained registry rules by default. Keep CodeQL optional and entitlement-aware. Evaluate CRS/model/dataset/image licenses and service terms before running or redistributing them. A subprocess boundary alone does not settle licensing obligations.
+Review each exact integration component independently. Do not bundle Semgrep-maintained registry rules by default. Keep CodeQL optional and entitlement-aware (host analysis requires an explicit acknowledgement of the CodeQL terms and is off by default; see [ADR-0011](0011-opt-in-host-codeql-analysis.md)). Evaluate CRS/model/dataset/image licenses and service terms before running or redistributing them. A subprocess boundary alone does not settle licensing obligations.
 
 Authorized proprietary source analysis must not require uploading source publicly or applying Sentra's license to a target by assumption. Patch/evidence ownership, contractual restrictions, provider terms, and disclosure rules remain governed by the actual input context and selected terms.
 

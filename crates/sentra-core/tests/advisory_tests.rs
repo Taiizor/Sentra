@@ -136,6 +136,41 @@ fn test_f07_affected_package_creates_present_only_finding() {
 }
 
 #[test]
+fn test_candidate_findings_per_lockfile_locate_each_match() {
+    let packages = parse_cargo_lock(sample_lockfile()).expect("parse lockfile");
+    let now = TimestampUtc::now();
+    let db = AdvisoryDatabase::new(AdvisoryDatabase::pinned_advisories(), now);
+    let result = db.audit_packages(&packages, now, 30).expect("audit");
+    assert_eq!(result.matches.len(), 2);
+
+    let lockfiles = vec!["Cargo.lock".to_string(), "package-lock.json".to_string()];
+    let findings =
+        result.to_candidate_findings_per_lockfile(SessionId::new(), TaskId::new(), now, &lockfiles);
+    let paths: Vec<&str> = findings
+        .iter()
+        .map(|f| f.location().unwrap().path.as_str())
+        .collect();
+    assert_eq!(paths, ["Cargo.lock", "package-lock.json"]);
+    assert!(matches!(
+        findings[0].source(),
+        FindingSource::CargoLockAdvisory { .. }
+    ));
+    assert!(matches!(
+        findings[1].source(),
+        FindingSource::DependencyLockAdvisory { lockfile_path, .. } if lockfile_path == "package-lock.json"
+    ));
+
+    // A match without an entry falls back to Cargo.lock, like to_candidate_findings.
+    let fallback =
+        result.to_candidate_findings_per_lockfile(SessionId::new(), TaskId::new(), now, &[]);
+    assert!(
+        fallback
+            .iter()
+            .all(|f| f.location().unwrap().path == "Cargo.lock")
+    );
+}
+
+#[test]
 fn test_f07_unaffected_package_produces_zero_findings() {
     let clean_lockfile = r#"# Generated
 version = 3

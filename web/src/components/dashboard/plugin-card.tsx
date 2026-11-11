@@ -81,17 +81,22 @@ export function PluginCard({
         </div>
 
         <div className="flex flex-col gap-1 rounded-md border border-border/40 bg-background/40 p-2 text-[11px]">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Declared by the manifest, not enforced
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Manifest limits</span>
+          <span className="text-zinc-300">
+            Execution time:{' '}
+            {plugin.declaredQuotas ? `${plugin.declaredQuotas.maxExecutionTimeSecs} s` : 'core default'}{' '}
+            <span className="text-zinc-500">(enforced by the core, at most one hour; the adapter's process tree is killed when it expires)</span>
           </span>
           <span className="text-zinc-300">
-            Egress policy: <span className="font-mono">{plugin.declaredEgressPolicy}</span>
+            Frame and output size: <span className="text-zinc-500">(enforced by the core)</span>
           </span>
           <span className="text-zinc-300">
-            Quotas:{' '}
-            {plugin.declaredQuotas
-              ? `${plugin.declaredQuotas.maxMemoryMib} MiB memory, ${plugin.declaredQuotas.maxExecutionTimeSecs} s execution time`
-              : 'none declared'}
+            Memory: {plugin.declaredQuotas ? `${plugin.declaredQuotas.maxMemoryMib} MiB` : 'none declared'}{' '}
+            <span className="text-zinc-500">(declared only, not enforced)</span>
+          </span>
+          <span className="text-zinc-300">
+            Egress policy: <span className="font-mono">{plugin.declaredEgressPolicy}</span>{' '}
+            <span className="text-zinc-500">(declared only, not enforced)</span>
           </span>
         </div>
 

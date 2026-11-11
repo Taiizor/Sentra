@@ -9,6 +9,7 @@ import { useConsole } from '@/lib/console-context'
 import { useResource } from '@/lib/use-resource'
 import { SEVERITIES, type OverviewView, type ScanRunView } from '@/types/api'
 import { minimumRoleFor } from './console-format'
+import { CODEQL_PER_ORIGIN_NOTE, codeqlOriginBreakdown } from './findings-format'
 import { formatCount, formatDateTime, formatDuration, formatMicroUsd, SEVERITY_BAR_CLASS } from './overview-tab-format'
 import { Field, LoadError, RunStatusBadge } from './overview-tab-parts'
 import { OverviewTrendCard } from './overview-tab-trend'
@@ -19,7 +20,8 @@ const RECENT_RUNS = 10
 const KIND_LABEL: Record<ScanRunView['kind'], string> = {
   sast: 'SAST',
   dependency: 'Dependency audit',
-  codeql: 'CodeQL language probe',
+  // The probe always runs; with host analysis enabled the same kind runs `sentra codeql analyze`.
+  codeql: 'CodeQL',
   all: 'Full scan',
 }
 
@@ -81,8 +83,8 @@ function SummaryCards({ overview, onOpenFindings, onOpenPatches }: { overview: O
         )}
         <span className="block text-zinc-500">
           {overview.lastCompletedRunAt && overview.lastCompletedRunAt !== overview.lastResultRunAt
-            ? `Newest completed run of any kind: ${formatDateTime(overview.lastCompletedRunAt)} (CodeQL probes and skipped dependency stages produce no results)`
-            : 'Completed run that produced SAST or dependency results'}
+            ? `Newest completed run of any kind: ${formatDateTime(overview.lastCompletedRunAt)} (CodeQL language probes without host analysis and skipped dependency stages produce no results)`
+            : 'Completed run that produced SAST, dependency or CodeQL host-analysis results'}
         </span>
       </StatCard>
 
@@ -96,7 +98,7 @@ function SummaryCards({ overview, onOpenFindings, onOpenPatches }: { overview: O
             {overview.riskScore.formula}
           </code>
         ) : (
-          'No completed run with SAST or dependency results yet'
+          'No completed run with SAST, dependency or CodeQL host-analysis results yet'
         )}
       </StatCard>
 
@@ -156,6 +158,12 @@ function BreakdownCard({ overview }: { overview: OverviewView }) {
         <div className="border-t border-zinc-800/80 pt-2">
           <Field label="SAST rules">{open.bySource.sast ?? 0}</Field>
           <Field label="Dependency advisories (OSV)">{open.bySource.dependency ?? 0}</Field>
+          <Field label="CodeQL (analysis, import, GitHub)">{open.bySource.codeql ?? 0}</Field>
+          {(open.bySource.codeql ?? 0) > 0 && (
+            <p className="text-[11px] text-zinc-500" title={CODEQL_PER_ORIGIN_NOTE}>
+              {codeqlOriginBreakdown(open.codeqlByOrigin)}. {CODEQL_PER_ORIGIN_NOTE}
+            </p>
+          )}
         </div>
         <div className="border-t border-zinc-800/80 pt-2">
           {triage.map(([label, count]) => (

@@ -11,6 +11,7 @@ import {
   type SystemStatus,
   type TenantView,
 } from '@/types/api'
+import { CODEQL_PER_ORIGIN_NOTE, codeqlOriginBreakdown } from '@/components/dashboard/findings-format'
 
 /**
  * Builds a self-contained HTML report from data read from the bridge at generation time.
@@ -159,10 +160,19 @@ export function splitOpenFindings(findings: FindingView[]): { counted: FindingVi
   return { counted, rejected }
 }
 
+const SOURCE_LABEL: Record<string, string> = { sast: 'SAST', dependency: 'Dependency', codeql: 'CodeQL' }
+const ORIGIN_LABEL: Record<string, string> = { host_analysis: 'host analysis', sarif_import: 'SARIF import', github_code_scanning: 'GitHub code scanning' }
+
+/** "SAST", "Dependency" or "CodeQL (SARIF import)"; unknown values are shown as they are. */
+function sourceLabel(finding: FindingView): string {
+  const source = SOURCE_LABEL[finding.source] ?? String(finding.source)
+  return finding.source === 'codeql' && finding.origin ? `${source} (${ORIGIN_LABEL[finding.origin] ?? finding.origin})` : source
+}
+
 function findingRow(finding: FindingView): string {
   return `<tr>
   <td><span class="sev sev-${escapeHtml(finding.severity.toLowerCase())}">${escapeHtml(finding.severity)}</span></td>
-  <td>${escapeHtml(finding.source === 'sast' ? 'SAST' : 'Dependency')}</td>
+  <td>${escapeHtml(sourceLabel(finding))}</td>
   <td>${findingRule(finding)}</td>
   <td>${findingLocation(finding)}</td>
   <td>${triageLabel(finding)}<div class="muted">first seen ${formatTime(finding.firstSeenAt)}</div></td>
@@ -193,7 +203,7 @@ export function renderExecutiveReportHtml(data: ExecutiveReportData): string {
             ? rejectedFindings.length > 0
               ? 'Every open finding is triaged as rejected (listed below). This does not mean the workspace is free of vulnerabilities: the scanners are heuristic.'
               : 'No open findings were recorded by the scans that ran. This does not mean the workspace is free of vulnerabilities: the scanners are heuristic.'
-            : 'No completed scan with SAST or dependency results exists for this workspace, so there is no finding data.'
+            : 'No completed scan with SAST, dependency or CodeQL host-analysis results exists for this workspace, so there is no finding data.'
         }</td></tr>`
       : shownFindings.map(findingRow).join('')
 
@@ -282,7 +292,8 @@ ${rejectedFindings.length > shownRejected.length ? `<p class="muted">Showing the
 
 <div class="notice">
   <strong>How to read this report.</strong> Findings are <strong>unvalidated candidates</strong> reported by Sentra's heuristic,
-  line-based SAST rules and by OSV.dev advisory matches against lockfile versions. They have not been independently verified
+  line-based SAST rules, by OSV.dev advisory matches against lockfile versions and by CodeQL (run on the bridge host with build
+  mode none, imported from a SARIF file, or read from GitHub code scanning). They have not been independently verified
   and may include false positives; the absence of a finding is not evidence of absence of a vulnerability. Patches are
   model-generated candidates; no patch has been verified (verification: not run). This document is not a compliance attestation.
 </div>
@@ -308,6 +319,7 @@ ${rejectedFindings.length > shownRejected.length ? `<p class="muted">Showing the
     <tr><th>Open candidate findings</th><td class="num">${escapeHtml(open.total)}</td></tr>
     <tr><th>From SAST rules</th><td class="num">${escapeHtml(open.bySource.sast ?? 0)}</td></tr>
     <tr><th>From dependency advisories</th><td class="num">${escapeHtml(open.bySource.dependency ?? 0)}</td></tr>
+    <tr><th>From CodeQL (host analysis, SARIF import, GitHub code scanning)${(open.bySource.codeql ?? 0) > 0 ? `<div class="muted">${escapeHtml(codeqlOriginBreakdown(open.codeqlByOrigin))}. ${escapeHtml(CODEQL_PER_ORIGIN_NOTE)}</div>` : ''}</th><td class="num">${escapeHtml(open.bySource.codeql ?? 0)}</td></tr>
     <tr><th>Resolved (no longer reported)</th><td class="num">${escapeHtml(overview.resolvedFindings)}</td></tr>
   </table>
   <table class="kv">${severityRows}</table>
@@ -319,7 +331,7 @@ ${rejectedFindings.length > shownRejected.length ? `<p class="muted">Showing the
   </table>
 </div>
 <table class="kv">
-  <tr><th>Last scan with results</th><td>${formatTime(overview.lastResultRunAt)} <div class="muted">Newest completed run that produced SAST or dependency results</div></td></tr>
+  <tr><th>Last scan with results</th><td>${formatTime(overview.lastResultRunAt)} <div class="muted">Newest completed run that produced SAST, dependency or CodeQL host-analysis results (SARIF imports and GitHub syncs are not runs)</div></td></tr>
   <tr><th>Last completed run (any kind)</th><td>${formatTime(overview.lastCompletedRunAt)}</td></tr>
   <tr><th>Latest run</th><td>${
     lastRun
@@ -331,7 +343,7 @@ ${rejectedFindings.length > shownRejected.length ? `<p class="muted">Showing the
   <tr><th>Heuristic risk score</th><td>${
     overview.riskScore
       ? `${escapeHtml(overview.riskScore.value)} <div class="muted">Formula: <code>${escapeHtml(overview.riskScore.formula)}</code></div>`
-      : '<span class="muted">Not computed: no completed run with SAST or dependency results</span>'
+      : '<span class="muted">Not computed: no completed run with SAST, dependency or CodeQL host-analysis results</span>'
   }</td></tr>
   <tr><th>Patch candidates</th><td>${escapeHtml(overview.patches.proposed)} proposed · ${escapeHtml(overview.patches.applied)} applied · ${escapeHtml(overview.patches.rolledBack)} rolled back · ${escapeHtml(overview.patches.pullRequests)} pull requests</td></tr>
 </table>

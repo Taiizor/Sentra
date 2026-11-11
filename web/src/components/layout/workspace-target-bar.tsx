@@ -29,8 +29,8 @@ const SCAN_ACTIONS: { kind: ScanKind; label: string; description: string }[] = [
   },
   {
     kind: 'codeql',
-    label: 'CodeQL language probe',
-    description: 'Counts source languages by file extension; CodeQL itself is not run',
+    label: 'CodeQL',
+    description: 'Counts source languages by file extension; runs CodeQL host analysis (build mode none) only when an admin enabled it',
   },
 ]
 
@@ -138,7 +138,7 @@ export function WorkspaceTargetBar({ onStartScan }: WorkspaceTargetBarProps) {
             disabled={scanBlockedReason !== null}
             onClick={() => onStartScan('all')}
             className="h-7.5 text-xs font-semibold px-3"
-            title="SAST scan, dependency audit and CodeQL language probe"
+            title="SAST scan, dependency audit and CodeQL stage"
           >
             <Play className="size-3 fill-current" />
             Full scan

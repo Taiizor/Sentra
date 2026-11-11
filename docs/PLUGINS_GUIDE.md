@@ -40,6 +40,7 @@ cp -r examples/adapters/sentra-adapter-snyk ~/.config/sentra/plugins/
 - **Removal:** delete the adapter's directory.
 - **Updates:** replace the directory. Nothing is pinned or cached.
 - `--dir <directory>` replaces the default directory for a single command. Sentra never searches the current directory, its parents, or a repository's `examples/adapters` or `.sentra/plugins` on its own, so a repository you scan cannot inject an adapter.
+- The web console bridge uses `SENTRA_PLUGIN_DIR` from its own environment or, when it is unset, the platform default directory the core reports. It refuses a default that is not an absolute path (on Windows, a drive-letter path whose real path is not a UNC or device path, so a mapped network drive or a link to a share is refused as far as the host's `realpath` reports it) or that overlaps its data or temporary directories, the system temporary directory, the repository or a registered workspace, and it never creates the directory. Network mounts on macOS and Linux are not detected. See [web/README.md](../web/README.md#plugin-directory).
 - A plugin directory is either one adapter directory (it holds `manifest.json`) or a container whose **immediate** child directories hold one manifest each. If a directory holds its own manifest, manifests in its children are ignored and reported (`nested_manifest_ignored`).
 - Plugin ids must be unique across the searched directories. When two manifests declare the same id, **neither** is loaded and the id is reported as `duplicate_plugin_id`; `probe`/`run` for that id fail with `plugin_duplicate_id`.
 
@@ -84,12 +85,12 @@ The workspace is validated with Sentra's workspace boundary (it must be an exist
 ```bash
 sentra plugin run --id org.sentra.adapter.snyk --capability dependency_audit --workspace ./my-project
 sentra plugin run --id org.sentra.adapter.semgrep --capability static_analysis \
-  --workspace ./my-project --args '{"rule_suite": "owasp-top-10"}' --json
+  --workspace ./my-project --args '{"config": ".semgrep.yml"}' --json
 ```
 
 The validated workspace is sent in the `execute` frame as `workspace_root`. Everything in the result — `exit_code`, `summary` and `evidence_refs` — is **adapter-reported**. Evidence references are opaque labels; Sentra does not resolve them or admit them as evidence. The real process exit status is recorded separately by the host.
 
-The reference adapters return synthetic data: for example, the Snyk example always reports `Snyk audit detected 2 vulnerable package(s).` whatever the workspace contains.
+The Snyk and Ollama reference adapters return synthetic data: for example, the Snyk example always reports `Snyk audit detected 2 vulnerable package(s).` whatever the workspace contains. The Semgrep example runs a Semgrep CLI found on `PATH` against `workspace_root` with local rules only (`config` inside the workspace, or a `rules/` directory the operator adds next to the adapter); it refuses registry rulesets and URLs, reports counts by severity and the top findings in `summary`, and fails with `plugin_adapter_error` when Semgrep is missing or fails. It has been tested with a stand-in executable, not a real Semgrep; see [its README](../examples/adapters/sentra-adapter-semgrep/README.md).
 
 ### 3.4 Error Codes
 

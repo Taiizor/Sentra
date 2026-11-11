@@ -263,7 +263,7 @@ pub struct CodeQlSarifIngestResult {
     pub taint_traces_extracted: usize,
     /// Unique rule IDs encountered.
     pub rules_identified: Vec<String>,
-    /// Highest severity finding admitted.
+    /// Highest severity among the parsed candidate findings.
     pub highest_severity: Option<Severity>,
 }
 

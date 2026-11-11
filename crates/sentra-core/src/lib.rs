@@ -1,7 +1,8 @@
 //! # Sentra Core Engine Foundation
 //!
-//! Sentra is an open-source, dual-mode security research platform for autonomous
-//! repository security analysis and verified patch generation.
+//! Sentra is an open-source, dual-mode security research platform for repository security
+//! analysis and remediation previews. Patch verification is modelled (`verification`) but
+//! not executed: no isolated runner exists yet.
 //!
 //! This crate provides the foundational domain models, session lifecycle state machine,
 //! immutable audit trail event types, security classification lattices, and default-deny
@@ -70,11 +71,12 @@ pub mod workspace;
 pub use advisory::{
     Advisory, AdvisoryAuditResult, AdvisoryDatabase, AdvisoryError, AdvisoryErrorKind,
     AdvisoryMatch, DEFAULT_INVENTORY_MAX_DEPTH, InventoryLimits, InventoryLockfile,
-    InventoryPackage, LockfileKind, MAX_INVENTORY_DEPTH, OsvAffected, OsvPackage, OsvRange,
-    OsvRecord, OsvSeverity, PackageRecord, SemverVersion, VersionReq, WorkspaceInventory,
-    collect_lockfile_inventory, discover_workspace_lockfiles, ingest_osv_directory, parse_bun_lock,
-    parse_cargo_lock, parse_deno_lock, parse_lockfile_content, parse_osv_payload,
-    parse_package_lock, parse_pnpm_lock, parse_yarn_lock,
+    InventoryPackage, LockfileKind, MAX_INVENTORY_DEPTH, OsvAffected, OsvDirectoryIngest,
+    OsvPackage, OsvRange, OsvRecord, OsvSeverity, PackageRecord, SemverVersion, VersionReq,
+    WorkspaceInventory, collect_lockfile_inventory, discover_workspace_lockfiles,
+    ingest_osv_directory, ingest_osv_directory_report, parse_bun_lock, parse_cargo_lock,
+    parse_deno_lock, parse_lockfile_content, parse_osv_payload, parse_package_lock,
+    parse_pnpm_lock, parse_yarn_lock,
 };
 pub use audit::{AuditEvent, AuditEventKind};
 pub use common::{

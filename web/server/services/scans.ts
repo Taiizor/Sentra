@@ -13,11 +13,12 @@ import type { AppContext } from "../app-context.ts";
 import { markAuditHandled } from "../audit-log.ts";
 import { nowIso, parseJsonColumn } from "../db.ts";
 import { readHead } from "../git-meta.ts";
-import { hostToolsDeps, reportedToolLocation } from "../host-tools.ts";
+import { codeqlLauncherChoice, hostToolsDeps } from "../host-tools.ts";
 import { HttpError } from "../http-error.ts";
 import { log } from "../logger.ts";
 import { cliFailure, cliValue, type CliResult } from "../sentra-cli.ts";
-import { emptySeverityCounts, parseScanOutput, reconcileFindings, sastCandidates, type CandidateFinding } from "./findings.ts";
+import { analysisPrecondition, busySkip, emptyAnalysis, runHostAnalysis, type CodeqlSkip, type HostAnalysisOutcome } from "./codeql.ts";
+import { emptySeverityCounts, parseScanOutput, reconcileFindings, sastCandidates, type CandidateFinding, type ReconcileScope } from "./findings.ts";
 import { auditDependencies, OSV_ENDPOINT, OsvClient, readInventory, type OsvFetcher } from "./osv.ts";
 import type { ActorRef, ScanRunInput, ScanService } from "./types.ts";
 
@@ -104,16 +105,19 @@ export function lastCompletedRunAt(app: Pick<AppContext, "db">, tenantId: string
 }
 
 /**
- * Finish time of the newest completed run that produced SAST or dependency results. A CodeQL
- * language probe, or a dependency stage skipped by policy, completes without either, so it
- * cannot back a statement about the workspace's findings (such as the heuristic risk score).
+ * Finish time of the newest completed run that produced SAST, dependency or CodeQL host-analysis
+ * results. A CodeQL language probe (host analysis skipped), a failed host analysis (a run can
+ * complete while one of its stages failed), or a dependency stage skipped by policy completes
+ * without results, so it cannot back a statement about the workspace's findings (such as the
+ * heuristic risk score). Host analysis counts only when at least one language was analyzed.
  */
 export function lastResultRunAt(app: Pick<AppContext, "db">, tenantId: string, workspace: string): string | null {
   const row = app.db
     .query(
       `SELECT finished_at FROM scan_runs
        WHERE tenant_id = ? AND workspace = ? AND status = 'completed'
-         AND (json_extract(summary_json, '$.sast') IS NOT NULL OR json_extract(summary_json, '$.dependency') IS NOT NULL)
+         AND (json_extract(summary_json, '$.sast') IS NOT NULL OR json_extract(summary_json, '$.dependency') IS NOT NULL
+           OR EXISTS (SELECT 1 FROM json_each(summary_json, '$.codeqlAnalysis.languages') WHERE json_extract(value, '$.status') = 'analyzed'))
        ORDER BY finished_at DESC LIMIT 1`,
     )
     .get(tenantId, workspace) as { finished_at: string | null } | null;
@@ -148,6 +152,7 @@ function emptySummary(): ScanRunSummary {
     dependency: null,
     dependencySkippedReason: null,
     codeql: null,
+    codeqlAnalysis: null,
     newFindings: 0,
     resolvedFindings: 0,
     stillOpen: 0,
@@ -175,6 +180,8 @@ class ScanExecution {
   readonly summary = emptySummary();
   readonly candidates: CandidateFinding[] = [];
   readonly completedSources: FindingSource[] = [];
+  /** Completed CodeQL reconciliation scopes (host analysis that analyzed at least one language). */
+  readonly scopes: ReconcileScope[] = [];
   filesScanned: number | null = null;
   signalsFound: number | null = null;
   packagesAudited: number | null = null;
@@ -293,26 +300,61 @@ class ScanExecution {
     });
   }
 
+  /**
+   * The language probe (`sentra codeql`, file extensions only) always runs. CodeQL host analysis
+   * (`sentra codeql analyze`, build mode none) runs only when an admin enabled it with accepted
+   * terms, a launcher qualifies and no other analysis holds the bridge-wide lock; otherwise the
+   * stage says exactly why it did not run.
+   */
   async codeql(): Promise<void> {
     const result = await this.runCli("codeql", ["codeql", "--workspace", cliValue(this.workspace, "workspace"), "--json"]);
-    // Presence only, resolved like the system page's codeql row: the path an admin set in the
-    // console when it is usable, else the automatic search (process PATH, persisted PATH,
-    // well-known install directories). codeql itself is never executed.
+    // Presence: the launcher that would be run (SENTRA_CODEQL_BIN or the execution choice), else
+    // any codeql the search found (standard install locations included). A path set in the
+    // console is never consulted for codeql.
     const executables = this.app.executables;
     const snapshot = await executables.current();
-    const codeql = await reportedToolLocation(hostToolsDeps(this.app), "codeql", snapshot);
-    const probe = mapCodeqlProbe(result.json, !!codeql.path);
+    const launcher = codeqlLauncherChoice(hostToolsDeps(this.app), snapshot);
+    const found = launcher.path ?? executables.locate("codeql", snapshot).path;
+    const probe = mapCodeqlProbe(result.json, !!found);
     this.summary.codeql = probe;
-    const where = codeql.path
-      ? `installed at ${codeql.path}${codeql.selection === "configured" ? " (path set in the console)" : ""}`
-      : `not found (searched ${executables.searchScope(snapshot)})`;
-    const broken = codeql.configuredPathProblem ? ` The codeql path set in the console cannot be used: ${codeql.configuredPathProblem}` : "";
+    const probeText = `Language probe: ${probe.detectedLanguages.length} language(s) detected by file extension, primary ${probe.primaryLanguage ?? "none"}.`;
+    const where = found ? `codeql is installed at ${found}.` : `codeql is not found (searched ${executables.searchScope(snapshot)}).`;
+
+    const skip = analysisPrecondition(this.app.codeql.settings(), launcher, this.app.cli.available());
+    if (skip) return this.codeqlSkipped(probeText, skip, where);
+    const release = this.app.codeql.lock.tryAcquire(this.input.tenantId);
+    const running = this.app.codeql.lock.current;
+    if (!release) return this.codeqlSkipped(probeText, running ? busySkip(running) : { reason: "analysis_busy", message: "Another CodeQL analysis is running on this bridge." }, where);
+    let outcome: HostAnalysisOutcome;
+    try {
+      outcome = await runHostAnalysis(this.app, {
+        workspace: this.workspace,
+        launcher: launcher.path as string,
+        signal: this.input.signal,
+        onCommand: (args) => this.bridge(`Running: sentra ${args.join(" ")}`),
+        onStderr: (text) => this.emit({ type: "log", stream: "stderr", text, ts: nowIso() }),
+      });
+    } finally {
+      release();
+    }
+    this.checkCancelled();
+    this.summary.codeqlAnalysis = outcome.view;
+    if (outcome.status === "failed") throw new HttpError(422, "codeql_failed", `${probeText} CodeQL host analysis failed: ${outcome.view.message}`);
+    if (outcome.scope) {
+      this.candidates.push(...outcome.candidates);
+      this.scopes.push(outcome.scope);
+    }
     this.emit({
       type: "stage",
       stage: "codeql",
       status: "completed",
-      message: `Language probe: ${probe.detectedLanguages.length} language(s) detected by file extension, primary ${probe.primaryLanguage ?? "none"}. CodeQL was not executed; codeql is ${where}.${broken}`,
+      message: outcome.view.skipReason ? `${probeText} CodeQL host analysis did not produce results: ${outcome.view.message}` : `${probeText} ${outcome.view.message}`,
     });
+  }
+
+  private codeqlSkipped(probeText: string, skip: CodeqlSkip, where: string): void {
+    this.summary.codeqlAnalysis = emptyAnalysis(skip);
+    this.emit({ type: "stage", stage: "codeql", status: "completed", message: `${probeText} CodeQL host analysis did not run: ${skip.message} ${where}` });
   }
 
   persist(): void {
@@ -324,6 +366,7 @@ class ScanExecution {
       at: nowIso(),
       candidates: this.candidates,
       completedSources: this.completedSources,
+      scopes: this.scopes,
     });
     this.summary.newFindings = result.created + result.reopened;
     this.summary.resolvedFindings = result.resolved;
@@ -332,7 +375,7 @@ class ScanExecution {
       type: "stage",
       stage: "persist",
       status: "completed",
-      message: `${result.created} new, ${result.reopened} reopened, ${result.stillOpen} still open, ${result.resolved} resolved (sources reconciled: ${this.completedSources.join(", ") || "none"}).`,
+      message: `${result.created} new, ${result.reopened} reopened, ${result.stillOpen} still open, ${result.resolved} resolved (sources reconciled: ${[...this.completedSources, ...this.scopes.map((scope) => `codeql ${scope.origin}`)].join(", ") || "none"}).`,
     });
   }
 }

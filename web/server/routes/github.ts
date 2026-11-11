@@ -51,13 +51,13 @@ function credentialView(app: AppContext): GitHubCredentialView {
 const NO_CREDENTIAL =
   "No GitHub credential is available. Sign in with `gh auth login` on the bridge host, set GITHUB_TOKEN, or store a token in Settings.";
 
-function requireCredential(app: AppContext): void {
+export function requireCredential(app: AppContext): void {
   const { source, error } = credentialSource(app);
   if (error) throw new HttpError(500, "github_credential_unreadable", error);
   if (!source) throw new HttpError(412, "github_not_configured", NO_CREDENTIAL);
 }
 
-function requireRepository(app: AppContext, tenant: TenantRecord): GitHubRepoRef {
+export function requireRepository(app: AppContext, tenant: TenantRecord): GitHubRepoRef {
   const repository = app.workspaces.repository(tenant);
   if (!repository) {
     throw new HttpError(

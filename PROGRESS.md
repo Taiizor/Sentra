@@ -1,8 +1,10 @@
 # Progress
 
-Last updated: 2026-11-09.
+Last updated: 2026-11-11.
 
 ## Current status
+
+Correction (2026-11-11): several entries below overstate what the code does; they are kept as written for history. The dashboard described in the first entry was replaced by a console that shows real data only (see [CHANGELOG.md](CHANGELOG.md)). `sentra sync-advisories` parses local OSV JSON in memory and persists nothing; there is no live OSV feed. `sentra audit`, `sentra propose-pr` and `sentra export sarif` match against a 6-record bundled advisory sample, and `propose-pr` prints local previews only. Whether GitHub Code Scanning or GitLab SAST accept Sentra's SARIF files has not been tested. `sentra verify-audit` and `sentra config test` are not implemented and exit 5 with `not_implemented`. The SAST engine builds no syntax tree. [docs/LIMITATIONS.md](docs/LIMITATIONS.md#6-web-console-and-pinned-core-commands) describes the current behaviour.
 
 Web Dashboard Frontend (React 19 + Vite + Tailwind CSS v4 + shadcn/ui + Base UI): IMPLEMENTED & VERIFIED (`web/`). Delivered full-featured enterprise security operations web console for Sentra built with Vite, React 19, TypeScript, Bun, Tailwind CSS v4, and official shadcn/ui components on `@base-ui/react` primitives adhering to `.agents/skills/shadcn`:
 - **Architecture & Foundation (`web/`):**

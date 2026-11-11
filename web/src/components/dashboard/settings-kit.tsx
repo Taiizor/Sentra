@@ -155,7 +155,8 @@ export function ConfirmDialog({
   }
   return (
     <Dialog open={open} onOpenChange={(next) => (!busy ? onOpenChange(next) : undefined)}>
-      <DialogContent className="sm:max-w-lg">
+      {/* Scrolls on short screens: long confirmations (the CodeQL licence summary) exceed a phone viewport. */}
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-sm font-semibold">{title}</DialogTitle>
           <DialogDescription render={<div />} className="text-xs flex flex-col gap-2 text-muted-foreground">

@@ -544,7 +544,7 @@ impl McpServer {
         })?;
         Ok(json!({
             "total_sarif_results": result.total_sarif_results,
-            "findings_admitted": result.findings.len(),
+            "candidate_findings_parsed": result.findings.len(),
             "taint_traces_extracted": result.taint_traces_extracted,
             "rules": result.rules_identified,
             "highest_severity": result.highest_severity.map(|s| s.to_string()),

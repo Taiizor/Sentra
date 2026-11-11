@@ -7,20 +7,27 @@ use std::{
     ffi::OsString,
     io::{BufRead, Write},
     path::{Path, PathBuf},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
 };
 
 use sentra_core::{
-    AdvisoryDatabase, CodeQlProbeReport, CodeQlSarifIngestResult, ContainmentLevel,
-    ContainmentReadiness, DEFAULT_INVENTORY_MAX_DEPTH, DEFAULT_MAX_LINE_BYTES, DiscoveredPlugin,
-    EgressPolicy, FileDeltaKind, MAX_INVENTORY_DEPTH, McpServer, MultiUserAuditReport,
-    MultiUserSecurityAudit, PluginCapability, PluginDriver, PluginError, PluginErrorKind,
-    PluginExecutionOutput, PluginProbeOutput, RemediationPrPackage, RemoteWorkerId,
-    RemoteWorkerNode, SastReport, SessionId, SnapshotDiff, TaskId, TenantRecord, TimestampUtc,
-    WorkerArchitecture, WorkerFleetManager, WorkerResourceCaps,
-    fleet::AuditStatus,
+    AdvisoryDatabase, CodeQlProbeReport, CodeQlSarifIngestResult, ContainmentReadiness,
+    DEFAULT_INVENTORY_MAX_DEPTH, DEFAULT_MAX_LINE_BYTES, DiscoveredPlugin, FileDeltaKind,
+    MAX_INVENTORY_DEPTH, McpServer, OsvDirectoryIngest, PluginCapability, PluginDriver,
+    PluginError, PluginErrorKind, PluginExecutionOutput, PluginProbeOutput, RemediationPrPackage,
+    SastReport, SessionId, SnapshotDiff, TaskId, TenantRecord, TimestampUtc, WorkerFleetManager,
+    ingest_osv_directory_report,
     mcp::{LATEST_PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS, run_stdio},
     plugin::{
-        DiagnosticSeverity, DiscoveryDiagnostic, PluginSessionReport, default_plugin_dir,
+        CodeQlAnalyzeRequest, CodeQlHostError, CodeQlHostErrorKind, CodeQlHostLanguage,
+        CodeQlLanguageStatus, CodeQlResultReport, CodeQlSarifError, CodeQlSuite,
+        DEFAULT_CODEQL_MAX_RESULTS, DEFAULT_CODEQL_TIMEOUT_SECS, DiagnosticSeverity,
+        DiscoveryDiagnostic, MAX_CODEQL_MAX_RESULTS, MAX_CODEQL_TIMEOUT_SECS, PluginSessionReport,
+        analyze_workspace_with_codeql, default_plugin_dir, import_codeql_sarif,
         plugin_dir_env_diagnostic, resolve_plugin, scan_plugin_dirs,
     },
     research::SkillPromptError,
@@ -35,7 +42,7 @@ use sentra_core::{
     },
 };
 
-pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra recover --database <file> [--workspace <directory>] [--json]\n  sentra audit --database <file> [--workspace <directory>] [--json]\n  sentra inventory [--workspace <directory>] [--max-depth <n>] [--json]\n  sentra scan [--workspace <directory>] [--snippet <string>] [-] [--file-name <name>] [--database <file>] [--sarif <file>] [--json]\n  sentra patch apply --patch <file> --workspace <directory> [--target <file>] [--backup-dir <directory>] [--database <file>] [--dry-run] [--json]\n  sentra patch rollback --backup <file> --workspace <directory> --target <file> [--database <file>] [--json]\n  sentra install <target> [--global] [--skill <id>[,<id>...]] [--workspace <directory>] [--json]\n  sentra install <target> --mcp [--global] [--workspace <directory>] [--command <path>] [--json]\n  sentra install mcp <target> [--global] [--workspace <directory>] [--command <path>] [--json]\n  sentra mcp install <target> [--global] [--workspace <directory>] [--command <path>] [--json]\n  sentra skills list [--json]\n  sentra skills show <id> [--json]\n  sentra prompt <workflow> [--scope <path>] [--skills <id>[,<id>...]] [--json]\n  sentra tenant list --database <file> [--json]\n  sentra tenant add --id <id> --name <name> [--workspace <directory>] [--isolation <level>] --database <file> [--json]\n  sentra config show [--key <key>] --database <file> [--json]\n  sentra config set --key <key> --value <value> --database <file> [--json]\n  sentra config test --provider <name> [--api-key <key>] [--model <model>] [--json]\n  sentra fleet list [--json]\n  sentra fleet status [--json]\n  sentra plugin list [--dir <directory>] [--json]\n  sentra plugin probe (--id <id> | --manifest <file>) [--dir <directory>] [--workspace <directory>] [--json]\n  sentra plugin run (--id <id> | --manifest <file>) --capability <capability> [--args <json>] [--dir <directory>] [--workspace <directory>] [--json]\n  sentra sync-advisories --source <directory-or-file> [--database <file>] [--json]\n  sentra propose-pr --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra codeql [--workspace <directory>] [--sarif <file>] [--database <file>] [--json]\n  sentra diff --base <directory> --head <directory> [--json]\n  sentra verify-audit [--json]\n  sentra export sarif --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra mcp [--workspace <directory>] [--database <file>]\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session/audit default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\nAudit analyzes multi-ecosystem lockfiles (Cargo, npm, yarn, pnpm, bun, deno, pip, poetry, go, composer, nuget, rubygems) against a small bundled pinned advisory sample, not a synchronized OSV or RustSec feed; is_stale reflects the sample's curation date.\nInventory lists lockfiles found recursively (depth 6 by default; dependency, build and VCS directories skipped; links not followed) and their parsed packages with OSV ecosystem names. Read-only; nothing is executed.\nScan runs heuristic line-based pattern rules for secrets and code antipatterns on workspaces or snippets; --file-name labels a snippet and selects its language rules. Results are unverified candidates.\nPatch applies a single-file unified diff positionally with exact context; all hunks apply or nothing is written. --dry-run validates without writing. --database records PatchApplied/PatchRolledBack events in the local store.\nInstall copies the bundled third-party AppSec skills as on-demand <skills dir>/<id>/SKILL.md trees (with every supporting file) into the location each agent documents. Skill targets: claude, antigravity, copilot, cursor, windsurf, cline, roo, continue, aider, openhands, goose, tabnine, junie, warp, droid, kiro, codex, zed, amazonq, devin, opencode, trae, kimi, qwen, hermes, replit, augment, amp, or all. Cody has no documented skills location (unsupported_target); Amazon Q, Continue and Replit are workspace-only (unsupported_scope); Aider gets read: entries in .aider.conf.yml and requires --skill because it loads every listed file into every chat (skill_selection_required, exit 2; exit 6 with the snippet to add by hand when the file cannot be edited losslessly), and all skips Aider. Unknown --skill ids fail with skill_not_found (exit 7) before anything is written; changed files are backed up first (skill files to <skills dir>/.sentra-backups/<id>/, other files to <file>.bak).\nInstall --mcp registers the stdio MCP server (this executable's absolute path, or --command, with the argument mcp) in the config file each agent documents. MCP targets are the skill targets; aider, openhands, replit and cody have no file-based stdio MCP configuration (mcp_unsupported_target); cline, goose and hermes are global-only and roo, trae and continue are workspace-only (unsupported_scope). Existing files are edited in place (comments, key order and formatting kept) after a <file>.bak backup; a file that cannot be edited losslessly is left untouched and the command exits 4 with the snippet to add by hand. --skill cannot be combined with --mcp.\nSkills lists or inspects the bundled third-party skill playbooks (SKILL.md plus supporting files, licenses in NOTICE).\nPrompt renders AppSec prompt templates (threat-model, api-bola, patch-remediation, skill-audit, scout, verify); --skills appends the named playbooks to the workflow prompt, keeping its rules and expected schema, and unknown ids fail with skill_not_found (exit 7).\nTenant lists or adds operator-declared tenant rows (labels only; no isolation is provisioned). List is read-only and never seeds rows.\nConfig manages provider API credentials and security policy configuration.\nFleet reports the in-process worker registry, which is empty because no worker registry source exists; containment readiness is never reported as ready without worker attestation.\nPlugin discovers adapters only in --dir or the default plugin directory (SENTRA_PLUGIN_DIR, else %APPDATA%/sentra/plugins on Windows, ~/Library/Application Support/sentra/plugins on macOS, $XDG_CONFIG_HOME/sentra/plugins or ~/.config/sentra/plugins elsewhere); the current directory and its parents are never searched and duplicate plugin ids are rejected. Probe and run start adapter code as a subprocess with the operator's privileges and an allowlisted environment; the time limit and frame/output quotas are enforced and the process tree is killed when the session ends, while declared memory and egress limits are not enforced. Run passes --workspace (default: current directory) to the adapter; its exit code, summary and evidence refs are adapter-reported.\nSync-advisories ingests universal OSV JSON advisories into the advisory database.\nPropose-pr packages verified vulnerabilities into GitHub Draft PR proposals.\nCodeql probes workspace for languages, generates CLI commands, or ingests CodeQL SARIF logs.\nDiff compares base and head directory snapshots with pure-Rust hashing.\nVerify-audit evaluates the 5 mandatory multi-user hosting security containment gates.\nExport sarif converts dependency and SAST findings into an OASIS SARIF v2.1.0 document.\nMcp runs the local stdio MCP server (legacy initialize-handshake revisions 2025-11-25, 2025-06-18, 2025-03-26 and 2024-11-05; the 2026-07-28 revision is not implemented). Tools are read-only and confined to --workspace (default: current directory); --database enables persisted session status. Skill installation is not exposed over MCP; use sentra install. Mcp install is an alias of install mcp.\n";
+pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra recover --database <file> [--workspace <directory>] [--json]\n  sentra audit --database <file> [--workspace <directory>] [--json]\n  sentra inventory [--workspace <directory>] [--max-depth <n>] [--json]\n  sentra scan [--workspace <directory>] [--snippet <string>] [-] [--file-name <name>] [--database <file>] [--sarif <file>] [--json]\n  sentra patch apply --patch <file> --workspace <directory> [--target <file>] [--backup-dir <directory>] [--database <file>] [--dry-run] [--json]\n  sentra patch rollback --backup <file> --workspace <directory> --target <file> [--database <file>] [--json]\n  sentra install <target> [--global] [--skill <id>[,<id>...]] [--workspace <directory>] [--json]\n  sentra install <target> --mcp [--global] [--workspace <directory>] [--command <path>] [--json]\n  sentra install mcp <target> [--global] [--workspace <directory>] [--command <path>] [--json]\n  sentra mcp install <target> [--global] [--workspace <directory>] [--command <path>] [--json]\n  sentra skills list [--json]\n  sentra skills show <id> [--json]\n  sentra prompt <workflow> [--scope <path>] [--skills <id>[,<id>...]] [--json]\n  sentra tenant list --database <file> [--json]\n  sentra tenant add --id <id> --name <name> [--workspace <directory>] [--isolation <level>] --database <file> [--json]\n  sentra config show [--key <key>] [--database <file>] [--json]\n  sentra config set --key <key> --value <value> [--database <file>] [--json]\n  sentra config test --provider <name> [--api-key <key>] [--model <model>] [--json]\n  sentra fleet list [--json]\n  sentra fleet status [--json]\n  sentra plugin list [--dir <directory>] [--json]\n  sentra plugin probe (--id <id> | --manifest <file>) [--dir <directory>] [--workspace <directory>] [--json]\n  sentra plugin run (--id <id> | --manifest <file>) --capability <capability> [--args <json>] [--dir <directory>] [--workspace <directory>] [--json]\n  sentra sync-advisories --source <directory-or-file> [--json]\n  sentra propose-pr --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra codeql [--workspace <directory>] [--sarif <file>] [--database <file>] [--json]\n  sentra codeql analyze --workspace <directory> --codeql <launcher> --work-dir <directory> --pack-cache <directory> --accept-codeql-terms [--language <id>]... [--suite code-scanning|security-extended] [--threads <n>] [--ram <mb>] [--timeout-secs <n>] [--allow-pack-download] [--max-results <n>] [--cancel-on-stdin-eof] [--json]\n  sentra codeql import --sarif <file> --workspace <directory> [--max-results <n>] [--json]\n  sentra diff --base <directory> --head <directory> [--json]\n  sentra verify-audit [--json]\n  sentra export sarif --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra mcp [--workspace <directory>] [--database <file>]\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session/audit default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\nAudit analyzes the lockfiles at the workspace root (Cargo, npm, yarn, pnpm, bun, deno, pip, poetry, go, composer, nuget, rubygems) against a small bundled pinned advisory sample, not a synchronized OSV or RustSec feed; is_stale reflects the sample's curation date. Advisories match by package name and version only (the ecosystem is not compared). Lockfiles that cannot be parsed are listed as not audited.\nInventory lists lockfiles found recursively (depth 6 by default; dependency, build and VCS directories skipped; links not followed) and their parsed packages with OSV ecosystem names. Read-only; nothing is executed.\nScan runs heuristic line-based pattern rules for secrets and code antipatterns on workspaces or snippets; --file-name labels a snippet and selects its language rules. Results are unverified candidates.\nPatch applies a single-file unified diff positionally with exact context; all hunks apply or nothing is written. --dry-run validates without writing. --database records PatchApplied/PatchRolledBack events in the local store.\nInstall copies the bundled third-party AppSec skills as on-demand <skills dir>/<id>/SKILL.md trees (with every supporting file) into the location each agent documents. Skill targets: claude, antigravity, copilot, cursor, windsurf, cline, roo, continue, aider, openhands, goose, tabnine, junie, warp, droid, kiro, codex, zed, amazonq, devin, opencode, trae, kimi, qwen, hermes, replit, augment, amp, or all. Cody has no documented skills location (unsupported_target); Amazon Q, Continue and Replit are workspace-only (unsupported_scope); Aider gets read: entries in .aider.conf.yml and requires --skill because it loads every listed file into every chat (skill_selection_required, exit 2; exit 6 with the snippet to add by hand when the file cannot be edited losslessly), and all skips Aider. Unknown --skill ids fail with skill_not_found (exit 7) before anything is written; changed files are backed up first (skill files to <skills dir>/.sentra-backups/<id>/, other files to <file>.bak).\nInstall --mcp registers the stdio MCP server (this executable's absolute path, or --command, with the argument mcp) in the config file each agent documents. MCP targets are the skill targets; aider, openhands, replit and cody have no file-based stdio MCP configuration (mcp_unsupported_target); cline, goose and hermes are global-only and roo, trae and continue are workspace-only (unsupported_scope). Existing files are edited in place (comments, key order and formatting kept) after a <file>.bak backup; a file that cannot be edited losslessly is left untouched and the command exits 4 with the snippet to add by hand. --skill cannot be combined with --mcp.\nSkills lists or inspects the bundled third-party skill playbooks (SKILL.md plus supporting files, licenses in NOTICE).\nPrompt renders AppSec prompt templates (threat-model, api-bola, patch-remediation, skill-audit, scout, verify); --skills appends the named playbooks to the workflow prompt, keeping its rules and expected schema, and unknown ids fail with skill_not_found (exit 7).\nTenant lists or adds operator-declared tenant rows (labels only; no isolation is provisioned). List is read-only and never seeds rows.\nConfig show and set read and write plain-text key/value rows in a system_settings table of --database (default data/sentra.db, relative to the current directory). The file and table are created if missing, but only inside an existing directory: when the parent directory does not exist, both fail with storage_or_service_failure (exit 5) and create nothing. No Sentra command reads these settings, and values, API keys included, are stored unencrypted. Config test is not implemented (the core CLI has no model-provider client): it exits 5 with not_implemented.\nFleet reports the in-process worker registry, which is empty because no worker registry source exists; containment readiness is never reported as ready without worker attestation.\nPlugin discovers adapters only in --dir or the default plugin directory (SENTRA_PLUGIN_DIR, else %APPDATA%/sentra/plugins on Windows, ~/Library/Application Support/sentra/plugins on macOS, $XDG_CONFIG_HOME/sentra/plugins or ~/.config/sentra/plugins elsewhere); the current directory and its parents are never searched and duplicate plugin ids are rejected. Probe and run start adapter code as a subprocess with the operator's privileges and an allowlisted environment; the time limit and frame/output quotas are enforced and the process tree is killed when the session ends, while declared memory and egress limits are not enforced. Run passes --workspace (default: current directory) to the adapter; its exit code, summary and evidence refs are adapter-reported.\nSync-advisories parses local OSV JSON (one file, or the top-level .json files of a directory) in memory and reports the advisory entries found. In a directory, unreadable or invalid files are counted as skipped; a single file that is not valid OSV JSON fails with invalid_advisory_feed (exit 4), and one that cannot be read with io_error (exit 5). Nothing is downloaded or persisted: audit, propose-pr and export sarif always use the bundled sample, and --database fails with not_implemented (exit 5).\nPropose-pr runs the dependency audit (bundled advisory sample, recorded as an audit task like audit) and prints one local draft pull request preview per match: title, a body that states which checks were not done, the lockfile the package came from, an illustrative version-bump diff that does not apply as-is, and a suggested gh command that is not run (it reads the body from <proposal id>.md; shell metacharacters in its title and branch are replaced with _). No branch, commit or pull request is created; --output writes the previews to a file.\nCodeql probes the workspace for languages and prints suggested CodeQL CLI commands (CodeQL is not run), or with --sarif parses a CodeQL SARIF file and reports its results. Nothing is uploaded and the parsed findings are not stored (with --workspace and --database, a completed task is recorded).\nCodeql analyze runs an operator-installed CodeQL CLI on this host (opt-in, ADR-0011) and refuses to start without --accept-codeql-terms: CodeQL is licensed under the GitHub CodeQL Terms and Conditions (LICENSE.md in its distribution), and Sentra does not check that your use is permitted. --codeql must be the codeql.exe of a CodeQL distribution on Windows (codeql.cmd and .bat files are refused) or its codeql launcher elsewhere. Only database create --build-mode=none is used: no build command, autobuild or build tracing, and the project is never built. actions, cpp, javascript, python and ruby are analyzed; go and swift (no build-mode none) and rust, csharp and java (their build-mode none extractors run project-controlled code: Cargo build scripts and procedural macros, dotnet restore, the project's Gradle wrapper or Maven) are reported as skipped. CodeQL's extractors still read and parse the untrusted code on this host, and the C/C++ and Python extractors start host compilers and the host Python. Each run gets a new run directory inside --work-dir, which every CodeQL step uses as its working directory, with an allowlisted environment (no tokens or keys), temporary and home directories inside the run directory, and the total --timeout-secs budget (default 1800; codeql version is also capped at 120 seconds); when the budget runs out the whole CodeQL process tree is killed (codeql_timeout, exit 5). --work-dir and --pack-cache are refused inside the workspace; on Unix they must belong to you and not be writable by group or others, and the run directory is created with mode 0700 (unsafe_directory, exit 4). On Windows a workspace, --work-dir or --pack-cache path containing & ^ ! or % is refused (invalid_workspace or unsafe_directory, exit 4), because CodeQL's extractor batch scripts expand those paths unquoted and cmd.exe would run part of the path as a command. With --cancel-on-stdin-eof the analysis is cancelled when standard input reaches end of file (for a parent process that keeps it open while it waits): the CodeQL process tree is killed and codeql_cancelled (exit 5) is returned. The run directory, databases included, is deleted afterwards. Query packs are read from the distribution or --pack-cache; only with --allow-pack-download does codeql pack download fetch a missing pack into --pack-cache (from the registry CodeQL is configured for, by default ghcr.io). Without it a language whose pack is missing is skipped, and codeql_query_pack_missing (exit 6) is returned when no language could run. Findings are candidate claims and are not stored.\nCodeql import normalizes a CodeQL SARIF file produced elsewhere (a local run, GitHub Actions; at most 64 MiB) into the same JSON as analyze. SARIF from other tools is rejected (sarif_not_codeql), and results whose path is absolute or outside the workspace are dropped and counted. Nothing is run, uploaded or stored.\nDiff compares base and head directory snapshots with pure-Rust hashing.\nVerify-audit is not implemented: no worker registry, secret-inheritance check or tamper-evident audit trail exists to assess, so it exits 5 with not_implemented instead of reporting gates.\nExport sarif runs the dependency audit (bundled advisory sample, recorded as an audit task like audit) and writes its results only as an OASIS SARIF v2.1.0 document to --output or stdout; SAST results are exported with scan --sarif. Nothing is uploaded.\nMcp runs the local stdio MCP server (legacy initialize-handshake revisions 2025-11-25, 2025-06-18, 2025-03-26 and 2024-11-05; the 2026-07-28 revision is not implemented). Tools are read-only and confined to --workspace (default: current directory); --database enables persisted session status. Skill installation is not exposed over MCP; use sentra install. Mcp install is an alias of install mcp.\n";
 
 /// Actions supported by the `sentra skills` command.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -175,6 +182,14 @@ pub enum Command {
         sarif: Option<PathBuf>,
         database: Option<PathBuf>,
     },
+    /// Opt-in host analysis with an operator-installed CodeQL CLI (ADR-0011).
+    CodeqlAnalyze(Box<CodeqlAnalyzeArgs>),
+    /// Normalizes a CodeQL SARIF file produced elsewhere.
+    CodeqlImport {
+        sarif: PathBuf,
+        workspace: PathBuf,
+        max_results: usize,
+    },
     Diff {
         base: PathBuf,
         head: PathBuf,
@@ -228,6 +243,26 @@ pub enum Command {
     VerifyAudit,
 }
 
+/// Arguments of `sentra codeql analyze`. Paths are untrusted until validated by Core.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CodeqlAnalyzeArgs {
+    pub workspace: PathBuf,
+    pub codeql: PathBuf,
+    pub work_dir: PathBuf,
+    pub pack_cache: PathBuf,
+    /// `--accept-codeql-terms`; checked at execution so the refusal is explained.
+    pub accept_terms: bool,
+    pub languages: Vec<CodeQlHostLanguage>,
+    pub suite: CodeQlSuite,
+    pub threads: Option<u32>,
+    pub ram_mb: Option<u32>,
+    pub timeout_secs: u64,
+    pub allow_pack_download: bool,
+    pub max_results: usize,
+    /// `--cancel-on-stdin-eof`: cancel the analysis when stdin reaches end of file.
+    pub cancel_on_stdin_eof: bool,
+}
+
 pub struct Invocation {
     pub command: Command,
     pub json: bool,
@@ -256,6 +291,122 @@ fn parse_max_depth(value: &str) -> Option<usize> {
         .parse::<usize>()
         .ok()
         .filter(|depth| *depth <= MAX_INVENTORY_DEPTH)
+}
+
+/// Decimal integer in `min..=max`; anything else is rejected, not clamped.
+fn parse_bounded(value: &str, min: u64, max: u64) -> Option<u64> {
+    if value.is_empty() || value.len() > 12 || !value.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    value
+        .parse::<u64>()
+        .ok()
+        .filter(|n| (min..=max).contains(n))
+}
+
+/// Most `--language` flags accepted by `codeql analyze`.
+const MAX_CODEQL_LANGUAGE_FLAGS: usize = 16;
+
+/// Grammar of `codeql analyze` and `codeql import`. Every value flag may appear once
+/// (`--language` may repeat); boolean flags take no value.
+fn parse_codeql_subcommand(sub: &str, words: Vec<&str>) -> Result<Command, ParseError> {
+    let invalid = || ParseError::InvalidArguments;
+    let mut workspace = None;
+    let mut codeql = None;
+    let mut work_dir = None;
+    let mut pack_cache = None;
+    let mut sarif = None;
+    let mut accept_terms = false;
+    let mut allow_pack_download = false;
+    let mut cancel_on_stdin_eof = false;
+    let mut languages = Vec::new();
+    let mut suite = None;
+    let mut threads = None;
+    let mut ram_mb = None;
+    let mut timeout_secs = None;
+    let mut max_results = None;
+    let analyze = sub == "analyze";
+    let mut rest = words.into_iter();
+    while let Some(flag) = rest.next() {
+        match flag {
+            "--accept-codeql-terms" if analyze && !accept_terms => {
+                accept_terms = true;
+                continue;
+            }
+            "--allow-pack-download" if analyze && !allow_pack_download => {
+                allow_pack_download = true;
+                continue;
+            }
+            "--cancel-on-stdin-eof" if analyze && !cancel_on_stdin_eof => {
+                cancel_on_stdin_eof = true;
+                continue;
+            }
+            _ => {}
+        }
+        let value = rest.next().ok_or_else(invalid)?;
+        if value.is_empty() || value.starts_with('-') {
+            return Err(invalid());
+        }
+        let first = match flag {
+            "--workspace" => workspace.replace(PathBuf::from(value)).is_none(),
+            "--max-results" => {
+                let n =
+                    parse_bounded(value, 1, MAX_CODEQL_MAX_RESULTS as u64).ok_or_else(invalid)?;
+                max_results.replace(n as usize).is_none()
+            }
+            "--sarif" if !analyze => sarif.replace(PathBuf::from(value)).is_none(),
+            "--codeql" if analyze => codeql.replace(PathBuf::from(value)).is_none(),
+            "--work-dir" if analyze => work_dir.replace(PathBuf::from(value)).is_none(),
+            "--pack-cache" if analyze => pack_cache.replace(PathBuf::from(value)).is_none(),
+            "--language" if analyze && languages.len() < MAX_CODEQL_LANGUAGE_FLAGS => {
+                languages.push(CodeQlHostLanguage::parse(value).ok_or_else(invalid)?);
+                true
+            }
+            "--suite" if analyze => suite
+                .replace(CodeQlSuite::parse(value).ok_or_else(invalid)?)
+                .is_none(),
+            "--threads" if analyze => {
+                let n = parse_bounded(value, 1, 256).ok_or_else(invalid)?;
+                threads.replace(n as u32).is_none()
+            }
+            "--ram" if analyze => {
+                let n = parse_bounded(value, 256, 4_194_304).ok_or_else(invalid)?;
+                ram_mb.replace(n as u32).is_none()
+            }
+            "--timeout-secs" if analyze => {
+                let n = parse_bounded(value, 1, MAX_CODEQL_TIMEOUT_SECS).ok_or_else(invalid)?;
+                timeout_secs.replace(n).is_none()
+            }
+            _ => return Err(invalid()),
+        };
+        if !first {
+            return Err(invalid());
+        }
+    }
+    let workspace = workspace.ok_or_else(invalid)?;
+    let max_results = max_results.unwrap_or(DEFAULT_CODEQL_MAX_RESULTS);
+    if !analyze {
+        return Ok(Command::CodeqlImport {
+            sarif: sarif.ok_or_else(invalid)?,
+            workspace,
+            max_results,
+        });
+    }
+    Ok(Command::CodeqlAnalyze(Box::new(CodeqlAnalyzeArgs {
+        workspace,
+        codeql: codeql.ok_or_else(invalid)?,
+        work_dir: work_dir.ok_or_else(invalid)?,
+        pack_cache: pack_cache.ok_or_else(invalid)?,
+        accept_terms,
+        languages,
+        suite: suite.unwrap_or_default(),
+        threads,
+        ram_mb,
+        timeout_secs: timeout_secs.unwrap_or(DEFAULT_CODEQL_TIMEOUT_SECS),
+        allow_pack_download,
+        max_results,
+        cancel_on_stdin_eof,
+    })))
 }
 
 /// Grammar shared by `install <target> [--mcp]`, `install mcp <target>` and
@@ -735,6 +886,19 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
         });
     }
     if name == "codeql" {
+        if let Some(sub @ ("analyze" | "import")) = words.first().copied() {
+            words.remove(0);
+            if words == ["--help"] {
+                return Ok(Invocation {
+                    command: Command::Help,
+                    json,
+                });
+            }
+            return Ok(Invocation {
+                command: parse_codeql_subcommand(sub, words)?,
+                json,
+            });
+        }
         let mut workspace = None;
         let mut sarif = None;
         let mut database = None;
@@ -1121,6 +1285,22 @@ fn detailed_error(
     }
 }
 
+/// Exit status of `not_implemented`: the command parses but has no real implementation, so
+/// it fails instead of printing a result that was never computed.
+const NOT_IMPLEMENTED_EXIT: u8 = 5;
+
+/// `not_implemented` error (exit 5) naming the command and what is missing. JSON mode
+/// prints `{schema_version, error, message, command}` on stderr like other detailed errors.
+fn not_implemented(command: &str, message: &str, json: bool) -> Response {
+    detailed_error(
+        "not_implemented",
+        NOT_IMPLEMENTED_EXIT,
+        json,
+        message,
+        serde_json::json!({ "command": command }),
+    )
+}
+
 /// One JSON document followed by a newline (serde_json escapes every string).
 fn json_text(value: &impl serde::Serialize) -> String {
     match serde_json::to_string(value) {
@@ -1384,7 +1564,8 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
                     "commands": [
                         "init", "status", "session show", "recover", "audit", "inventory",
                         "scan", "patch", "install", "skills", "prompt", "tenant", "config",
-                        "fleet", "plugin", "sync-advisories", "propose-pr", "codeql", "diff",
+                        "fleet", "plugin", "sync-advisories", "propose-pr", "codeql",
+                        "codeql analyze", "codeql import", "diff",
                         "verify-audit", "export sarif", "mcp",
                     ],
                     "mcp_protocol_versions": SUPPORTED_PROTOCOL_VERSIONS,
@@ -1547,22 +1728,34 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
                 }
             }
         }
-        Command::SyncAdvisories {
-            source,
-            database: _,
-        } => {
+        Command::SyncAdvisories { source, database } => {
+            if database.is_some() {
+                return not_implemented(
+                    "sync-advisories",
+                    "sync-advisories cannot persist advisories: the store has no advisory table, so --database is not supported. Without --database it only checks that local OSV JSON parses; audit, propose-pr and export sarif always use the bundled pinned advisory sample.",
+                    json,
+                );
+            }
             let src_path = absolute(&source, cwd);
-            let mut db = AdvisoryDatabase::default_pinned();
-            let count = if src_path.is_dir() {
-                db.ingest_osv_directory(&src_path)
+            // Parsed into a throwaway in-memory database: nothing reads it afterwards.
+            let mut db = AdvisoryDatabase::empty(TimestampUtc::now());
+            let parsed = if src_path.is_dir() {
+                ingest_osv_directory_report(&mut db, &src_path).map(|report| (true, report))
             } else {
                 match std::fs::read_to_string(&src_path) {
-                    Ok(content) => db.ingest_osv_payload(&content),
+                    Ok(content) => db.ingest_osv_payload(&content).map(|entries| {
+                        let report = OsvDirectoryIngest {
+                            advisory_entries: entries,
+                            files_parsed: 1,
+                            files_skipped: 0,
+                        };
+                        (false, report)
+                    }),
                     Err(_) => return error("io_error", 5, json),
                 }
             };
-            match count {
-                Ok(n) => render_sync_advisories(n, json),
+            match parsed {
+                Ok((directory, report)) => render_sync_advisories(directory, &report, json),
                 Err(_) => error("invalid_advisory_feed", 4, json),
             }
         }
@@ -1574,7 +1767,13 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
             let ws_path = absolute(workspace.as_deref().unwrap_or(cwd), cwd);
             let db_path = absolute(&database, cwd);
             let advisory_db = AdvisoryDatabase::default_pinned();
-            match LocalWorkspace::propose_remediations(&ws_path, &db_path, &advisory_db) {
+            let advisory_source = pinned_advisory_source(&advisory_db);
+            match LocalWorkspace::propose_remediations(
+                &ws_path,
+                &db_path,
+                &advisory_db,
+                &advisory_source,
+            ) {
                 Ok(proposals) => {
                     if let Some(out_file) = output {
                         let out_path = absolute(&out_file, cwd);
@@ -1590,15 +1789,23 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
                         match std::fs::write(&out_path, rendered_text.as_bytes()) {
                             Ok(_) => {
                                 let stdout = if json {
-                                    format!(
-                                        "{{\"schema_version\":1,\"command\":\"propose-pr\",\"status\":\"success\",\"count\":{},\"written\":true}}\n",
-                                        proposals.len()
-                                    )
+                                    json_text(&serde_json::json!({
+                                        "schema_version": 1,
+                                        "command": "propose-pr",
+                                        "status": "success",
+                                        "count": proposals.len(),
+                                        "written": true,
+                                        "local_preview_only": true,
+                                        "pull_requests_created": false,
+                                        "advisory_db_source": ADVISORY_DB_SOURCE,
+                                        "advisory_db_records": advisory_db.advisory_count(),
+                                    }))
                                 } else {
                                     format!(
-                                        "Sentra Remediation Proposals: {} draft PRs written to {}\n",
+                                        "Sentra remediation previews: {} written to {}\nLocal preview only: no branch, commit or pull request was created\nAdvisory database: bundled pinned sample ({} records); not a synchronized OSV or RustSec feed\n",
                                         proposals.len(),
-                                        out_path.display()
+                                        out_path.display(),
+                                        advisory_db.advisory_count(),
                                     )
                                 };
                                 Response {
@@ -1610,7 +1817,7 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
                             Err(_) => error("io_error", 5, json),
                         }
                     } else {
-                        render_propose_pr(&proposals, json)
+                        render_propose_pr(&proposals, &advisory_db, json)
                     }
                 }
                 Err(source) => core_error(source, json),
@@ -1643,6 +1850,47 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
                 error("invalid_arguments", 2, json)
             }
         }
+        Command::CodeqlAnalyze(args) => {
+            let request = CodeQlAnalyzeRequest {
+                workspace: absolute(&args.workspace, cwd),
+                codeql: absolute(&args.codeql, cwd),
+                work_dir: absolute(&args.work_dir, cwd),
+                pack_cache: absolute(&args.pack_cache, cwd),
+                terms_accepted: args.accept_terms,
+                languages: args.languages,
+                suite: args.suite,
+                threads: args.threads,
+                ram_mb: args.ram_mb,
+                timeout: Duration::from_secs(args.timeout_secs),
+                allow_pack_download: args.allow_pack_download,
+                max_results: args.max_results,
+                cancel: args.cancel_on_stdin_eof.then(cancel_when_stdin_closes),
+            };
+            match analyze_workspace_with_codeql(&request) {
+                Ok(report) => render_codeql_report(&report, json),
+                Err(err) => codeql_host_error(&err, json),
+            }
+        }
+        Command::CodeqlImport {
+            sarif,
+            workspace,
+            max_results,
+        } => {
+            let ws_path = absolute(&workspace, cwd);
+            let Some(ws_path) = std::fs::canonicalize(&ws_path).ok().filter(|w| w.is_dir()) else {
+                return detailed_error(
+                    "invalid_workspace",
+                    4,
+                    json,
+                    "the workspace is not an accessible directory",
+                    serde_json::json!({}),
+                );
+            };
+            match import_codeql_sarif(&absolute(&sarif, cwd), &ws_path, max_results) {
+                Ok(report) => render_codeql_report(&report, json),
+                Err(err) => codeql_sarif_error(&err, json),
+            }
+        }
         Command::Diff { base, head } => {
             let base_path = absolute(&base, cwd);
             let head_path = absolute(&head, cwd);
@@ -1651,20 +1899,14 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
                 Err(source) => core_error(source, json),
             }
         }
-        Command::VerifyAudit => {
-            let mut fleet = WorkerFleetManager::new();
-            let worker = RemoteWorkerNode::new(
-                RemoteWorkerId::new("worker-enterprise-01").expect("valid id"),
-                "https://worker-node-1.internal:8443",
-                WorkerArchitecture::LinuxX86_64,
-                ContainmentLevel::DisposableVm,
-                WorkerResourceCaps::default(),
-                EgressPolicy::StrictlyDenied,
-            );
-            let _ = fleet.register_worker(worker);
-            let report = MultiUserSecurityAudit::run_assessment(&fleet);
-            render_verify_audit(&report, json)
-        }
+        // There is nothing real to assess: the worker registry is empty and no secret-
+        // inheritance or audit-trail tamper-evidence check exists. Earlier builds assessed a
+        // built-in fixture worker with gates hard-coded to pass and reported `approved`.
+        Command::VerifyAudit => not_implemented(
+            "verify-audit",
+            "verify-audit is not implemented: there is no worker registry to assess, and no secret-inheritance or audit-trail tamper-evidence check exists, so no multi-user hosting gate can be evaluated.",
+            json,
+        ),
         Command::ExportSarif {
             workspace,
             database,
@@ -1815,27 +2057,13 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
                     Err(source) => core_error(source, json),
                 }
             }
-            ConfigAction::Test {
-                provider,
-                api_key: _,
-                model,
-            } => {
-                let model_str = model.unwrap_or_else(|| match provider.to_lowercase().as_str() {
-                    "anthropic" => "claude-3-7-sonnet-20250219".to_string(),
-                    "openai" => "gpt-4o".to_string(),
-                    "gemini" => "gemini-2.5-pro".to_string(),
-                    "ollama" => "deepseek-r1:7b".to_string(),
-                    _ => "default-model".to_string(),
-                });
-                render_config_test(
-                    &provider,
-                    &model_str,
-                    "connected",
-                    23,
-                    "API key format verified; endpoint probe returned healthy status (HTTP 200).",
-                    json,
-                )
-            }
+            // No provider client exists in the core CLI. Earlier builds printed a fixed
+            // `connected` result (HTTP 200, 23 ms) without contacting anything.
+            ConfigAction::Test { .. } => not_implemented(
+                "config test",
+                "config test is not implemented: the core CLI has no model-provider client, so no provider connection, API key or model can be checked.",
+                json,
+            ),
         },
         Command::Fleet { action } => {
             let fleet = LocalWorkspace::fleet_manager();
@@ -2658,134 +2886,88 @@ fn render_prompt(workflow: &str, scope: &str, skills: Option<&str>, json: bool) 
     }
 }
 
-fn render_verify_audit(report: &MultiUserAuditReport, json: bool) -> Response {
-    let exit_code = if report.is_approved() { 0 } else { 5 };
-    let stdout = if json {
-        let findings_json = report
-            .findings
-            .iter()
-            .map(|f| format!("\"{}\"", f.replace('"', "\\\"")))
-            .collect::<Vec<_>>()
-            .join(",");
-        let status_str = match report.overall_status {
-            AuditStatus::Approved => "approved",
-            AuditStatus::Blocked => "blocked",
-        };
-        format!(
-            "{{\"schema_version\":1,\"command\":\"verify-audit\",\"status\":\"{}\",\"approved\":{},\"gate_tenant_isolation\":{},\"gate_worker_egress_containment\":{},\"gate_cross_tenant_worker_reuse\":{},\"gate_zero_secret_inheritance\":{},\"gate_immutable_audit_trail\":{},\"findings\":[{}],\"untrusted_execution\":false}}\n",
-            status_str,
-            report.is_approved(),
-            report.gate_tenant_isolation,
-            report.gate_worker_egress_containment,
-            report.gate_cross_tenant_worker_reuse,
-            report.gate_zero_secret_inheritance,
-            report.gate_immutable_audit_trail,
-            findings_json,
-        )
-    } else {
-        let status_str = match report.overall_status {
-            AuditStatus::Approved => "approved",
-            AuditStatus::Blocked => "blocked",
-        };
-        let mut text = format!(
-            "Sentra multi-user security audit: {}\nTenant isolation: {}\nWorker egress containment: {}\nCross-tenant worker reuse: {}\nZero secret inheritance: {}\nImmutable audit trail: {}\n",
-            status_str,
-            if report.gate_tenant_isolation {
-                "passed"
-            } else {
-                "failed"
-            },
-            if report.gate_worker_egress_containment {
-                "passed"
-            } else {
-                "failed"
-            },
-            if report.gate_cross_tenant_worker_reuse {
-                "passed"
-            } else {
-                "failed"
-            },
-            if report.gate_zero_secret_inheritance {
-                "passed"
-            } else {
-                "failed"
-            },
-            if report.gate_immutable_audit_trail {
-                "passed"
-            } else {
-                "failed"
-            },
-        );
-        for f in &report.findings {
-            text.push_str(&format!("  [finding] {}\n", f));
-        }
-        text.push_str("Untrusted execution: disabled\n");
-        text
-    };
-    Response {
-        stdout,
-        stderr: String::new(),
-        exit_code,
-    }
-}
-
 /// Source label for the bundled advisory set: a small hand-written sample, not a feed.
 const ADVISORY_DB_SOURCE: &str = "bundled_pinned_sample";
+
+/// Human description of the bundled advisory set, quoted in remediation preview bodies.
+fn pinned_advisory_source(advisory_db: &AdvisoryDatabase) -> String {
+    format!(
+        "Sentra's bundled pinned advisory sample ({} records, curated {}), not a synchronized OSV, RustSec or GHSA feed",
+        advisory_db.advisory_count(),
+        advisory_db.updated_at().to_rfc3339()
+    )
+}
+
+/// `a, b` or `none`.
+fn list_or_none(items: &[String]) -> String {
+    if items.is_empty() {
+        "none".to_string()
+    } else {
+        items.join(", ")
+    }
+}
 
 fn render_audit(report: LocalAuditReport, advisory_db: &AdvisoryDatabase, json: bool) -> Response {
     let advisory_db_updated_at = advisory_db.updated_at().to_rfc3339();
     let stdout = if json {
-        let findings_json = report
+        let findings: Vec<serde_json::Value> = report
             .candidate_findings
             .iter()
             .map(|f| {
-                format!(
-                    "{{\"id\":\"{}\",\"title\":\"{}\",\"severity\":\"{}\",\"reachability\":\"{}\",\"status\":\"{}\"}}",
-                    f.id(),
-                    f.title().replace('"', "\\\""),
-                    f.severity().as_str(),
-                    f.reachability().as_str(),
-                    f.status().as_str(),
-                )
+                serde_json::json!({
+                    "id": f.id().to_string(),
+                    "title": f.title(),
+                    "severity": f.severity().as_str(),
+                    "reachability": f.reachability().as_str(),
+                    "status": f.status().as_str(),
+                    "lockfile": f.location().map(|l| l.path.as_str()),
+                })
             })
-            .collect::<Vec<_>>()
-            .join(",");
-        let unknown_json = report
-            .audit_result
-            .unknown_version_packages
-            .iter()
-            .map(|u| format!("\"{}\"", u.replace('"', "\\\"")))
-            .collect::<Vec<_>>()
-            .join(",");
-        format!(
-            "{{\"schema_version\":1,\"command\":\"audit\",\"session_id\":\"{}\",\"task_id\":\"{}\",\"packages_audited\":{},\"vulnerable_packages\":{},\"is_stale\":{},\"advisory_db_source\":\"{}\",\"advisory_db_records\":{},\"advisory_db_updated_at\":\"{}\",\"unknown_version_packages\":[{}],\"findings\":[{}],\"untrusted_execution\":false}}\n",
-            report.session_id,
-            report.task_id,
-            report.audit_result.packages_audited,
-            report.audit_result.vulnerable_packages,
-            report.audit_result.is_stale,
-            ADVISORY_DB_SOURCE,
-            advisory_db.advisory_count(),
-            advisory_db_updated_at,
-            unknown_json,
-            findings_json,
-        )
+            .collect();
+        json_text(&serde_json::json!({
+            "schema_version": 1,
+            "command": "audit",
+            "session_id": report.session_id.to_string(),
+            "task_id": report.task_id.to_string(),
+            "packages_audited": report.audit_result.packages_audited,
+            "vulnerable_packages": report.audit_result.vulnerable_packages,
+            "is_stale": report.audit_result.is_stale,
+            "advisory_db_source": ADVISORY_DB_SOURCE,
+            "advisory_db_records": advisory_db.advisory_count(),
+            "advisory_db_updated_at": advisory_db_updated_at,
+            "lockfiles_audited": report.lockfiles,
+            "lockfiles_unparsed": report.unparsed_lockfiles,
+            "unknown_version_packages": report.audit_result.unknown_version_packages,
+            "findings": findings,
+            "untrusted_execution": false,
+        }))
     } else {
         let mut text = format!(
-            "Sentra dependency audit: completed\nSession: {}\nTask: {}\nPackages audited: {}\nVulnerable packages: {}\nAdvisory database: bundled pinned sample ({} records, curated {}); not a synchronized OSV or RustSec feed\nAdvisory database stale: {}\n",
+            "Sentra dependency audit: completed\nSession: {}\nTask: {}\nLockfiles audited: {}\n",
             report.session_id,
             report.task_id,
+            list_or_none(&report.lockfiles),
+        );
+        if !report.unparsed_lockfiles.is_empty() {
+            text.push_str(&format!(
+                "Lockfiles not parsed (their packages were not audited): {}\n",
+                report.unparsed_lockfiles.join(", ")
+            ));
+        }
+        text.push_str(&format!(
+            "Packages audited: {}\nVulnerable packages: {}\nAdvisory database: bundled pinned sample ({} records, curated {}); not a synchronized OSV or RustSec feed\nAdvisory database stale: {}\n",
             report.audit_result.packages_audited,
             report.audit_result.vulnerable_packages,
             advisory_db.advisory_count(),
             advisory_db_updated_at,
             report.audit_result.is_stale
-        );
+        ));
         for f in &report.candidate_findings {
             text.push_str(&format!(
-                "\n[{}] {}\n  Reachability: {}\n  Status: {}\n",
+                "\n[{}] {}\n  Lockfile: {}\n  Reachability: {}\n  Status: {}\n",
                 f.severity().as_str(),
                 f.title(),
+                f.location().map_or("unknown", |l| l.path.as_str()),
                 f.reachability().as_str(),
                 f.status().as_str(),
             ));
@@ -2856,16 +3038,31 @@ fn render_scan(report: &SastReport, json: bool) -> Response {
     }
 }
 
-fn render_sync_advisories(count: usize, json: bool) -> Response {
+fn render_sync_advisories(directory: bool, report: &OsvDirectoryIngest, json: bool) -> Response {
+    let source_kind = if directory { "directory" } else { "file" };
     let stdout = if json {
-        format!(
-            "{{\"schema_version\":1,\"command\":\"sync-advisories\",\"advisories_ingested\":{},\"status\":\"success\",\"untrusted_execution\":false}}\n",
-            count
-        )
+        json_text(&serde_json::json!({
+            "schema_version": 1,
+            "command": "sync-advisories",
+            "source_kind": source_kind,
+            "advisory_entries_parsed": report.advisory_entries,
+            "files_parsed": report.files_parsed,
+            "files_skipped": report.files_skipped,
+            "persisted": false,
+            "message": "Parsed in memory only; nothing was downloaded or stored. audit, propose-pr and export sarif use the bundled pinned advisory sample.",
+            "untrusted_execution": false,
+        }))
     } else {
         format!(
-            "Sentra advisory synchronization: completed\nAdvisories ingested: {}\nStatus: success\nUntrusted execution: disabled\n",
-            count
+            "Sentra OSV advisory parse: completed; nothing was persisted\nSource: {}\nAdvisory entries parsed: {} (one per affected package)\nFiles parsed: {}\nFiles skipped (unreadable or invalid): {}\nPersisted: no (no advisory store exists; audit, propose-pr and export sarif use the bundled pinned advisory sample)\nUntrusted execution: disabled\n",
+            if directory {
+                "directory (top-level .json files)"
+            } else {
+                "file"
+            },
+            report.advisory_entries,
+            report.files_parsed,
+            report.files_skipped,
         )
     };
     Response {
@@ -2875,27 +3072,42 @@ fn render_sync_advisories(count: usize, json: bool) -> Response {
     }
 }
 
-fn render_propose_pr(proposals: &[RemediationPrPackage], json: bool) -> Response {
+fn render_propose_pr(
+    proposals: &[RemediationPrPackage],
+    advisory_db: &AdvisoryDatabase,
+    json: bool,
+) -> Response {
     let stdout = if json {
-        let proposals_json = serde_json::to_string(proposals).unwrap_or_default();
-        format!(
-            "{{\"schema_version\":1,\"command\":\"propose-pr\",\"proposals_count\":{},\"proposals\":{},\"is_draft_only\":true,\"untrusted_execution\":false}}\n",
-            proposals.len(),
-            proposals_json
-        )
+        json_text(&serde_json::json!({
+            "schema_version": 1,
+            "command": "propose-pr",
+            "proposals_count": proposals.len(),
+            "proposals": proposals,
+            "is_draft_only": true,
+            "local_preview_only": true,
+            "pull_requests_created": false,
+            "patch_diffs_illustrative": true,
+            "advisory_db_source": ADVISORY_DB_SOURCE,
+            "advisory_db_records": advisory_db.advisory_count(),
+            "advisory_db_updated_at": advisory_db.updated_at().to_rfc3339(),
+            "untrusted_execution": false,
+        }))
     } else {
         let mut text = format!(
-            "Sentra Remediation PR Proposals: {}\nDraft only invariant: enforced (zero autonomous merge)\nUntrusted execution: disabled\n\n",
-            proposals.len()
+            "Sentra remediation PR previews: {}\nLocal preview only: no branch, commit or pull request was created, and the suggested commands were not run\nAdvisory database: bundled pinned sample ({} records, curated {}); not a synchronized OSV or RustSec feed\nPatch diffs: illustrative version bumps; they do not apply as-is\nUntrusted execution: disabled\n\n",
+            proposals.len(),
+            advisory_db.advisory_count(),
+            advisory_db.updated_at().to_rfc3339(),
         );
         for (idx, p) in proposals.iter().enumerate() {
             text.push_str(&format!(
-                "Proposal #{}: [{}]\n  Target: {}\n  Branch: {}\n  Title:  {}\n  GitHub Dispatch Command:\n    {}\n\n",
+                "Preview #{}: [{}]\n  Target: {}\n  Suggested branch (not created): {}\n  Title:  {}\n  Suggested command (not run; it needs the branch on the remote and the preview body saved as {}.md, see body_markdown in the --json output):\n    {}\n\n",
                 idx + 1,
                 p.proposal_id,
                 p.target_component,
                 p.branch_name,
                 p.title,
+                p.proposal_id,
                 p.gh_command
             ));
         }
@@ -2985,7 +3197,7 @@ fn render_codeql_ingest(result: &CodeQlSarifIngestResult, json: bool) -> Respons
             .map(|s| format!("\"{}\"", s.as_str()))
             .unwrap_or_else(|| "null".to_string());
         format!(
-            "{{\"schema_version\":1,\"command\":\"codeql\",\"mode\":\"ingest\",\"total_sarif_results\":{},\"findings_admitted\":{},\"taint_traces_extracted\":{},\"highest_severity\":{},\"rules\":[{}],\"untrusted_execution\":false}}\n",
+            "{{\"schema_version\":1,\"command\":\"codeql\",\"mode\":\"ingest\",\"total_sarif_results\":{},\"candidate_findings_parsed\":{},\"findings_stored\":false,\"taint_traces_extracted\":{},\"highest_severity\":{},\"rules\":[{}],\"untrusted_execution\":false}}\n",
             result.total_sarif_results,
             result.findings.len(),
             result.taint_traces_extracted,
@@ -2994,7 +3206,7 @@ fn render_codeql_ingest(result: &CodeQlSarifIngestResult, json: bool) -> Respons
         )
     } else {
         let mut text = format!(
-            "Sentra CodeQL analysis ingestion: completed\nTotal SARIF results: {}\nFindings admitted: {}\nTaint traces extracted: {}\nHighest severity: {}\nRules identified: {}\n\n",
+            "Sentra CodeQL analysis ingestion: completed\nTotal SARIF results: {}\nCandidate findings parsed (not stored): {}\nTaint traces extracted: {}\nHighest severity: {}\nRules identified: {}\n\n",
             result.total_sarif_results,
             result.findings.len(),
             result.taint_traces_extracted,
@@ -3029,6 +3241,181 @@ fn render_codeql_ingest(result: &CodeQlSarifIngestResult, json: bool) -> Respons
     };
     Response {
         stdout,
+        stderr: String::new(),
+        exit_code: 0,
+    }
+}
+
+/// A flag that becomes true once standard input reaches end of file (or fails).
+///
+/// A parent process that keeps the pipe open while it waits closes it to cancel; the
+/// pipe also closes when the parent dies, so CodeQL never outlives it unnoticed.
+fn cancel_when_stdin_closes() -> Arc<AtomicBool> {
+    let flag = Arc::new(AtomicBool::new(false));
+    let set = Arc::clone(&flag);
+    std::thread::spawn(move || {
+        use std::io::Read;
+        let mut stdin = std::io::stdin();
+        let mut buffer = [0_u8; 256];
+        while matches!(stdin.read(&mut buffer), Ok(n) if n > 0) {}
+        set.store(true, Ordering::SeqCst);
+    });
+    flag
+}
+
+/// Maps a host analysis failure to its error code, exit status and the partial report.
+fn codeql_host_error(err: &CodeQlHostError, json: bool) -> Response {
+    let exit = match err.kind {
+        CodeQlHostErrorKind::TermsNotAccepted
+        | CodeQlHostErrorKind::InvalidWorkspace
+        | CodeQlHostErrorKind::WorkDirInsideWorkspace
+        | CodeQlHostErrorKind::PackCacheInsideWorkspace
+        | CodeQlHostErrorKind::UnsafeDirectory => 4,
+        CodeQlHostErrorKind::NotFound => 7,
+        CodeQlHostErrorKind::QueryPackMissing => 6,
+        CodeQlHostErrorKind::Timeout
+        | CodeQlHostErrorKind::Failed
+        | CodeQlHostErrorKind::Cancelled
+        | CodeQlHostErrorKind::Io => 5,
+    };
+    let details = match &err.report {
+        Some(report) => serde_json::json!({
+            "command": "codeql analyze",
+            "codeql_version": report.codeql_version,
+            "target_code_executed": false,
+            "languages": report.languages,
+            "warnings": report.warnings,
+        }),
+        None => serde_json::json!({
+            "command": "codeql analyze",
+            "target_code_executed": false,
+        }),
+    };
+    let mut response = detailed_error(err.kind.code(), exit, json, &err.message, details);
+    if !json && let Some(report) = &err.report {
+        response.stderr.push_str(&codeql_language_lines(report));
+    }
+    response
+}
+
+/// Maps a rejected SARIF document to its error code and exit status.
+fn codeql_sarif_error(err: &CodeQlSarifError, json: bool) -> Response {
+    let exit = match err {
+        CodeQlSarifError::Io(_) => 5,
+        _ => 4,
+    };
+    let details = match err {
+        CodeQlSarifError::TooLarge { size, limit } => {
+            serde_json::json!({ "command": "codeql import", "size_bytes": size, "limit_bytes": limit })
+        }
+        _ => serde_json::json!({ "command": "codeql import" }),
+    };
+    detailed_error(err.code(), exit, json, &err.to_string(), details)
+}
+
+fn codeql_language_lines(report: &CodeQlResultReport) -> String {
+    let mut text = String::new();
+    if report.languages.is_empty() {
+        return text;
+    }
+    text.push_str("Languages:\n");
+    for outcome in &report.languages {
+        let status = match outcome.status {
+            CodeQlLanguageStatus::Analyzed => "analyzed",
+            CodeQlLanguageStatus::Skipped => "skipped",
+            CodeQlLanguageStatus::Failed => "failed",
+        };
+        let mut line = format!("  - {:<11} {status}", outcome.language);
+        if outcome.status == CodeQlLanguageStatus::Analyzed {
+            line.push_str(&format!(" ({} results", outcome.results));
+            if let Some(ms) = outcome.duration_ms {
+                line.push_str(&format!(", {:.1} s", ms as f64 / 1000.0));
+            }
+            line.push(')');
+        }
+        if let Some(reason) = &outcome.reason {
+            line.push_str(&format!(": {reason}"));
+        }
+        line.push('\n');
+        text.push_str(&line);
+    }
+    text
+}
+
+fn render_codeql_report(report: &CodeQlResultReport, json: bool) -> Response {
+    if json {
+        return json_line(report);
+    }
+    let import = report.command == "codeql import";
+    let mut text = if import {
+        "Sentra CodeQL SARIF import: completed (Sentra did not run CodeQL)\n".to_string()
+    } else {
+        "Sentra CodeQL host analysis: completed\n".to_string()
+    };
+    text.push_str(&format!("Workspace: {}\n", report.workspace));
+    if import {
+        if let Some(tool) = &report.source_tool {
+            text.push_str(&format!(
+                "SARIF produced by: {} {}\n",
+                tool.name,
+                tool.version.as_deref().unwrap_or("(version not stated)")
+            ));
+        }
+    } else {
+        text.push_str(&format!(
+            "CodeQL version: {}\nSuite: {}\nPack download allowed: {}\n",
+            report.codeql_version.as_deref().unwrap_or("unknown"),
+            report.suite.as_deref().unwrap_or("-"),
+            if report.pack_download_allowed {
+                "yes"
+            } else {
+                "no"
+            }
+        ));
+    }
+    text.push_str(&codeql_language_lines(report));
+    text.push_str(&format!(
+        "Findings (candidate claims, not stored): {} of {} results ({} outside the workspace dropped{})\n",
+        report.findings.len(),
+        report.results_total,
+        report.results_outside_workspace,
+        if report.truncated { ", truncated at --max-results" } else { "" }
+    ));
+    for finding in report.findings.iter().take(50) {
+        let message: String = finding
+            .message
+            .lines()
+            .next()
+            .unwrap_or_default()
+            .chars()
+            .take(160)
+            .collect();
+        text.push_str(&format!(
+            "  [{:<8}] {}:{} {} - {}\n",
+            finding.severity.as_str(),
+            finding.path,
+            finding.start_line,
+            finding.rule_id,
+            message
+        ));
+    }
+    if report.findings.len() > 50 {
+        text.push_str(&format!(
+            "  ... {} more (use --json for all)\n",
+            report.findings.len() - 50
+        ));
+    }
+    if !report.warnings.is_empty() {
+        text.push_str("Warnings:\n");
+        for warning in &report.warnings {
+            text.push_str(&format!("  - {warning}\n"));
+        }
+    }
+    if !import {
+        text.push_str("Target code executed: no (CodeQL build-mode none only; see ADR-0011)\n");
+    }
+    Response {
+        stdout: text,
         stderr: String::new(),
         exit_code: 0,
     }
@@ -3379,36 +3766,6 @@ fn render_config_set(key: &str, value: &str, json: bool) -> Response {
         format!(
             "Sentra configuration updated: success\nKey: {}\nValue: {}\nUntrusted execution: disabled\n",
             key, value
-        )
-    };
-    Response {
-        stdout,
-        stderr: String::new(),
-        exit_code: 0,
-    }
-}
-
-fn render_config_test(
-    provider: &str,
-    model: &str,
-    status: &str,
-    latency_ms: u64,
-    message: &str,
-    json: bool,
-) -> Response {
-    let stdout = if json {
-        format!(
-            "{{\"schema_version\":1,\"command\":\"config test\",\"provider\":\"{}\",\"model\":\"{}\",\"status\":\"{}\",\"latency_ms\":{},\"message\":\"{}\",\"untrusted_execution\":false}}\n",
-            provider,
-            model,
-            status,
-            latency_ms,
-            message.replace('"', "\\\"")
-        )
-    } else {
-        format!(
-            "Sentra AI Provider Connection Test: {}\nProvider: {}\nModel: {}\nLatency: {}ms\nMessage: {}\nUntrusted execution: disabled\n",
-            status, provider, model, latency_ms, message
         )
     };
     Response {

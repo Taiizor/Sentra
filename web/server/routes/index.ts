@@ -1,5 +1,6 @@
 import type { AppContext } from "../app-context.ts";
 import type { Router } from "../http.ts";
+import { registerCodeqlRoutes } from "./codeql.ts";
 import { registerCoreRoutes } from "./core-routes.ts";
 import { registerGitHubRoutes } from "./github.ts";
 import { registerIntelRoutes } from "./intel.ts";
@@ -22,4 +23,5 @@ export function registerRoutes(router: Router, app: AppContext): void {
   registerWebhookRoutes(router, app);
   registerResearchRoutes(router, app);
   registerPluginRoutes(router, app);
+  registerCodeqlRoutes(router, app);
 }

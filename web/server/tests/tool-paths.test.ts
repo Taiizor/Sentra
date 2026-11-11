@@ -11,7 +11,7 @@ import { openWebDb } from "../db.ts";
 import { ExecutableLocator } from "../executables.ts";
 import { GitHubService } from "../github.ts";
 import { HostPlatform } from "../host-platform.ts";
-import { describeTools, GH_PINNED_NOTE, normalizeStoredTool, reportedToolLocation, TOOL_NAMES, type HostToolsDeps } from "../host-tools.ts";
+import { codeqlLauncherChoice, describeTools, GH_PINNED_NOTE, hostToolsDeps, normalizeStoredTool, reportedToolLocation, TOOL_NAMES, type HostToolsDeps } from "../host-tools.ts";
 import type { Router } from "../http.ts";
 import { createApp, handleRequest } from "../main.ts";
 import { SecretStore } from "../secrets.ts";
@@ -21,6 +21,8 @@ import {
   checkToolPath,
   CONFIGURABLE_TOOLS,
   GH_PATH_HINT,
+  CODEQL_PATH_HINT,
+  ignoredStoredToolPaths,
   GH_PINNED_HINT,
   hostToolPathProbes,
   MAX_TOOL_PATH_LENGTH,
@@ -193,12 +195,12 @@ describe("tool path input", () => {
 describe("tool path validation (nothing is executed)", () => {
   test("Windows: a folder is searched like PATH (PATHEXT, never the extension-less launcher)", async () => {
     const fake = fakeFs("win32", "x64", {
-      "D:\\CodeQL": dir(),
-      "D:\\CodeQL\\codeql": file(POSIX_SCRIPT),
-      "D:\\CodeQL\\CODEQL.EXE": file(peHeader(PE_X64)),
+      "D:\\Semgrep": dir(),
+      "D:\\Semgrep\\semgrep": file(POSIX_SCRIPT),
+      "D:\\Semgrep\\SEMGREP.EXE": file(peHeader(PE_X64)),
     });
-    const check = accepted(await checkToolPath("codeql", '"D:\\codeql\\"', fake.probes));
-    expect(check).toMatchObject({ input: "D:\\codeql", file: "D:\\codeql\\CODEQL.EXE", warning: null });
+    const check = accepted(await checkToolPath("semgrep", '"D:\\semgrep\\"', fake.probes));
+    expect(check).toMatchObject({ input: "D:\\semgrep", file: "D:\\semgrep\\SEMGREP.EXE", warning: null });
     expect(check.binary).toMatchObject({ format: "pe", compatibility: "native" });
   });
 
@@ -253,20 +255,20 @@ describe("tool path validation (nothing is executed)", () => {
 
   test("Windows: a folder without the tool names what was looked for and suggests the subfolder that has it", async () => {
     const fake = fakeFs("win32", "x64", {
-      "D:\\CodeQL": dir(),
-      "D:\\CodeQL\\codeql": dir(),
-      "D:\\CodeQL\\codeql\\codeql.exe": file(peHeader(PE_X64)),
+      "D:\\Semgrep": dir(),
+      "D:\\Semgrep\\semgrep": dir(),
+      "D:\\Semgrep\\semgrep\\semgrep.exe": file(peHeader(PE_X64)),
     });
-    expect(problemOf(await checkToolPath("codeql", "D:\\CodeQL", fake.probes))).toBe(
-      "No codeql executable in D:\\CodeQL (looked for codeql.com, codeql.exe, codeql.bat, codeql.cmd). D:\\CodeQL\\codeql\\codeql.exe exists: enter D:\\CodeQL\\codeql or the file itself.",
+    expect(problemOf(await checkToolPath("semgrep", "D:\\Semgrep", fake.probes))).toBe(
+      "No semgrep executable in D:\\Semgrep (looked for semgrep.com, semgrep.exe, semgrep.bat, semgrep.cmd). D:\\Semgrep\\semgrep\\semgrep.exe exists: enter D:\\Semgrep\\semgrep or the file itself.",
     );
-    expect(problemOf(await checkToolPath("codeql", "D:\\nowhere\\codeql.exe", fake.probes))).toBe("Nothing exists at D:\\nowhere\\codeql.exe.");
+    expect(problemOf(await checkToolPath("semgrep", "D:\\nowhere\\semgrep.exe", fake.probes))).toBe("Nothing exists at D:\\nowhere\\semgrep.exe.");
   });
 
   test("Windows: network, device and drive-relative paths are refused before any file-system call", async () => {
     const fake = fakeFs("win32", "x64", {});
-    for (const raw of ["\\\\server\\share\\codeql", "\\\\?\\UNC\\server\\share", "\\\\.\\C:\\codeql.exe", "C:codeql.exe", "codeql"]) {
-      expect((await checkToolPath("codeql", raw, fake.probes)).ok).toBe(false);
+    for (const raw of ["\\\\server\\share\\semgrep", "\\\\?\\UNC\\server\\share", "\\\\.\\C:\\semgrep.exe", "C:semgrep.exe", "semgrep"]) {
+      expect((await checkToolPath("semgrep", raw, fake.probes)).ok).toBe(false);
     }
     expect(fake.touched).toEqual([]);
   });
@@ -336,7 +338,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 
 describe("tool path checks on slow or unreachable drives", () => {
   test("a folder that does not answer in time is reported as such, not searched name by name or called empty", async () => {
-    const fake = fakeFs("win32", "x64", { "Z:\\CodeQL": dir(), "Z:\\CodeQL\\codeql.exe": file(peHeader(PE_X64)) });
+    const fake = fakeFs("win32", "x64", { "Z:\\Semgrep": dir(), "Z:\\Semgrep\\semgrep.exe": file(peHeader(PE_X64)) });
     const kinds: string[] = [];
     const probes: ToolPathProbes = {
       ...fake.probes,
@@ -348,12 +350,12 @@ describe("tool path checks on slow or unreachable drives", () => {
         throw Object.assign(new Error(`${target} timed out`), { code: "ETIMEDOUT", timeoutMs: PROBE_TIMEOUT_MS });
       },
     };
-    expect(problemOf(await checkToolPath("codeql", "Z:\\CodeQL", probes))).toBe(slowPathProblem("Z:\\CodeQL", PROBE_TIMEOUT_MS));
-    expect(slowPathProblem("Z:\\CodeQL", PROBE_TIMEOUT_MS)).toBe(
-      "Z:\\CodeQL did not answer within 2 s; the drive or network share it is on may be slow or unreachable.",
+    expect(problemOf(await checkToolPath("semgrep", "Z:\\Semgrep", probes))).toBe(slowPathProblem("Z:\\Semgrep", PROBE_TIMEOUT_MS));
+    expect(slowPathProblem("Z:\\Semgrep", PROBE_TIMEOUT_MS)).toBe(
+      "Z:\\Semgrep did not answer within 2 s; the drive or network share it is on may be slow or unreachable.",
     );
     // Only the folder itself was checked: no per-name probing after the listing timed out.
-    expect(kinds).toEqual(["Z:\\CodeQL"]);
+    expect(kinds).toEqual(["Z:\\Semgrep"]);
   });
 
   test("every call of the bounded probes has a deadline, and a call that never returns is joined, not repeated", async () => {
@@ -418,19 +420,21 @@ describe("tool path checks on slow or unreachable drives", () => {
 // ───────────────────────────── storage ─────────────────────────────
 
 describe("tool path storage", () => {
-  test("only configurable tools are stored and read back; gh, bun and malformed entries are dropped", () => {
-    expect(CONFIGURABLE_TOOLS).toEqual(["git", "cargo", "codeql", "semgrep", "osv-scanner", "docker"]);
-    expect(TOOL_NAMES.filter((name) => !(CONFIGURABLE_TOOLS as readonly string[]).includes(name))).toEqual(["gh", "bun"]);
-    expect(
-      parseStoredToolPaths({
-        gh: { path: "/tmp/gh", setAt: "x", setBy: "y" },
-        bun: { path: "/tmp/bun" },
-        codeql: { path: "D:\\CodeQL", setAt: "2026-11-11T00:00:00.000Z", setBy: "alice" },
-        semgrep: { path: 5 },
-        docker: { path: "x".repeat(MAX_TOOL_PATH_LENGTH + 1) },
-        nope: { path: "/tmp/nope" },
-      }),
-    ).toEqual({ codeql: { path: "D:\\CodeQL", setAt: "2026-11-11T00:00:00.000Z", setBy: "alice" } });
+  test("only configurable tools are stored and read back; gh, codeql, bun and malformed entries are dropped", () => {
+    expect(CONFIGURABLE_TOOLS).toEqual(["git", "cargo", "semgrep", "osv-scanner", "docker"]);
+    expect(TOOL_NAMES.filter((name) => !(CONFIGURABLE_TOOLS as readonly string[]).includes(name))).toEqual(["gh", "bun", "codeql"]);
+    const stored = {
+      gh: { path: "/tmp/gh", setAt: "x", setBy: "y" },
+      bun: { path: "/tmp/bun" },
+      codeql: { path: "D:\\CodeQL", setAt: "2026-11-11T00:00:00.000Z", setBy: "alice" },
+      semgrep: { path: 5 },
+      docker: { path: "x".repeat(MAX_TOOL_PATH_LENGTH + 1) },
+      git: { path: "C:\\Git\\cmd", setAt: "2026-11-11T00:00:00.000Z", setBy: "alice" },
+      nope: { path: "/tmp/nope" },
+    };
+    expect(parseStoredToolPaths(stored)).toEqual({ git: { path: "C:\\Git\\cmd", setAt: "2026-11-11T00:00:00.000Z", setBy: "alice" } });
+    // A codeql path stored by an earlier bridge is only reported as ignored.
+    expect(ignoredStoredToolPaths(stored)).toEqual({ codeql: { path: "D:\\CodeQL", setAt: "2026-11-11T00:00:00.000Z", setBy: "alice" } });
     expect(parseStoredToolPaths(null)).toEqual({});
     expect(parseStoredToolPaths([1, 2])).toEqual({});
 
@@ -438,11 +442,11 @@ describe("tool path storage", () => {
     openDbs.push(db);
     const settings = new SettingsStore(db);
     const store = new ToolPathStore(settings);
-    const entry = store.set("codeql", "D:\\CodeQL", "alice");
+    const entry = store.set("semgrep", "D:\\Semgrep", "alice");
     store.set("git", "C:\\Git\\cmd", "bob");
-    expect(store.list()).toEqual({ codeql: entry, git: expect.objectContaining({ path: "C:\\Git\\cmd", setBy: "bob" }) });
-    expect(store.clear("codeql", "alice")).toEqual(entry);
-    expect(store.clear("codeql", "alice")).toBeNull();
+    expect(store.list()).toEqual({ semgrep: entry, git: expect.objectContaining({ path: "C:\\Git\\cmd", setBy: "bob" }) });
+    expect(store.clear("semgrep", "alice")).toEqual(entry);
+    expect(store.clear("semgrep", "alice")).toBeNull();
     expect(store.clear("git", "bob")?.path).toBe("C:\\Git\\cmd");
     // The key is removed once nothing is configured.
     expect(settings.meta(TOOL_PATHS_SETTING)).toBeNull();
@@ -453,7 +457,8 @@ describe("tool path storage", () => {
   });
 
   test("tool rows of reports stored before contract version 3 get the selection fields", () => {
-    expect(API_CONTRACT_VERSION).toBe(3);
+    // Version 3 introduced the selection fields; later versions keep them.
+    expect(API_CONTRACT_VERSION).toBeGreaterThanOrEqual(3);
     expect(normalizeStoredTool({ name: "gh", available: false, path: null })).toMatchObject({
       selection: "automatic",
       configuredPath: null,
@@ -461,11 +466,18 @@ describe("tool path storage", () => {
       pathConfigurable: false,
       pathHint: GH_PATH_HINT,
     });
+    expect(normalizeStoredTool({ name: "semgrep", available: true, path: "D:\\Semgrep\\semgrep.exe", source: "configured", configuredPath: "D:\\Semgrep" })).toMatchObject({
+      selection: "configured",
+      configuredPath: "D:\\Semgrep",
+      pathConfigurable: true,
+      pathHint: null,
+    });
+    // A stored report keeps what it recorded; codeql is no longer settable in the console.
     expect(normalizeStoredTool({ name: "codeql", available: true, path: "D:\\CodeQL\\codeql.exe", source: "configured", configuredPath: "D:\\CodeQL" })).toMatchObject({
       selection: "configured",
       configuredPath: "D:\\CodeQL",
-      pathConfigurable: true,
-      pathHint: null,
+      pathConfigurable: false,
+      pathHint: CODEQL_PATH_HINT,
     });
     expect(normalizeStoredTool({ name: "custom-tool", available: false })).toMatchObject({ selection: "automatic", pathConfigurable: false, pathHint: null });
   });
@@ -638,14 +650,14 @@ describe("tools table with configured paths and SENTRA_GH_BIN", () => {
   });
 
   test("a configured path is checked once per search snapshot and per save, shared by the tools table and scans", async () => {
-    const bundle = tempDir("cached-codeql-");
-    const codeqlFile = writeTool(bundle, hostExecutableName("codeql"));
+    const bundle = tempDir("cached-semgrep-");
+    const semgrepFile = writeTool(bundle, hostExecutableName("semgrep"));
     let stored: StoredToolPath = { path: bundle, setAt: "2026-11-11T00:00:00.000Z", setBy: "admin" };
     let calls = 0;
     const deps: HostToolsDeps = {
       executables: emptyLocator(),
       hostPlatform: quietHostPlatform(),
-      toolPaths: { list: () => ({ codeql: stored }) },
+      toolPaths: { list: () => ({ semgrep: stored }) },
       ghBin: null,
       toolPathProbes: (host) => {
         const real = hostToolPathProbes({ platform: process.platform, env: process.env, nativeArch: host.nativeArch });
@@ -658,24 +670,24 @@ describe("tools table with configured paths and SENTRA_GH_BIN", () => {
         };
       },
     };
-    const codeqlRow = async () => (await describeTools(deps)).find((tool) => tool.name === "codeql")!;
-    expect(await codeqlRow()).toMatchObject({ selection: "configured", path: codeqlFile });
+    const semgrepRow = async () => (await describeTools(deps)).find((tool) => tool.name === "semgrep")!;
+    expect(await semgrepRow()).toMatchObject({ selection: "configured", path: semgrepFile });
     const afterFirst = calls;
     expect(afterFirst).toBeGreaterThan(0);
-    // Further requests of the same snapshot, and the scan's CodeQL message, reuse that check.
-    await codeqlRow();
-    await codeqlRow();
+    // Further requests of the same snapshot, and the scan's semgrep message, reuse that check.
+    await semgrepRow();
+    await semgrepRow();
     const snapshot = await deps.executables.current();
-    expect(await reportedToolLocation(deps, "codeql", snapshot)).toMatchObject({ path: codeqlFile, selection: "configured" });
+    expect(await reportedToolLocation(deps, "semgrep", snapshot)).toMatchObject({ path: semgrepFile, selection: "configured" });
     expect(calls).toBe(afterFirst);
     // Saving the path again checks it again.
     stored = { ...stored, setAt: "2026-11-11T00:01:00.000Z" };
-    await codeqlRow();
+    await semgrepRow();
     expect(calls).toBeGreaterThan(afterFirst);
     const afterSave = calls;
     // So does the next snapshot.
     await deps.executables.refresh();
-    await codeqlRow();
+    await semgrepRow();
     expect(calls).toBeGreaterThan(afterSave);
   });
 
@@ -689,7 +701,7 @@ describe("tools table with configured paths and SENTRA_GH_BIN", () => {
     const deps: HostToolsDeps = {
       executables: emptyLocator(),
       hostPlatform: quietHostPlatform(),
-      toolPaths: { list: () => ({ codeql: { path: offline, setAt: "2026-11-11T00:00:00.000Z", setBy: "admin" } }) },
+      toolPaths: { list: () => ({ semgrep: { path: offline, setAt: "2026-11-11T00:00:00.000Z", setBy: "admin" } }) },
       ghBin,
       toolPathProbes: hungKind,
       toolPathTimeoutMs: 50,
@@ -697,8 +709,8 @@ describe("tools table with configured paths and SENTRA_GH_BIN", () => {
     const started = performance.now();
     const tools = await describeTools(deps);
     expect(performance.now() - started).toBeLessThan(2_000);
-    const codeql = tools.find((tool) => tool.name === "codeql")!;
-    expect(codeql).toMatchObject({ selection: "automatic", available: false, configuredPath: offline, configuredPathProblem: slowPathProblem(offline, 50) });
+    const semgrep = tools.find((tool) => tool.name === "semgrep")!;
+    expect(semgrep).toMatchObject({ selection: "automatic", available: false, configuredPath: offline, configuredPathProblem: slowPathProblem(offline, 50) });
     const gh = tools.find((tool) => tool.name === "gh")!;
     expect(gh).toMatchObject({ selection: "environment", available: false, path: ghBin });
     expect(gh.configuredPathProblem).toContain(`SENTRA_GH_BIN: ${slowPathProblem(ghBin, 50)}`);
@@ -726,6 +738,7 @@ function bridgeConfig(): ServerConfig {
     staticDir: null,
     sentraBin: path.join(dataDir, "missing-sentra-binary"),
     ghBin: null,
+    codeqlBin: null,
     dataDir,
     registryDbPath: path.join(dataDir, "sentra.db"),
     webDbPath: path.join(dataDir, "sentra-web.db"),
@@ -787,17 +800,17 @@ describe("PUT and DELETE /api/system/tools/:name", () => {
 
   test("an admin sets a folder, the row and GET /api/system follow it, a removed file falls back, a reset returns to automatic; everything is audited", async () => {
     const h = bridge();
-    const bundle = tempDir("codeql-bundle-");
-    const codeqlFile = writeTool(bundle, hostExecutableName("codeql"));
+    const bundle = tempDir("semgrep-bundle-");
+    const semgrepFile = writeTool(bundle, hostExecutableName("semgrep"));
 
-    const saved = await h.send("PUT", "/api/system/tools/codeql", ADMIN_TOKEN, { path: `  ${bundle}${path.sep}  ` });
+    const saved = await h.send("PUT", "/api/system/tools/semgrep", ADMIN_TOKEN, { path: `  ${bundle}${path.sep}  ` });
     expect(saved.status).toBe(200);
     const body = saved.body as SetToolPathResponse;
     expect(body.warning).toBeNull();
     expect(body.tool).toMatchObject({
-      name: "codeql",
+      name: "semgrep",
       available: true,
-      path: codeqlFile,
+      path: semgrepFile,
       source: "configured",
       selection: "configured",
       configuredPath: bundle,
@@ -806,22 +819,22 @@ describe("PUT and DELETE /api/system/tools/:name", () => {
       pathHint: null,
     });
     expect(body.tool.binary?.compatibility).not.toBe("incompatible");
-    expect(await h.systemTool("codeql")).toEqual(body.tool);
+    expect(await h.systemTool("semgrep")).toEqual(body.tool);
     expect(await h.systemTool("gh")).toMatchObject({ pathConfigurable: false, pathHint: GH_PATH_HINT, selection: "automatic" });
     expect(await h.systemTool("bun")).toMatchObject({ pathConfigurable: false, pathHint: null, selection: "automatic" });
-    expect(h.app.toolPaths.list().codeql).toMatchObject({ path: bundle, setBy: "admin" });
+    expect(h.app.toolPaths.list().semgrep).toMatchObject({ path: bundle, setBy: "admin" });
 
     // The file goes away. GET /api/system does not check the path again within the same search
     // snapshot; the next snapshot does: the row keeps the configured path, says why it fails and
     // reports automatic detection.
-    fs.rmSync(codeqlFile);
-    expect(await h.systemTool("codeql")).toEqual(body.tool);
+    fs.rmSync(semgrepFile);
+    expect(await h.systemTool("semgrep")).toEqual(body.tool);
     await h.app.executables.refresh();
-    const broken = await h.systemTool("codeql");
+    const broken = await h.systemTool("semgrep");
     expect(broken).toMatchObject({ available: false, path: null, source: null, selection: "automatic", configuredPath: bundle });
-    expect(broken.configuredPathProblem).toContain(`No codeql executable in ${bundle}`);
+    expect(broken.configuredPathProblem).toContain(`No semgrep executable in ${bundle}`);
 
-    const reset = await h.send("DELETE", "/api/system/tools/codeql", ADMIN_TOKEN);
+    const reset = await h.send("DELETE", "/api/system/tools/semgrep", ADMIN_TOKEN);
     expect(reset.status).toBe(200);
     expect((reset.body as SetToolPathResponse).tool).toMatchObject({ selection: "automatic", configuredPath: null, configuredPathProblem: null });
     expect((reset.body as SetToolPathResponse).warning).toBeNull();
@@ -829,8 +842,8 @@ describe("PUT and DELETE /api/system/tools/:name", () => {
 
     const entries = h.app.audit.list({ limit: 20 }).reverse();
     expect(entries.map((entry) => `${entry.action}:${entry.outcome}`)).toEqual(["tool_path_configured:success", "tool_path_cleared:success"]);
-    expect(entries[0]).toMatchObject({ actor: "admin", target: "codeql", details: { tool: "codeql", path: bundle } });
-    expect(entries[1]).toMatchObject({ target: "codeql", details: { tool: "codeql", path: bundle } });
+    expect(entries[0]).toMatchObject({ actor: "admin", target: "semgrep", details: { tool: "semgrep", path: bundle } });
+    expect(entries[1]).toMatchObject({ target: "semgrep", details: { tool: "semgrep", path: bundle } });
     expect(h.app.audit.verify().valid).toBe(true);
   });
 
@@ -845,9 +858,34 @@ describe("PUT and DELETE /api/system/tools/:name", () => {
     expect((saved.body as SetToolPathResponse).tool).toMatchObject({ path: target, configuredPath: target, selection: "configured" });
   });
 
+  test("codeql is not settable in the console: PUT and DELETE answer 409, and a path stored by an earlier bridge is ignored and explained", async () => {
+    const h = bridge();
+    const bundle = tempDir("codeql-bundle-");
+    writeTool(bundle, hostExecutableName("codeql"));
+    const refused = await h.send("PUT", "/api/system/tools/codeql", ADMIN_TOKEN, { path: bundle });
+    expect(refused.status).toBe(409);
+    expect(refused.body.error.code).toBe("tool_path_not_configurable");
+    expect(refused.body.error.message).toContain("SENTRA_CODEQL_BIN");
+    expect(refused.body.error.message).toContain("must never become a program the bridge runs");
+    expect((await h.send("DELETE", "/api/system/tools/codeql", ADMIN_TOKEN)).status).toBe(409);
+
+    // An entry an earlier bridge stored for codeql is reported as ignored, never used.
+    h.app.settings.set(TOOL_PATHS_SETTING, { codeql: { path: bundle, setAt: "2026-11-10T00:00:00.000Z", setBy: "admin" } }, "admin");
+    const row = await h.systemTool("codeql");
+    expect(row).toMatchObject({ selection: "automatic", configuredPath: null, pathConfigurable: false, usage: "presence_only" });
+    expect(row.pathHint).toContain(CODEQL_PATH_HINT);
+    expect(row.pathHint).toContain(`The path set earlier in the console (${bundle}) is ignored`);
+    expect(row.path).not.toBe(path.join(bundle, hostExecutableName("codeql")));
+    expect(h.app.toolPaths.list()).toEqual({});
+
+    const entries = h.app.audit.list({ limit: 5 }).reverse();
+    expect(entries.map((entry) => `${entry.action}:${entry.outcome}`)).toEqual(["tool_path_configured:failure", "tool_path_cleared:failure"]);
+    expect(String(entries[0].details?.error)).toContain("tool_path_not_configurable");
+  });
+
   test("404 for unknown tools, 409 for gh and bun, 400 for invalid paths, 403 below SecurityAdmin", async () => {
     const h = bridge();
-    const target = writeTool(tempDir("codeql-"), hostExecutableName("codeql"));
+    const target = writeTool(tempDir("semgrep-"), hostExecutableName("semgrep"));
 
     const unknown = await h.send("PUT", "/api/system/tools/nmap", ADMIN_TOKEN, { path: target });
     expect(unknown.status).toBe(404);
@@ -861,19 +899,19 @@ describe("PUT and DELETE /api/system/tools/:name", () => {
     expect((await h.send("PUT", "/api/system/tools/bun", ADMIN_TOKEN, { path: target })).status).toBe(409);
     expect((await h.send("DELETE", "/api/system/tools/gh", ADMIN_TOKEN)).status).toBe(409);
 
-    const relative = await h.send("PUT", "/api/system/tools/codeql", ADMIN_TOKEN, { path: "codeql" });
+    const relative = await h.send("PUT", "/api/system/tools/semgrep", ADMIN_TOKEN, { path: "semgrep" });
     expect(relative.status).toBe(400);
     expect(relative.body.error.code).toBe("invalid_tool_path");
     expect(relative.body.error.message).toContain("absolute path");
-    const notString = await h.send("PUT", "/api/system/tools/codeql", ADMIN_TOKEN, { path: 5 });
+    const notString = await h.send("PUT", "/api/system/tools/semgrep", ADMIN_TOKEN, { path: 5 });
     expect(notString.status).toBe(400);
     expect(notString.body.error.code).toBe("invalid_request");
-    const missing = await h.send("PUT", "/api/system/tools/codeql", ADMIN_TOKEN, { path: path.join(TEST_ROOT, "missing-dir") });
+    const missing = await h.send("PUT", "/api/system/tools/semgrep", ADMIN_TOKEN, { path: path.join(TEST_ROOT, "missing-dir") });
     expect(missing.body.error.message).toBe(`Nothing exists at ${path.join(TEST_ROOT, "missing-dir")}.`);
 
-    expect((await h.send("PUT", "/api/system/tools/codeql", OPERATOR_TOKEN, { path: target })).status).toBe(403);
-    expect((await h.send("PUT", "/api/system/tools/codeql", VIEWER_TOKEN, { path: target })).status).toBe(403);
-    expect((await h.send("DELETE", "/api/system/tools/codeql", VIEWER_TOKEN)).status).toBe(403);
+    expect((await h.send("PUT", "/api/system/tools/semgrep", OPERATOR_TOKEN, { path: target })).status).toBe(403);
+    expect((await h.send("PUT", "/api/system/tools/semgrep", VIEWER_TOKEN, { path: target })).status).toBe(403);
+    expect((await h.send("DELETE", "/api/system/tools/semgrep", VIEWER_TOKEN)).status).toBe(403);
     expect(h.app.toolPaths.list()).toEqual({});
 
     const entries = h.app.audit.list({ limit: 20 }).reverse();
@@ -890,8 +928,8 @@ describe("PUT and DELETE /api/system/tools/:name", () => {
       "authorization_denied:denied",
     ]);
     expect(entries[1].details).toMatchObject({ tool: "gh", path: target, error: expect.stringContaining("tool_path_not_configurable") });
-    expect(entries[4].details).toMatchObject({ tool: "codeql", path: "codeql", error: expect.stringContaining("invalid_tool_path") });
-    expect(entries[5].details).toMatchObject({ tool: "codeql", path: null });
+    expect(entries[4].details).toMatchObject({ tool: "semgrep", path: "semgrep", error: expect.stringContaining("invalid_tool_path") });
+    expect(entries[5].details).toMatchObject({ tool: "semgrep", path: null });
     expect(h.app.audit.verify().valid).toBe(true);
   });
 });
@@ -919,10 +957,31 @@ describe("configured paths never reach anything that runs a program", () => {
     expect(h.app.github.resolveAuth()).toBeNull();
   });
 
+  test("a codeql path written to the database never becomes the launcher that host analysis would run", async () => {
+    const h = bridge();
+    const bundle = tempDir("configured-codeql-");
+    // A complete CodeQL distribution layout, so only the source of the path could refuse it.
+    writeTool(bundle, hostExecutableName("codeql"));
+    fs.mkdirSync(path.join(bundle, "tools"));
+    fs.writeFileSync(path.join(bundle, ".codeqlmanifest.json"), "{}");
+    h.app.settings.set(TOOL_PATHS_SETTING, { codeql: { path: bundle, setAt: "2026-11-11T00:00:00.000Z", setBy: "admin" } }, "admin");
+    await h.app.executables.refresh();
+    const choice = codeqlLauncherChoice(hostToolsDeps(h.app), await h.app.executables.current());
+    expect(choice.path).toBeNull();
+    expect(choice.problem).toContain("SENTRA_CODEQL_BIN");
+    const view = await h.send("GET", "/api/settings/codeql", VIEWER_TOKEN);
+    expect(view.status).toBe(200);
+    expect(view.body.launcher).toMatchObject({ available: false, path: null });
+  });
+
   test("the modules that start programs do not import the configured tool paths", () => {
-    for (const module of ["executables.ts", "github.ts", "config.ts", "sentra-cli.ts", "host-platform.ts"]) {
+    for (const module of ["executables.ts", "github.ts", "config.ts", "sentra-cli.ts", "host-platform.ts", "codeql-launcher.ts"]) {
       const source = fs.readFileSync(path.join(import.meta.dir, "..", module), "utf8");
       expect({ module, importsToolPaths: /from\s+["']\.\/tool-paths(\.ts)?["']/.test(source) }).toEqual({ module, importsToolPaths: false });
+    }
+    for (const module of ["services/codeql.ts", "services/scans.ts", "routes/codeql.ts"]) {
+      const source = fs.readFileSync(path.join(import.meta.dir, "..", module), "utf8");
+      expect({ module, importsToolPaths: /from\s+["']\.\.\/tool-paths(\.ts)?["']/.test(source) }).toEqual({ module, importsToolPaths: false });
     }
   });
 });

@@ -1,5 +1,9 @@
 import type {
   AiSettingsView,
+  CodeqlIngestView,
+  CodeqlSettingsView,
+  FindingOrigin,
+  UpdateCodeqlSettingsRequest,
   AuditLogPage,
   AuditVerificationView,
   ConsoleCommand,
@@ -137,6 +141,30 @@ async function request<T>(method: string, path: string, body?: unknown, options:
   return (await res.json()) as T
 }
 
+/**
+ * POSTs a JSON document that is already text (a SARIF file read in the browser), without parsing
+ * and re-serialising it.
+ */
+async function postJsonText<T>(path: string, text: string): Promise<T> {
+  let res: Response
+  try {
+    res = await fetch(path, {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...CSRF_HEADERS },
+      body: text,
+      credentials: 'same-origin',
+    })
+  } catch {
+    throw new ApiError(0, 'network_error', 'The Sentra bridge is unreachable.')
+  }
+  if (!res.ok) {
+    const error = await parseError(res)
+    if (res.status === 401) window.dispatchEvent(new CustomEvent(UNAUTHENTICATED_EVENT))
+    throw error
+  }
+  return (await res.json()) as T
+}
+
 const get = <T>(path: string, options?: RequestOptions) => request<T>('GET', path, undefined, options)
 const post = <T>(path: string, body?: unknown, options?: RequestOptions) => request<T>('POST', path, body ?? {}, options)
 const put = <T>(path: string, body: unknown, options?: RequestOptions) => request<T>('PUT', path, body, options)
@@ -265,7 +293,7 @@ export const api = {
   findings: {
     list: (
       tenantId: string,
-      filter: { state?: FindingState | 'all'; source?: FindingSource; severity?: Severity } = {},
+      filter: { state?: FindingState | 'all'; source?: FindingSource; origin?: FindingOrigin; severity?: Severity } = {},
       signal?: AbortSignal,
     ) => get<{ findings: FindingView[] }>(`${t(tenantId)}/findings${query(filter)}`, { signal }),
     get: (tenantId: string, findingId: string, signal?: AbortSignal) =>
@@ -279,6 +307,16 @@ export const api = {
   },
 
   dependencies: (tenantId: string, signal?: AbortSignal) => get<DependencyInventoryView>(`${t(tenantId)}/dependencies`, { signal }),
+
+  codeql: {
+    settings: (signal?: AbortSignal) => get<CodeqlSettingsView>('/api/settings/codeql', { signal }),
+    /** Enabling requires acceptTerms: true in the same request. */
+    updateSettings: (body: UpdateCodeqlSettingsRequest) => put<CodeqlSettingsView>('/api/settings/codeql', body),
+    /** Uploads a CodeQL SARIF document (the file's text, at most 64 MiB). */
+    importSarif: (tenantId: string, sarifText: string) => postJsonText<CodeqlIngestView>(`${t(tenantId)}/codeql/import`, sarifText),
+    /** Reads open GitHub code scanning alerts of tool CodeQL for the workspace's repository (read-only on GitHub). */
+    githubSync: (tenantId: string) => post<CodeqlIngestView>(`${t(tenantId)}/codeql/github-sync`),
+  },
 
   intel: {
     status: (signal?: AbortSignal) => get<IntelStatusView>('/api/intel/status', { signal }),
@@ -365,7 +403,9 @@ export const api = {
   },
 
   plugins: {
-    list: (signal?: AbortSignal) => get<PluginsView>('/api/plugins', { signal }),
+    /** `refresh` lists again instead of reusing a listing the bridge completed in the last 15 seconds. */
+    list: (signal?: AbortSignal, options: { refresh?: boolean } = {}) =>
+      get<PluginsView>(`/api/plugins${query({ refresh: options.refresh ? 1 : null })}`, { signal }),
     probe: (pluginId: string, tenantId: string) => post<PluginProbeView>(`/api/plugins/${encodeURIComponent(pluginId)}/probe`, { tenantId }),
     run: (pluginId: string, body: PluginRunRequest) => post<PluginRunView>(`/api/plugins/${encodeURIComponent(pluginId)}/run`, body),
   },

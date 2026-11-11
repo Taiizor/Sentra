@@ -28,7 +28,11 @@ use std::{
     io::{BufRead, BufReader, Read, Write},
     path::{Component, Path, PathBuf, Prefix},
     process::{Child, Command, Stdio},
-    sync::{Arc, Mutex, mpsc},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
     thread,
     time::{Duration, Instant},
 };
@@ -594,6 +598,225 @@ fn pump_stderr<R: Read>(mut stderr: R, tail: &Mutex<StderrTail>, events: &mpsc::
             }
         }
     }
+}
+
+/// Observations of one command run by [`run_contained`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ContainedRun {
+    /// Exit code of the started program; `None` when it was killed or exited by signal.
+    pub exit_code: Option<i32>,
+    /// Whether the deadline passed and the process tree was killed.
+    pub timed_out: bool,
+    /// Whether the run was cancelled (see [`run_contained_cancellable`]) and the
+    /// process tree was killed.
+    pub cancelled: bool,
+    /// Last bytes written to stdout (lossy UTF-8, at most the requested tail size).
+    pub stdout_tail: String,
+    /// Total stdout bytes observed.
+    pub stdout_bytes: usize,
+    /// Last bytes written to stderr (lossy UTF-8, at most the requested tail size).
+    pub stderr_tail: String,
+    /// Total stderr bytes observed.
+    pub stderr_bytes: usize,
+    /// Wall-clock time from start until the process tree was gone.
+    pub elapsed: Duration,
+}
+
+/// Bounded tail of one output stream with a byte counter.
+#[derive(Debug)]
+struct BoundedTail {
+    bytes: Vec<u8>,
+    total: usize,
+    limit: usize,
+}
+
+impl BoundedTail {
+    fn new(limit: usize) -> Self {
+        Self {
+            bytes: Vec::new(),
+            total: 0,
+            limit,
+        }
+    }
+
+    fn push(&mut self, chunk: &[u8]) {
+        self.total = self.total.saturating_add(chunk.len());
+        self.bytes.extend_from_slice(chunk);
+        if self.bytes.len() > self.limit {
+            let excess = self.bytes.len() - self.limit;
+            self.bytes.drain(..excess);
+        }
+    }
+
+    fn snapshot(&self) -> (String, usize) {
+        (
+            String::from_utf8_lossy(&self.bytes).into_owned(),
+            self.total,
+        )
+    }
+}
+
+/// Drains `stream` into `tail` until end of file and reports completion on `done`.
+fn drain_into<R: Read + Send + 'static>(
+    stream: Option<R>,
+    tail: Arc<Mutex<BoundedTail>>,
+    done: mpsc::Sender<()>,
+) {
+    thread::spawn(move || {
+        if let Some(mut stream) = stream {
+            let mut chunk = vec![0_u8; STDERR_CHUNK_BYTES];
+            loop {
+                match stream.read(&mut chunk) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => {
+                        if let Ok(mut tail) = tail.lock() {
+                            tail.push(&chunk[..n]);
+                        }
+                    }
+                }
+            }
+        }
+        let _ = done.send(());
+    });
+}
+
+/// Runs `program` to completion inside the same containment as plugin adapters and
+/// returns what was observed.
+///
+/// - The environment is exactly `env` (the parent environment is cleared), stdin is
+///   the null device and `cwd` is the working directory.
+/// - stdout and stderr are always drained; only the last `tail_bytes` of each are kept.
+/// - Windows: the process is assigned to a kill-on-close Job Object right after it
+///   starts, and the job is closed when the run ends (normal exit, timeout or error),
+///   so descendants it left behind are terminated too. Without a job, `taskkill /T`
+///   is used while the process is still alive.
+/// - Unix: the process leads a new process group, which is killed when the run ends.
+/// - When `timeout` passes, the whole tree is killed and `timed_out` is set.
+///
+/// The same residual risks as for adapters apply (see the module documentation); in
+/// addition, if the calling process is itself killed, a Unix process group started
+/// here is not killed (on Windows the Job Object closes with the caller). Callers that
+/// must stop the tree on request use [`run_contained_cancellable`].
+pub fn run_contained(
+    program: &Path,
+    args: &[OsString],
+    cwd: &Path,
+    env: &[(OsString, OsString)],
+    timeout: Duration,
+    tail_bytes: usize,
+) -> std::io::Result<ContainedRun> {
+    let never = AtomicBool::new(false);
+    run_contained_cancellable(program, args, cwd, env, timeout, tail_bytes, &never)
+}
+
+/// [`run_contained`] that also stops when `cancel` becomes true: the whole tree is
+/// killed as on a timeout and `cancelled` is set. The flag is polled with the exit
+/// status, so the tree is gone within a few tens of milliseconds of the request.
+pub fn run_contained_cancellable(
+    program: &Path,
+    args: &[OsString],
+    cwd: &Path,
+    env: &[(OsString, OsString)],
+    timeout: Duration,
+    tail_bytes: usize,
+    cancel: &AtomicBool,
+) -> std::io::Result<ContainedRun> {
+    let mut builder = Command::new(program);
+    builder
+        .args(args)
+        .current_dir(cwd)
+        .env_clear()
+        .envs(env.iter().map(|(k, v)| (k, v)))
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        builder.process_group(0);
+    }
+    let started = Instant::now();
+    let mut child = builder.spawn()?;
+    // Contain the tree before the program gets a chance to start children.
+    let mut tree = TreeGuard::attach(&child);
+
+    let stdout_tail = Arc::new(Mutex::new(BoundedTail::new(tail_bytes)));
+    let stderr_tail = Arc::new(Mutex::new(BoundedTail::new(tail_bytes)));
+    let (done_tx, done_rx) = mpsc::channel();
+    drain_into(
+        child.stdout.take(),
+        Arc::clone(&stdout_tail),
+        done_tx.clone(),
+    );
+    drain_into(child.stderr.take(), Arc::clone(&stderr_tail), done_tx);
+
+    let deadline = started + timeout;
+    let mut timed_out = false;
+    let mut cancelled = false;
+    let mut exit_code = None;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                exit_code = status.code();
+                break;
+            }
+            Ok(None) if cancel.load(Ordering::SeqCst) => {
+                cancelled = true;
+                break;
+            }
+            Ok(None) if Instant::now() < deadline => thread::sleep(EXIT_POLL_INTERVAL),
+            Ok(None) => {
+                timed_out = true;
+                break;
+            }
+            Err(_) => break,
+        }
+    }
+
+    // Kill whatever is left of the tree: the program itself on timeout, and any
+    // descendant it left running after a normal exit.
+    let pid = child.id();
+    if tree.has_job() {
+        if exit_code.is_none() {
+            let _ = child.kill();
+        }
+        tree.close_job();
+    } else if cfg!(unix) || exit_code.is_none() {
+        kill_tree(pid);
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+
+    // The pipes close once every holder is gone; wait briefly for both pumps.
+    let pump_deadline = Instant::now() + Duration::from_secs(5);
+    for _ in 0..2 {
+        let remaining = pump_deadline.saturating_duration_since(Instant::now());
+        if done_rx.recv_timeout(remaining).is_err() {
+            break;
+        }
+    }
+    let (stdout_tail, stdout_bytes) = stdout_tail
+        .lock()
+        .map(|tail| tail.snapshot())
+        .unwrap_or_default();
+    let (stderr_tail, stderr_bytes) = stderr_tail
+        .lock()
+        .map(|tail| tail.snapshot())
+        .unwrap_or_default();
+    Ok(ContainedRun {
+        exit_code: if timed_out || cancelled {
+            None
+        } else {
+            exit_code
+        },
+        timed_out,
+        cancelled,
+        stdout_tail,
+        stdout_bytes,
+        stderr_tail,
+        stderr_bytes,
+        elapsed: started.elapsed(),
+    })
 }
 
 /// Kills the adapter's process tree (best effort).

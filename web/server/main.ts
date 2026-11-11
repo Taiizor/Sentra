@@ -28,6 +28,7 @@ import { isWithin } from "./paths.ts";
 import { GitHubService } from "./github.ts";
 import { LlmGateway } from "./llm.ts";
 import { CoreStoreReader } from "./services/core-store.ts";
+import { CODEQL_IMPORT_MAX_BYTES, createCodeqlService } from "./services/codeql.ts";
 import { createOsvService } from "./services/osv.ts";
 import { createScanService } from "./services/scans.ts";
 import { ExecutableLocator } from "./executables.ts";
@@ -188,6 +189,7 @@ export function createApp(config: ServerConfig, hostServices: HostServices = cre
     executables,
     hostPlatform,
     toolPaths: new ToolPathStore(settings),
+    codeql: createCodeqlService(settings, config),
   };
   const osv = createOsvService(partial);
   const app: AppContext = { ...partial, osv, scans: createScanService({ ...partial, osv }) };
@@ -312,8 +314,9 @@ export function startServer(): Server<unknown> {
   const server = Bun.serve({
     hostname: config.host,
     port: config.port,
-    // Webhook payloads can reach 25 MB; per-route limits are enforced while reading bodies.
-    maxRequestBodySize: Math.max(config.maxBodyBytes, 26 * 1024 * 1024),
+    // Webhook payloads can reach 25 MB and CodeQL SARIF uploads 64 MiB; per-route limits are
+    // enforced while reading bodies (every other route keeps SENTRA_WEB_MAX_BODY_BYTES).
+    maxRequestBodySize: Math.max(config.maxBodyBytes, 26 * 1024 * 1024, CODEQL_IMPORT_MAX_BYTES + 1024 * 1024),
     // Slow or stalled unauthenticated senders (webhooks, login, static files) are disconnected;
     // handleRequest lifts the limit for authenticated requests.
     idleTimeout: IDLE_TIMEOUT_SECONDS,
@@ -334,6 +337,7 @@ export function startServer(): Server<unknown> {
     sentraBinary: config.sentraBin,
     sentraBinaryPresent: app.cli.available(),
     ghBinary: config.ghBin ?? "located automatically (SENTRA_GH_BIN unset)",
+    codeqlLauncher: config.codeqlBin ?? "located automatically when host analysis runs (SENTRA_CODEQL_BIN unset)",
     dataDir: config.dataDir,
     tokenGrants: config.tokenGrants.map((grant) => `${grant.role}:${grant.label}`),
   });

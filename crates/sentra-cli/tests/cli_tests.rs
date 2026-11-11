@@ -534,6 +534,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
     assert_eq!(audit["advisory_db_updated_at"], "2026-11-08T23:43:22.000Z");
     let expected_stale = pinned.is_stale(sentra_core::TimestampUtc::now(), 30);
     assert_eq!(audit["is_stale"], expected_stale);
+    assert_eq!(
+        audit["lockfiles_audited"],
+        serde_json::json!(["Cargo.lock"])
+    );
+    assert_eq!(audit["lockfiles_unparsed"], serde_json::json!([]));
+    assert_eq!(audit["findings"][0]["lockfile"], "Cargo.lock");
 
     // 2. Human-readable text mode
     let audit_human = f.invoke(&args(&[
@@ -551,6 +557,43 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
     assert!(stdout_human.contains("RUSTSEC-2021-0145"));
     assert!(stdout_human.contains("Advisory database: bundled pinned sample"));
     assert!(stdout_human.contains("not a synchronized OSV or RustSec feed"));
+    assert!(stdout_human.contains("Lockfiles audited: Cargo.lock"));
+
+    // Regression: a lockfile that could not be parsed was dropped silently. It is now
+    // reported as not audited, and the parsed one is still audited.
+    fs::write(f.workspace.join("package-lock.json"), "{ not json").unwrap();
+    let partial = f.invoke(&f.command("audit"));
+    assert_eq!(partial.status.code(), Some(0));
+    let partial: serde_json::Value = serde_json::from_slice(&partial.stdout).unwrap();
+    assert_eq!(
+        partial["lockfiles_audited"],
+        serde_json::json!(["Cargo.lock"])
+    );
+    assert_eq!(
+        partial["lockfiles_unparsed"],
+        serde_json::json!(["package-lock.json"])
+    );
+    assert_eq!(partial["packages_audited"], 1);
+
+    // Regression: a yarn.lock truncated inside a block was listed as audited, with the
+    // truncated entry skipped silently. It is now reported as not audited.
+    fs::write(
+        f.workspace.join("yarn.lock"),
+        "express@^4.0.0:\n  version \"4.17.1\"\n\nlodash@^4.17.0:\n  resol",
+    )
+    .unwrap();
+    let truncated = f.invoke(&f.command("audit"));
+    assert_eq!(truncated.status.code(), Some(0));
+    let truncated: serde_json::Value = serde_json::from_slice(&truncated.stdout).unwrap();
+    assert_eq!(
+        truncated["lockfiles_audited"],
+        serde_json::json!(["Cargo.lock"])
+    );
+    assert_eq!(
+        truncated["lockfiles_unparsed"],
+        serde_json::json!(["package-lock.json", "yarn.lock"])
+    );
+    assert_eq!(truncated["packages_audited"], 1);
 }
 
 #[test]
@@ -735,47 +778,61 @@ fn diff_invalid_workspace_fails_closed() {
     );
 }
 
-#[test]
-fn verify_audit_executes_five_gates() {
-    let resp = run(&args(&["verify-audit"]), Path::new(""));
-    assert_eq!(resp.exit_code, 0);
-    assert!(
-        resp.stdout
-            .contains("Sentra multi-user security audit: approved")
-    );
-    assert!(resp.stdout.contains("Tenant isolation: passed"));
-    assert!(resp.stdout.contains("Worker egress containment: passed"));
-    assert!(resp.stdout.contains("Cross-tenant worker reuse: passed"));
-    assert!(resp.stdout.contains("Zero secret inheritance: passed"));
-    assert!(resp.stdout.contains("Immutable audit trail: passed"));
-    assert!(resp.stdout.contains("Untrusted execution: disabled"));
+/// Parses the single JSON error document a failing in-process command prints on stderr.
+fn error_json(stderr: &str) -> serde_json::Value {
+    let mut lines = stderr.lines();
+    let value = serde_json::from_str(lines.next().unwrap_or_default()).unwrap();
+    assert_eq!(lines.next(), None, "one JSON document expected: {stderr}");
+    value
+}
 
+/// Asserts the `not_implemented` failure shape shared by commands without a real
+/// implementation: nothing on stdout, exit 5, and the same keys as other detailed errors.
+fn assert_not_implemented(resp: &sentra_cli::Response, command: &str) {
+    assert_eq!(resp.exit_code, 5, "stderr: {}", resp.stderr);
+    assert!(resp.stdout.is_empty(), "stdout: {}", resp.stdout);
+    let error = error_json(&resp.stderr);
+    assert_eq!(error["schema_version"], 1);
+    assert_eq!(error["error"], "not_implemented");
+    assert_eq!(error["command"], command);
+    assert!(error["message"].as_str().unwrap().contains("not"));
+}
+
+#[test]
+fn help_describes_sample_based_and_unimplemented_commands_truthfully() {
+    let help = sentra_cli::HELP;
+    // Regression: claims the commands did not back.
+    for claim in [
+        "converts dependency and SAST findings",
+        "ingests universal OSV JSON advisories into the advisory database",
+        "packages verified vulnerabilities",
+        "evaluates the 5 mandatory",
+        "Config manages provider API credentials",
+        "sync-advisories --source <directory-or-file> [--database <file>]",
+    ] {
+        assert!(!help.contains(claim), "help still claims {claim:?}");
+    }
+    assert!(help.contains("Export sarif runs the dependency audit (bundled advisory sample"));
+    assert!(help.contains("SAST results are exported with scan --sarif"));
+    assert!(help.contains("Nothing is downloaded or persisted"));
+    assert!(help.contains("No branch, commit or pull request is created"));
+    assert!(help.contains("Verify-audit is not implemented"));
+    assert!(help.contains("Config test is not implemented"));
+}
+
+#[test]
+fn verify_audit_fails_as_not_implemented() {
+    // Regression: verify-audit used to assess a built-in fixture worker with gates
+    // hard-coded to pass and report `approved` (exit 0).
     let resp_json = run(&args(&["verify-audit", "--json"]), Path::new(""));
-    assert_eq!(resp_json.exit_code, 0);
-    assert!(resp_json.stdout.contains("\"command\":\"verify-audit\""));
-    assert!(resp_json.stdout.contains("\"status\":\"approved\""));
-    assert!(resp_json.stdout.contains("\"approved\":true"));
-    assert!(resp_json.stdout.contains("\"gate_tenant_isolation\":true"));
-    assert!(
-        resp_json
-            .stdout
-            .contains("\"gate_worker_egress_containment\":true")
-    );
-    assert!(
-        resp_json
-            .stdout
-            .contains("\"gate_cross_tenant_worker_reuse\":true")
-    );
-    assert!(
-        resp_json
-            .stdout
-            .contains("\"gate_zero_secret_inheritance\":true")
-    );
-    assert!(
-        resp_json
-            .stdout
-            .contains("\"gate_immutable_audit_trail\":true")
-    );
+    assert_not_implemented(&resp_json, "verify-audit");
+    assert!(!resp_json.stderr.contains("approved"));
+
+    let resp = run(&args(&["verify-audit"]), Path::new(""));
+    assert_eq!(resp.exit_code, 5);
+    assert!(resp.stdout.is_empty());
+    assert!(resp.stderr.starts_with("error: not_implemented\n"));
+    assert!(resp.stderr.contains("no worker registry"));
 }
 
 #[test]
@@ -807,15 +864,16 @@ fn mcp_stdio_server_loop() {
 
 #[test]
 fn binary_mcp_and_diff_and_verify_audit_subprocesses() {
-    // 1. Binary verify-audit
+    // 1. Binary verify-audit fails closed: nothing real to assess.
     let audit_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
         .args(["verify-audit", "--json"])
         .output()
         .unwrap();
-    assert!(audit_out.status.success());
-    let audit_stdout = String::from_utf8(audit_out.stdout).unwrap();
-    assert!(audit_stdout.contains("\"command\":\"verify-audit\""));
-    assert!(audit_stdout.contains("\"status\":\"approved\""));
+    assert_eq!(audit_out.status.code(), Some(5));
+    assert!(audit_out.stdout.is_empty());
+    let audit_error = stderr_json(&audit_out);
+    assert_eq!(audit_error["error"], "not_implemented");
+    assert_eq!(audit_error["command"], "verify-audit");
 
     // 2. Binary mcp over stdio pipe
     let mut mcp_child = Command::new(env!("CARGO_BIN_EXE_sentra"))
@@ -1101,9 +1159,86 @@ fn binary_sync_advisories_ingests_osv_feed() {
         .unwrap();
 
     assert!(out.status.success());
-    let stdout = String::from_utf8(out.stdout).unwrap();
-    assert!(stdout.contains("\"command\":\"sync-advisories\""));
-    assert!(stdout.contains("\"advisories_ingested\":1"));
+    let report: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(report["command"], "sync-advisories");
+    assert_eq!(report["source_kind"], "file");
+    assert_eq!(report["advisory_entries_parsed"], 1);
+    assert_eq!(report["files_parsed"], 1);
+    assert_eq!(report["files_skipped"], 0);
+    // Regression: the parsed records were reported as "ingested" although nothing kept them.
+    assert_eq!(report["persisted"], false);
+    assert!(report.get("advisories_ingested").is_none());
+
+    // A directory: top-level .json files are parsed, invalid ones are counted as skipped.
+    let feed_dir = f.root.join("osv feed");
+    fs::create_dir(&feed_dir).unwrap();
+    fs::write(feed_dir.join("good.json"), osv_feed).unwrap();
+    fs::write(feed_dir.join("broken.json"), "{ not osv").unwrap();
+    fs::write(feed_dir.join("notes.txt"), "ignored").unwrap();
+    let dir_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "sync-advisories",
+            "--source",
+            feed_dir.to_str().unwrap(),
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(dir_out.status.success());
+    let dir_report: serde_json::Value = serde_json::from_slice(&dir_out.stdout).unwrap();
+    assert_eq!(dir_report["source_kind"], "directory");
+    assert_eq!(dir_report["advisory_entries_parsed"], 1);
+    assert_eq!(dir_report["files_parsed"], 1);
+    assert_eq!(dir_report["files_skipped"], 1);
+    assert_eq!(dir_report["persisted"], false);
+
+    let text_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["sync-advisories", "--source", feed_dir.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(text_out.status.success());
+    let text = String::from_utf8(text_out.stdout).unwrap();
+    assert!(text.contains("nothing was persisted"));
+    assert!(text.contains("Files skipped (unreadable or invalid): 1"));
+
+    // Regression: the help said invalid files are counted as skipped. That holds for a
+    // directory only; a single invalid file fails, and the help now says so.
+    let bad_file = feed_dir.join("broken.json");
+    let bad_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "sync-advisories",
+            "--source",
+            bad_file.to_str().unwrap(),
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(bad_out.status.code(), Some(4));
+    assert!(bad_out.stdout.is_empty());
+    assert_eq!(stderr_json(&bad_out)["error"], "invalid_advisory_feed");
+    assert!(sentra_cli::HELP.contains(
+        "a single file that is not valid OSV JSON fails with invalid_advisory_feed (exit 4)"
+    ));
+
+    // Regression: --database was accepted and silently ignored. It now fails clearly and
+    // writes nothing.
+    let db_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "sync-advisories",
+            "--source",
+            feed_path.to_str().unwrap(),
+            "--database",
+            f.db.to_str().unwrap(),
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(db_out.status.code(), Some(5));
+    assert!(db_out.stdout.is_empty());
+    let db_error = stderr_json(&db_out);
+    assert_eq!(db_error["error"], "not_implemented");
+    assert_eq!(db_error["command"], "sync-advisories");
+    assert!(!f.db.exists());
     let _ = fs::remove_file(feed_path);
 }
 
@@ -1123,6 +1258,9 @@ fn binary_propose_pr_generates_draft_proposals() {
         }
     }"#;
     fs::write(f.workspace.join("package-lock.json"), pkg_lock).unwrap();
+    // A second lockfile, discovered first: each preview must name its own lockfile.
+    let cargo_lock = "version = 3\n\n[[package]]\nname = \"atty\"\nversion = \"0.2.11\"\n";
+    fs::write(f.workspace.join("Cargo.lock"), cargo_lock).unwrap();
 
     let out = Command::new(env!("CARGO_BIN_EXE_sentra"))
         .args([
@@ -1142,6 +1280,62 @@ fn binary_propose_pr_generates_draft_proposals() {
     assert!(stdout.contains("\"is_draft_only\":true"));
     assert!(stdout.contains("GHSA-p6mc-m468-83gw"));
     assert!(stdout.contains("gh pr create --draft"));
+
+    // The output says what it is: a local preview from the bundled advisory sample.
+    let report: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(report["local_preview_only"], true);
+    assert_eq!(report["pull_requests_created"], false);
+    assert_eq!(report["patch_diffs_illustrative"], true);
+    assert_eq!(report["advisory_db_source"], "bundled_pinned_sample");
+    assert_eq!(report["proposals_count"], 2);
+
+    // Regression: every preview named Cargo.lock and claimed a "canonical OSV/RustSec/GHSA"
+    // match. Each now names the lockfile its package came from and the advisory sample.
+    let proposals = report["proposals"].as_array().unwrap();
+    let by_id = |id: &str| {
+        proposals
+            .iter()
+            .find(|p| p["advisory_or_rule_id"] == id)
+            .unwrap_or_else(|| panic!("no proposal for {id}"))
+    };
+    let lodash = by_id("GHSA-p6mc-m468-83gw");
+    assert!(
+        lodash["patch_diff"]
+            .as_str()
+            .unwrap()
+            .starts_with("--- a/package-lock.json\n")
+    );
+    let atty = by_id("RUSTSEC-2021-0145");
+    assert!(
+        atty["patch_diff"]
+            .as_str()
+            .unwrap()
+            .starts_with("--- a/Cargo.lock\n")
+    );
+    for proposal in proposals {
+        let body = proposal["body_markdown"].as_str().unwrap();
+        assert!(body.contains("matched against: Sentra's bundled pinned advisory sample"));
+        assert!(body.contains("not a synchronized OSV, RustSec or GHSA feed"));
+        assert!(!body.contains("canonical"));
+        assert!(!body.contains("Reachability confirmed"));
+    }
+
+    // Human-readable output carries the same disclosure.
+    let text_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "propose-pr",
+            "--workspace",
+            f.workspace.to_str().unwrap(),
+            "--database",
+            f.db.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert!(text_out.status.success());
+    let text = String::from_utf8(text_out.stdout).unwrap();
+    assert!(text.contains("Local preview only: no branch, commit or pull request was created"));
+    assert!(text.contains("Advisory database: bundled pinned sample"));
+    assert!(text.contains("Suggested command (not run"));
 }
 
 #[test]
@@ -1262,6 +1456,302 @@ fn binary_codeql_probe_and_sarif_ingest() {
     assert!(ingest_stdout.contains("\"taint_traces_extracted\":1"));
     assert!(ingest_stdout.contains("\"highest_severity\":\"HIGH\""));
     assert!(ingest_stdout.contains("py/sql-injection"));
+    // Regression: the parsed results were reported as "admitted" findings, although nothing is
+    // admitted as evidence or stored.
+    assert!(ingest_stdout.contains("\"candidate_findings_parsed\":1"));
+    assert!(ingest_stdout.contains("\"findings_stored\":false"));
+    assert!(!ingest_stdout.contains("admitted"));
+    let ingest_text = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["codeql", "--sarif", sarif_file.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(ingest_text.status.success());
+    let ingest_text = String::from_utf8(ingest_text.stdout).unwrap();
+    assert!(ingest_text.contains("Candidate findings parsed (not stored): 1"));
+    assert!(!ingest_text.contains("admitted"));
+}
+
+#[test]
+fn parses_codeql_analyze_and_import_grammar() {
+    let base = [
+        "codeql",
+        "analyze",
+        "--workspace",
+        "ws",
+        "--codeql",
+        "D:/CodeQL/codeql.exe",
+        "--work-dir",
+        "work",
+        "--pack-cache",
+        "cache",
+    ];
+    let parsed = parse(&args(&base)).unwrap_or_else(|_| panic!("valid analyze"));
+    let CliCommand::CodeqlAnalyze(analyze) = parsed.command else {
+        panic!("expected codeql analyze");
+    };
+    assert!(!analyze.accept_terms);
+    assert!(!analyze.allow_pack_download);
+    assert!(analyze.languages.is_empty());
+    assert_eq!(analyze.suite.as_str(), "code-scanning");
+    assert_eq!(analyze.timeout_secs, 1800);
+    assert_eq!(analyze.max_results, 5000);
+    assert_eq!((analyze.threads, analyze.ram_mb), (None, None));
+
+    let mut full: Vec<&str> = base.to_vec();
+    full.extend([
+        "--accept-codeql-terms",
+        "--language",
+        "TypeScript",
+        "--language",
+        "python",
+        "--suite",
+        "security-extended",
+        "--threads",
+        "4",
+        "--ram",
+        "8192",
+        "--timeout-secs",
+        "600",
+        "--allow-pack-download",
+        "--max-results",
+        "10",
+        "--json",
+    ]);
+    let parsed = parse(&args(&full)).unwrap_or_else(|_| panic!("valid analyze"));
+    assert!(parsed.json);
+    let CliCommand::CodeqlAnalyze(analyze) = parsed.command else {
+        panic!("expected codeql analyze");
+    };
+    assert!(analyze.accept_terms && analyze.allow_pack_download);
+    let languages: Vec<&str> = analyze.languages.iter().map(|l| l.as_str()).collect();
+    assert_eq!(languages, ["javascript", "python"]);
+    assert_eq!(analyze.suite.as_str(), "security-extended");
+    assert_eq!((analyze.threads, analyze.ram_mb), (Some(4), Some(8192)));
+    assert_eq!((analyze.timeout_secs, analyze.max_results), (600, 10));
+
+    for extra in [
+        vec!["--language", "cobol"],
+        vec!["--suite", "everything"],
+        vec!["--threads", "0"],
+        vec!["--threads", "-1"],
+        vec!["--ram", "100"],
+        vec!["--timeout-secs", "0"],
+        vec!["--timeout-secs", "86401"],
+        vec!["--max-results", "0"],
+        vec!["--max-results", "100001"],
+        vec!["--accept-codeql-terms", "--accept-codeql-terms"],
+        vec!["--workspace", "again"],
+        vec!["--command", "make"],
+        vec!["--build-mode", "autobuild"],
+        vec!["--sarif", "x.sarif"],
+        vec!["--threads"],
+    ] {
+        let mut words = base.to_vec();
+        words.extend(extra.iter().copied());
+        assert!(parse(&args(&words)).is_err(), "must reject {extra:?}");
+    }
+    for missing in ["--workspace", "--codeql", "--work-dir", "--pack-cache"] {
+        let index = base.iter().position(|w| *w == missing).unwrap();
+        let mut words = base.to_vec();
+        words.drain(index..index + 2);
+        assert!(parse(&args(&words)).is_err(), "must require {missing}");
+    }
+
+    let parsed = parse(&args(&[
+        "codeql",
+        "import",
+        "--sarif",
+        "r.sarif",
+        "--workspace",
+        "ws",
+        "--max-results",
+        "7",
+    ]))
+    .unwrap_or_else(|_| panic!("valid import"));
+    assert!(matches!(
+        parsed.command,
+        CliCommand::CodeqlImport { ref sarif, ref workspace, max_results: 7 }
+            if sarif == Path::new("r.sarif") && workspace == Path::new("ws")
+    ));
+    for words in [
+        vec!["codeql", "import", "--sarif", "r.sarif"],
+        vec!["codeql", "import", "--workspace", "ws"],
+        vec![
+            "codeql",
+            "import",
+            "--sarif",
+            "r",
+            "--workspace",
+            "w",
+            "--accept-codeql-terms",
+        ],
+        vec![
+            "codeql",
+            "import",
+            "--sarif",
+            "r",
+            "--workspace",
+            "w",
+            "--codeql",
+            "c",
+        ],
+        vec![
+            "codeql",
+            "import",
+            "--sarif",
+            "r",
+            "--workspace",
+            "w",
+            "--database",
+            "d",
+        ],
+    ] {
+        assert!(parse(&args(&words)).is_err(), "must reject {words:?}");
+    }
+    // The legacy forms keep their grammar.
+    assert!(matches!(
+        parse(&args(&["codeql", "--workspace", "ws"]))
+            .unwrap_or_else(|_| panic!())
+            .command,
+        CliCommand::Codeql { .. }
+    ));
+    assert!(matches!(
+        parse(&args(&[
+            "codeql",
+            "--sarif",
+            "r.sarif",
+            "--workspace",
+            "ws",
+            "--database",
+            "d"
+        ]))
+        .unwrap_or_else(|_| panic!())
+        .command,
+        CliCommand::Codeql { .. }
+    ));
+    assert!(matches!(
+        parse(&args(&["codeql", "analyze", "--help"]))
+            .unwrap_or_else(|_| panic!())
+            .command,
+        CliCommand::Help
+    ));
+}
+
+#[test]
+fn binary_codeql_import_normalizes_and_rejects() {
+    let f = Fixture::new();
+    let sarif = r#"{
+      "version": "2.1.0",
+      "runs": [{
+        "tool": { "driver": { "name": "CodeQL", "semanticVersion": "2.27.4", "rules": [{
+          "id": "js/sql-injection",
+          "properties": { "security-severity": "8.8", "problem.severity": "error",
+                          "tags": ["security", "external/cwe/cwe-089"] }
+        }]}},
+        "results": [
+          { "ruleId": "js/sql-injection", "ruleIndex": 0, "message": { "text": "SQL built from input" },
+            "locations": [{ "physicalLocation": { "artifactLocation": { "uri": "src/db.js" },
+                                                  "region": { "startLine": 7, "endLine": 9 } } }],
+            "partialFingerprints": { "primaryLocationLineHash": "deadbeef:1" } },
+          { "ruleId": "js/sql-injection", "message": { "text": "outside" },
+            "locations": [{ "physicalLocation": { "artifactLocation": { "uri": "../../etc/x.js" } } }] }
+        ]
+      }]
+    }"#;
+    let file = f.root.join("import.sarif");
+    fs::write(&file, sarif).unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["codeql", "import", "--sarif"])
+        .arg(&file)
+        .arg("--workspace")
+        .arg(&f.workspace)
+        .arg("--json")
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(report["command"], "codeql import");
+    assert_eq!(report["codeql_version"], serde_json::Value::Null);
+    assert_eq!(report["target_code_executed"], false);
+    assert_eq!(report["results_total"], 2);
+    assert_eq!(report["results_outside_workspace"], 1);
+    assert_eq!(report["languages"][0]["language"], "javascript");
+    assert_eq!(report["source_tool"]["version"], "2.27.4");
+    let finding = &report["findings"][0];
+    assert_eq!(finding["severity"], "high");
+    assert_eq!(finding["cwe"], serde_json::json!(["CWE-89"]));
+    assert_eq!(finding["path"], "src/db.js");
+    assert_eq!(
+        (finding["start_line"].as_u64(), finding["end_line"].as_u64()),
+        (Some(7), Some(9))
+    );
+    assert_eq!(finding["fingerprint"], "deadbeef:1");
+
+    let text = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["codeql", "import", "--sarif"])
+        .arg(&file)
+        .arg("--workspace")
+        .arg(&f.workspace)
+        .output()
+        .unwrap();
+    assert!(text.status.success());
+    let text = String::from_utf8(text.stdout).unwrap();
+    assert!(text.contains("Sentra did not run CodeQL"), "{text}");
+    assert!(text.contains("src/db.js:7"), "{text}");
+
+    let reject = |name: &str, content: Option<&str>, size: Option<u64>| {
+        let path = f.root.join(name);
+        match (content, size) {
+            (Some(text), _) => fs::write(&path, text).unwrap(),
+            (None, Some(len)) => fs::File::create(&path).unwrap().set_len(len).unwrap(),
+            _ => {}
+        }
+        Command::new(env!("CARGO_BIN_EXE_sentra"))
+            .args(["codeql", "import", "--sarif"])
+            .arg(&path)
+            .arg("--workspace")
+            .arg(&f.workspace)
+            .arg("--json")
+            .output()
+            .unwrap()
+    };
+    for (name, content, size, code, exit) in [
+        (
+            "semgrep.sarif",
+            Some(r#"{"runs":[{"tool":{"driver":{"name":"Semgrep"}},"results":[]}]}"#),
+            None,
+            "sarif_not_codeql",
+            4,
+        ),
+        ("broken.sarif", Some("{ nope"), None, "sarif_invalid", 4),
+        (
+            "big.sarif",
+            None,
+            Some(64 * 1024 * 1024 + 1),
+            "sarif_too_large",
+            4,
+        ),
+        ("missing.sarif", None, None, "io_error", 5),
+    ] {
+        let out = reject(name, content, size);
+        assert_eq!(out.status.code(), Some(exit), "{name}");
+        let err: serde_json::Value = serde_json::from_slice(&out.stderr).unwrap();
+        assert_eq!(err["error"], code, "{name}");
+        assert!(out.stdout.is_empty());
+    }
+    let out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["codeql", "import", "--sarif"])
+        .arg(&file)
+        .arg("--workspace")
+        .arg(f.root.join("no-such-workspace"))
+        .arg("--json")
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(4));
 }
 
 #[test]
@@ -1455,13 +1945,71 @@ fn binary_config_commands() {
     let show_str = String::from_utf8(show_out.stdout).unwrap();
     assert!(show_str.contains("anthropic"));
 
-    let test_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args(["config", "test", "--provider", "anthropic", "--json"])
+    // Regression: the help said the default database (data/sentra.db) is created if missing.
+    // It is created only inside an existing directory; without `data/` both commands fail.
+    let cwd = f.root.join("config-cwd");
+    fs::create_dir(&cwd).unwrap();
+    for config_args in [
+        vec!["config", "show", "--json"],
+        vec!["config", "set", "--key", "k", "--value", "v", "--json"],
+    ] {
+        let out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+            .args(&config_args)
+            .current_dir(&cwd)
+            .output()
+            .unwrap();
+        assert_eq!(out.status.code(), Some(5), "{config_args:?}");
+        assert_eq!(stderr_json(&out)["error"], "storage_or_service_failure");
+        assert!(!cwd.join("data").exists());
+    }
+    fs::create_dir(cwd.join("data")).unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args(["config", "set", "--key", "k", "--value", "v", "--json"])
+        .current_dir(&cwd)
         .output()
         .unwrap();
-    assert!(test_out.status.success());
-    let test_str = String::from_utf8(test_out.stdout).unwrap();
-    assert!(test_str.contains("\"status\":\"connected\""));
+    assert!(out.status.success());
+    assert!(cwd.join("data").join("sentra.db").is_file());
+    let help = sentra_cli::HELP;
+    assert!(help.contains("sentra config show [--key <key>] [--database <file>] [--json]"));
+    assert!(help.contains("but only inside an existing directory"));
+    assert!(!help.contains("the file and table are created if missing)"));
+
+    // Regression: config test printed a fixed "connected" result without contacting the
+    // provider. It now fails as not implemented and never echoes the key.
+    let test_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
+        .args([
+            "config",
+            "test",
+            "--provider",
+            "anthropic",
+            "--api-key",
+            "sk-test-not-echoed",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(test_out.status.code(), Some(5));
+    assert!(test_out.stdout.is_empty());
+    let test_error = stderr_json(&test_out);
+    assert_eq!(test_error["error"], "not_implemented");
+    assert_eq!(test_error["command"], "config test");
+    assert!(!String::from_utf8_lossy(&test_out.stderr).contains("sk-test-not-echoed"));
+
+    let resp = run(
+        &args(&["config", "test", "--provider", "openai"]),
+        Path::new(""),
+    );
+    assert_eq!(resp.exit_code, 5);
+    assert!(resp.stdout.is_empty());
+    assert!(resp.stderr.starts_with("error: not_implemented\n"));
+    assert_not_implemented(
+        &run(
+            &args(&["config", "test", "--provider", "openai", "--json"]),
+            Path::new(""),
+        ),
+        "config test",
+    );
 }
 
 #[test]

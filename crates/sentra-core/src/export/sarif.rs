@@ -339,7 +339,7 @@ pub fn generate_sarif_report(findings: &[Finding], tool_version: &str) -> SarifL
                 driver: SarifDriver {
                     name: "Sentra".to_string(),
                     version: tool_version.to_string(),
-                    information_uri: "https://github.com/sentra-security/sentra".to_string(),
+                    information_uri: "https://github.com/Taiizor/Sentra".to_string(),
                     rules,
                 },
             },
