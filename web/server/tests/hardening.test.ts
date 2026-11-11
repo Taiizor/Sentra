@@ -192,7 +192,8 @@ describe("core process queue", () => {
     const counter = path.join(dir, "runs.txt");
     // The Bun executable stands in for the core: it appends one byte per process start.
     const cli = new SentraCli(process.execPath, dir, 30_000, 2);
-    const args = ["-e", `require("fs").appendFileSync(${JSON.stringify(counter)}, "x"); console.log("{}")`];
+    // The counter path is an argument (process.argv[1]), not part of the evaluated source.
+    const args = ["-e", `require("fs").appendFileSync(process.argv[1], "x"); console.log("{}")`, counter];
     const [a, b, c] = await Promise.all([
       cli.runShared(args, { ttlMs: 60_000 }),
       cli.runShared(args, { ttlMs: 60_000 }),
@@ -213,7 +214,7 @@ describe("core process queue", () => {
     expect(fs.readFileSync(counter, "utf8")).toBe("xxx");
     // A caller that goes away stops waiting; the shared run is unaffected.
     const controller = new AbortController();
-    const slow = ["-e", `setTimeout(() => { require("fs").appendFileSync(${JSON.stringify(counter)}, "y"); console.log("{}"); }, 300)`];
+    const slow = ["-e", `setTimeout(() => { require("fs").appendFileSync(process.argv[1], "y"); console.log("{}"); }, 300)`, counter];
     const waiting = cli.runShared(slow, { ttlMs: 60_000, signal: controller.signal });
     const other = cli.runShared(slow, { ttlMs: 60_000 });
     // A refresh joins a run still in progress instead of starting a second one.

@@ -1240,7 +1240,9 @@ describe("long CodeQL runs", () => {
     const cli = new SentraCli(process.execPath, dir, 30_000, 2);
     const graceful = [
       "-e",
-      `process.stdin.on("data", () => {}); process.stdin.on("end", () => { require("fs").writeFileSync(${JSON.stringify(marker)}, "stopped"); console.log("{}"); process.exit(0); });`,
+      // The marker path is an argument (process.argv[1]), not part of the evaluated source.
+      `process.stdin.on("data", () => {}); process.stdin.on("end", () => { require("fs").writeFileSync(process.argv[1], "stopped"); console.log("{}"); process.exit(0); });`,
+      marker,
     ];
     const controller = new AbortController();
     const running = cli.run(graceful, { signal: controller.signal, cancelViaStdinEof: true });

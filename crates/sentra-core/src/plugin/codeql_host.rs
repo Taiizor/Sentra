@@ -2153,7 +2153,8 @@ mod tests {
                 .map(|(_, v)| v.clone())
                 .collect::<Vec<_>>()
         };
-        for secret in [
+        // Only variable names are named in the assertion message, never their values.
+        for removed_variable in [
             "GITHUB_TOKEN",
             "GH_TOKEN",
             "OPENAI_API_KEY",
@@ -2161,7 +2162,10 @@ mod tests {
             "JAVA_TOOL_OPTIONS",
             "CODEQL_EXTRACTOR_PYTHON_OPTION_X",
         ] {
-            assert!(get(secret).is_empty(), "{secret} leaked");
+            assert!(
+                get(removed_variable).is_empty(),
+                "variable {removed_variable} was passed to CodeQL"
+            );
         }
         assert_eq!(get("TEMP"), [dirs.tmp.clone().into_os_string()]);
         assert_eq!(get("TMP"), [dirs.tmp.clone().into_os_string()]);
