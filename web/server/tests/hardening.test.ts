@@ -314,6 +314,7 @@ function appConfig(): ServerConfig {
     production: false,
     staticDir: null,
     sentraBin: path.join(dataDir, "missing-sentra-binary"),
+    ghBin: null,
     dataDir,
     registryDbPath: path.join(dataDir, "sentra.db"),
     webDbPath: path.join(dataDir, "sentra-web.db"),

@@ -34,6 +34,7 @@ import { ExecutableLocator } from "./executables.ts";
 import { HostPlatform } from "./host-platform.ts";
 import { SettingsStore } from "./services/settings-store.ts";
 import { TENANT_ID_RE, WorkspaceService } from "./services/workspaces.ts";
+import { ToolPathStore } from "./tool-paths.ts";
 
 const STATE_CHANGING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 export const CSRF_HEADER = "x-sentra-client";
@@ -174,13 +175,19 @@ export function createApp(config: ServerConfig, hostServices: HostServices = cre
     settings,
     cli,
     llm: new LlmGateway(db, secrets),
-    // gh is run only from the process PATH or the persisted PATH, never from a standard install
-    // location; the system page reports this same choice in the gh row's usage note.
-    github: new GitHubService(secrets, config.githubTokenFromEnv, config.dataDir, { locateGh: () => executables.locateForExecution("gh").path }),
+    // gh is the file SENTRA_GH_BIN names (set by the host operator, validated at startup), else a
+    // match on the process PATH or the persisted PATH, never a standard install location; the system
+    // page reports this same choice in the gh row. Tool paths set in the console are deliberately
+    // not consulted: a path entered in the web console never becomes a program the bridge runs.
+    github: new GitHubService(secrets, config.githubTokenFromEnv, config.dataDir, {
+      ghBin: config.ghBin,
+      locateGh: () => executables.locateForExecution("gh").path,
+    }),
     workspaces,
     coreStore: new CoreStoreReader(cli, workspaces),
     executables,
     hostPlatform,
+    toolPaths: new ToolPathStore(settings),
   };
   const osv = createOsvService(partial);
   const app: AppContext = { ...partial, osv, scans: createScanService({ ...partial, osv }) };
@@ -326,6 +333,7 @@ export function startServer(): Server<unknown> {
     staticAssets: config.staticDir ?? "disabled (use the Vite dev server)",
     sentraBinary: config.sentraBin,
     sentraBinaryPresent: app.cli.available(),
+    ghBinary: config.ghBin ?? "located automatically (SENTRA_GH_BIN unset)",
     dataDir: config.dataDir,
     tokenGrants: config.tokenGrants.map((grant) => `${grant.role}:${grant.label}`),
   });

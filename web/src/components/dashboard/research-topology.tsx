@@ -7,7 +7,7 @@ import { api } from '@/lib/api'
 import { useConsole } from '@/lib/console-context'
 import { useResource } from '@/lib/use-resource'
 import type { TenantView, ToolAvailability, TopologyReportView } from '@/types/api'
-import { formatDateTime, TOOL_USAGE_LABEL } from './console-format'
+import { EXECUTABLE_SOURCE_LABEL, formatDateTime, TOOL_USAGE_LABEL } from './console-format'
 import { EmptyBlock, ErrorAlert, GatedButton, KeyValue, LoadingBlock, SectionCard } from './console-kit'
 import { LockfileList } from './stream-summary'
 
@@ -102,7 +102,7 @@ function TopologyDetails({ report }: { report: TopologyReportView }) {
         )}
       </SectionCard>
 
-      <SectionCard title="Tools on the bridge host" description="Presence when the report was created. Tools are located, never run.">
+      <SectionCard title="Tools on the bridge host" description="Presence when the report was created, including paths set in the console. Tools are located, never run.">
         <div className="flex flex-wrap gap-1.5">
           {report.tools.map((tool) => (
             <span key={tool.name} className="inline-flex items-center gap-1 text-[11px]" title={topologyToolTitle(tool)}>
@@ -219,9 +219,13 @@ function Muted({ children }: { children: ReactNode }) {
   return <p className="text-xs text-muted-foreground">{children}</p>
 }
 
-/** Reports persisted before the tool search recorded usage carry only name, availability and path. */
+/**
+ * Reports persisted before the tool search recorded usage carry only name, availability and path,
+ * and reports from before contract version 3 no source of a path set in the console.
+ */
 function topologyToolTitle(tool: ToolAvailability): string {
   const lines = [tool.path ?? 'not found']
+  if (tool.path && tool.source) lines.push(`Found via: ${EXECUTABLE_SOURCE_LABEL[tool.source] ?? tool.source}`)
   if (tool.usage) lines.push(`Used by the bridge: ${TOOL_USAGE_LABEL[tool.usage]}`)
   return lines.join('\n')
 }

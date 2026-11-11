@@ -12,6 +12,7 @@ import type { CoreStoreReader } from "./services/core-store.ts";
 import type { SettingsStore } from "./services/settings-store.ts";
 import type { OsvService, ScanService } from "./services/types.ts";
 import type { WorkspaceService } from "./services/workspaces.ts";
+import type { ToolPathStore } from "./tool-paths.ts";
 
 /** Everything a route module may use. Built once in main.ts#createApp. */
 export interface AppContext {
@@ -33,4 +34,6 @@ export interface AppContext {
   executables: ExecutableLocator;
   /** Host OS facts: native architecture, OS name, available memory, persisted PATH. */
   hostPlatform: HostPlatform;
+  /** Tool paths set by an admin in the console; reporting only, never used to run a program. */
+  toolPaths: ToolPathStore;
 }

@@ -13,6 +13,7 @@ import type { AppContext } from "../app-context.ts";
 import { markAuditHandled } from "../audit-log.ts";
 import { nowIso, parseJsonColumn } from "../db.ts";
 import { readHead } from "../git-meta.ts";
+import { hostToolsDeps, reportedToolLocation } from "../host-tools.ts";
 import { HttpError } from "../http-error.ts";
 import { log } from "../logger.ts";
 import { cliFailure, cliValue, type CliResult } from "../sentra-cli.ts";
@@ -294,18 +295,23 @@ class ScanExecution {
 
   async codeql(): Promise<void> {
     const result = await this.runCli("codeql", ["codeql", "--workspace", cliValue(this.workspace, "workspace"), "--json"]);
-    // Presence only: the same search as the system page (process PATH, persisted PATH, well-known
-    // install directories). codeql itself is never executed.
+    // Presence only, resolved like the system page's codeql row: the path an admin set in the
+    // console when it is usable, else the automatic search (process PATH, persisted PATH,
+    // well-known install directories). codeql itself is never executed.
     const executables = this.app.executables;
     const snapshot = await executables.current();
-    const codeqlPath = executables.locate("codeql", snapshot).path;
-    const probe = mapCodeqlProbe(result.json, !!codeqlPath);
+    const codeql = await reportedToolLocation(hostToolsDeps(this.app), "codeql", snapshot);
+    const probe = mapCodeqlProbe(result.json, !!codeql.path);
     this.summary.codeql = probe;
+    const where = codeql.path
+      ? `installed at ${codeql.path}${codeql.selection === "configured" ? " (path set in the console)" : ""}`
+      : `not found (searched ${executables.searchScope(snapshot)})`;
+    const broken = codeql.configuredPathProblem ? ` The codeql path set in the console cannot be used: ${codeql.configuredPathProblem}` : "";
     this.emit({
       type: "stage",
       stage: "codeql",
       status: "completed",
-      message: `Language probe: ${probe.detectedLanguages.length} language(s) detected by file extension, primary ${probe.primaryLanguage ?? "none"}. CodeQL was not executed; codeql is ${codeqlPath ? `installed at ${codeqlPath}` : `not found (searched ${executables.searchScope(snapshot)})`}.`,
+      message: `Language probe: ${probe.detectedLanguages.length} language(s) detected by file extension, primary ${probe.primaryLanguage ?? "none"}. CodeQL was not executed; codeql is ${where}.${broken}`,
     });
   }
 

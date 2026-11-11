@@ -48,6 +48,8 @@ import type {
   ScanRunView,
   ScanStreamEvent,
   SessionInfo,
+  SetToolPathRequest,
+  SetToolPathResponse,
   Severity,
   SkillDetailView,
   SkillSummaryView,
@@ -226,6 +228,15 @@ export const api = {
   system: {
     status: (signal?: AbortSignal) => get<SystemStatus>('/api/system', { signal }),
     host: (signal?: AbortSignal) => get<HostInfo>('/api/system/host', { signal }),
+    /**
+     * Sets the path the bridge reports for a tool (an absolute path to the executable or to the
+     * directory that contains it). The bridge validates it and never runs the file; gh and bun are
+     * not settable here.
+     */
+    setToolPath: (tool: string, path: string) =>
+      put<SetToolPathResponse>(`/api/system/tools/${encodeURIComponent(tool)}`, { path } satisfies SetToolPathRequest),
+    /** Removes the path set in the console; the tool is located automatically again. */
+    clearToolPath: (tool: string) => del<SetToolPathResponse>(`/api/system/tools/${encodeURIComponent(tool)}`),
   },
 
   tenants: {

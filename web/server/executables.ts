@@ -28,14 +28,25 @@ import type { CpuArch, ExecutableSource, ToolSearchStatus } from "../src/types/a
  * and Linux only persisted-PATH files owned by root or the bridge user that neither others nor a
  * non-root group can modify (see ownershipProblem).
  *
+ * Paths an admin sets in the web console (tool-paths.ts) are never passed to this module: they are
+ * applied by the reporting layer (host-tools.ts) only, so no configured path can become a program
+ * the bridge runs.
+ *
  * Everything that depends on the host is injected so Windows, macOS and Linux behaviour can be
  * unit-tested on any host.
  */
 
+/**
+ * Sources the automatic search can produce. The console-configured and environment sources of the
+ * tools table are deliberately not part of it: this module never sees a configured path, so nothing
+ * it returns (and in particular nothing locateForExecution chooses to run) can come from one.
+ */
+export type SearchSource = Exclude<ExecutableSource, "configured" | "environment">;
+
 export interface SearchDirectory {
   /** Absolute, normalised directory (no trailing separator except for a root). */
   dir: string;
-  source: ExecutableSource;
+  source: SearchSource;
 }
 
 export interface PersistedPathEntries {
@@ -311,7 +322,7 @@ export function buildSearchPlan(input: SearchEnvironment, options: { wellKnown?:
   const out: SearchDirectory[] = [];
   const seen = new Set<string>();
   let skippedNetworkEntries = 0;
-  const add = (raw: string, source: ExecutableSource, entryOptions: { expandVariables?: boolean; homedir?: string } = {}) => {
+  const add = (raw: string, source: SearchSource, entryOptions: { expandVariables?: boolean; homedir?: string } = {}) => {
     const dir = normalizeSearchEntry(raw, platform, { env: input.env, ...entryOptions });
     if (dir === null) {
       if (platform === "win32" && isWindowsNetworkOrDevicePath(entryOptions.expandVariables ? (expandWindowsVariables(raw, input.env) ?? raw) : raw)) {
@@ -422,13 +433,13 @@ export function executableFileNames(
 
 export interface ExecutableMatch {
   path: string;
-  source: ExecutableSource;
+  source: SearchSource;
 }
 
 export interface LocatedExecutable {
   /** First match in search order; null when nothing matched. */
   path: string | null;
-  source: ExecutableSource | null;
+  source: SearchSource | null;
   /** True when the first match is in a directory of the bridge process PATH. */
   onProcessPath: boolean;
   /** Later matches (max 4). */
@@ -555,7 +566,7 @@ export async function fileIdentity(file: string): Promise<string | null> {
 // ───────────────────────────── execution policy ─────────────────────────────
 
 /** Sources whose directories may supply a program the bridge runs. Standard install locations never do. */
-export const EXECUTION_SOURCES: readonly ExecutableSource[] = ["process_path", "persisted_system_path", "persisted_user_path"];
+export const EXECUTION_SOURCES: readonly SearchSource[] = ["process_path", "persisted_system_path", "persisted_user_path"];
 
 /** Only these are started directly on Windows; a .cmd/.bat would run through cmd.exe and re-parse its arguments. */
 const WINDOWS_DIRECT_EXECUTABLE = /\.(exe|com)$/i;
@@ -568,7 +579,7 @@ export interface SkippedForExecution {
 export interface ExecutionChoice {
   /** The file the bridge runs for this tool, or null when no match qualifies. */
   path: string | null;
-  source: ExecutableSource | null;
+  source: SearchSource | null;
   /** Matches passed over before the chosen one (or all of them), with the reason. */
   skipped: SkippedForExecution[];
 }
@@ -1043,7 +1054,7 @@ export class ExecutableLocator {
   }
 
   /** Source of a directory in the snapshot's search order, or null when it is not searched. */
-  sourceOfDirectory(dir: string, snapshot: SearchSnapshot = this.current_): ExecutableSource | null {
+  sourceOfDirectory(dir: string, snapshot: SearchSnapshot = this.current_): SearchSource | null {
     const normalized = normalizeSearchEntry(dir, this.platform, { env: {} }) ?? dir;
     const key = directoryKey(normalized, this.platform);
     return snapshot.directories.find((entry) => directoryKey(entry.dir, this.platform) === key)?.source ?? null;

@@ -1,22 +1,17 @@
 import { useEffect } from 'react'
-import { AlertTriangle, CheckCircle2, Cpu, MonitorCog, Network, RotateCw, Server, ServerOff, Wrench, XCircle } from 'lucide-react'
+import { Cpu, MonitorCog, Network, RotateCw, Server, ServerOff, Wrench } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { api, errorMessage } from '@/lib/api'
+import { useConsole } from '@/lib/console-context'
 import { useResource } from '@/lib/use-resource'
-import { cn } from '@/lib/utils'
-import type { BinaryInfo, HostInfo, SystemStatus, ToolAvailability } from '@/types/api'
+import type { HostInfo, SystemStatus, ToolAvailability } from '@/types/api'
 import {
-  BINARY_COMPATIBILITY_CLASS,
-  describeBinary,
-  describeToolPath,
-  describeToolSearchScope,
-  EXECUTABLE_SOURCE_LABEL,
+  CANNOT_RUN_HERE_LABEL,
+  cannotRunHere,
+  describeCannotRun,
   formatAccessGrants,
-  formatBinaryArchitectures,
-  formatBinaryCompatibility,
   formatBytes,
   formatDateTime,
   formatHostArchitecture,
@@ -26,15 +21,10 @@ import {
   hasCurrentToolShape,
   MEMORY_SOURCE_LABEL,
   minimumRoleFor,
-  persistedPathLabel,
-  persistedPathReadState,
-  stalePathAdvice,
-  TOOL_USAGE_CLASS,
-  TOOL_USAGE_LABEL,
   toolSearchLocations,
-  type ToolSearchContext,
 } from './console-format'
 import { EmptyBlock, ErrorAlert, KeyValue, LoadingBlock, SectionCard, TabHeader } from './console-kit'
+import { ToolsSection } from './host-tools-section'
 
 const HOST_POLL_MS = 10_000
 
@@ -50,9 +40,18 @@ const MEMORY_SOURCE_TITLE: Record<HostInfo['memorySource'], string> = {
  * this view reports that fact instead of rendering workers, leases or quarantine states.
  */
 export function WorkerFleetTab() {
+  const { invalidate } = useConsole()
   const status = useResource('system-status', (signal) => api.system.status(signal))
   const host = useResource('system-host', (signal) => api.system.host(signal))
   const reloadHost = host.reload
+
+  // After a tool path is set or reset: show the row the bridge returned at once, then refetch every
+  // view (the system status here, Settings → System, scan and topology messages).
+  const applyTool = (tool: ToolAvailability) => {
+    const current = status.data
+    if (current) status.setData({ ...current, tools: current.tools.map((entry) => (entry.name === tool.name ? tool : entry)) })
+    invalidate()
+  }
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -129,12 +128,12 @@ export function WorkerFleetTab() {
       <SectionCard
         icon={<Wrench className="size-4 text-emerald-400" />}
         title="Tools on the bridge host"
-        description={`Located on ${toolSearchLocations(status.data?.host?.platform)}. Presence and binary architecture are read from the file; tools are never run to detect them, and versions and licences are not checked.`}
+        description={`Found automatically on ${toolSearchLocations(status.data?.host?.platform)}, unless a path was set here. Tools are never run to detect them: presence, and whether the file can run on this machine, are read from the file. Versions and licences are not checked.`}
       >
         {!status.data ? (
           status.error ? <p className="text-xs text-muted-foreground">Unavailable: system status failed to load.</p> : <LoadingBlock rows={4} />
         ) : hasCurrentToolShape(status.data) ? (
-          <ToolsSection status={status.data} />
+          <ToolsSection status={status.data} onToolUpdated={applyTool} />
         ) : (
           <RestartBridgeNotice what="the tool search details" />
         )}
@@ -178,7 +177,8 @@ function RemoteWorkersCard({ status, error }: { status: SystemStatus | undefined
 function HostDetails({ host }: { host: HostInfo }) {
   const usedMemory = Math.max(0, host.totalMemoryBytes - host.availableMemoryBytes)
   const memoryPercent = host.totalMemoryBytes > 0 ? Math.round((usedMemory / host.totalMemoryBytes) * 100) : 0
-  const archDiffers = !!host.nativeArch && host.nativeArch !== 'unknown' && host.nativeArch !== host.arch
+  const emulated = !!host.archEmulated && !!host.nativeArch && host.nativeArch !== 'unknown'
+  const emulator = host.platform === 'darwin' ? 'Rosetta 2' : host.platform === 'win32' ? 'Windows on Arm emulation' : 'emulation'
   return (
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
@@ -193,12 +193,8 @@ function HostDetails({ host }: { host: HostInfo }) {
         </KeyValue>
         <KeyValue label="Architecture" mono>
           <span
-            className={archDiffers && host.archEmulated ? 'text-amber-300' : undefined}
-            title={
-              archDiffers
-                ? `The bridge process is ${host.arch}; the hardware is ${host.nativeArch}.${host.archEmulated ? ` The process runs under ${host.platform === 'darwin' ? 'Rosetta 2' : host.platform === 'win32' ? 'Windows on Arm emulation' : 'emulation'}.` : ''}`
-                : 'Process and hardware architecture match.'
-            }
+            className={emulated ? 'text-amber-300' : undefined}
+            title={emulated ? `The bridge process runs under ${emulator} on ${host.nativeArch} hardware.` : undefined}
           >
             {formatHostArchitecture(host)}
           </span>
@@ -250,21 +246,18 @@ function CoreDetails({ status, cliQueued }: { status: SystemStatus; cliQueued: n
         {status.core.binaryPath}
       </KeyValue>
       <KeyValue label="Binary present">
-        {status.core.present ? (
-          <span className="text-emerald-300">yes</span>
-        ) : (
+        {!status.core.present ? (
           <span className="text-rose-300">no — scans and console commands cannot run</span>
+        ) : status.core.binary && cannotRunHere(status.core.binary) ? (
+          <span className="text-rose-300" title={describeCannotRun(status.core.binary)}>
+            {CANNOT_RUN_HERE_LABEL}
+          </span>
+        ) : (
+          <span className="text-emerald-300">yes</span>
         )}
       </KeyValue>
       <KeyValue label="Version" mono>
         {status.core.version ?? (status.core.error ? `unknown (${status.core.error})` : 'unknown')}
-      </KeyValue>
-      <KeyValue label="Binary architecture" mono>
-        {status.core.binary ? (
-          <BinaryArchitecture binary={status.core.binary} />
-        ) : (
-          <span className="text-muted-foreground">{status.core.present ? 'not read' : 'n/a'}</span>
-        )}
       </KeyValue>
       <KeyValue label="Bridge mode">{status.mode}</KeyValue>
       <KeyValue label="Core CLI calls waiting for a slot">{cliQueued ?? 'n/a'}</KeyValue>
@@ -303,17 +296,6 @@ function BridgeConfig({ status }: { status: SystemStatus }) {
   )
 }
 
-/** Architectures read from an executable header, coloured by compatibility with this host. */
-function BinaryArchitecture({ binary }: { binary: BinaryInfo }) {
-  const compatibility = formatBinaryCompatibility(binary)
-  return (
-    <span className="inline-flex flex-wrap items-baseline gap-x-1.5 font-mono text-[11px]" title={describeBinary(binary)}>
-      <span className="text-zinc-200">{formatBinaryArchitectures(binary)}</span>
-      {compatibility && <span className={BINARY_COMPATIBILITY_CLASS[binary.compatibility]}>{compatibility}</span>}
-    </span>
-  )
-}
-
 /** Placeholder for a section whose data the running bridge does not send yet (it runs older code). */
 function RestartBridgeNotice({ what }: { what: string }) {
   return (
@@ -321,139 +303,5 @@ function RestartBridgeNotice({ what }: { what: string }) {
       The bridge did not send {what}: it is running older code than this console. Restart the bridge (for example stop and
       rerun <span className="font-mono">bun run dev</span>) to see them.
     </p>
-  )
-}
-
-function ToolsSection({ status }: { status: SystemStatus }) {
-  const { tools, toolSearch } = status
-  const platform = status.host.platform
-  const search = { toolSearch, platform }
-  const persisted = persistedPathLabel(platform)
-  // A tool in a standard install location is "only" there when the persisted PATH was fully read;
-  // otherwise the persisted PATH may list its directory too.
-  const persistedRead = persistedPathReadState(toolSearch)
-  // Tools the bridge's own environment cannot see, grouped by where they were found. The running Bun
-  // (usage "runtime") is left out: starting the bridge by absolute path from a directory that is not
-  // on PATH is normal and says nothing about a stale PATH. A runtime started from outside the
-  // searched directories has source null and is never listed either.
-  const offPath = tools.filter((tool) => tool.available && tool.usage !== 'runtime')
-  const persistedOnly = offPath.filter((tool) => tool.source === 'persisted_system_path' || tool.source === 'persisted_user_path')
-  const wellKnownOnly = offPath.filter((tool) => tool.source === 'well_known')
-  return (
-    <div className="flex flex-col gap-3">
-      <p className="text-[11px] text-muted-foreground">
-        Searched {toolSearch.searchedDirectories} {toolSearch.searchedDirectories === 1 ? 'directory' : 'directories'} at{' '}
-        {formatDateTime(toolSearch.refreshedAt)}: {describeToolSearchScope(toolSearch, platform)}.
-        {toolSearch.skippedNetworkEntries > 0 &&
-          ` ${toolSearch.skippedNetworkEntries} UNC or device PATH ${toolSearch.skippedNetworkEntries === 1 ? 'entry was' : 'entries were'} skipped on purpose: listing a network share would make the bridge authenticate to that host.`}
-      </p>
-      {toolSearch.persistedPathError &&
-        (toolSearch.persistedPathRead ? (
-          <p className="text-[11px] text-amber-300">
-            Part of {persisted} could not be read ({toolSearch.persistedPathError}). The entries that were read are included in the
-            search.
-          </p>
-        ) : (
-          <p className="text-[11px] text-amber-300">
-            {persisted.charAt(0).toUpperCase() + persisted.slice(1)} could not be read ({toolSearch.persistedPathError}). Only the
-            bridge process PATH and standard install locations were searched.
-          </p>
-        ))}
-      {persistedOnly.length > 0 && (
-        <OffPathBanner tools={persistedOnly} found={`in ${persisted}`} advice={stalePathAdvice(platform, 'persisted')} />
-      )}
-      {wellKnownOnly.length > 0 && (
-        <OffPathBanner
-          tools={wellKnownOnly}
-          found={persistedRead === 'read' ? 'only in a standard install location' : 'in a standard install location'}
-          advice={stalePathAdvice(platform, 'well_known', persistedRead)}
-        />
-      )}
-      {(persistedOnly.length > 0 || wellKnownOnly.length > 0) && (
-        <p className="text-[11px] text-muted-foreground">
-          The only tool the bridge runs itself is gh, from the process PATH or the persisted PATH (never from a standard install
-          location); its usage note names the file. Programs the bridge starts, such as the core CLI and plugin adapters, look
-          tools up on the bridge process PATH only.
-        </p>
-      )}
-      <Table className="text-xs">
-        <TableHeader>
-          <TableRow>
-            <TableHead>Tool</TableHead>
-            <TableHead>Found</TableHead>
-            <TableHead>Path</TableHead>
-            <TableHead>Architecture</TableHead>
-            <TableHead>Used by the bridge</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {tools.map((tool) => (
-            <ToolRow key={tool.name} tool={tool} search={search} />
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  )
-}
-
-function OffPathBanner({ tools, found, advice }: { tools: ToolAvailability[]; found: string; advice: string }) {
-  return (
-    <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-2.5 text-[11px] text-amber-200">
-      <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-400" />
-      <span>
-        <span className="font-mono">{tools.map((tool) => tool.name).join(', ')}</span> {tools.length === 1 ? 'was' : 'were'} found{' '}
-        {found}, but not on the bridge process PATH. {advice}
-      </span>
-    </div>
-  )
-}
-
-function ToolRow({ tool, search }: { tool: ToolAvailability; search: ToolSearchContext }) {
-  const count = tool.shadowed.length
-  const otherMatches =
-    tool.usage === 'runtime' ? (count === 1 ? 'other install' : 'other installs') : count === 1 ? 'later match' : 'later matches'
-  return (
-    <TableRow>
-      <TableCell className="align-top font-mono text-[11px]">{tool.name}</TableCell>
-      <TableCell className="align-top">
-        {tool.available ? (
-          <CheckCircle2 className="size-3.5 text-emerald-400" aria-label="found" />
-        ) : (
-          <XCircle className="size-3.5 text-zinc-600" aria-label="not found" />
-        )}
-      </TableCell>
-      <TableCell className="max-w-96 align-top">
-        {tool.path ? (
-          <div className="flex min-w-0 flex-col gap-0.5" title={describeToolPath(tool, search)}>
-            <span className="truncate font-mono text-[11px] text-zinc-300">{tool.path}</span>
-            <span className="truncate text-[10px] text-muted-foreground">
-              {tool.source ? EXECUTABLE_SOURCE_LABEL[tool.source] : 'outside the searched directories'}
-              {tool.source && !tool.onProcessPath && <span className="text-amber-300"> · not on the process PATH</span>}
-              {tool.resolvedPath && (tool.resolvedVia === 'scoop_shim' ? ' · Scoop shim' : ' · symlink')}
-              {count > 0 && ` · ${count} ${otherMatches}`}
-            </span>
-          </div>
-        ) : (
-          <span className="text-[11px] text-zinc-500" title={describeToolPath(tool, search)}>
-            not found
-          </span>
-        )}
-      </TableCell>
-      <TableCell className="align-top">
-        {tool.binary ? (
-          <BinaryArchitecture binary={tool.binary} />
-        ) : (
-          <span className="text-[11px] text-zinc-600">{tool.available ? 'not read' : '—'}</span>
-        )}
-      </TableCell>
-      <TableCell className="min-w-56 align-top whitespace-normal">
-        <div className="flex flex-col items-start gap-0.5">
-          <Badge variant="outline" className={cn('font-mono text-[10px]', TOOL_USAGE_CLASS[tool.usage])}>
-            {TOOL_USAGE_LABEL[tool.usage]}
-          </Badge>
-          {tool.usageNote && <span className="text-[10px] leading-snug text-muted-foreground">{tool.usageNote}</span>}
-        </div>
-      </TableCell>
-    </TableRow>
   )
 }

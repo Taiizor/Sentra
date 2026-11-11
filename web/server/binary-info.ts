@@ -166,9 +166,17 @@ export function windowsScriptNote(filePath: string, platform: NodeJS.Platform): 
   return WINDOWS_SCRIPT_EXTENSIONS[path.win32.extname(filePath).toLowerCase()] ?? null;
 }
 
-function osLabel(platform: NodeJS.Platform): string {
+/** Display name of an OS for messages. */
+export function osLabel(platform: NodeJS.Platform): string {
   return platform === "win32" ? "Windows" : platform === "darwin" ? "macOS" : platform === "linux" ? "Linux" : platform;
 }
+
+/** Executable formats each OS starts natively (anything else cannot run there). */
+export const NATIVE_FORMATS: Partial<Record<NodeJS.Platform, readonly BinaryFormat[]>> = {
+  win32: ["pe"],
+  darwin: ["macho", "macho_universal"],
+  linux: ["elf"],
+};
 
 const FORMAT_LABEL: Record<BinaryFormat, string> = {
   pe: "Windows (PE)",

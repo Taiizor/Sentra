@@ -291,6 +291,7 @@ export function ConfirmDialog({
   busy = false,
   onConfirm,
   children,
+  finalFocus,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -301,10 +302,12 @@ export function ConfirmDialog({
   busy?: boolean
   onConfirm: () => void
   children?: ReactNode
+  /** Where focus goes when the dialog closes, for when confirming removes the control that opened it. */
+  finalFocus?: ComponentProps<typeof DialogContent>['finalFocus']
 }) {
   return (
     <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
-      <DialogContent className="max-w-md border-border/80 bg-background">
+      <DialogContent className="max-w-md border-border/80 bg-background" finalFocus={finalFocus}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm">
             <AlertTriangle className={cn('size-4', destructive ? 'text-rose-400' : 'text-amber-400')} />

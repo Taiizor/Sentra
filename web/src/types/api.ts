@@ -115,8 +115,12 @@ export interface SessionInfo {
  *   osName, nativeArch, archEmulated, runtimePath and runtimePathNote; ToolAvailability adds the
  *   search source, resolved target, binary header, usage and shadowed matches; SystemStatus adds
  *   apiContractVersion, toolSearch and core.binary; HealthResponse adds apiContractVersion.
+ * - 3: ExecutableSource adds 'configured' and 'environment'; ToolAvailability adds selection,
+ *   configuredPath, configuredPathProblem, pathConfigurable and pathHint; PUT and DELETE
+ *   /api/system/tools/:name set and clear a console-configured tool path (SetToolPathRequest,
+ *   SetToolPathResponse).
  */
-export const API_CONTRACT_VERSION = 2
+export const API_CONTRACT_VERSION = 3
 
 export interface HealthResponse {
   status: 'ok'
@@ -164,8 +168,19 @@ export interface HostInfo {
   sampledAt: string
 }
 
-/** Where an executable's directory came from in the bridge's search order. */
-export type ExecutableSource = 'process_path' | 'persisted_system_path' | 'persisted_user_path' | 'well_known'
+/**
+ * Where a reported executable came from: a directory of the bridge's automatic search order
+ * (process_path, persisted_system_path, persisted_user_path, well_known), a path an admin set in
+ * the console (configured; reporting only, never run), or a path the host operator pinned with an
+ * environment variable (environment; SENTRA_GH_BIN for gh).
+ */
+export type ExecutableSource =
+  | 'process_path'
+  | 'persisted_system_path'
+  | 'persisted_user_path'
+  | 'well_known'
+  | 'configured'
+  | 'environment'
 export type BinaryFormat = 'pe' | 'elf' | 'macho' | 'macho_universal' | 'script' | 'unknown'
 export type BinaryCompatibility = 'native' | 'emulated' | 'compatible_32bit' | 'incompatible' | 'script' | 'unknown'
 
@@ -181,6 +196,12 @@ export interface BinaryInfo {
 
 /** executed: the bridge runs it; runtime: it runs the bridge; presence_only: only its presence is reported; not_used: not used by the bridge. */
 export type ToolUsage = 'executed' | 'runtime' | 'presence_only' | 'not_used'
+
+/**
+ * How a tool row's path was chosen: automatic detection, a path an admin set in the console, or
+ * an environment variable set by the host operator (SENTRA_GH_BIN for gh).
+ */
+export type ToolPathSelection = 'automatic' | 'configured' | 'environment'
 
 export interface ToolAvailability {
   name: string
@@ -205,9 +226,44 @@ export interface ToolAvailability {
   /**
    * Further matches later in the search order (max 4), absolute paths; the same file reached through
    * another directory (merged /usr, symlinked bin directories) is not repeated. For bun: the other
-   * installs, i.e. matches that are not the running executable.
+   * installs, i.e. matches that are not the running executable. For a configured or environment
+   * row: copies found by the automatic search that are not the selected file.
    */
   shadowed: string[]
+  /** How `path` was chosen (see ToolPathSelection). A broken configured path falls back to 'automatic'. */
+  selection: ToolPathSelection
+  /** Path an admin set in the console for this tool (a file or the folder holding it); null when none is set. */
+  configuredPath: string | null
+  /**
+   * Why the configured path (or SENTRA_GH_BIN for gh) cannot be used right now, e.g. the file was
+   * removed. The row then reports what automatic detection finds (for SENTRA_GH_BIN: nothing).
+   */
+  configuredPathProblem: string | null
+  /**
+   * True when an admin may set this tool's path in the console (PUT /api/system/tools/:name).
+   * False for tools the bridge runs (gh) or that run the bridge (bun): a path entered in the web
+   * console never becomes a program the bridge runs.
+   */
+  pathConfigurable: boolean
+  /** For a tool whose path cannot be set in the console: how it can be set instead; null otherwise. */
+  pathHint: string | null
+}
+
+/** Body of PUT /api/system/tools/:name (permission settings:write). */
+export interface SetToolPathRequest {
+  /**
+   * Absolute path to the executable or to the folder that contains it. The bridge never runs it;
+   * it only checks that it exists and can run on the bridge host.
+   */
+  path: string
+}
+
+/** Response of PUT and DELETE /api/system/tools/:name. */
+export interface SetToolPathResponse {
+  /** The tool's row after the change, as GET /api/system reports it. */
+  tool: ToolAvailability
+  /** Non-blocking remark about an accepted path (e.g. the file name does not look like the tool); null otherwise. */
+  warning: string | null
 }
 
 /** The executable search snapshot behind SystemStatus.tools. */

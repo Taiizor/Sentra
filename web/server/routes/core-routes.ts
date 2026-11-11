@@ -5,6 +5,7 @@ import {
   type HealthResponse,
   type HostInfo,
   type SessionInfo,
+  type SetToolPathResponse,
   type SystemStatus,
   type TenantView,
   type ToolAvailability,
@@ -14,9 +15,10 @@ import { markAuditHandled } from "../audit-log.ts";
 import { AttemptLimiter } from "../auth.ts";
 import { inspectBinary } from "../binary-info.ts";
 import { configuredGrantCount } from "../config.ts";
-import { collectHostInfo, describeTools, hostArch } from "../host-tools.ts";
-import { HttpError, json, type Router } from "../http.ts";
+import { collectHostInfo, describeTools, hostArch, hostToolsDeps, isToolName, toolPathProbesFor, type ToolName } from "../host-tools.ts";
+import { HttpError, json, type AuthedContext, type Router } from "../http.ts";
 import { permissionsFor, ROLE_LABEL } from "../permissions.ts";
+import { checkToolPath, isConfigurableTool, MAX_TOOL_PATH_LENGTH, notConfigurableReason } from "../tool-paths.ts";
 import { asObject, oneOf, optionalString, requiredString, TENANT_ID_PATTERN } from "../validate.ts";
 import { actorOf, audited, intParam, tenantParam } from "./helpers.ts";
 
@@ -45,10 +47,30 @@ export function hostInfo(app: Pick<AppContext, "executables" | "hostPlatform" | 
   return collectHostInfo(app, app.cli.queued);
 }
 
-/** Reported tools, located through the executable search snapshot; nothing is executed. */
-export function toolAvailability(app: Pick<AppContext, "executables" | "hostPlatform">): Promise<ToolAvailability[]> {
-  return describeTools(app);
+/**
+ * Reported tools: located through the executable search snapshot, or at the path an admin set in
+ * the console (SENTRA_GH_BIN for gh); nothing is executed.
+ */
+export function toolAvailability(app: Pick<AppContext, "executables" | "hostPlatform" | "toolPaths" | "config">): Promise<ToolAvailability[]> {
+  return describeTools(hostToolsDeps(app));
 }
+
+/** One tool's row as GET /api/system reports it. */
+async function toolRow(app: AppContext, name: ToolName): Promise<ToolAvailability> {
+  const row = (await toolAvailability(app)).find((tool) => tool.name === name);
+  if (!row) throw new HttpError(500, "internal_error", `No row for tool ${name}`);
+  return row;
+}
+
+/** `:name` of the tool routes: one of the reported tools (404 otherwise). */
+function toolParam(ctx: AuthedContext): ToolName {
+  const name = ctx.params.name ?? "";
+  if (!isToolName(name)) throw new HttpError(404, "tool_not_found", "Unknown tool. Paths can be set for the tools listed on the Host & workers page.");
+  return name;
+}
+
+/** Bound on the raw path recorded on the audit chain for a refused request. */
+const AUDITED_PATH_CHARS = MAX_TOOL_PATH_LENGTH + 16;
 
 function sessionInfo(principal: { role: SessionInfo["role"]; label: string; via: SessionInfo["via"] }, expiresAt: string | null): SessionInfo {
   return {
@@ -106,7 +128,7 @@ export function registerCoreRoutes(router: Router, app: AppContext): void {
     const [version, host, tools, coreBinary] = await Promise.all([
       coreVersion(app),
       hostInfo(app),
-      describeTools(app, { snapshot }),
+      describeTools(hostToolsDeps(app), { snapshot }),
       corePresent ? hostArch(app).then((arch) => inspectBinary(app.config.sentraBin, arch)) : Promise.resolve(null),
     ]);
     const ai = app.llm.status();
@@ -142,6 +164,46 @@ export function registerCoreRoutes(router: Router, app: AppContext): void {
   });
 
   router.get("/api/system/host", { auth: "session", permission: "read" }, async () => json(await hostInfo(app)));
+
+  // ── tool paths (reporting only) ─────────────────────────────────────────
+  // An admin may tell the bridge where a tool lives when automatic detection cannot find it. The
+  // path is only checked (exists, can run on this host, header read) and used for reporting; it is
+  // never passed to anything that starts a program. gh (run by the bridge) and bun (runs the
+  // bridge) are refused: a path entered in the web console must never become a program the bridge
+  // runs, the "command execution through client-supplied paths" issue of the legacy bridge.
+  router.put("/api/system/tools/:name", { auth: "session", permission: "settings:write", maxBodyBytes: 8 * 1024 }, async (ctx) => {
+    const tool = toolParam(ctx);
+    const body = asObject(await ctx.readJson());
+    const raw = body.path;
+    const check = await audited(
+      app,
+      ctx.principal,
+      { action: "tool_path_configured", target: tool, details: { tool, path: typeof raw === "string" ? raw.slice(0, AUDITED_PATH_CHARS) : null } },
+      async () => {
+        if (!isConfigurableTool(tool)) throw new HttpError(409, "tool_path_not_configurable", notConfigurableReason(tool));
+        if (typeof raw !== "string") throw new HttpError(400, "invalid_request", "'path' is required and must be a string");
+        const deps = hostToolsDeps(app);
+        const result = await checkToolPath(tool, raw, toolPathProbesFor(deps, await hostArch(deps)));
+        if (!result.ok) throw new HttpError(400, "invalid_tool_path", result.problem);
+        app.toolPaths.set(tool, result.input, ctx.principal.label);
+        return result;
+      },
+      (result) => ({ path: result.input }),
+    );
+    const response: SetToolPathResponse = { tool: await toolRow(app, tool), warning: check.warning };
+    return json(response);
+  });
+
+  router.delete("/api/system/tools/:name", { auth: "session", permission: "settings:write" }, async (ctx) => {
+    const tool = toolParam(ctx);
+    const previous = isConfigurableTool(tool) ? (app.toolPaths.list()[tool]?.path ?? null) : null;
+    await audited(app, ctx.principal, { action: "tool_path_cleared", target: tool, details: { tool, path: previous } }, () => {
+      if (!isConfigurableTool(tool)) throw new HttpError(409, "tool_path_not_configurable", notConfigurableReason(tool));
+      app.toolPaths.clear(tool, ctx.principal.label);
+    });
+    const response: SetToolPathResponse = { tool: await toolRow(app, tool), warning: null };
+    return json(response);
+  });
 
   // ── tenants ─────────────────────────────────────────────────────────────
   router.get("/api/tenants", { auth: "session", permission: "read" }, async () => {

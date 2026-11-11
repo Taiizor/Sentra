@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { findOnProcessPathForExecution } from "./executables.ts";
+import { MAX_HEADER_BYTES, NATIVE_FORMATS, osLabel, parseExecutableHeader } from "./binary-info.ts";
+import { findOnProcessPathForExecution, pathApi } from "./executables.ts";
 
 /** Server-side roles. The UI labels them Viewer / Operator / SecurityAdmin. */
 export type Role = "viewer" | "operator" | "admin";
@@ -32,6 +33,12 @@ export interface ServerConfig {
   /** Directory with the Vite production build, served from the same origin when present. */
   staticDir: string | null;
   sentraBin: string;
+  /**
+   * gh executable pinned by the host operator (SENTRA_GH_BIN); null to locate gh automatically.
+   * Validated once at startup (resolveGhBinary). It is the only way to choose the gh the bridge
+   * runs: a gh path cannot be set in the web console.
+   */
+  ghBin: string | null;
   dataDir: string;
   /** Core-owned SQLite store that holds the tenant/workspace registry. */
   registryDbPath: string;
@@ -157,6 +164,99 @@ function resolveSentraBinary(repoRoot: string): string {
   if (onPath) return onPath;
   // Resolved lazily: health reports the binary as missing instead of crashing startup.
   return path.resolve(repoRoot, "target", "release", exe);
+}
+
+/** File-system access behind resolveGhBinary (injectable so every platform's rules are tested anywhere). */
+export interface GhBinaryProbes {
+  /** What the path leads to after following links; "missing" when nothing exists there. Throws on other errors. */
+  kind(file: string): "file" | "directory" | "other" | "missing";
+  /** Execute permission for the bridge user (macOS and Linux). */
+  isExecutable(file: string): boolean;
+  /** At most MAX_HEADER_BYTES from the start of the file. */
+  readHeader(file: string): Uint8Array;
+}
+
+const HOST_GH_PROBES: GhBinaryProbes = {
+  kind(file) {
+    try {
+      const stat = fs.statSync(file);
+      return stat.isFile() ? "file" : stat.isDirectory() ? "directory" : "other";
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOENT" || code === "ENOTDIR") return "missing";
+      throw error;
+    }
+  },
+  isExecutable(file) {
+    try {
+      fs.accessSync(file, fs.constants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  readHeader(file) {
+    const fd = fs.openSync(file, "r");
+    try {
+      const buffer = Buffer.alloc(MAX_HEADER_BYTES);
+      const bytesRead = fs.readSync(fd, buffer, 0, buffer.length, 0);
+      return buffer.subarray(0, bytesRead);
+    } finally {
+      fs.closeSync(fd);
+    }
+  },
+};
+
+/**
+ * Validates SENTRA_GH_BIN, the gh executable the host operator pins for `gh auth token`: an
+ * absolute local path (no UNC or device path on Windows) to an existing regular file that is a
+ * native executable of this OS, not a script: on Windows a .exe or .com with a PE header (a .cmd
+ * or .bat would run through cmd.exe), on macOS a Mach-O and on Linux an ELF file with execute
+ * permission. The file is only inspected here, never run. Ownership is not checked: like
+ * SENTRA_BIN, the variable is set by whoever controls the bridge's environment.
+ */
+export function resolveGhBinary(input: string | null, platform: NodeJS.Platform = process.platform, probes: GhBinaryProbes = HOST_GH_PROBES): string | null {
+  if (input === null) return null;
+  // One pair of surrounding quotes, as Windows "Copy as path" adds, is not part of the path.
+  const raw = /^"[^"]+"$/.test(input) ? input.slice(1, -1).trim() : input;
+  // oxlint-disable-next-line no-control-regex -- intentional: rejects control characters in SENTRA_GH_BIN
+  if (/[\u0000-\u001f\u007f]/.test(raw)) throw new ConfigError("SENTRA_GH_BIN contains control characters");
+  if (platform === "win32") {
+    if (/^[\\/]{2}/.test(raw)) {
+      throw new ConfigError("SENTRA_GH_BIN must be a path on a local drive; UNC (\\\\server\\share) and device (\\\\?\\, \\\\.\\) paths are not accepted");
+    }
+    if (!/^[A-Za-z]:[\\/]/.test(raw)) throw new ConfigError(`SENTRA_GH_BIN must be an absolute path such as C:\\Program Files\\GitHub CLI\\gh.exe: ${raw}`);
+  } else if (!raw.startsWith("/")) {
+    throw new ConfigError(`SENTRA_GH_BIN must be an absolute path such as /usr/bin/gh: ${raw}`);
+  }
+  const file = pathApi(platform).normalize(raw);
+  let kind: ReturnType<GhBinaryProbes["kind"]>;
+  try {
+    kind = probes.kind(file);
+  } catch (error) {
+    throw new ConfigError(`SENTRA_GH_BIN could not be checked (${(error as NodeJS.ErrnoException).code ?? "error"}): ${file}`);
+  }
+  if (kind === "missing") throw new ConfigError(`SENTRA_GH_BIN points to a missing file: ${file}`);
+  if (kind !== "file") throw new ConfigError(`SENTRA_GH_BIN is not a regular file: ${file}`);
+  if (platform === "win32") {
+    if (!/\.(exe|com)$/i.test(file)) {
+      throw new ConfigError(`SENTRA_GH_BIN must name a .exe or .com file (a script such as .cmd would run through cmd.exe): ${file}`);
+    }
+  } else if (!probes.isExecutable(file)) {
+    throw new ConfigError(`SENTRA_GH_BIN is not executable by the bridge user: ${file}`);
+  }
+  let header: ReturnType<typeof parseExecutableHeader>;
+  try {
+    header = parseExecutableHeader(probes.readHeader(file));
+  } catch (error) {
+    throw new ConfigError(`SENTRA_GH_BIN could not be read (${(error as NodeJS.ErrnoException).code ?? "error"}): ${file}`);
+  }
+  if (header.format === "script") throw new ConfigError(`SENTRA_GH_BIN must be a native executable, not a script (${header.note}): ${file}`);
+  const expected = NATIVE_FORMATS[platform];
+  if (expected && !expected.includes(header.format)) {
+    throw new ConfigError(`SENTRA_GH_BIN is not a native ${osLabel(platform)} executable (${header.note ?? `${header.format} file`}): ${file}`);
+  }
+  return file;
 }
 
 function loadSecretKey(dataDir: string): Buffer {
@@ -304,6 +404,7 @@ export function loadConfig(): ServerConfig {
     production,
     staticDir,
     sentraBin: resolveSentraBinary(repoRoot),
+    ghBin: resolveGhBinary(env("SENTRA_GH_BIN")),
     dataDir,
     registryDbPath: path.join(dataDir, "sentra.db"),
     webDbPath: path.join(dataDir, "sentra-web.db"),

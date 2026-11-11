@@ -94,6 +94,12 @@ export interface GitHubServiceOptions {
   /** Replaces `gh auth token` discovery (tests, or hosts where gh must not be consulted). */
   ghTokenReader?: () => string | null;
   /**
+   * gh executable pinned by the host operator (SENTRA_GH_BIN, validated by loadConfig). When set it
+   * is the only gh ever run: locateGh is not consulted, so there is no silent fallback to another
+   * gh. Paths set in the web console are never passed here.
+   */
+  ghBin?: string | null;
+  /**
    * Absolute path of the gh executable to run, or null when none qualifies. Defaults to the bridge
    * process PATH only; the app passes the locator's execution lookup (process PATH and persisted
    * PATH, never standard install locations).
@@ -246,6 +252,7 @@ export class GitHubService {
   private readonly ghCwd: string;
   private readonly fetcher: GitHubFetcher;
   private readonly ghTokenReader: (() => string | null) | null;
+  private readonly ghBin: string | null;
   private readonly locateGh: () => string | null;
   private readonly ghTimeoutMs: number;
 
@@ -255,6 +262,7 @@ export class GitHubService {
     this.ghCwd = ghCwd;
     this.fetcher = options.fetcher ?? fetchWithLimits;
     this.ghTokenReader = options.ghTokenReader ?? null;
+    this.ghBin = options.ghBin ?? null;
     this.locateGh = options.locateGh ?? (() => findOnProcessPathForExecution("gh"));
     this.ghTimeoutMs = options.ghTimeoutMs ?? GH_TOKEN_TIMEOUT_MS;
   }
@@ -263,10 +271,11 @@ export class GitHubService {
    * Reads `gh auth token` (cached for five minutes, and read again when a different gh is
    * located). Runs outside any workspace, with an allow-listed environment and a timeout. On
    * Windows only a .exe/.com is started, never a batch script (which would run through cmd.exe).
+   * The gh run is SENTRA_GH_BIN when set, else the locator's execution choice.
    */
   private ghCliToken(): string | null {
     const now = Date.now();
-    const gh = this.ghTokenReader ? null : this.locateGh();
+    const gh = this.ghTokenReader ? null : (this.ghBin ?? this.locateGh());
     if (this.ghCache && now - this.ghCache.at < 5 * 60_000 && this.ghCache.ghPath === gh) return this.ghCache.token;
     let token: string | null = null;
     if (this.ghTokenReader) {

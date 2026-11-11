@@ -88,6 +88,7 @@ If you bind a non-loopback address without tokens, the bridge refuses to start.
 | `SENTRA_WEB_MODE` | `development` | `production` serves `web/dist`. `bun run start` passes `--production`. |
 | `SENTRA_WEB_DATA_DIR` | `<repo>/../sentra_web_storage` | Bridge data directory. Must be outside the repository and outside every workspace. |
 | `SENTRA_BIN` | see above | Path to the `sentra` binary. |
+| `SENTRA_GH_BIN` | unset (automatic detection) | Absolute path to the GitHub CLI (`gh`) that the bridge runs for `gh auth token`. Checked at startup, without running it: the bridge refuses to start unless it is an existing local file and a native executable of the host OS (Windows: a `.exe` or `.com` PE file, not a `.cmd`/`.bat` wrapper or a UNC path; macOS: Mach-O; Linux: ELF), executable by the bridge user, and not a script. When set, it is the only `gh` the bridge runs; there is no fallback to another `gh`. Its ownership is not checked: like `SENTRA_BIN`, it is set by whoever controls the bridge environment. Cannot be set in the console; see [Tool paths set in the console](#tool-paths-set-in-the-console). |
 | `SENTRA_REPO_ROOT` | parent of `web/` | Repository root used to locate the binary. |
 | `SENTRA_WEB_TOKENS` | generated local admin token | Comma-separated `role:token` or `role:label:token`. Roles are `viewer`, `operator` and `admin`. Tokens must be 24–256 URL-safe characters. |
 | `SENTRA_WEB_SESSION_TTL_MINUTES` | `720` | Session lifetime. |
@@ -125,7 +126,7 @@ Creating a pull request (publication) and posting a comment or commit status (di
 - **Network:** binds to loopback by default. A `Host` allowlist blocks DNS rebinding. No CORS headers are sent, and in production the UI is served from the same origin.
 - **Authentication:** bearer tokens for API clients, or an `HttpOnly`, `SameSite=Strict` session cookie for the UI. Login attempts are rate-limited.
 - **CSRF:** state-changing cookie requests must carry an allowed `Origin` (or `Sec-Fetch-Site: same-origin`) and the `X-Sentra-Client: console` header. JSON bodies require `Content-Type: application/json`.
-- **Paths:** clients never send filesystem paths for workspaces, stores, backups or manifests. File reads are confined (after symlinks are resolved) to the registered workspace. Secret files and the data directory are denied, and lines with open secret findings are redacted.
+- **Paths:** clients never send filesystem paths for workspaces, stores, backups or manifests. File reads are confined (after symlinks are resolved) to the registered workspace. Secret files and the data directory are denied, and lines with open secret findings are redacted. A SecurityAdmin can set the path of a tool the bridge never runs; the bridge only checks that file and never runs it (see [Tool paths set in the console](#tool-paths-set-in-the-console)).
 - **Process execution:** the core runs without a shell, from the data directory, with a minimal environment, a timeout, an output cap and a concurrency limit. Credentials are never passed to the core or to plugin adapters.
 - **Outbound requests:** model provider endpoints are fixed. The only custom endpoints allowed are explicitly loopback ones (local runtimes) or public HTTPS hosts that pass a private-address and metadata-address guard. Responses are size- and time-limited.
 - **Secrets at rest:** provider API keys and the GitHub token are encrypted with AES-256-GCM. The key comes from `SENTRA_WEB_SECRET_KEY` or `web-secret.key`.
@@ -161,7 +162,8 @@ PR scans and the Pull requests view need a GitHub credential: the `gh` CLI sessi
 
 ```
 <data dir>/
-  sentra-web.db        bridge store: workspaces, sessions, settings, encrypted secrets,
+  sentra-web.db        bridge store: workspaces, sessions, settings (including tool
+                       paths set in the console), encrypted secrets,
                        audit chain, scan runs, findings, patches, webhooks, PR scans,
                        coverage ledger, recon reports, OSV cache
   core-stores/<id>.db  one core store per workspace (owned by the sentra core)
@@ -179,7 +181,7 @@ That file contains `tenants` and `system_settings` tables that the earlier bridg
 
 ## Host and tool detection
 
-*Host & workers* and *Settings → System* describe the machine that runs the bridge. Detection never runs a tool it finds. The only programs the bridge starts for it are fixed system programs, called by absolute path without a shell, with a minimal environment and a short timeout; their results are cached:
+*Host & workers* and *Settings → System* describe the machine that runs the bridge. Tools are found automatically; the search has rules for Windows, macOS and Linux hosts, including Arm hosts and emulated processes (what has been tested on which host is listed at the end of this section). When detection misses a tool, a SecurityAdmin can set its path on *Host & workers* (see [Tool paths set in the console](#tool-paths-set-in-the-console)). Detection never runs a tool it finds, and a path set in the console is never run either. The only programs the bridge starts for detection are fixed system programs, called by absolute path without a shell, with a minimal environment and a short timeout; their results are cached:
 
 | Host OS | Programs | Used for |
 | --- | --- | --- |
@@ -200,7 +202,7 @@ A process copies `PATH` when it starts. A directory added to `PATH` after the br
 
 ### Search order
 
-Each tool is looked up in these directories, in order. Empty, relative and duplicate entries are dropped. On Windows, UNC (`\\server\share`) and device (`\\?\`, `\\.\`) entries are skipped on purpose, because listing a share would make the bridge authenticate to that host on every refresh; the page shows how many were skipped. Standard install locations under such a path are dropped as well, before anything is listed, for example the Python directories under an `APPDATA` that Folder Redirection points to a share. The first match is reported, and up to four later matches are listed as shadowed. The same file reached through another directory (for example `/bin` and `/usr/bin` on merged-`/usr` Linux distributions, or a symlinked directory) is reported once. A row shows a resolved target only when the path or one of its directories is a symlink or junction; a path that differs from its canonical form only through a Windows 8.3 short name (`C:\PROGRA~1`), a `subst` or mapped drive, or letter case is shown as it is.
+Each tool is looked up in these directories, in order. Empty, relative and duplicate entries are dropped. On Windows, UNC (`\\server\share`) and device (`\\?\`, `\\.\`) entries are skipped on purpose, because listing a share would make the bridge authenticate to that host on every refresh; the page shows how many were skipped. Standard install locations under such a path are dropped as well, before anything is listed, for example the Python directories under an `APPDATA` that Folder Redirection points to a share. The first match is reported, and up to four later matches are listed as shadowed. When a path was set for the tool in the console, or `SENTRA_GH_BIN` is set for `gh`, the search still runs, but the row reports that path; what the search found, its first match included, is then listed as other copies found by automatic detection (and is what the row falls back to when a console path stops working). The same file reached through another directory (for example `/bin` and `/usr/bin` on merged-`/usr` Linux distributions, or a symlinked directory) is reported once. A row shows a resolved target only when the path or one of its directories is a symlink or junction; a path that differs from its canonical form only through a Windows 8.3 short name (`C:\PROGRA~1`), a `subst` or mapped drive, or letter case is shown as it is.
 
 Directories are checked and listed asynchronously when the search is refreshed, each with a 2-second deadline; a directory that does not answer in time is treated as empty (a standard install location as missing) until the next refresh.
 
@@ -214,7 +216,7 @@ Directories are checked and listed asynchronously when the search is refreshed, 
 
 Each match records its source and whether it is on the process PATH. If the persisted PATH could not be read, the page and scan messages say so and name only the locations that were searched.
 
-When a tool is found only through steps 2–4, the page explains why the bridge cannot see it and what to change, depending on where it was found and on the host OS. The running Bun is left out of this notice: starting the bridge by absolute path from a directory that is not on `PATH` is normal.
+When a tool is found only through steps 2–4, the page explains why the bridge cannot see it and what to change, depending on where it was found and on the host OS. The running Bun is left out of this notice: starting the bridge by absolute path from a directory that is not on `PATH` is normal. So are tools whose path was set in the console (even when that path is broken) or through `SENTRA_GH_BIN`: their rows say where the path came from.
 
 | Found in | Windows | macOS | Linux |
 | --- | --- | --- | --- |
@@ -225,22 +227,22 @@ The second row assumes the persisted PATH was read. If it could not be read, or 
 
 #### Package-manager shims (Windows)
 
-- **Scoop** puts a copy of its generic `shim.exe` in `~\scoop\shims` for every command (for example `bun.exe`), next to a `bun.shim` text file whose `path = "…"` line names the real executable, usually under `~\scoop\apps\<app>\current` (not on `PATH`, so not searched). When a located `<name>.exe` has such a sibling `.shim` file, the row shows the shim's path with the target as its resolved path ("Scoop shim"), the architecture is read from the target, and the Bun runtime is matched against the target. The `.shim` file is read with a size limit; only an absolute drive path is accepted as its target, and the target is never run by detection.
-- **Chocolatey** shims in `%ChocolateyInstall%\bin` are generated by shimgen and carry their target inside the executable. They are not resolved: the row reports the shim itself, and a note says that the architecture shown is the shim's.
+- **Scoop** puts a copy of its generic `shim.exe` in `~\scoop\shims` for every command (for example `bun.exe`), next to a `bun.shim` text file whose `path = "…"` line names the real executable, usually under `~\scoop\apps\<app>\current` (not on `PATH`, so not searched). When a located `<name>.exe` has such a sibling `.shim` file, the row shows the shim's path with the target as its resolved path ("Scoop shim"), the [platform check](#platform-check) reads the target, and the Bun runtime is matched against the target. The `.shim` file is read with a size limit; only an absolute drive path is accepted as its target, and the target is never run by detection.
+- **Chocolatey** shims in `%ChocolateyInstall%\bin` are generated by shimgen and carry their target inside the executable. They are not resolved: the row reports the shim itself, and the platform check reads the shim, not its target.
 
 #### Which file is run
 
-Finding a tool and running it are separate decisions. Standard install locations are searched only to report what is installed: some can be created by any local user, and on macOS and Linux they may belong to a different user than the one running the bridge. The bridge itself runs only two programs found this way:
+Finding a tool and running it are separate decisions. Standard install locations are searched only to report what is installed: some can be created by any local user, and on macOS and Linux they may belong to a different user than the one running the bridge. Paths set in the console are used only for reporting, too. The bridge itself runs only two programs found this way:
 
-- **`gh`** (`gh auth token`): taken from the process PATH or the persisted PATH, never from a standard install location. On Windows only a `.exe` or `.com` is started, never a `.cmd`/`.bat` (those run through `cmd.exe`); a script earlier in the search order is skipped in favour of a later `gh.exe`. On macOS and Linux, a match from the persisted PATH is run only if the directory it was found in, the file it resolves to and that file's directory are each owned by root or the bridge user and writable neither by others nor by a group other than root. A match that fails is skipped, and the *gh* row's usage note gives the reason, which names the path and one of:
+- **`gh`** (`gh auth token`): the file `SENTRA_GH_BIN` names, when the host operator sets it (see [Configuration](#configuration)); no other `gh` is then run. Otherwise taken from the process PATH or the persisted PATH, never from a standard install location or a path set in the console. On Windows only a `.exe` or `.com` is started, never a `.cmd`/`.bat` (those run through `cmd.exe`); a script earlier in the search order is skipped in favour of a later `gh.exe`. On macOS and Linux, a match from the persisted PATH is run only if the directory it was found in, the file it resolves to and that file's directory are each owned by root or the bridge user and writable neither by others nor by a group other than root. A match that fails is skipped, and the *gh* row's usage note gives the reason, which names the path and one of:
   - "owned by uid N, which is neither root nor the bridge user (uid M)";
   - "writable by others";
   - "writable by group admin (gid 80), which is not root" (the group name comes from `/etc/group` when it is listed there). This is the case for Homebrew's `/opt/homebrew/bin` and, on Intel Macs, `/usr/local/bin`, which are group-writable by the `admin` group: any admin could replace the file. Such a `gh` is run only when its directory is on the bridge's process PATH.
 
   Process-PATH matches are not checked (the operator chose that `PATH`). On Windows, directory ACLs are not checked (reading them would mean starting another program); the persisted PATH is trusted as much as the process PATH, which Windows builds from it. `gh` runs with an allow-listed environment that excludes the bridge's secrets (`SENTRA_WEB_SECRET_KEY`, `SENTRA_WEB_TOKENS`, webhook secrets), and is stopped after 5 seconds. The *gh* row's usage note names the file that is run, or why none is.
-- **`sentra`**: see [the binary lookup order](#requirements); only the process PATH is used, not the persisted PATH or standard install locations.
+- **`sentra`**: see [the binary lookup order](#requirements); only the process PATH is used, not the persisted PATH, standard install locations or paths set in the console.
 
-Programs the bridge starts, such as the core CLI and through it plugin adapters, look tools up on the bridge's own process PATH, not at the paths shown on this page.
+Programs the bridge starts, such as the core CLI and through it plugin adapters, look tools up on the bridge's own process PATH, not at the paths shown on this page, including paths set in the console.
 
 #### Bun runtime
 
@@ -252,14 +254,33 @@ Programs the bridge starts, such as the core CLI and through it plugin adapters,
 
 If no located `bun` is the same file (the `bun run` shim is a copy, or Bun was started from outside the searched directories), no other installation is substituted: the row shows the running file, and when that is a shim, a note says the install path is unknown.
 
-### Architecture
+### Tool paths set in the console
 
-The architecture of each match, and of the `sentra` binary, is read from the file header. Nothing is executed:
+When automatic detection misses a tool, or finds an installation you do not want reported, a SecurityAdmin (`settings:write`) can set its path in the tools table on *Host & workers*: *Set path* for a tool that was not found, *Change* for one that was, and *Reset to automatic* to remove a path set there. Other roles see the table without these actions. The same operations are `PUT /api/system/tools/:name` with the body `{"path": "<path>"}` and `DELETE /api/system/tools/:name`; both return the tool's updated row (`{tool, warning}`). An unknown tool answers `404`, `gh` and `bun` answer `409`, and a refused path answers `400` (`invalid_tool_path`) with the reason.
+
+- **Which tools.** `git`, `cargo`, `codeql`, `semgrep`, `osv-scanner` and `docker`: tools the bridge never runs. The path of `gh` and `bun` cannot be set: the bridge runs `gh` and runs on `bun`, and a path entered in the web console must never become a program the bridge runs. The legacy bridge's command execution through client-supplied paths was a critical issue. To choose the `gh` the bridge runs, the host operator sets `SENTRA_GH_BIN` (see [Configuration](#configuration)); alternatively, store a GitHub token in *Settings → GitHub*, which makes `gh` unnecessary. The `bun` row is always the running executable.
+- **What is accepted.** An absolute path to the executable, or to the folder that contains it. In a folder the tool is looked for under the names automatic detection uses: on Windows the `PATHEXT` extensions, on macOS and Linux with execute permission, and for `osv-scanner` also the release-asset names such as `osv-scanner_windows_amd64.exe` or `osv-scanner_darwin_arm64`. When the folder holds no match but its `<tool>` or `bin` subfolder does, the error names that subfolder.
+  - The path is trimmed, and one pair of surrounding double quotes (as Windows Explorer's *Copy as path* adds) is removed. It must be at most 1024 characters, as entered and as stored (after `~` is expanded), without control characters.
+  - Windows: a path starting with a drive letter, such as `D:\CodeQL` or `D:\CodeQL\codeql.exe`. UNC (`\\server\share`) and device (`\\?\`, `\\.\`) paths are refused without touching them, because checking them would make the bridge authenticate to another computer. So are drive-relative forms (`C:tools`), `%VAR%` references and characters Windows does not allow in file names. A file must have a `PATHEXT` extension; `.cmd` and `.bat` are accepted, because nothing is run.
+  - macOS and Linux: a path starting with `/`. A leading `~` or `~/` is expanded to the home directory of the user the bridge runs as; `~user` and `$VAR` are not expanded. The file must be executable by that user.
+  - The path must exist and lead to a regular file or a folder after links are followed.
+  - A file whose header says it cannot run on this host (see [Platform check](#platform-check)) is refused; the message names what the file is built for and what the host is.
+  - A file whose name does not look like the tool is saved with a warning, which the console shows before closing the dialog.
+- **Nothing is run.** The bridge only checks the path: it lists at most the entered folder and two of its subfolders, and reads at most 64 KiB of the file's header.
+- **Time limits.** Each file-system call of a check (status, listing, permission, header read) must answer within 2 seconds, and a whole check within 5 seconds. A path on a slow or unreachable drive, mapped network drive or NFS/SMB mount is refused, or reported as broken, with "did not answer within …" instead of holding the request; a folder that does not answer is not reported as empty. A call that never returns (an NFS hard mount, for example) is waited on by later checks instead of being started again.
+- **When it is checked.** On every save, and then once per tool search refresh (about every 60 seconds): the tools table, *Settings → System*, scans and topology reports of the same refresh share one check instead of touching the file system on every request.
+- **Where it is used.** For reporting only: the tools table, *Settings → System*, the CodeQL stage message of scans and the tools in topology reports. It is never used to run anything: the `gh` and `sentra` lookups ignore it, and programs the bridge starts (the core CLI, plugin adapters) still look tools up on the bridge process PATH.
+- **Storage and audit.** One bridge-wide setting in `sentra-web.db`, the same for every workspace. Each change is recorded in the operator audit log as `tool_path_configured` or `tool_path_cleared`, with the tool and the path; a refused path is recorded as a failure.
+- **When the path stops working.** If the file is later removed, its drive stops answering, or it no longer passes these checks, the row is marked *configured path broken* with the reason at the next refresh, and shows what automatic detection finds instead (with the "cannot run here" warning when that file is built for another platform). The stored path is kept until it is changed or reset.
+
+### Platform check
+
+Tool rows do not show architectures; the bridge reads the file header of each match, and of the `sentra` binary, only to decide whether the file can run on this host. Nothing is executed:
 
 - **PE** (Windows): the COFF machine type.
 - **ELF** (Linux): `e_machine`.
 - **Mach-O** (macOS): the CPU type. A universal (fat) binary lists every architecture it contains.
-- **Scripts:** files that start with `#!` are reported as scripts, with the interpreter line as a note.
+- **Scripts:** files that start with `#!` are treated as scripts, which run through their interpreter.
 
 The result is compared with the host's native architecture:
 
@@ -268,10 +289,10 @@ The result is compared with the host's native architecture:
 | native | Matches the hardware. |
 | emulated | Runs under emulation, for example an x64 binary on Windows on Arm, or under Rosetta 2 on Apple silicon. |
 | 32-bit | Runs through a 64-bit OS's 32-bit compatibility layer: x86 under WOW64 on Windows (also on Windows on Arm), i386 on Linux x64, and 32-bit Arm on Linux arm64, which runs only if the CPU and kernel support AArch32 (many arm64 servers and boards do; some recent cores do not). |
-| incompatible | Cannot run on this host. This includes 32-bit Arm on Windows on Arm (Windows 11 24H2 and later do not run 32-bit Arm apps) and any 32-bit code on macOS. |
+| incompatible | Cannot run on this host: built for another OS, or for an architecture this host cannot run. This includes 32-bit Arm on Windows on Arm (Windows 11 24H2 and later do not run 32-bit Arm apps) and any 32-bit code on macOS. |
 | unknown | The header was not recognised or could not be read, for example a Windows App Execution Alias. |
 
-The same rules decide which architecture-suffixed release assets (such as `osv-scanner_linux_arm`) count as present; none of those tools is run by the bridge.
+Only *incompatible* is shown: the tool's status reads "found, but built for another platform — cannot run here" (the core CLI card says the same for the `sentra` binary; a row whose console path is broken says it for the file shown instead), and the status tooltip names the format, the architectures the file is built for and the reason. The same rules refuse such a file as a [tool path set in the console](#tool-paths-set-in-the-console), and decide which architecture-suffixed release assets (such as `osv-scanner_linux_arm`) count as present; none of those tools is run by the bridge.
 
 ### Host fields
 
@@ -282,7 +303,7 @@ The same rules decide which architecture-suffixed release assets (such as `osv-s
 | Available memory | `os.freemem()` (available physical memory) | `vm_stat` page counts | `MemAvailable` from `/proc/meminfo` |
 | Load average | not reported | `os.loadavg()` | `os.loadavg()` |
 
-The *Architecture* field shows the process architecture (`os.arch()`). When the process architecture differs from the hardware, the field says so, for example "x64 process on arm64 hardware (emulated)". On macOS, `os.freemem()` counts only free pages, so it would overstate memory use.
+The *Architecture* field shows the process architecture (`os.arch()`). When the process runs under emulation (Windows on Arm, Rosetta 2), "(emulated on arm64)" is appended. The native architecture is otherwise used only for the [platform check](#platform-check). On macOS, `os.freemem()` counts only free pages, so it would overstate memory use.
 
 ### What the bridge uses each tool for
 
@@ -296,9 +317,9 @@ The *Architecture* field shows the process architecture (`os.arch()`). When the 
 | `semgrep` | not used | The bridge never runs it. A semgrep plugin adapter (see `examples/adapters`) that is installed in the plugin directory and started from the *Plugins* tab runs it; the adapter looks `semgrep` up on the `PATH` the bridge passes on, which is the bridge's own process PATH, not the path shown here. Example adapters are never loaded implicitly. |
 | `osv-scanner` | not used | OSV lookups use the OSV.dev API. |
 
-Presence does not show a tool's version or licence, or whether it works.
+Every tool except `gh` and `bun` can have its path [set in the console](#tool-paths-set-in-the-console). Presence does not show a tool's version or licence, or whether it works.
 
-Only Windows 11 x64 has been exercised on a real host. The CI workflow's `web-test` job runs the bridge unit tests on GitHub's `ubuntu-latest`, `windows-latest` and `macos-latest` runners; on Linux and macOS this includes the real-file-system tests that are skipped on Windows (ownership and mode checks, running a stand-in `gh` with the allow-listed environment and timeout). The persisted PATH sources, emulation detection and memory sources are tested with injected OS answers, and the bridge itself has not been run on macOS, Linux or Arm hosts.
+Only Windows 11 x64 has been exercised on a real host. The CI workflow's `web-test` job runs the bridge unit tests on GitHub's `ubuntu-latest`, `windows-latest` and `macos-latest` runners; on Linux and macOS this includes the real-file-system tests that are skipped on Windows (ownership and mode checks, running a stand-in `gh` with the allow-listed environment and timeout). The persisted PATH sources, emulation detection and memory sources are tested with injected OS answers, and the bridge itself has not been run on macOS, Linux or Arm hosts. Tool path validation is unit-tested with injected file systems for Windows x64 and Windows on Arm, Linux arm64 and macOS on Apple silicon (folder search, `PATHEXT` and execute permission, release-asset names, foreign and incompatible headers, refused input forms), as are the time limits and the per-refresh reuse of checks with injected slow and never-answering probes (no real network drive or NFS mount was used), the `SENTRA_GH_BIN` startup checks, the `PUT`/`DELETE` routes with their audit entries, and the rule that no configured path reaches the code that starts programs. On the Windows 11 x64 host the routes were also exercised against the real file system (automatic detection of a CodeQL bundle on the persisted PATH, setting and resetting its folder, refused inputs). The wording of the tools table (status, other copies, path actions and their accessible names) is unit-tested; the console's tool path dialog, including where keyboard focus returns after a save or reset, has not been tested in a browser.
 
 ## Limitations
 

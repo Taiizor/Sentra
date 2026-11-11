@@ -5,15 +5,16 @@ import { api } from '@/lib/api'
 import { useResource } from '@/lib/use-resource'
 import type { SystemStatus, ToolAvailability } from '@/types/api'
 import {
-  BINARY_COMPATIBILITY_CLASS,
-  describeBinary,
+  CANNOT_RUN_HERE_LABEL,
+  cannotRunHere,
+  describeCannotRun,
   describeToolPath,
-  describeToolSearchScope,
-  formatBinaryArchitectures,
-  formatBinaryCompatibility,
   hasCurrentToolShape,
   TOOL_USAGE_LABEL,
+  toolDetectionSummary,
+  toolStatus,
   type ToolSearchContext,
+  type ToolStatusKind,
 } from './console-format'
 import { CREDENTIAL_SOURCE_LABEL } from './settings-format'
 import { ErrorState, LoadingRows } from './settings-kit'
@@ -70,21 +71,15 @@ function SystemDetails({ system }: { system: SystemStatus }) {
           <span className="font-mono">{core.binaryPath}</span>
         </Row>
         <Row label="Binary present">
-          <YesNo value={core.present} />
-        </Row>
-        <Row label="Version">{core.version ? <span className="font-mono">{core.version}</span> : <span className="text-muted-foreground">unknown</span>}</Row>
-        <Row label="Binary architecture">
-          {core.binary ? (
-            <span className="font-mono" title={describeBinary(core.binary)}>
-              {formatBinaryArchitectures(core.binary)}
-              {formatBinaryCompatibility(core.binary) && (
-                <span className={BINARY_COMPATIBILITY_CLASS[core.binary.compatibility]}> ({formatBinaryCompatibility(core.binary)})</span>
-              )}
+          {core.present && core.binary && cannotRunHere(core.binary) ? (
+            <span className="text-rose-400" title={describeCannotRun(core.binary)}>
+              {CANNOT_RUN_HERE_LABEL}
             </span>
           ) : (
-            <span className="text-muted-foreground">{core.present ? 'not read' : 'n/a'}</span>
+            <YesNo value={core.present} />
           )}
         </Row>
+        <Row label="Version">{core.version ? <span className="font-mono">{core.version}</span> : <span className="text-muted-foreground">unknown</span>}</Row>
         {core.error && (
           <Row label="Version check error">
             <span className="text-rose-400">{core.error}</span>
@@ -146,20 +141,23 @@ function SystemDetails({ system }: { system: SystemStatus }) {
           {search ? (
             <>
               <div className="flex flex-wrap gap-1.5 py-1">
-                {system.tools.map((tool) => (
-                  <Badge
-                    key={tool.name}
-                    variant="outline"
-                    title={toolTitle(tool, search)}
-                    className={`text-[10px] font-mono ${tool.available ? 'border-emerald-500/30 text-emerald-400' : 'text-muted-foreground'}`}
-                  >
-                    {tool.name}: {tool.available ? 'found' : 'not found'} · {TOOL_USAGE_LABEL[tool.usage]}
-                  </Badge>
-                ))}
+                {system.tools.map((tool) => {
+                  const toolState = toolStatus(tool)
+                  return (
+                    <Badge
+                      key={tool.name}
+                      variant="outline"
+                      title={toolTitle(tool, search)}
+                      className={`text-[10px] font-mono ${TOOL_STATUS_BADGE_CLASS[toolState.kind]}`}
+                    >
+                      {tool.name}: {toolState.kind === 'cannot_run' ? 'cannot run here' : toolState.label} · {TOOL_USAGE_LABEL[tool.usage]}
+                    </Badge>
+                  )
+                })}
               </div>
               <span className="text-[10px] text-muted-foreground">
-                Searched {describeToolSearchScope(search.toolSearch, search.platform)}, without running any tool. The second label
-                says how the bridge uses the tool; hover a tool for its path, or open Host &amp; workers for architectures and details.
+                {toolDetectionSummary(search.toolSearch, search.platform)} The second label says how the bridge uses the tool; hover
+                a tool for its path, or open Host &amp; workers for details and to set a tool&apos;s path.
               </span>
             </>
           ) : (
@@ -174,9 +172,19 @@ function SystemDetails({ system }: { system: SystemStatus }) {
   )
 }
 
+const TOOL_STATUS_BADGE_CLASS: Record<ToolStatusKind, string> = {
+  found: 'border-emerald-500/30 text-emerald-400',
+  not_found: 'text-muted-foreground',
+  configured_broken: 'border-amber-500/30 text-amber-400',
+  cannot_run: 'border-rose-500/30 text-rose-400',
+}
+
 function toolTitle(tool: ToolAvailability, search: ToolSearchContext): string {
+  const status = toolStatus(tool)
+  // The path details already describe a broken chosen path (and whether the file shown instead can
+  // run here); a found file that cannot run here is added.
   const lines = [describeToolPath(tool, search)]
-  if (tool.binary) lines.push(describeBinary(tool.binary))
+  if (status.kind === 'cannot_run') lines.unshift(status.title)
   lines.push(`Used by the bridge: ${TOOL_USAGE_LABEL[tool.usage]}${tool.usageNote ? ` (${tool.usageNote})` : ''}`)
   return lines.join('\n')
 }

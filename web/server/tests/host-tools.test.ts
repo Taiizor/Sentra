@@ -66,6 +66,7 @@ import {
   TOOL_NAMES,
   TOOL_USAGE,
   UNMATCHED_SHIM_NOTE,
+  type HostToolsDeps,
   type LinkProbes,
 } from "../host-tools.ts";
 import { Router } from "../http.ts";
@@ -73,6 +74,7 @@ import { createApp, handleRequest } from "../main.ts";
 import { SecretStore } from "../secrets.ts";
 import { CHOCOLATEY_SHIM_NOTE, isChocolateyShim, parseScoopShim, scoopShimFile } from "../shims.ts";
 import { latestTopologyReport, saveTopologyReport } from "../services/topology.ts";
+import { NO_CONFIGURED_TOOL_PATHS } from "../tool-paths.ts";
 
 // Canonical (links and 8.3 short names resolved, e.g. /private/var on macOS or RUNNER~1 on Windows CI
 // runners), so paths built here compare equal to the real paths the code under test reports.
@@ -1197,6 +1199,11 @@ describe("host platform facts", () => {
 
 // ───────────────────────────── tools + runtime ─────────────────────────────
 
+/** Reporting dependencies without configured tool paths or SENTRA_GH_BIN (automatic detection only). */
+function automaticDeps(executables: ExecutableLocator, hostPlatform: HostPlatform): HostToolsDeps {
+  return { executables, hostPlatform, toolPaths: NO_CONFIGURED_TOOL_PATHS, ghBin: null };
+}
+
 describe("reported tools", () => {
   test("every reported tool has an explicit usage", () => {
     expect(Object.keys(TOOL_USAGE).sort()).toEqual([...TOOL_NAMES].sort());
@@ -1262,7 +1269,7 @@ describe("reported tools", () => {
     fs.copyFileSync(install, portable);
     const locator = new ExecutableLocator({ env: { PATH: installDir, PATHEXT: ".EXE" }, homedir: path.join(root, "home"), isDirectory: () => false });
     const hostPlatform = new HostPlatform({ run: async () => ({ code: 1, stdout: "", timedOut: false }) });
-    const bunRow = async (execPath: string) => (await describeTools({ executables: locator, hostPlatform }, { execPath })).find((tool) => tool.name === "bun")!;
+    const bunRow = async (execPath: string) => (await describeTools(automaticDeps(locator, hostPlatform), { execPath })).find((tool) => tool.name === "bun")!;
 
     expect((await bunRow(install)).usageNote).toBe(`${TOOL_USAGE.bun.note} ${BUN_MATCHED_NOTE}`);
     const shim = await bunRow(copiedShim);
@@ -1363,7 +1370,7 @@ describe("reported tools", () => {
       isDirectory: () => false,
     });
     const hostPlatform = new HostPlatform({ run: async () => ({ code: 1, stdout: "", timedOut: false }) });
-    const tools = await describeTools({ executables: locator, hostPlatform }, { execPath });
+    const tools = await describeTools(automaticDeps(locator, hostPlatform), { execPath });
     const bun = tools.find((tool) => tool.name === "bun")!;
     expect(bun).toMatchObject({
       path: path.join(linkDir, exe),
@@ -1422,7 +1429,7 @@ describe("reported tools", () => {
       isDirectory: () => false,
     });
     const hostPlatform = new HostPlatform({ run: async () => ({ code: 1, stdout: "", timedOut: false }) });
-    const tools = await describeTools({ executables: locator, hostPlatform }, { execPath });
+    const tools = await describeTools(automaticDeps(locator, hostPlatform), { execPath });
     const bun = tools.find((tool) => tool.name === "bun")!;
     expect(bun).toMatchObject({
       path: path.join(shims, "bun.exe"),
@@ -1459,7 +1466,7 @@ describe("reported tools", () => {
       isDirectory: (dir) => dir.toLowerCase() === bin.toLowerCase(),
     });
     const hostPlatform = new HostPlatform({ run: async () => ({ code: 1, stdout: "", timedOut: false }) });
-    const codeql = (await describeTools({ executables: locator, hostPlatform })).find((tool) => tool.name === "codeql")!;
+    const codeql = (await describeTools(automaticDeps(locator, hostPlatform))).find((tool) => tool.name === "codeql")!;
     expect(codeql).toMatchObject({ path: path.join(bin, "codeql.exe"), source: "well_known", resolvedPath: null, resolvedVia: null });
     expect(codeql.binary?.note).toBe(CHOCOLATEY_SHIM_NOTE);
   });
@@ -1497,7 +1504,7 @@ describe("reported tools", () => {
       loadPersisted: async () => ({ entries: { system: [persistedDir], user: [] }, read: true, error: null }),
     });
     const hostPlatform = new HostPlatform({ run: async () => ({ code: 1, stdout: "", timedOut: false }) });
-    const tools = await describeTools({ executables: locator, hostPlatform }, { execPath: shimBun });
+    const tools = await describeTools(automaticDeps(locator, hostPlatform), { execPath: shimBun });
     const byName = new Map(tools.map((tool) => [tool.name, tool] as [string, ToolAvailability]));
     expect(byName.get("gh")).toMatchObject({ available: true, path: gh, source: "process_path", onProcessPath: true, shadowed: [shadowGh], usage: "executed" });
     expect(byName.get("gh")?.usageNote).toBe(`${TOOL_USAGE.gh.note} The file shown is the one run.`);
@@ -1509,7 +1516,7 @@ describe("reported tools", () => {
     expect(byName.get("semgrep")).toMatchObject({ available: false, path: null, source: null, binary: null, shadowed: [], usage: "not_used" });
     expect(byName.get("bun")).toMatchObject({ available: true, path: realBun, source: "process_path", onProcessPath: true, usage: "runtime", shadowed: [] });
     // Cached per snapshot.
-    expect(await describeTools({ executables: locator, hostPlatform }, { execPath: shimBun })).toBe(tools);
+    expect(await describeTools(automaticDeps(locator, hostPlatform), { execPath: shimBun })).toBe(tools);
   });
 
   test("tool rows of older topology reports are upgraded when read back", () => {
@@ -1546,6 +1553,11 @@ describe("reported tools", () => {
         usage: "presence_only",
         usageNote: TOOL_USAGE.codeql.note,
         shadowed: [],
+        selection: "automatic",
+        configuredPath: null,
+        configuredPathProblem: null,
+        pathConfigurable: true,
+        pathHint: null,
       },
     ]);
     expect(normalizeStoredTool(null)).toBeNull();
@@ -1644,6 +1656,7 @@ describe("configured grants", () => {
       production: false,
       staticDir: null,
       sentraBin: path.join(dataDir, "missing-sentra-binary"),
+      ghBin: null,
       dataDir,
       registryDbPath: path.join(dataDir, "sentra.db"),
       webDbPath: path.join(dataDir, "sentra-web.db"),

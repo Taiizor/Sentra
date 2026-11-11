@@ -440,6 +440,11 @@ const FAKE_TOOL: ToolAvailability = {
   usage: "not_used",
   usageNote: "Never executed.",
   shadowed: [],
+  selection: "automatic",
+  configuredPath: null,
+  configuredPathProblem: null,
+  pathConfigurable: true,
+  pathHint: null,
 };
 
 function fakeSources(overrides: Partial<TopologySources> = {}): TopologySources {
