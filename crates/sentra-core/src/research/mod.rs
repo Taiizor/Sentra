@@ -27,7 +27,7 @@ pub use hypothesis::{Hypothesis, HypothesisDeduplicator, HypothesisStatus, Vulne
 pub use prompt::{
     AgentSkillAuditPromptBuilder, ApiSecurityPromptBuilder, AppSecPersona, AppSecPrompt,
     BolaAuditResponse, PatchSynthesisPromptBuilder, ScoutPromptBuilder, SkillPromptComposer,
-    SkillSafetyResponse, StructuredResponseParser, ThreatModelingPromptBuilder,
+    SkillPromptError, SkillSafetyResponse, StructuredResponseParser, ThreatModelingPromptBuilder,
     ThreeTierPatchResponse, VerificationPromptBuilder,
 };
 pub use role::{

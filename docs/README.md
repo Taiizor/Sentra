@@ -1,8 +1,8 @@
 # Sentra Documentation Index
 
-Welcome to the **Sentra** technical documentation. Sentra is an open-source, extensible, dual-mode security research platform for autonomous repository vulnerability discovery, differential code review, and independently verified remediation.
+Welcome to the **Sentra** technical documentation. Sentra is an open-source, local-first security review toolkit: heuristic SAST pattern rules, lockfile inventory and sample-based dependency auditing, differential snapshot comparison, positional patch application, and a web console that reads the core CLI. Model output and scanner results are unverified candidates; no independent patch verifier or worker fleet exists yet (see [LIMITATIONS](LIMITATIONS.md)).
 
-All core crates (`crates/sentra-core`, `crates/sentra-cli`) and the web operations dashboard (`web/`) are implemented under `#![forbid(unsafe_code)]` and verified across Windows 11, Linux, and macOS platforms.
+The Rust crates (`crates/sentra-core`, `crates/sentra-cli`, `crates/sentra`) are built under `#![forbid(unsafe_code)]`. CI builds and tests them on Windows, Linux and macOS; the web console (`web/`, TypeScript on Bun) has been exercised on a real Windows 11 x64 host only (see [web/README.md](../web/README.md)).
 
 ---
 
@@ -20,17 +20,17 @@ These specifications describe Sentra's runtime architecture, operating modes, da
 | [**Data Model**](DATA_MODEL.md) | SQLite schema, domain entities (Findings, Evidence, Approvals, Patches). |
 | [**Extensions & Fleet Management**](EXTENSIONS.md) | Subprocess plugin SDK, Model Context Protocol (MCP), and target matrices. |
 | [**Agent Model**](AGENT_MODEL.md) | Multi-role autonomous agent architecture (Scout, Analyst, Patch Author). |
-| [**Architectural Decisions (ADRs)**](adr/README.md) | Formal records of accepted design decisions (ADR-0001 through ADR-0010). |
+| [**Architectural Decisions (ADRs)**](adr/README.md) | Formal records of accepted design decisions (ADR-0001 through ADR-0011). |
 | [**Security Policy**](../SECURITY.md) | Vulnerability disclosure policy, private reporting channels, and SLAs. |
 
 ---
 
 ## 2. Release & Verification Quality
 
-Sentra adheres to strict, evidence-based security engineering. All core capabilities across continuous review, autonomous research, plugin extensions, and multi-tenant operations are audited against release-wide quality and containment gates:
+Release gates and their current status are recorded, including the gates that are not met (for example, adapter network egress is declared but not enforced, and no worker fleet exists):
 
-- [**Release-Wide Gates Audit**](RELEASE_GATES_AUDIT.md) — Comprehensive cross-platform audit of toolchain pinning, network egress controls, fail-closed containment, and evidence integrity.
-- [**Architectural Decisions (ADRs)**](adr/README.md) — Formal records of accepted design decisions (ADR-0001 through ADR-0010).
+- [**Release-Wide Gates Audit**](RELEASE_GATES_AUDIT.md) — The 2026-11-08 gate audit with its dated 2026-11-11 correction: toolchain pinning, egress, containment and evidence integrity.
+- [**Architectural Decisions (ADRs)**](adr/README.md) — Formal records of accepted design decisions (ADR-0001 through ADR-0011).
 
 ---
 

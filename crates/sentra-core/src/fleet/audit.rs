@@ -1,4 +1,11 @@
-//! Multi-user hosting security assessment and independent readiness audit (REQ-F19, Fleet Isolation Specification).
+//! Multi-user hosting readiness gates over an in-process worker registry (REQ-F19, Fleet
+//! Isolation Specification).
+//!
+//! This is a logic check of the fleet and tenant domain code against the registry it is
+//! given, not an assessment of a deployment. A gate is `true` only when it was evaluated
+//! and passed: a gate with nothing to evaluate (an empty registry) or no implemented check
+//! is reported `false` with a "Not Assessed" finding, so the overall status cannot be
+//! `Approved` without evidence for every gate.
 
 use serde::{Deserialize, Serialize};
 
@@ -8,47 +15,54 @@ use crate::{
     verification::{EgressPolicy, WorkerArchitecture},
 };
 
-/// Status of the multi-user hosting security assessment.
+/// Status of the multi-user hosting readiness gates.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AuditStatus {
-    /// All security containment and multi-tenant isolation gates passed.
+    /// Every gate was evaluated and passed.
     Approved,
-    /// One or more mandatory enterprise hosting gates failed; multi-user hosting blocked.
+    /// At least one gate failed or could not be assessed; multi-user hosting is blocked.
     Blocked,
 }
 
-/// Comprehensive report detailing multi-user enterprise hosting readiness.
+/// Result of the multi-user hosting readiness gates. Each gate is `true` only when it was
+/// evaluated and passed.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MultiUserAuditReport {
-    /// Overall assessment status.
+    /// Overall status.
     pub overall_status: AuditStatus,
-    /// Gate 1: Strict tenant isolation enforcement.
+    /// Gate 1: the tenant context denies cross-tenant access (checked on synthetic tenants).
     pub gate_tenant_isolation: bool,
-    /// Gate 2: Worker network egress containment (strictly denied).
+    /// Gate 2: every registered worker declares strictly denied egress (declared policy,
+    /// not a network measurement). `false` for an empty registry.
     pub gate_worker_egress_containment: bool,
-    /// Gate 3: Zero cross-tenant worker reuse without clean sanitary reset.
+    /// Gate 3: a leased worker is denied to another tenant and is quarantined, not made
+    /// available, on release (simulated on a copy of the registry). `false` when no worker
+    /// could be leased.
     pub gate_cross_tenant_worker_reuse: bool,
-    /// Gate 4: Zero secret inheritance to worker environments.
+    /// Gate 4: no secret inheritance into worker environments. No check is implemented, so
+    /// this is always `false`.
     pub gate_zero_secret_inheritance: bool,
-    /// Gate 5: Tamper-resistant immutable audit trail compliance.
+    /// Gate 5: tamper-evident audit trail. No check is implemented (the core audit events
+    /// carry no hash chain), so this is always `false`.
     pub gate_immutable_audit_trail: bool,
-    /// Detailed list of security findings or deficiencies observed during audit.
+    /// Failed and not-assessed gates, one entry each.
     pub findings: Vec<String>,
 }
 
 impl MultiUserAuditReport {
-    /// Returns whether multi-user hosting is approved.
+    /// Returns whether every gate was evaluated and passed.
     pub fn is_approved(&self) -> bool {
         self.overall_status == AuditStatus::Approved
     }
 }
 
-/// Independent security auditor verifying multi-user enterprise hosting prerequisites.
+/// Multi-user hosting readiness gates over a [`WorkerFleetManager`].
 pub struct MultiUserSecurityAudit;
 
 impl MultiUserSecurityAudit {
-    /// Executes the 5 mandatory enterprise hosting security gates against a worker fleet.
+    /// Evaluates the 5 multi-user hosting gates against `fleet`. Gates 4 and 5 have no
+    /// implemented check, so the result is currently always [`AuditStatus::Blocked`].
     pub fn run_assessment(fleet: &WorkerFleetManager) -> MultiUserAuditReport {
         let mut findings = Vec::new();
 
@@ -67,10 +81,14 @@ impl MultiUserSecurityAudit {
             }
         };
 
-        // Gate 2: Worker Network Egress Containment
+        // Gate 2: Worker Network Egress Containment (declared policies only)
         let mut gate_worker_egress_containment = true;
         if fleet.total_workers() == 0 {
-            findings.push("Gate 2 Notice: Fleet has 0 registered workers; egress check evaluated on empty set".to_string());
+            findings.push(
+                "Gate 2 Not Assessed: the worker registry is empty, so no egress policy was checked"
+                    .to_string(),
+            );
+            gate_worker_egress_containment = false;
         } else {
             for worker in fleet.iter_workers() {
                 if worker.egress_policy != EgressPolicy::StrictlyDenied {
@@ -117,14 +135,27 @@ impl MultiUserSecurityAudit {
                 );
                 gate_cross_tenant_worker_reuse = false;
             }
+        } else {
+            findings.push(
+                "Gate 3 Not Assessed: no available LinuxX86_64 worker could be leased to check cross-tenant reuse"
+                    .to_string(),
+            );
+            gate_cross_tenant_worker_reuse = false;
         }
 
-        // Gate 4: Zero Secret Inheritance
-        // Remote workers run under DisposableVm containment where host secrets are strictly blocked
-        let gate_zero_secret_inheritance = true;
+        // Gate 4: Zero Secret Inheritance. Nothing inspects worker environments.
+        let gate_zero_secret_inheritance = false;
+        findings.push(
+            "Gate 4 Not Assessed: no check of secret inheritance into worker environments is implemented"
+                .to_string(),
+        );
 
-        // Gate 5: Immutable Audit Trail Compliance
-        let gate_immutable_audit_trail = true;
+        // Gate 5: Tamper-evident audit trail. Core audit events have no hash chain to verify.
+        let gate_immutable_audit_trail = false;
+        findings.push(
+            "Gate 5 Not Assessed: no tamper-evidence check of the audit trail is implemented"
+                .to_string(),
+        );
 
         let all_passed = gate_tenant_isolation
             && gate_worker_egress_containment

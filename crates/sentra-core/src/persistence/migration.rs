@@ -5,7 +5,7 @@ use super::{
 use rusqlite::{Connection, params};
 
 pub(super) const VERSION: i64 = 2;
-pub(super) const APPLICATION_ID: i64 = 0x5345_4e54;
+pub(crate) const APPLICATION_ID: i64 = 0x5345_4e54;
 pub(super) const SQL_V1: &str = include_str!("schema_v1.sql");
 pub(super) const SQL_V2: &str = include_str!("schema_v2.sql");
 const DESCRIPTION_V1: &str = "Initial Sentra persistence schema";

@@ -1,12 +1,11 @@
 {
   "id": "org.sentra.adapter.semgrep",
   "name": "Semgrep SAST Analysis Adapter",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "interface_version": 1,
   "family": "analysis_tool",
   "executable_path": "python adapter.py",
   "declared_capabilities": [
-    "source_discovery",
     "static_analysis"
   ],
   "quotas": {

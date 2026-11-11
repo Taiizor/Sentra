@@ -1,1064 +1,579 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { cn } from 'cn'
 import {
-  GitBranch,
-  ShieldCheck,
-  Search,
-  ChevronRight,
-  Eye,
-  ArrowUpDown,
-  ArrowUp,
   ArrowDown,
-  Copy,
-  Check,
-  Download,
+  ArrowUp,
   ChevronLeft,
-  CheckCircle2,
-  HelpCircle,
-  XCircle,
-  Code2,
-  FileCode2,
-  Sparkles,
-  ChevronDown,
+  ChevronRight,
+  Download,
+  FolderSearch,
+  Loader2,
+  RotateCw,
+  Search,
+  ShieldAlert,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { copyText } from '@/lib/clipboard'
-import { validateFindingsInvariants } from '@/lib/api-client'
+import { api, errorMessage } from '@/lib/api'
+import { useConsole } from '@/lib/console-context'
+import { useResource } from '@/lib/use-resource'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Input } from '@/components/ui/input'
-import { SourceViewer } from '@/components/dashboard/source-viewer'
-import { SurgicalDiffView } from '@/components/dashboard/surgical-diff-view'
-import { MarkdownView, InlineFormattedText } from '@/components/ui/markdown-view'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
-import type { FindingView, Severity, Reachability, UserRole, FindingVerdict } from '@/types/sentra'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { AiPatchModal } from '@/components/dashboard/ai-patch-modal'
+import { FindingDetail } from '@/components/dashboard/findings-detail'
+import { CodeqlIngestActions } from '@/components/dashboard/codeql-ingest-actions'
+import { FINDING_ORIGIN_LABEL, findingLocation, findingSourceLabel, formatTimestamp, SEVERITY_RANK } from '@/components/dashboard/findings-format'
+import { ErrorAlert, SeverityBadge, Timestamp, TriageBadge } from '@/components/dashboard/findings-shared'
+import { FINDING_ORIGINS, FINDING_SOURCES, SEVERITIES, type FindingOrigin, type FindingSource, type FindingState, type FindingView, type ScanRunView, type Severity } from '@/types/api'
 
-interface FindingsTabProps {
-  findings: FindingView[]
-  currentRole: UserRole
-  onProposePatch: (findingId: string) => void
-  onOpenAiPatchModal: (finding: FindingView) => void
-  selectedFindingId?: string | null
-  onSelectFindingId?: (id: string | null) => void
+type StateFilter = FindingState | 'all'
+type SourceFilter = FindingSource | 'all'
+type SeverityFilter = Severity | 'all'
+type SortField = 'severity' | 'rule' | 'location' | 'lastSeen'
+
+const PAGE_SIZE = 25
+
+const STATE_OPTIONS: { id: StateFilter; label: string }[] = [
+  { id: 'open', label: 'Open' },
+  { id: 'resolved', label: 'Resolved' },
+  { id: 'all', label: 'All' },
+]
+
+const SOURCE_LABEL: Record<SourceFilter, string> = { all: 'All sources', sast: 'SAST', dependency: 'Dependencies', codeql: 'CodeQL' }
+
+function matchesSearch(finding: FindingView, query: string): boolean {
+  if (!query) return true
+  const haystack = [
+    finding.ruleId,
+    finding.ruleName,
+    finding.cwe,
+    finding.category,
+    finding.filePath,
+    finding.dependency?.packageName,
+    finding.dependency?.advisoryId,
+    ...(finding.dependency?.aliases ?? []),
+    finding.origin ? FINDING_ORIGIN_LABEL[finding.origin] : null,
+    finding.codeql?.language,
+  ]
+  return haystack.some((value) => value?.toLowerCase().includes(query))
 }
 
-type SortField = 'severity' | 'ruleId' | 'title' | 'targetLocation' | 'reachability' | 'verdict'
-type SortDir = 'asc' | 'desc'
-
-const SEVERITY_WEIGHT: Record<Severity, number> = {
-  Critical: 4,
-  High: 3,
-  Medium: 2,
-  Low: 1,
-  Informational: 0,
-}
-
-export function FindingsTab({
-  findings,
-  currentRole,
-  onProposePatch: _onProposePatch,
-  onOpenAiPatchModal,
-  selectedFindingId,
-  onSelectFindingId,
-}: FindingsTabProps) {
-  const [searchTerm, setSearchTerm] = useState('')
-  const [severityFilter, setSeverityFilter] = useState<string>('ALL')
-  const [reachabilityFilter, setReachabilityFilter] = useState<string>('ALL')
-  const [verdictFilter, setVerdictFilter] = useState<string>('ALL')
-  const [selectedFinding, setSelectedFinding] = useState<FindingView | null>(() => {
-    if (selectedFindingId) {
-      return findings.find((f) => f.findingId === selectedFindingId) || null
-    }
-    return null
-  })
-  const [copiedPath, setCopiedPath] = useState<string | null>(null)
-  const [isValidatingSchema, setIsValidatingSchema] = useState(false)
-
-  // Synchronize deep-linked finding ID with selectedFinding state
-  useEffect(() => {
-    if (selectedFindingId) {
-      const match = findings.find((f) => f.findingId === selectedFindingId)
-      if (match && selectedFinding?.findingId !== match.findingId) {
-        setSelectedFinding(match)
-      }
-    } else if (selectedFinding !== null && selectedFindingId === null) {
-      setSelectedFinding(null)
-    }
-  }, [selectedFindingId, findings, selectedFinding])
-
-  function handleSelectFinding(f: FindingView | null) {
-    setSelectedFinding(f)
-    onSelectFindingId?.(f ? f.findingId : null)
+function compareFindings(a: FindingView, b: FindingView, field: SortField): number {
+  switch (field) {
+    case 'severity':
+      return SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]
+    case 'rule':
+      return a.ruleId.localeCompare(b.ruleId)
+    case 'location':
+      return findingLocation(a).localeCompare(findingLocation(b), undefined, { numeric: true })
+    case 'lastSeen':
+      return Date.parse(a.lastSeenAt) - Date.parse(b.lastSeenAt)
   }
+}
 
-  // Pagination & Sorting state
-  const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState(15)
-  const [sortField, setSortField] = useState<SortField>('severity')
-  const [sortDir, setSortDir] = useState<SortDir>('desc')
+async function downloadSarif(tenantId: string): Promise<void> {
+  const document_ = await api.findings.sarif(tenantId)
+  const blob = new Blob([JSON.stringify(document_, null, 2)], { type: 'application/sarif+json' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = `sentra-${tenantId}-open-findings.sarif`
+  anchor.click()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
 
-  // Calculate quick count metrics
+function describeRun(run: ScanRunView): string {
+  return `${formatTimestamp(run.finishedAt ?? run.startedAt)} · ${run.kind} · ${run.status}`
+}
+
+function SortHead({
+  field,
+  label,
+  sort,
+  onToggle,
+  className,
+}: {
+  field: SortField
+  label: string
+  sort: { field: SortField; desc: boolean }
+  onToggle: (field: SortField) => void
+  className?: string
+}) {
+  const active = sort.field === field
+  return (
+    <TableHead className={cn('select-none text-xs font-semibold text-zinc-300', className)} aria-sort={active ? (sort.desc ? 'descending' : 'ascending') : undefined}>
+      <button type="button" className="inline-flex items-center gap-1 hover:text-zinc-100" onClick={() => onToggle(field)}>
+        {label}
+        {active && (sort.desc ? <ArrowDown className="size-3" /> : <ArrowUp className="size-3" />)}
+      </button>
+    </TableHead>
+  )
+}
+
+export function FindingsTab() {
+  const { tenant } = useConsole()
+  if (!tenant) {
+    return (
+      <Empty className="border border-zinc-800 py-16">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <FolderSearch />
+          </EmptyMedia>
+          <EmptyTitle>No workspace selected</EmptyTitle>
+          <EmptyDescription>Findings are recorded per workspace. Register or select a workspace first.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    )
+  }
+  return <FindingsWorkspace key={tenant.tenantId} tenantId={tenant.tenantId} />
+}
+
+function FindingsWorkspace({ tenantId }: { tenantId: string }) {
+  const { can, navigate, selectedFindingId, setSelectedFindingId, tenant } = useConsole()
+  const [stateFilter, setStateFilter] = useState<StateFilter>('open')
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
+  const [originFilter, setOriginFilter] = useState<FindingOrigin | 'all'>('all')
+  const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all')
+  const [search, setSearch] = useState('')
+  const [sort, setSort] = useState<{ field: SortField; desc: boolean }>({ field: 'severity', desc: true })
+  const [pageState, setPageState] = useState<{ filterKey: string; page: number }>({ filterKey: '', page: 0 })
+  const [patchTarget, setPatchTarget] = useState<FindingView | null>(null)
+  const [exporting, setExporting] = useState(false)
+
+  const filter = {
+    state: stateFilter,
+    source: sourceFilter === 'all' ? undefined : sourceFilter,
+    origin: sourceFilter === 'codeql' && originFilter !== 'all' ? originFilter : undefined,
+    severity: severityFilter === 'all' ? undefined : severityFilter,
+  }
+  const originKey = sourceFilter === 'codeql' ? originFilter : 'all'
+  const list = useResource(`findings:${tenantId}:${stateFilter}:${sourceFilter}:${originKey}:${severityFilter}`, (signal) =>
+    api.findings.list(tenantId, filter, signal),
+  )
+  const scans = useResource(`scans:${tenantId}:recent`, (signal) => api.scans.list(tenantId, 20, signal))
+
+  const query = search.trim().toLowerCase()
+  const findings = list.data?.findings
+  const visible = useMemo(() => {
+    const matched = (findings ?? []).filter((finding) => matchesSearch(finding, query))
+    return matched.sort((a, b) => {
+      const primary = compareFindings(a, b, sort.field)
+      if (primary !== 0) return sort.desc ? -primary : primary
+      return findingLocation(a).localeCompare(findingLocation(b), undefined, { numeric: true })
+    })
+  }, [findings, query, sort])
+
   const counts = useMemo(() => {
-    return {
-      all: findings.length,
-      critical: findings.filter((f) => f.severity === 'Critical').length,
-      high: findings.filter((f) => f.severity === 'High').length,
-      medium: findings.filter((f) => f.severity === 'Medium').length,
-      reachable: findings.filter((f) => f.reachability === 'ReachableCallPath').length,
-      confirmed: findings.filter((f) => f.verdict === 'confirmed' || (!f.verdict && f.status !== 'Rejected')).length,
-      needsValidation: findings.filter((f) => f.verdict === 'needs_validation').length,
-      rejected: findings.filter((f) => f.verdict === 'rejected' || f.status === 'Rejected').length,
+    const bySeverity = new Map<Severity, number>()
+    let untriaged = 0
+    for (const finding of findings ?? []) {
+      bySeverity.set(finding.severity, (bySeverity.get(finding.severity) ?? 0) + 1)
+      if (!finding.triage) untriaged += 1
     }
+    return { bySeverity, untriaged }
   }, [findings])
 
-  const filteredFindings = useMemo(() => {
-    return findings.filter((f) => {
-      const matchesSearch =
-        f.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        f.ruleId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        f.targetLocation.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        f.cwe.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (f.fingerprint && f.fingerprint.toLowerCase().includes(searchTerm.toLowerCase()))
+  // Any filter or search change returns to the first page.
+  const filterKey = `${stateFilter}|${sourceFilter}|${originKey}|${severityFilter}|${query}`
+  const page = pageState.filterKey === filterKey ? pageState.page : 0
+  const setPage = (next: number) => setPageState({ filterKey, page: next })
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE))
+  const currentPage = Math.min(page, pageCount - 1)
+  const pageRows = visible.slice(currentPage * PAGE_SIZE, currentPage * PAGE_SIZE + PAGE_SIZE)
 
-      const matchesSeverity = severityFilter === 'ALL' || f.severity === severityFilter
-      const matchesReachability = reachabilityFilter === 'ALL' || f.reachability === reachabilityFilter
-      
-      const effectiveVerdict = f.verdict ?? (f.status === 'Rejected' ? 'rejected' : 'confirmed')
-      const matchesVerdict = verdictFilter === 'ALL' || effectiveVerdict === verdictFilter
+  // Selected finding: prefer the fresh server copy; the list row fills in while it loads.
+  const listSelection = selectedFindingId ? (findings ?? []).find((finding) => finding.findingId === selectedFindingId) : undefined
+  const detail = useResource(selectedFindingId ? `finding:${tenantId}:${selectedFindingId}` : null, (signal) =>
+    api.findings.get(tenantId, selectedFindingId as string, signal),
+  )
+  const selected = detail.data ?? listSelection ?? null
 
-      return matchesSearch && matchesSeverity && matchesReachability && matchesVerdict
-    })
-  }, [findings, searchTerm, severityFilter, reachabilityFilter, verdictFilter])
+  const runs = useMemo(
+    () => [...(scans.data?.runs ?? [])].sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt)),
+    [scans.data],
+  )
+  const lastRun = runs[0] ?? null
+  const lastCompleted = runs.find((run) => run.status === 'completed') ?? null
+  const filtersActive = sourceFilter !== 'all' || originKey !== 'all' || severityFilter !== 'all' || stateFilter !== 'open'
 
-  const sortedFindings = useMemo(() => {
-    const list = [...filteredFindings]
-    list.sort((a, b) => {
-      let cmp = 0
-      if (sortField === 'severity') {
-        cmp = (SEVERITY_WEIGHT[a.severity] || 0) - (SEVERITY_WEIGHT[b.severity] || 0)
-      } else if (sortField === 'ruleId') {
-        cmp = a.ruleId.localeCompare(b.ruleId)
-      } else if (sortField === 'title') {
-        cmp = a.title.localeCompare(b.title)
-      } else if (sortField === 'targetLocation') {
-        cmp = a.targetLocation.localeCompare(b.targetLocation)
-      } else if (sortField === 'reachability') {
-        cmp = a.reachability.localeCompare(b.reachability)
-      } else if (sortField === 'verdict') {
-        const vA = a.verdict ?? (a.status === 'Rejected' ? 'rejected' : 'confirmed')
-        const vB = b.verdict ?? (b.status === 'Rejected' ? 'rejected' : 'confirmed')
-        cmp = vA.localeCompare(vB)
-      }
-      return sortDir === 'asc' ? cmp : -cmp
-    })
-    return list
-  }, [filteredFindings, sortField, sortDir])
-
-  // Paginated findings slice
-  const totalPages = Math.max(1, Math.ceil(sortedFindings.length / pageSize))
-  const paginatedFindings = useMemo(() => {
-    const start = (currentPage - 1) * pageSize
-    return sortedFindings.slice(start, start + pageSize)
-  }, [sortedFindings, currentPage, pageSize])
-
-  function handleSort(field: SortField) {
-    if (sortField === field) {
-      setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'))
-    } else {
-      setSortField(field)
-      setSortDir('desc')
-    }
-    setCurrentPage(1)
+  function toggleSort(field: SortField) {
+    setSort((current) => (current.field === field ? { field, desc: !current.desc } : { field, desc: field !== 'rule' && field !== 'location' }))
   }
 
-  function handleCopyPath(path: string, e: React.MouseEvent) {
-    e.stopPropagation()
-    copyText(path)
-    setCopiedPath(path)
-    toast.success('Path copied to clipboard', {
-      description: path,
-    })
-    setTimeout(() => setCopiedPath(null), 2000)
-  }
-
-  function handleExportCsv() {
-    const header = 'Verdict,Severity,Rule,CWE,Title,File,Line,Reachability,Status\n'
-    const rows = sortedFindings
-      .map(
-        (f) =>
-          `"${f.verdict || (f.status === 'Rejected' ? 'rejected' : 'confirmed')}","${f.severity}","${f.ruleId}","${f.cwe}","${f.title.replace(/"/g, '""')}","${f.targetLocation}",${f.startLine},"${f.reachability}","${f.status}"`
-      )
-      .join('\n')
-    const blob = new Blob([header + rows], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `sentra-findings-${Date.now()}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-    toast.success('CSV Export Ready', {
-      description: `Downloaded ${sortedFindings.length} findings as CSV with Cloudflare Three-Verdict classifications.`,
-    })
-  }
-
-  function handleExportJson() {
-    const jsonStr = JSON.stringify(sortedFindings, null, 2)
-    const blob = new Blob([jsonStr], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `sentra-findings-${Date.now()}.json`
-    a.click()
-    URL.revokeObjectURL(url)
-    toast.success('JSON Export Ready', {
-      description: `Downloaded ${sortedFindings.length} findings as JSON (OASIS SARIF / Cloudflare audit format).`,
-    })
-  }
-
-  async function handleValidateSchema() {
-    setIsValidatingSchema(true)
+  async function handleExport() {
+    setExporting(true)
     try {
-      const res = await validateFindingsInvariants(findings)
-      if (res && res.invariantsPass) {
-        toast.success('Cloudflare Schema Invariants Pass', {
-          description: `All ${res.totalFindings} findings strictly comply with Cloudflare Three-Verdict criteria and source-grounding.`,
-        })
-      } else if (res && !res.invariantsPass) {
-        toast.error('Schema Invariants Failed', {
-          description: `Found ${res.errors.length} error(s). First: ${res.errors[0]}`,
-        })
-      } else {
-        toast.info('Validation Offline', {
-          description: 'Web API bridge is unreachable. Displaying cached verified findings.',
-        })
-      }
-    } catch (err: any) {
-      toast.error('Validation Error', { description: err.message })
+      await downloadSarif(tenantId)
+    } catch (error) {
+      toast.error('SARIF export failed', { description: errorMessage(error) })
     } finally {
-      setIsValidatingSchema(false)
+      setExporting(false)
     }
-  }
-
-  function getVerdictBadge(verdict?: FindingVerdict, status?: string) {
-    const effectiveVerdict = verdict ?? (status === 'Rejected' ? 'rejected' : 'confirmed')
-    switch (effectiveVerdict) {
-      case 'confirmed':
-        return (
-          <Badge variant="destructive" className="text-[10px] font-mono font-bold flex items-center gap-1 bg-rose-500/15 text-rose-400 border border-rose-500/30">
-            <CheckCircle2 className="size-3" />
-            CONFIRMED
-          </Badge>
-        )
-      case 'needs_validation':
-        return (
-          <Badge variant="outline" className="text-[10px] font-mono font-bold flex items-center gap-1 bg-amber-500/15 text-amber-400 border border-amber-500/30">
-            <HelpCircle className="size-3" />
-            NEEDS VALIDATION
-          </Badge>
-        )
-      case 'rejected':
-        return (
-          <Badge variant="secondary" className="text-[10px] font-mono font-bold flex items-center gap-1 bg-zinc-800 text-zinc-400 border border-zinc-700">
-            <XCircle className="size-3" />
-            REJECTED
-          </Badge>
-        )
-    }
-  }
-
-  function getSeverityBadgeVariant(severity: Severity) {
-    switch (severity) {
-      case 'Critical':
-        return 'destructive'
-      case 'High':
-        return 'secondary'
-      case 'Medium':
-        return 'outline'
-      default:
-        return 'outline'
-    }
-  }
-
-  function getReachabilityBadge(reachability: Reachability) {
-    switch (reachability) {
-      case 'ReachableCallPath':
-        return (
-          <Badge variant="destructive" className="text-[11px] flex items-center gap-1 font-mono font-bold">
-            <GitBranch className="size-3" />
-            Reachable Flow
-          </Badge>
-        )
-      case 'SinkOnly':
-        return (
-          <Badge variant="outline" className="text-[11px] font-mono text-zinc-400">
-            Sink Only
-          </Badge>
-        )
-      case 'Unreachable':
-        return (
-          <Badge variant="secondary" className="text-[11px] font-mono">
-            Unreachable
-          </Badge>
-        )
-      default:
-        return (
-          <Badge variant="outline" className="text-[11px] font-mono">
-            Inconclusive
-          </Badge>
-        )
-    }
-  }
-
-  function renderSortIcon(field: SortField) {
-    if (sortField !== field) {
-      return <ArrowUpDown className="size-3 text-zinc-500 opacity-60 ml-1 inline-block" />
-    }
-    return sortDir === 'asc' ? (
-      <ArrowUp className="size-3 text-primary ml-1 inline-block" />
-    ) : (
-      <ArrowDown className="size-3 text-primary ml-1 inline-block" />
-    )
   }
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Top Controls: Verdict Tabs & Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        {/* Left: Verdict Filter Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 max-w-full">
-          <Button
-            variant={verdictFilter === 'ALL' ? 'default' : 'outline'}
-            size="sm"
-            className={`h-7.5 text-xs rounded-lg px-3 shrink-0 ${
-              verdictFilter === 'ALL'
-                ? 'font-bold shadow-xs'
-                : 'bg-zinc-950/70 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-            }`}
-            onClick={() => {
-              setVerdictFilter('ALL')
-              setCurrentPage(1)
-            }}
-          >
-            All ({counts.all})
-          </Button>
-
-          <Button
-            variant={verdictFilter === 'confirmed' ? 'destructive' : 'outline'}
-            size="sm"
-            className={`h-7.5 text-xs rounded-lg px-3 shrink-0 ${
-              verdictFilter === 'confirmed'
-                ? 'font-bold shadow-xs'
-                : 'border-rose-500/30 hover:border-rose-500/60 bg-rose-500/10 text-rose-300'
-            }`}
-            onClick={() => {
-              setVerdictFilter(verdictFilter === 'confirmed' ? 'ALL' : 'confirmed')
-              setCurrentPage(1)
-            }}
-          >
-            <CheckCircle2 className="size-3 mr-1.5 text-rose-400" />
-            Confirmed ({counts.confirmed})
-          </Button>
-
-          <Button
-            variant={verdictFilter === 'needs_validation' ? 'secondary' : 'outline'}
-            size="sm"
-            className={`h-7.5 text-xs rounded-lg px-3 shrink-0 ${
-              verdictFilter === 'needs_validation'
-                ? 'font-bold shadow-xs'
-                : 'border-amber-500/30 hover:border-amber-500/60 bg-amber-500/10 text-amber-300'
-            }`}
-            onClick={() => {
-              setVerdictFilter(verdictFilter === 'needs_validation' ? 'ALL' : 'needs_validation')
-              setCurrentPage(1)
-            }}
-          >
-            <HelpCircle className="size-3 mr-1.5 text-amber-400" />
-            Needs Validation ({counts.needsValidation})
-          </Button>
-
-          <Button
-            variant={verdictFilter === 'rejected' ? 'secondary' : 'outline'}
-            size="sm"
-            className={`h-7.5 text-xs rounded-lg px-3 shrink-0 ${
-              verdictFilter === 'rejected'
-                ? 'font-bold shadow-xs'
-                : 'border-zinc-800 hover:border-zinc-700 bg-zinc-900/60 text-zinc-400'
-            }`}
-            onClick={() => {
-              setVerdictFilter(verdictFilter === 'rejected' ? 'ALL' : 'rejected')
-              setCurrentPage(1)
-            }}
-          >
-            <XCircle className="size-3 mr-1.5 text-zinc-400" />
-            Rejected ({counts.rejected})
-          </Button>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-col gap-0.5">
+          <h2 className="text-base font-bold tracking-tight text-zinc-100 sm:text-lg">Findings</h2>
+          <p className="text-xs text-zinc-400">
+            Candidates reported by the SAST scanner, OSV dependency lookups and CodeQL (host analysis, imported SARIF or GitHub code
+            scanning) for this workspace. Every entry is an unverified candidate; a triage verdict records an operator decision.
+          </p>
+          <p className="text-[11px] text-zinc-500">
+            {scans.loading && !scans.data
+              ? 'Loading scan history…'
+              : scans.error
+                ? `Scan history unavailable: ${errorMessage(scans.error)}`
+                : lastRun
+                  ? `Last scan: ${describeRun(lastRun)}`
+                  : 'No scan has run for this workspace yet.'}
+          </p>
         </div>
-
-        {/* Right: Validate Schema & Consolidated Export */}
-        <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7.5 text-xs border-zinc-800 bg-zinc-900/60 text-primary hover:bg-primary/10 px-2.5 cursor-pointer"
-            onClick={handleValidateSchema}
-            disabled={isValidatingSchema}
-          >
-            <ShieldCheck className="size-3.5 mr-1" />
-            {isValidatingSchema ? 'Validating...' : 'Validate Schema'}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <CodeqlIngestActions tenantId={tenantId} hasRepository={!!tenant?.githubRepository} />
+          <Button variant="outline" size="sm" onClick={list.reload} disabled={list.loading}>
+            <RotateCw className={cn(list.loading && 'animate-spin')} /> Refresh
           </Button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              className="inline-flex items-center justify-center h-7.5 text-xs font-medium rounded-md border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800 text-zinc-300 px-2.5 gap-1.5 cursor-pointer transition-colors outline-none"
-              title="Export findings as CSV or JSON"
-            >
-              <Download className="size-3.5" />
-              <span>Export</span>
-              <ChevronDown className="size-3 text-zinc-400" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48 bg-zinc-950 border border-zinc-800 p-1.5 text-zinc-200">
-              <DropdownMenuItem onClick={handleExportCsv} className="cursor-pointer text-xs flex items-center gap-2 py-1.5">
-                <Download className="size-3.5 text-primary" />
-                <span>Export as CSV</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExportJson} className="cursor-pointer text-xs flex items-center gap-2 py-1.5">
-                <FileCode2 className="size-3.5 text-cyan-400" />
-                <span>Export as JSON (SARIF)</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button variant="outline" size="sm" onClick={() => void handleExport()} disabled={exporting}>
+            {exporting ? <Loader2 className="animate-spin" /> : <Download />} Export SARIF (open findings)
+          </Button>
         </div>
       </div>
 
-      {/* Unified Search & Filter Toolbar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 p-2 sm:px-3 sm:py-2 rounded-xl border border-zinc-800/80 bg-zinc-900/40 shadow-xs">
-        {/* Search Input */}
-        <div className="relative flex-1 min-w-[200px] max-w-[420px]">
-          <Search className="size-3.5 absolute left-2.5 top-2 text-zinc-400" />
-          <Input
-            placeholder="Search rule ID, CWE, path, or title..."
-            value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value)
-              setCurrentPage(1)
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex overflow-hidden rounded-lg border border-zinc-800">
+          {STATE_OPTIONS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => setStateFilter(option.id)}
+              aria-pressed={stateFilter === option.id}
+              className={cn(
+                'px-2.5 py-1 text-xs transition-colors',
+                stateFilter === option.id ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200',
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <Select
+          value={sourceFilter}
+          onValueChange={(value) => {
+            if (value === 'all' || FINDING_SOURCES.includes(value as FindingSource)) setSourceFilter(value as SourceFilter)
+          }}
+        >
+          <SelectTrigger className="h-7.5 w-[140px] border-zinc-800 bg-zinc-950/80 text-xs">
+            <SelectValue>{(value: string | null) => SOURCE_LABEL[(value ?? 'all') as SourceFilter] ?? 'All sources'}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {(Object.keys(SOURCE_LABEL) as SourceFilter[]).map((id) => (
+                <SelectItem key={id} value={id}>
+                  {SOURCE_LABEL[id]}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+        {sourceFilter === 'codeql' && (
+          <Select
+            value={originFilter}
+            onValueChange={(value) => {
+              if (value === 'all' || FINDING_ORIGINS.includes(value as FindingOrigin)) setOriginFilter(value as FindingOrigin | 'all')
             }}
-            className="pl-8 h-7.5 text-xs bg-zinc-950/70 border-zinc-800 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-primary/30"
+          >
+            <SelectTrigger className="h-7.5 w-[170px] border-zinc-800 bg-zinc-950/80 text-xs" aria-label="CodeQL origin">
+              <SelectValue>{(value: string | null) => (!value || value === 'all' ? 'All CodeQL origins' : (FINDING_ORIGIN_LABEL[value as FindingOrigin] ?? value))}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="all">All CodeQL origins</SelectItem>
+                {FINDING_ORIGINS.map((origin) => (
+                  <SelectItem key={origin} value={origin}>
+                    {FINDING_ORIGIN_LABEL[origin]}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        )}
+        <Select
+          value={severityFilter}
+          onValueChange={(value) => {
+            if (value === 'all') setSeverityFilter('all')
+            else if (SEVERITIES.some((severity) => severity === value)) setSeverityFilter(value as Severity)
+          }}
+        >
+          <SelectTrigger className="h-7.5 w-[140px] border-zinc-800 bg-zinc-950/80 text-xs">
+            <SelectValue>{(value: string | null) => (!value || value === 'all' ? 'All severities' : value)}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value="all">All severities</SelectItem>
+              {SEVERITIES.map((severity) => (
+                <SelectItem key={severity} value={severity}>
+                  {severity}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+        <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-zinc-500" />
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search rule, CWE, file, package, advisory…"
+            className="h-7.5 border-zinc-800 bg-zinc-950/80 pl-8 text-xs"
           />
         </div>
-
-        {/* Severity, Reachability & Quick Severity Chips */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Severity Dropdown */}
-          <Select
-            value={severityFilter}
-            onValueChange={(val) => {
-              setSeverityFilter(val ?? 'ALL')
-              setCurrentPage(1)
+        {(filtersActive || query) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-zinc-400"
+            onClick={() => {
+              setStateFilter('open')
+              setSourceFilter('all')
+              setOriginFilter('all')
+              setSeverityFilter('all')
+              setSearch('')
             }}
           >
-            <SelectTrigger className="w-[125px] h-7.5 text-xs bg-zinc-950/80 border-zinc-800 text-zinc-200">
-              <SelectValue placeholder="Severity">
-                {(val: string | null) => (val === 'ALL' || !val ? 'All Severities' : val)}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem value="ALL">All Severities</SelectItem>
-                <SelectItem value="Critical">Critical</SelectItem>
-                <SelectItem value="High">High</SelectItem>
-                <SelectItem value="Medium">Medium</SelectItem>
-                <SelectItem value="Low">Low</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-
-          {/* Reachability Dropdown */}
-          <Select
-            value={reachabilityFilter}
-            onValueChange={(val) => {
-              setReachabilityFilter(val ?? 'ALL')
-              setCurrentPage(1)
-            }}
-          >
-            <SelectTrigger className="w-[145px] h-7.5 text-xs bg-zinc-950/80 border-zinc-800 text-zinc-200">
-              <SelectValue placeholder="Reachability">
-                {(val: string | null) => {
-                  if (val === 'ALL' || !val) return 'All Reachability'
-                  if (val === 'ReachableCallPath') return 'Reachable Flow'
-                  if (val === 'SinkOnly') return 'Sink Only'
-                  if (val === 'Unreachable') return 'Unreachable'
-                  return val
-                }}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem value="ALL">All Reachability</SelectItem>
-                <SelectItem value="ReachableCallPath">Reachable Flow</SelectItem>
-                <SelectItem value="SinkOnly">Sink Only</SelectItem>
-                <SelectItem value="Unreachable">Unreachable</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-
-          {/* Quick Active Filter Badges */}
-          {(severityFilter !== 'ALL' || reachabilityFilter !== 'ALL' || searchTerm.trim()) && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setSeverityFilter('ALL')
-                setReachabilityFilter('ALL')
-                setSearchTerm('')
-                setCurrentPage(1)
-              }}
-              className="h-7 text-[11px] text-zinc-400 hover:text-zinc-200 px-2"
-            >
-              Reset Filters
-            </Button>
-          )}
-        </div>
+            Reset filters
+          </Button>
+        )}
       </div>
 
-      {/* Findings Table Card */}
-      <Card className="border-zinc-800/80 bg-zinc-900/40 shadow-xs">
-        <CardHeader className="py-2.5 px-4 border-b border-zinc-800/80 bg-zinc-950/40">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <CardTitle className="text-xs font-semibold text-zinc-200">
-                Security Findings
-              </CardTitle>
-              <Badge variant="outline" className="text-[10px] font-mono border-zinc-800 text-zinc-400">
-                {sortedFindings.length} Items
-              </Badge>
-            </div>
-
-            {/* Page Size Selector */}
-            <div className="flex items-center gap-2 text-xs text-zinc-400">
-              <span className="text-[11px]">Rows:</span>
-              <Select
-                value={pageSize.toString()}
-                onValueChange={(val) => {
-                  setPageSize(Number(val) || 15)
-                  setCurrentPage(1)
-                }}
-              >
-                <SelectTrigger className="w-[65px] h-7 text-xs bg-zinc-950/80 border-zinc-800">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="5">5</SelectItem>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="15">15</SelectItem>
-                    <SelectItem value="25">25</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
+      <Card className="gap-0 border-zinc-800/80 bg-zinc-900/40 py-0 shadow-xs">
+        <CardHeader className="border-b border-zinc-800/80 bg-zinc-950/40 px-4 py-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <CardTitle className="text-xs font-semibold text-zinc-200">
+              {STATE_OPTIONS.find((option) => option.id === stateFilter)?.label} findings
+            </CardTitle>
+            {findings && (
+              <>
+                <Badge variant="outline" className="border-zinc-800 font-mono text-[10px] text-zinc-400">
+                  {query ? `${visible.length} of ${findings.length}` : findings.length}
+                </Badge>
+                {SEVERITIES.filter((severity) => counts.bySeverity.get(severity)).map((severity) => (
+                  <span key={severity} className="inline-flex items-center gap-1 text-[10px] text-zinc-500">
+                    <SeverityBadge severity={severity} className="h-4 px-1.5 text-[9px]" />
+                    {counts.bySeverity.get(severity)}
+                  </span>
+                ))}
+                <span className="text-[10px] text-zinc-500">· {counts.untriaged} untriaged</span>
+              </>
+            )}
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          {sortedFindings.length === 0 ? (
+          {list.loading && !list.data ? (
+            <div className="flex flex-col gap-2 p-4">
+              {Array.from({ length: 6 }, (_, index) => (
+                <Skeleton key={index} className="h-7 w-full bg-zinc-800/50" />
+              ))}
+            </div>
+          ) : list.error ? (
+            <div className="p-4">
+              <ErrorAlert error={list.error} title="Could not load findings" onRetry={list.reload} />
+            </div>
+          ) : findings && findings.length === 0 ? (
             <Empty className="py-12">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
-                  <ShieldCheck className="size-8 text-primary" />
+                  <ShieldAlert />
                 </EmptyMedia>
-                <EmptyTitle>No Findings Match Active Filters</EmptyTitle>
-                <EmptyDescription>
-                  Try clearing your search query or clicking &apos;All&apos; in the filter chips above.
-                </EmptyDescription>
+                {scans.data && runs.length === 0 ? (
+                  <>
+                    <EmptyTitle>No scan has run for this workspace yet</EmptyTitle>
+                    <EmptyDescription>Findings appear here after a scan completes.</EmptyDescription>
+                  </>
+                ) : filtersActive ? (
+                  <>
+                    <EmptyTitle>No findings match these filters</EmptyTitle>
+                    <EmptyDescription>
+                      {lastCompleted ? `Last completed scan: ${describeRun(lastCompleted)}.` : 'No scan has completed yet.'}
+                    </EmptyDescription>
+                  </>
+                ) : (
+                  <>
+                    <EmptyTitle>No open findings</EmptyTitle>
+                    <EmptyDescription>
+                      {lastCompleted
+                        ? `No open finding is recorded. Last completed scan: ${describeRun(lastCompleted)}.`
+                        : 'No scan has completed for this workspace yet.'}
+                    </EmptyDescription>
+                  </>
+                )}
+              </EmptyHeader>
+              {scans.data && runs.length === 0 && can('scan:run') && (
+                <EmptyContent>
+                  <Button size="sm" variant="outline" onClick={() => navigate('overview')}>
+                    Go to Overview to run a scan
+                  </Button>
+                </EmptyContent>
+              )}
+            </Empty>
+          ) : visible.length === 0 ? (
+            <Empty className="py-12">
+              <EmptyHeader>
+                <EmptyTitle>No findings match “{search.trim()}”</EmptyTitle>
+                <EmptyDescription>The search covers rule, CWE, category, file, package, advisory IDs and the CodeQL origin and language.</EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader className="bg-zinc-950/40">
-                  <TableRow className="border-zinc-800/80 hover:bg-transparent">
-                    <TableHead
-                      className="text-xs cursor-pointer select-none text-zinc-300 font-semibold w-[130px]"
-                      onClick={() => handleSort('verdict')}
-                    >
-                      Verdict {renderSortIcon('verdict')}
-                    </TableHead>
-                    <TableHead
-                      className="text-xs cursor-pointer select-none text-zinc-300 font-semibold w-[110px]"
-                      onClick={() => handleSort('severity')}
-                    >
-                      Severity {renderSortIcon('severity')}
-                    </TableHead>
-                    <TableHead
-                      className="text-xs cursor-pointer select-none text-zinc-300 font-semibold w-[160px]"
-                      onClick={() => handleSort('ruleId')}
-                    >
-                      Rule &amp; CWE {renderSortIcon('ruleId')}
-                    </TableHead>
-                    <TableHead
-                      className="text-xs cursor-pointer select-none text-zinc-300 font-semibold"
-                      onClick={() => handleSort('title')}
-                    >
-                      Vulnerability Title {renderSortIcon('title')}
-                    </TableHead>
-                    <TableHead
-                      className="text-xs cursor-pointer select-none text-zinc-300 font-semibold w-[260px]"
-                      onClick={() => handleSort('targetLocation')}
-                    >
-                      Target Location {renderSortIcon('targetLocation')}
-                    </TableHead>
-                    <TableHead
-                      className="text-xs cursor-pointer select-none text-zinc-300 font-semibold w-[140px]"
-                      onClick={() => handleSort('reachability')}
-                    >
-                      Reachability {renderSortIcon('reachability')}
-                    </TableHead>
-                    <TableHead className="text-xs text-zinc-300 font-semibold w-[90px]">Status</TableHead>
-                    <TableHead className="text-xs text-right text-zinc-300 font-semibold w-[100px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedFindings.map((finding) => (
-                    <TableRow
-                      key={finding.findingId}
-                      className="cursor-pointer hover:bg-zinc-800/40 border-zinc-800/70 transition-colors group"
-                      onClick={() => handleSelectFinding(finding)}
-                    >
-                      <TableCell>
-                        {getVerdictBadge(finding.verdict, finding.status)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={getSeverityBadgeVariant(finding.severity)} className="text-[11px] font-bold">
-                          {finding.severity}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        <div className="flex flex-col">
-                          <span className="font-bold text-zinc-200">{finding.ruleId}</span>
-                          <span className="text-[11px] text-zinc-400 font-normal">{finding.cwe}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-xs font-medium max-w-[280px] text-zinc-100">
-                        <div className="truncate group-hover:text-primary transition-colors">{finding.title}</div>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs text-zinc-400">
-                        <div className="flex items-center gap-1.5 group/loc">
-                          <span className="truncate max-w-[220px]" title={`${finding.targetLocation}:${finding.startLine}`}>
-                            {finding.targetLocation}:{finding.startLine}
-                          </span>
-                          <button
-                            type="button"
-                            className="opacity-0 group-hover/loc:opacity-100 transition-opacity p-0.5 hover:text-zinc-100 text-zinc-400"
-                            onClick={(e) => handleCopyPath(`${finding.targetLocation}:${finding.startLine}`, e)}
-                            title="Copy path to clipboard"
-                          >
-                            {copiedPath === `${finding.targetLocation}:${finding.startLine}` ? (
-                              <Check className="size-3 text-emerald-400" />
-                            ) : (
-                              <Copy className="size-3" />
-                            )}
-                          </button>
-                        </div>
-                      </TableCell>
-                      <TableCell>{getReachabilityBadge(finding.reachability)}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-[11px] font-mono text-zinc-400 border-zinc-700">
-                          {finding.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs px-2 border-primary/30 bg-primary/10 text-primary hover:bg-primary/20"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onOpenAiPatchModal(finding)
-                            }}
-                          >
-                            <Sparkles className="size-3 mr-1" />
-                            AI Patch
-                          </Button>
-
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 text-xs px-2 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleSelectFinding(finding)
-                            }}
-                          >
-                            <Eye className="size-3.5 mr-1" />
-                            Inspect
-                          </Button>
-                        </div>
-                      </TableCell>
+            <>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader className="bg-zinc-950/40">
+                    <TableRow className="border-zinc-800/80 hover:bg-transparent">
+                      <SortHead field="severity" label="Severity" sort={sort} onToggle={toggleSort} className="w-[110px]" />
+                      <SortHead field="rule" label="Rule" sort={sort} onToggle={toggleSort} />
+                      <SortHead field="location" label="Location" sort={sort} onToggle={toggleSort} />
+                      <TableHead className="w-[140px] text-xs font-semibold text-zinc-300">Source</TableHead>
+                      <TableHead className="w-[130px] text-xs font-semibold text-zinc-300">Triage</TableHead>
+                      {stateFilter === 'all' && (
+                        <TableHead className="w-[90px] text-xs font-semibold text-zinc-300">State</TableHead>
+                      )}
+                      <SortHead field="lastSeen" label="Last seen" sort={sort} onToggle={toggleSort} className="w-[170px]" />
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-
-          {/* Pagination Navigation Footer */}
-          {sortedFindings.length > 0 && (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 sm:px-5 py-3 border-t border-zinc-800/80 bg-zinc-950/30">
-              <span className="text-xs text-zinc-400">
-                Page <span className="font-semibold text-zinc-200">{currentPage}</span> of{' '}
-                <span className="font-semibold text-zinc-200">{totalPages}</span>
-              </span>
-
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs bg-zinc-900 border-zinc-800 disabled:opacity-40"
-                  disabled={currentPage <= 1}
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                >
-                  <ChevronLeft className="size-3.5 mr-1" />
-                  Previous
-                </Button>
-
-                {/* Quick Page Jump Pills (hidden on mobile, visible on sm:) */}
-                <div className="hidden sm:flex items-center gap-1">
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    let p = i + 1
-                    if (totalPages > 5 && currentPage > 3) {
-                      p = Math.min(totalPages - 4 + i, currentPage - 2 + i)
-                    }
-                    return (
-                      <Button
-                        key={p}
-                        variant={currentPage === p ? 'default' : 'outline'}
-                        size="sm"
+                  </TableHeader>
+                  <TableBody>
+                    {pageRows.map((finding) => (
+                      <TableRow
+                        key={finding.findingId}
+                        tabIndex={0}
+                        aria-selected={finding.findingId === selectedFindingId}
+                        onClick={() => setSelectedFindingId(finding.findingId)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            setSelectedFindingId(finding.findingId)
+                          }
+                        }}
                         className={cn(
-                          "h-8 w-8 text-xs p-0 font-medium transition-colors",
-                          currentPage === p
-                            ? "bg-zinc-100 text-zinc-950 font-bold border-zinc-100 shadow-sm hover:bg-white hover:text-black"
-                            : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
+                          'cursor-pointer border-zinc-800/70 hover:bg-zinc-800/40',
+                          finding.findingId === selectedFindingId && 'bg-zinc-800/50',
                         )}
-                        onClick={() => setCurrentPage(p)}
                       >
-                        {p}
-                      </Button>
-                    )
-                  })}
-                </div>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs bg-zinc-900 border-zinc-800 disabled:opacity-40"
-                  disabled={currentPage >= totalPages}
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                >
-                  Next
-                  <ChevronRight className="size-3.5 ml-1" />
-                </Button>
+                        <TableCell>
+                          <SeverityBadge severity={finding.severity} />
+                        </TableCell>
+                        <TableCell className="max-w-[320px] text-xs">
+                          <div className="flex flex-col">
+                            <span className="truncate font-medium text-zinc-100">{finding.ruleName}</span>
+                            <span className="truncate font-mono text-[10px] text-zinc-500">
+                              {finding.ruleId}
+                              {finding.cwe ? ` · ${finding.cwe}` : ''}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="max-w-[300px] font-mono text-[11px] text-zinc-400">
+                          <span className="block truncate" title={findingLocation(finding)}>
+                            {findingLocation(finding)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-[11px] text-zinc-400">
+                          {findingSourceLabel(finding)}
+                        </TableCell>
+                        <TableCell>
+                          <TriageBadge triage={finding.triage} />
+                        </TableCell>
+                        {stateFilter === 'all' && (
+                          <TableCell className="text-[11px] text-zinc-400">
+                            {finding.state === 'open' ? 'Open' : 'Resolved'}
+                          </TableCell>
+                        )}
+                        <TableCell className="text-[11px] text-zinc-500">
+                          <Timestamp value={finding.lastSeenAt} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
-            </div>
+              {pageCount > 1 && (
+                <div className="flex items-center justify-between border-t border-zinc-800/80 px-4 py-2 text-[11px] text-zinc-500">
+                  <span>
+                    {currentPage * PAGE_SIZE + 1}–{Math.min(visible.length, (currentPage + 1) * PAGE_SIZE)} of {visible.length}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      disabled={currentPage === 0}
+                      onClick={() => setPage(currentPage - 1)}
+                      aria-label="Previous page"
+                    >
+                      <ChevronLeft />
+                    </Button>
+                    <span>
+                      {currentPage + 1} / {pageCount}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      disabled={currentPage >= pageCount - 1}
+                      onClick={() => setPage(currentPage + 1)}
+                      aria-label="Next page"
+                    >
+                      <ChevronRight />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
 
-      {/* Finding Inspector Sheet / Drawer */}
-      <Sheet open={!!selectedFinding} onOpenChange={(open) => !open && handleSelectFinding(null)}>
-        <SheetContent className="w-full sm:max-w-[620px] md:max-w-[680px] lg:max-w-[740px] p-0 bg-background/95 border-l border-border/80 shadow-2xl flex flex-col h-full backdrop-blur-md">
-          {selectedFinding && (
-            <div className="flex flex-col h-full min-h-0">
-              {/* Sticky Top Header */}
-              <SheetHeader className="px-5 py-4 border-b border-border/60 bg-card/60 sticky top-0 z-20 backdrop-blur pr-12 text-left">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {getVerdictBadge(selectedFinding.verdict, selectedFinding.status)}
-                  <Badge variant={getSeverityBadgeVariant(selectedFinding.severity)} className="text-[10px] font-bold uppercase px-1.5 py-0">
-                    {selectedFinding.severity}
-                  </Badge>
-                  <Badge variant="outline" className="font-mono text-[10px] px-1.5 py-0">
-                    {selectedFinding.ruleId}
-                  </Badge>
-                  <Badge variant="secondary" className="font-mono text-[10px] px-1.5 py-0">
-                    {selectedFinding.cwe}
-                  </Badge>
-                  {selectedFinding.reachability === 'ReachableCallPath' && (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
-                      <GitBranch className="size-2.5" />
-                      Reachable Flow
-                    </span>
-                  )}
-                </div>
-                <SheetTitle className="text-base font-semibold mt-1.5 text-foreground leading-snug">
-                  {selectedFinding.title}
-                </SheetTitle>
-                <SheetDescription className="flex flex-wrap items-center gap-2 mt-0.5 text-xs text-muted-foreground font-mono">
-                  <span className="truncate max-w-[280px]" title={selectedFinding.targetLocation}>
-                    {selectedFinding.targetLocation}
-                  </span>
-                  <span>:</span>
-                  <span>L{selectedFinding.startLine}-{selectedFinding.endLine}</span>
-                  {selectedFinding.fingerprint && (
-                    <>
-                      <span>•</span>
-                      <span className="text-[10px] text-muted-foreground bg-muted/50 px-1 py-0.2 rounded">
-                        FP: {selectedFinding.fingerprint}
-                      </span>
-                    </>
-                  )}
-                </SheetDescription>
-              </SheetHeader>
-
-              {/* Scrollable Inspector Body with shadcn ScrollArea */}
-              <ScrollArea className="flex-1 min-h-0">
-                <div className="px-5 py-5 flex flex-col gap-5">
-                  {/* Needs Validation Banner */}
-                {selectedFinding.verdict === 'needs_validation' && (
-                  <div className="p-3.5 rounded-lg border border-amber-500/30 bg-amber-500/5 flex flex-col gap-2.5 text-xs">
-                    <div className="flex items-center gap-1.5 text-amber-400 font-semibold tracking-wider uppercase text-[11px]">
-                      <HelpCircle className="size-3.5 shrink-0" />
-                      <span>Decisive Validation Blocked (Candidate Finding)</span>
-                    </div>
-                    <p className="text-muted-foreground leading-relaxed">
-                      This finding is a source-grounded candidate whose confirmation requires live environment access or operational telemetry.
-                    </p>
-                    {selectedFinding.blockers && selectedFinding.blockers.length > 0 && (
-                      <div className="flex flex-col gap-1 bg-background/60 p-2.5 rounded border border-border/50">
-                        <span className="text-[10px] font-semibold text-amber-300 uppercase">
-                          Unresolved Blockers:
-                        </span>
-                        <ul className="list-disc list-inside text-[11px] text-muted-foreground space-y-0.5">
-                          {selectedFinding.blockers.map((b, i) => (
-                            <li key={i}>{b}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Rejected / Refuted Hypothesis Banner */}
-                {selectedFinding.verdict === 'rejected' && (
-                  <div className="p-3.5 rounded-lg border border-border/60 bg-muted/20 flex flex-col gap-2 text-xs">
-                    <div className="flex items-center gap-1.5 text-muted-foreground font-semibold tracking-wider uppercase text-[11px]">
-                      <XCircle className="size-3.5 shrink-0" />
-                      <span>Refuted Candidate / Disproven Hypothesis</span>
-                    </div>
-                    {selectedFinding.rejectionReason && (
-                      <div className="p-2.5 rounded bg-background/60 border border-border/50 text-[11px] text-foreground/90">
-                        <InlineFormattedText text={selectedFinding.rejectionReason} />
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Live Host Source Code & Taint Flow Viewer */}
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                      <FileCode2 className="size-3.5 text-sky-400" />
-                      Source Code & Taint Path
-                    </span>
-                    <Badge variant="outline" className="text-[10px] font-mono">
-                      Line {selectedFinding.startLine || 1}
-                    </Badge>
-                  </div>
-                  <SourceViewer
-                    filePath={selectedFinding.targetLocation || ''}
-                    targetLine={selectedFinding.startLine}
-                    taintSteps={selectedFinding.taintTrace || []}
-                    fallbackSnippet={selectedFinding.smallestEffectiveFix}
-                  />
-                </div>
-
-                {/* Smallest Effective Source Fix */}
-                {selectedFinding.smallestEffectiveFix && (
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                        <Code2 className="size-3.5 text-emerald-400" />
-                        Smallest Effective Source Fix
-                      </span>
-                      <Badge variant="outline" className="text-[10px] font-mono text-emerald-400 border-emerald-500/30 bg-emerald-500/5">
-                        Surgical Diff
-                      </Badge>
-                    </div>
-                    <SurgicalDiffView
-                      diff={selectedFinding.smallestEffectiveFix}
-                      filePath={selectedFinding.targetLocation}
-                      title={`Surgical Remedy — ${selectedFinding.targetLocation.split('/').pop()}`}
-                    />
-                  </div>
-                )}
-
-                {/* Root Cause & Intended Behavior */}
-                {(selectedFinding.rootCause || selectedFinding.intendedBehavior) && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {selectedFinding.rootCause && (
-                      <div className="flex flex-col gap-1 p-3 rounded-lg border border-border/60 bg-card/40">
-                        <span className="text-[10px] font-semibold text-rose-400 uppercase tracking-wider flex items-center gap-1">
-                          <span className="size-1.5 rounded-full bg-rose-500" />
-                          Root Cause
-                        </span>
-                        <div className="text-xs text-muted-foreground leading-relaxed">
-                          <InlineFormattedText text={selectedFinding.rootCause} />
-                        </div>
-                      </div>
-                    )}
-                    {selectedFinding.intendedBehavior && (
-                      <div className="flex flex-col gap-1 p-3 rounded-lg border border-border/60 bg-card/40">
-                        <span className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
-                          <span className="size-1.5 rounded-full bg-emerald-500" />
-                          Intended Invariant
-                        </span>
-                        <div className="text-xs text-muted-foreground leading-relaxed">
-                          <InlineFormattedText text={selectedFinding.intendedBehavior} />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Vulnerability Analysis Card */}
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
-                    Vulnerability Analysis & Impact
-                  </span>
-                  <div className="bg-card/40 border border-border/60 p-3.5 rounded-lg text-xs">
-                    <MarkdownView content={selectedFinding.description} />
-                  </div>
-                </div>
-
-                {/* Remediation Guidance */}
-                {selectedFinding.remediationGuidance && (
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
-                      Remediation Guidance
-                    </span>
-                    <div className="bg-card/40 border border-border/60 p-3.5 rounded-lg text-xs">
-                      <MarkdownView content={selectedFinding.remediationGuidance} />
-                    </div>
-                  </div>
-                )}
-
-                {/* In-Engine Semantic Taint Trace */}
-                {selectedFinding.taintTrace && selectedFinding.taintTrace.length > 0 && (
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                        <GitBranch className="size-3.5 text-primary" />
-                        Semantic Taint Trace ({selectedFinding.taintTrace.length} Steps)
-                      </span>
-                      <Badge variant="outline" className="text-[10px] font-mono text-rose-400 border-rose-500/30">
-                        AST Proof
-                      </Badge>
-                    </div>
-
-                    <div className="flex flex-col gap-2 border border-border/60 rounded-lg p-3 bg-card/40">
-                      {selectedFinding.taintTrace.map((step, idx) => (
-                        <div
-                          key={step.step}
-                          className="flex flex-col gap-1.5 p-2.5 rounded bg-background/60 border border-border/40 text-xs"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                              <span className="size-5 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center justify-center text-[10px] font-mono font-bold">
-                                {step.step}
-                              </span>
-                              <Badge
-                                variant="outline"
-                                className={`text-[10px] font-mono font-bold px-1.5 py-0 ${
-                                  step.role === 'SOURCE'
-                                    ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
-                                    : step.role === 'SINK'
-                                      ? 'border-rose-500/40 bg-rose-500/10 text-rose-400'
-                                      : 'border-sky-500/40 bg-sky-500/10 text-sky-400'
-                                }`}
-                              >
-                                {step.role}
-                              </Badge>
-                              <span className="font-mono text-muted-foreground text-[11px]">
-                                {step.location}:{step.line}
-                              </span>
-                            </div>
-                            <span className="font-mono text-[11px] font-semibold text-primary bg-primary/10 px-1.5 py-0.2 rounded">
-                              ${step.variable}
-                            </span>
-                          </div>
-
-                          <pre className="font-mono text-[11px] bg-background/80 border border-border/40 p-2 rounded mt-1 overflow-x-auto text-foreground/90">
-                            {step.codeSnippet}
-                          </pre>
-
-                          {idx < selectedFinding.taintTrace!.length - 1 && (
-                            <div className="flex justify-center -mb-3 my-0.5">
-                              <ChevronRight className="size-3.5 text-muted-foreground rotate-90" />
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                </div>
-              </ScrollArea>
-
-              {/* Sticky Bottom Actions & Governance Footer */}
-              <div className="border-t border-border/60 px-5 py-3 bg-card/90 backdrop-blur sticky bottom-0 z-20 flex items-center justify-between gap-3 mt-auto">
-                <div className="flex flex-col min-w-0">
-                  <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                    <ShieldCheck className="size-3.5 text-primary shrink-0" />
-                    Three-Tier Verified Patch
-                  </span>
-                  <span className="text-[11px] text-muted-foreground truncate">
-                    Test synthesis & regression verification
-                  </span>
-                </div>
-                <Button
-                  size="sm"
-                  disabled={currentRole === 'Viewer'}
-                  onClick={() => {
-                    onOpenAiPatchModal(selectedFinding)
-                    handleSelectFinding(null)
-                  }}
-                  className="font-medium bg-primary text-primary-foreground hover:bg-primary/90 shrink-0 gap-1.5 h-8 text-xs"
-                >
-                  <Sparkles className="size-3" />
-                  <span>Synthesize Patch</span>
-                </Button>
+      <Sheet
+        open={selectedFindingId !== null}
+        onOpenChange={(open) => {
+          if (open) return
+          setSelectedFindingId(null)
+          setPatchTarget(null)
+        }}
+      >
+        <SheetContent side="right" className="w-full border-zinc-800 bg-zinc-950 sm:max-w-2xl lg:max-w-3xl">
+          <SheetHeader className="border-b border-zinc-800">
+            <SheetTitle className="pr-8 text-sm text-zinc-100">{selected ? selected.ruleName : 'Finding'}</SheetTitle>
+            <SheetDescription className="font-mono text-[11px] text-zinc-500">
+              {selected ? findingLocation(selected) : selectedFindingId}
+            </SheetDescription>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto p-4">
+            {selected ? (
+              <FindingDetail finding={selected} onGeneratePatch={() => setPatchTarget(selected)} />
+            ) : detail.error ? (
+              <ErrorAlert error={detail.error} title="Could not load this finding" onRetry={detail.reload} />
+            ) : (
+              <div className="flex flex-col gap-2">
+                <Skeleton className="h-5 w-1/3 bg-zinc-800/60" />
+                <Skeleton className="h-4 w-2/3 bg-zinc-800/60" />
+                <Skeleton className="h-40 w-full bg-zinc-800/60" />
               </div>
-            </div>
+            )}
+          </div>
+          {/* Rendered inside the sheet so it is a nested dialog of the sheet, not an outside press. */}
+          {patchTarget && (
+            <AiPatchModal
+              key={patchTarget.findingId}
+              finding={patchTarget}
+              open
+              onOpenChange={(open) => {
+                if (!open) setPatchTarget(null)
+              }}
+            />
           )}
         </SheetContent>
       </Sheet>

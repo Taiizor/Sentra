@@ -1,392 +1,399 @@
-import {
-  ShieldAlert,
-  CheckCircle2,
-  AlertTriangle,
-  Coins,
-  History,
-  FolderGit2,
-  TrendingUp,
-  Activity,
-  Layers,
-} from 'lucide-react'
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts'
+import type { ReactNode } from 'react'
+import { Activity, CheckCircle2, Clock, Cpu, History, Layers, ListChecks } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import type { DashboardOverview, SecurityTrendPoint, SessionSummaryView } from '@/types/sentra'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { api } from '@/lib/api'
+import { useConsole } from '@/lib/console-context'
+import { useResource } from '@/lib/use-resource'
+import { SEVERITIES, type OverviewView, type ScanRunView } from '@/types/api'
+import { minimumRoleFor } from './console-format'
+import { CODEQL_PER_ORIGIN_NOTE, codeqlOriginBreakdown } from './findings-format'
+import { formatCount, formatDateTime, formatDuration, formatMicroUsd, SEVERITY_BAR_CLASS } from './overview-tab-format'
+import { Field, LoadError, RunStatusBadge } from './overview-tab-parts'
+import { OverviewTrendCard } from './overview-tab-trend'
 
-interface OverviewTabProps {
-  overview: DashboardOverview
-  sessions: SessionSummaryView[]
-  trends: SecurityTrendPoint[]
-  onSelectTab: (tab: string) => void
-  onOpenLiveStream?: () => void
+const TREND_DAYS = 30
+const RECENT_RUNS = 10
+
+const KIND_LABEL: Record<ScanRunView['kind'], string> = {
+  sast: 'SAST',
+  dependency: 'Dependency audit',
+  // The probe always runs; with host analysis enabled the same kind runs `sentra codeql analyze`.
+  codeql: 'CodeQL',
+  all: 'Full scan',
 }
 
-export function OverviewTab({ overview, sessions, trends, onSelectTab }: OverviewTabProps) {
-  const totalFindings =
-    overview.criticalFindings +
-    overview.highFindings +
-    overview.mediumFindings +
-    overview.lowFindings +
-    overview.infoFindings
-
-  const criticalPercent = totalFindings ? Math.round((overview.criticalFindings / totalFindings) * 100) : 0
-  const highPercent = totalFindings ? Math.round((overview.highFindings / totalFindings) * 100) : 0
-  const mediumPercent = totalFindings ? Math.round((overview.mediumFindings / totalFindings) * 100) : 0
-
-  const score = overview.securityScore
-  const grade =
-    score >= 95 ? 'GRADE A+' :
-    score >= 85 ? 'GRADE A' :
-    score >= 75 ? 'GRADE B' :
-    score >= 60 ? 'GRADE C' :
-    score >= 45 ? 'GRADE D' : 'GRADE F'
-
-  const scoreColor =
-    score >= 80 ? 'text-emerald-400' :
-    score >= 65 ? 'text-teal-400' :
-    score >= 50 ? 'text-amber-400' : 'text-rose-400'
-
-  const gradeBadgeVariant =
-    score >= 80 ? ('secondary' as const) :
-    score >= 50 ? ('outline' as const) : ('destructive' as const)
-
+function StatCard({
+  title,
+  icon,
+  value,
+  children,
+  onClick,
+}: {
+  title: string
+  icon: ReactNode
+  value: ReactNode
+  children?: ReactNode
+  onClick?: () => void
+}) {
+  const interactive = onClick !== undefined
   return (
-    <div className="flex flex-col gap-5">
-      {/* Primary Threat Posture Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
-        {/* Security Posture Score */}
-        <Card
-          className="border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-900/70 hover:border-primary/40 transition-all cursor-pointer shadow-xs"
-          onClick={() => onSelectTab('findings')}
-        >
-          <CardHeader className="flex flex-row items-center justify-between pb-1.5 pt-3.5 px-4">
-            <CardTitle className="text-xs font-medium text-zinc-400">
-              Security Score
-            </CardTitle>
-            <Activity className={`size-4 ${scoreColor}`} />
-          </CardHeader>
-          <CardContent className="px-4 pb-3.5 pt-0">
-            <div className={`text-2xl font-bold ${scoreColor}`}>
-              {overview.securityScore} <span className="text-xs text-zinc-500 font-normal">/ 100</span>
-            </div>
-            <div className="text-[11px] text-zinc-400 mt-1 flex items-center gap-1.5">
-              <Badge variant={gradeBadgeVariant} className="text-[10px] h-4 px-1.5 font-bold">
-                {grade}
-              </Badge>
-              <span className="truncate">{overview.securityScore >= 75 ? 'Verified Posture' : 'Action Required'}</span>
-            </div>
-          </CardContent>
-        </Card>
+    <Card
+      className={`border-zinc-800/80 bg-zinc-900/40 ${interactive ? 'hover:bg-zinc-900/70 hover:border-zinc-700 cursor-pointer transition-colors' : ''}`}
+      onClick={onClick}
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onKeyDown={interactive ? (event) => (event.key === 'Enter' || event.key === ' ') && onClick() : undefined}
+    >
+      <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3.5 px-4">
+        <CardTitle className="text-xs font-medium text-zinc-400">{title}</CardTitle>
+        {icon}
+      </CardHeader>
+      <CardContent className="px-4 pb-3.5 pt-0 flex flex-col gap-1">
+        <div className="text-2xl font-bold text-zinc-100">{value}</div>
+        <div className="text-[11px] text-zinc-400 leading-snug">{children}</div>
+      </CardContent>
+    </Card>
+  )
+}
 
-        {/* Total Sessions */}
-        <Card
-          className="border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-900/70 hover:border-primary/40 transition-all cursor-pointer shadow-xs"
-          onClick={() => onSelectTab('fleet')}
-        >
-          <CardHeader className="flex flex-row items-center justify-between pb-1.5 pt-3.5 px-4">
-            <CardTitle className="text-xs font-medium text-zinc-400">
-              Workspace Sessions
-            </CardTitle>
-            <FolderGit2 className="size-4 text-zinc-400" />
-          </CardHeader>
-          <CardContent className="px-4 pb-3.5 pt-0">
-            <div className="text-2xl font-bold text-zinc-100">{overview.totalSessions}</div>
-            <p className="text-[11px] text-zinc-400 mt-1 truncate">
-              {overview.activeSessions} active scoped instance(s)
-            </p>
-          </CardContent>
-        </Card>
+function SummaryCards({ overview, onOpenFindings, onOpenPatches }: { overview: OverviewView; onOpenFindings: () => void; onOpenPatches: () => void }) {
+  const open = overview.openFindings
+  const lastRun = overview.lastRun
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5">
+      <StatCard title="Open findings" icon={<ListChecks className="size-4 text-zinc-400" />} value={open.total} onClick={onOpenFindings}>
+        {open.bySeverity.Critical} critical · {open.bySeverity.High} high · {open.byTriage.untriaged} untriaged
+        <span className="block text-zinc-500">Unverified scanner candidates</span>
+      </StatCard>
 
-        {/* Security Findings */}
-        <Card
-          className="border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-900/70 hover:border-rose-500/40 transition-all cursor-pointer shadow-xs"
-          onClick={() => onSelectTab('findings')}
-        >
-          <CardHeader className="flex flex-row items-center justify-between pb-1.5 pt-3.5 px-4">
-            <CardTitle className="text-xs font-medium text-zinc-400">
-              Vulnerabilities
-            </CardTitle>
-            <AlertTriangle className="size-4 text-rose-500" />
-          </CardHeader>
-          <CardContent className="px-4 pb-3.5 pt-0">
-            <div className="text-2xl font-bold flex items-center gap-2">
-              <span className="text-zinc-100">{totalFindings}</span>
-              {overview.criticalFindings > 0 && (
-                <Badge variant="destructive" className="text-[10px] h-4 px-1.5">
-                  {overview.criticalFindings} Critical
-                </Badge>
-              )}
-            </div>
-            <p className="text-[11px] text-zinc-400 mt-1 truncate">
-              {overview.highFindings} high, {overview.mediumFindings} medium
-            </p>
-          </CardContent>
-        </Card>
+      <StatCard
+        title="Last scan with results"
+        icon={<Clock className="size-4 text-zinc-400" />}
+        value={<span className="text-base">{overview.lastResultRunAt ? formatDateTime(overview.lastResultRunAt) : 'None yet'}</span>}
+      >
+        {lastRun ? (
+          <span className="flex items-center gap-1.5 flex-wrap">
+            Latest run: {KIND_LABEL[lastRun.kind]} <RunStatusBadge status={lastRun.status} />
+          </span>
+        ) : (
+          'No scan has run for this workspace yet'
+        )}
+        <span className="block text-zinc-500">
+          {overview.lastCompletedRunAt && overview.lastCompletedRunAt !== overview.lastResultRunAt
+            ? `Newest completed run of any kind: ${formatDateTime(overview.lastCompletedRunAt)} (CodeQL language probes without host analysis and skipped dependency stages produce no results)`
+            : 'Completed run that produced SAST, dependency or CodeQL host-analysis results'}
+        </span>
+      </StatCard>
 
-        {/* Verified Patches */}
-        <Card
-          className="border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-900/70 hover:border-emerald-500/40 transition-all cursor-pointer shadow-xs"
-          onClick={() => onSelectTab('remediation')}
-        >
-          <CardHeader className="flex flex-row items-center justify-between pb-1.5 pt-3.5 px-4">
-            <CardTitle className="text-xs font-medium text-zinc-400">
-              Verified Patches
-            </CardTitle>
-            <CheckCircle2 className="size-4 text-emerald-400" />
-          </CardHeader>
-          <CardContent className="px-4 pb-3.5 pt-0">
-            <div className="text-2xl font-bold text-emerald-400">
-              {overview.verifiedPatches}
-            </div>
-            <p className="text-[11px] text-zinc-400 mt-1 truncate">
-              Dual-state oracle verified
-            </p>
-          </CardContent>
-        </Card>
+      <StatCard
+        title="Heuristic risk score"
+        icon={<Activity className="size-4 text-zinc-400" />}
+        value={overview.riskScore ? overview.riskScore.value : <span className="text-base text-zinc-400">Not computed</span>}
+      >
+        {overview.riskScore ? (
+          <code className="font-mono text-[10px] text-zinc-400 break-all" title="Formula reported by the bridge">
+            {overview.riskScore.formula}
+          </code>
+        ) : (
+          'No completed run with SAST, dependency or CodeQL host-analysis results yet'
+        )}
+      </StatCard>
 
-        {/* Budget Spend */}
-        <Card
-          className="border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-900/70 hover:border-amber-500/40 transition-all cursor-pointer shadow-xs"
-          onClick={() => onSelectTab('research')}
-        >
-          <CardHeader className="flex flex-row items-center justify-between pb-1.5 pt-3.5 px-4">
-            <CardTitle className="text-xs font-medium text-zinc-400">
-              Research Tokens
-            </CardTitle>
-            <Coins className="size-4 text-amber-400" />
-          </CardHeader>
-          <CardContent className="px-4 pb-3.5 pt-0">
-            <div className="text-2xl font-bold text-zinc-100 font-mono">
-              ${(overview.totalSpentMicroUsd / 1_000_000).toFixed(2)}
-            </div>
-            <p className="text-[11px] text-zinc-400 mt-1 flex items-center gap-1 truncate">
-              <History className="size-3 shrink-0" />
-              <span>{overview.auditEventCount} immutable audit logs</span>
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <StatCard
+        title="Patch candidates"
+        icon={<CheckCircle2 className="size-4 text-zinc-400" />}
+        value={overview.patches.proposed}
+        onClick={onOpenPatches}
+      >
+        proposed · {overview.patches.applied} applied · {overview.patches.rolledBack} rolled back · {overview.patches.pullRequests} PRs
+        <span className="block text-zinc-500">Model-generated · Verification: not run</span>
+      </StatCard>
+    </div>
+  )
+}
 
-      {/* Two Column Layout: Recharts Threat Trend & CWE Breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Recharts Area Chart: 14-Day Vulnerability Trend */}
-        <Card className="lg:col-span-8 border-zinc-800/80 bg-zinc-900/40">
-          <CardHeader className="pb-2 pt-4 px-4 sm:px-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="flex flex-col">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <TrendingUp className="size-4 text-primary" />
-                  Vulnerability Velocity &amp; Remediation Rate
-                </CardTitle>
-                <CardDescription className="text-xs text-zinc-400">
-                  Historical telemetry showing signals detected vs verified remediations over time
-                </CardDescription>
+function BreakdownCard({ overview }: { overview: OverviewView }) {
+  const open = overview.openFindings
+  // untriaged + confirmed + needs_validation = open.total; rejected findings are still open
+  // (the scanner keeps reporting them) but excluded from the total and the severity rows.
+  const triage: [string, number][] = [
+    ['Untriaged', open.byTriage.untriaged],
+    ['Confirmed', open.byTriage.confirmed],
+    ['Needs validation', open.byTriage.needs_validation],
+  ]
+  return (
+    <Card className="border-zinc-800/80 bg-zinc-900/40">
+      <CardHeader className="pb-2 pt-4 px-4 sm:px-5">
+        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+          <Layers className="size-4 text-primary" />
+          Open findings breakdown
+        </CardTitle>
+        <CardDescription className="text-xs text-zinc-400">
+          {open.total === 0 && open.byTriage.rejected === 0
+            ? 'No open findings recorded.'
+            : `${open.total} open${open.byTriage.rejected > 0 ? ` (+${open.byTriage.rejected} triaged as rejected, not counted)` : ''} · ${overview.resolvedFindings} resolved since first scan`}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3 px-4 sm:px-5 pb-4">
+        <div className="flex flex-col gap-1.5">
+          {SEVERITIES.map((severity) => {
+            const count = open.bySeverity[severity] ?? 0
+            const percent = open.total > 0 ? (count / open.total) * 100 : 0
+            return (
+              <div key={severity} className="flex flex-col gap-0.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-zinc-300">{severity}</span>
+                  <span className="font-mono text-zinc-400">{count}</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                  <div className={`h-full rounded-full ${SEVERITY_BAR_CLASS[severity]}`} style={{ width: `${percent}%` }} />
+                </div>
               </div>
-              <Badge variant="secondary" className="text-xs font-mono self-start sm:self-auto">
-                MTTR: 4.2 min
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-2 px-3 sm:px-4 pb-4">
-            <div className="h-[220px] w-full min-h-[220px] min-w-0">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
-                <AreaChart data={trends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="detectedGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#f43f5e" stopOpacity={0.0} />
-                    </linearGradient>
-                    <linearGradient id="remediatedGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="date" stroke="#71717a" fontSize={11} tickLine={false} />
-                  <YAxis stroke="#71717a" fontSize={11} tickLine={false} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#18181b',
-                      borderColor: '#27272a',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                    }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="detected"
-                    stroke="#f43f5e"
-                    strokeWidth={2}
-                    fillOpacity={1}
-                    fill="url(#detectedGrad)"
-                    name="Detected"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="remediated"
-                    stroke="#10b981"
-                    strokeWidth={2}
-                    fillOpacity={1}
-                    fill="url(#remediatedGrad)"
-                    name="Remediated"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
+            )
+          })}
+        </div>
+        <div className="border-t border-zinc-800/80 pt-2">
+          <Field label="SAST rules">{open.bySource.sast ?? 0}</Field>
+          <Field label="Dependency advisories (OSV)">{open.bySource.dependency ?? 0}</Field>
+          <Field label="CodeQL (analysis, import, GitHub)">{open.bySource.codeql ?? 0}</Field>
+          {(open.bySource.codeql ?? 0) > 0 && (
+            <p className="text-[11px] text-zinc-500" title={CODEQL_PER_ORIGIN_NOTE}>
+              {codeqlOriginBreakdown(open.codeqlByOrigin)}. {CODEQL_PER_ORIGIN_NOTE}
+            </p>
+          )}
+        </div>
+        <div className="border-t border-zinc-800/80 pt-2">
+          {triage.map(([label, count]) => (
+            <Field key={label} label={label}>
+              {count}
+            </Field>
+          ))}
+          <Field label="Rejected (excluded from open total)">
+            <span className="text-zinc-500">{open.byTriage.rejected}</span>
+          </Field>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
 
-        {/* Severity & Attack Surface Breakdown */}
-        <Card className="lg:col-span-4 border-zinc-800/80 bg-zinc-900/40 flex flex-col justify-between">
-          <CardHeader className="pb-2 pt-4 px-4 sm:px-5">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Layers className="size-4 text-primary" />
-              Attack Surface Breakdown
-            </CardTitle>
-            <CardDescription className="text-xs text-zinc-400">
-              Normalized SAST, Taint, and Dependency signals
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3 pt-2 px-4 sm:px-5 pb-4">
-            {/* Critical */}
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-medium flex items-center gap-1.5 text-rose-400">
-                  <span className="size-2 rounded-full bg-rose-500" />
-                  Critical Severity
-                </span>
-                <span className="font-mono text-zinc-400">
-                  {overview.criticalFindings} ({criticalPercent}%)
-                </span>
+function CoreSessionCard({ overview }: { overview: OverviewView }) {
+  const core = overview.core
+  const budgetPercent =
+    core.budgetLimitMicroUsd && core.budgetLimitMicroUsd > 0 && core.budgetUsedMicroUsd !== null
+      ? Math.min(100, (core.budgetUsedMicroUsd / core.budgetLimitMicroUsd) * 100)
+      : null
+  return (
+    <Card className="border-zinc-800/80 bg-zinc-900/40">
+      <CardHeader className="pb-2 pt-4 px-4 sm:px-5">
+        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+          <Cpu className="size-4 text-primary" />
+          Core session
+        </CardTitle>
+        <CardDescription className="text-xs text-zinc-400">Read from this workspace's core store via `sentra status`.</CardDescription>
+      </CardHeader>
+      <CardContent className="px-4 sm:px-5 pb-4">
+        {!core.initialized ? (
+          <p className="text-xs text-amber-300 break-words">
+            Not initialized{core.error ? `: ${core.error}` : '.'}
+          </p>
+        ) : (
+          <div className="flex flex-col">
+            {core.error && <p className="text-xs text-rose-300 break-words pb-1">{core.error}</p>}
+            <Field label="Session" mono>
+              {core.sessionId ?? '—'}
+            </Field>
+            <Field label="State">
+              <Badge variant="outline" className="text-[10px] font-mono">
+                {core.state ?? 'unknown'}
+              </Badge>
+            </Field>
+            <Field label="Mode">{core.mode ?? '—'}</Field>
+            <Field label="Classification floor">{core.classificationFloor ?? '—'}</Field>
+            <Field label="Context generation">{formatCount(core.contextGeneration)}</Field>
+            <Field label="Budget used / limit" mono>
+              {formatMicroUsd(core.budgetUsedMicroUsd)} / {formatMicroUsd(core.budgetLimitMicroUsd)}
+            </Field>
+            {budgetPercent !== null && (
+              <div className="h-1 rounded-full bg-zinc-800 overflow-hidden my-1">
+                <div className="h-full bg-zinc-400" style={{ width: `${budgetPercent}%` }} />
               </div>
-              <Progress value={criticalPercent} className="h-1.5" />
-            </div>
-
-            {/* High */}
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-medium flex items-center gap-1.5 text-amber-400">
-                  <span className="size-2 rounded-full bg-amber-500" />
-                  High Severity
-                </span>
-                <span className="font-mono text-zinc-400">
-                  {overview.highFindings} ({highPercent}%)
-                </span>
-              </div>
-              <Progress value={highPercent} className="h-1.5" />
-            </div>
-
-            {/* Medium */}
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-medium flex items-center gap-1.5 text-blue-400">
-                  <span className="size-2 rounded-full bg-blue-500" />
-                  Medium Severity
-                </span>
-                <span className="font-mono text-zinc-400">
-                  {overview.mediumFindings} ({mediumPercent}%)
-                </span>
-              </div>
-              <Progress value={mediumPercent} className="h-1.5" />
-            </div>
-
-            {/* CWE Tags */}
-            <div className="border-t border-zinc-800/80 pt-3 mt-1 flex flex-wrap gap-1.5">
-              <Badge variant="outline" className="text-[10px] font-mono text-zinc-400 border-zinc-800">
-                CWE-89 SQLi
-              </Badge>
-              <Badge variant="outline" className="text-[10px] font-mono text-zinc-400 border-zinc-800">
-                CWE-78 Cmd Injection
-              </Badge>
-              <Badge variant="outline" className="text-[10px] font-mono text-zinc-400 border-zinc-800">
-                CWE-798 Secrets
-              </Badge>
-              <Badge variant="outline" className="text-[10px] font-mono text-zinc-400 border-zinc-800">
-                CWE-22 Traversal
-              </Badge>
-              <Badge variant="outline" className="text-[10px] font-mono text-zinc-400 border-zinc-800">
-                CWE-1321 Proto
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Active Workspace Sessions */}
-      <Card className="border-zinc-800/80 bg-zinc-900/40">
-        <CardHeader className="pt-4 pb-2 px-4 sm:px-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="flex flex-col">
-              <CardTitle className="text-sm font-semibold">
-                Active Workspace Sessions
-              </CardTitle>
-              <CardDescription className="text-xs text-zinc-400">
-                Audit-backed deterministic workspace snapshots with CAS storage
-              </CardDescription>
-            </div>
-            <Badge variant="outline" className="text-[10px] font-mono shrink-0 self-start sm:self-auto text-zinc-400 border-zinc-800">
-              WAL Journal
-            </Badge>
+            )}
+            <Field label="Core tasks">{formatCount(core.taskCount)}</Field>
+            <Field label="Core audit events">{formatCount(core.auditEventCount)}</Field>
+            <Field label="Operator audit entries">{formatCount(overview.operatorAuditEntries)}</Field>
+            <Field label="Created">{formatDateTime(core.createdAt)}</Field>
           </div>
-        </CardHeader>
-        <CardContent className="px-4 sm:px-5 pb-4">
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function RecentRuns({ runs, loading, error, onRetry, canScan }: {
+  runs: ScanRunView[] | undefined
+  loading: boolean
+  error: unknown
+  onRetry: () => void
+  canScan: boolean
+}) {
+  return (
+    <Card className="border-zinc-800/80 bg-zinc-900/40">
+      <CardHeader className="pt-4 pb-2 px-4 sm:px-5">
+        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+          <History className="size-4 text-primary" />
+          Recent scan runs
+        </CardTitle>
+        <CardDescription className="text-xs text-zinc-400">The {RECENT_RUNS} most recent runs recorded by the bridge for this workspace.</CardDescription>
+      </CardHeader>
+      <CardContent className="px-4 sm:px-5 pb-4">
+        {error ? (
+          <LoadError title="Scan runs unavailable" error={error} onRetry={onRetry} />
+        ) : !runs ? (
+          loading ? <Skeleton className="h-32 w-full bg-zinc-900" /> : null
+        ) : runs.length === 0 ? (
+          <p className="text-xs text-zinc-500 py-6 text-center">
+            No scan has run for this workspace yet.{' '}
+            {canScan ? 'Start one with "Full scan" in the workspace bar above.' : `Starting a scan requires the ${minimumRoleFor('scan:run')} role or higher.`}
+          </p>
+        ) : (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-xs">Session ID</TableHead>
-                  <TableHead className="text-xs">Canonical Workspace Path</TableHead>
-                  <TableHead className="text-xs">Lifecycle State</TableHead>
-                  <TableHead className="text-xs">Task Count</TableHead>
-                  <TableHead className="text-xs">Fencing Epoch</TableHead>
-                  <TableHead className="text-xs text-right">Created Timestamp (UTC)</TableHead>
+                  <TableHead className="text-xs">Started</TableHead>
+                  <TableHead className="text-xs">Kind</TableHead>
+                  <TableHead className="text-xs">Status</TableHead>
+                  <TableHead className="text-xs">Trigger / actor</TableHead>
+                  <TableHead className="text-xs text-right">Duration</TableHead>
+                  <TableHead className="text-xs text-right">Files</TableHead>
+                  <TableHead className="text-xs text-right">Signals</TableHead>
+                  <TableHead className="text-xs text-right">Packages</TableHead>
+                  <TableHead className="text-xs text-right">Vulnerable pkgs</TableHead>
+                  <TableHead className="text-xs">Git head</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sessions.map((session) => (
-                  <TableRow key={session.sessionId}>
-                    <TableCell className="font-mono text-xs font-semibold whitespace-nowrap">
-                      {session.sessionId}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-zinc-400 truncate max-w-[320px]">
-                      {session.workspaceRoot}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={session.state === 'SCOPED' ? 'secondary' : 'outline'}
-                        className="text-[10px] font-mono"
-                      >
-                        {session.state}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs font-mono">{session.taskCount}</TableCell>
-                    <TableCell className="text-xs font-mono">#{session.fencingEpoch}</TableCell>
-                    <TableCell className="text-xs text-zinc-400 font-mono text-right">
-                      {new Date(session.createdAt).toLocaleTimeString()}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {runs.map((run) => {
+                  const stageErrors = run.summary?.stageErrors ?? []
+                  return (
+                    <TableRow key={run.runId}>
+                      <TableCell className="text-[11px] font-mono whitespace-nowrap" title={run.runId}>
+                        {formatDateTime(run.startedAt)}
+                      </TableCell>
+                      <TableCell className="text-xs whitespace-nowrap">{KIND_LABEL[run.kind]}</TableCell>
+                      <TableCell className="text-xs">
+                        <div className="flex flex-col gap-0.5 items-start">
+                          <RunStatusBadge status={run.status} />
+                          {run.error && (
+                            <span className="text-[10px] text-rose-300 max-w-[220px] truncate" title={run.error}>
+                              {run.error}
+                            </span>
+                          )}
+                          {stageErrors.length > 0 && (
+                            <span
+                              className="text-[10px] text-amber-300"
+                              title={stageErrors.map((stage) => `${stage.stage}: ${stage.message}`).join('\n')}
+                            >
+                              {stageErrors.length} stage error(s)
+                            </span>
+                          )}
+                          {run.summary?.dependencySkippedReason && (
+                            <span className="text-[10px] text-zinc-500 max-w-[220px] truncate" title={run.summary.dependencySkippedReason}>
+                              Dependency stage skipped
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-[11px] whitespace-nowrap">
+                        {run.trigger} <span className="text-zinc-500 font-mono">{run.actor}</span>
+                      </TableCell>
+                      <TableCell className="text-[11px] font-mono text-right whitespace-nowrap">{formatDuration(run.startedAt, run.finishedAt)}</TableCell>
+                      <TableCell className="text-[11px] font-mono text-right">{formatCount(run.filesScanned)}</TableCell>
+                      <TableCell className="text-[11px] font-mono text-right">{formatCount(run.signalsFound)}</TableCell>
+                      <TableCell className="text-[11px] font-mono text-right">{formatCount(run.packagesAudited)}</TableCell>
+                      <TableCell className="text-[11px] font-mono text-right">{formatCount(run.vulnerablePackages)}</TableCell>
+                      <TableCell className="text-[11px] font-mono text-zinc-400" title={run.gitHead ?? undefined}>
+                        {run.gitHead ? run.gitHead.slice(0, 8) : '—'}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           </div>
-        </CardContent>
-      </Card>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+export function OverviewTab() {
+  const { tenant, navigate, can } = useConsole()
+  const tenantId = tenant?.tenantId ?? null
+
+  const overview = useResource(tenantId ? `overview:${tenantId}` : null, (signal) => api.tenants.overview(tenantId ?? '', signal))
+  const trends = useResource(tenantId ? `trends:${tenantId}:${TREND_DAYS}` : null, (signal) =>
+    api.tenants.trends(tenantId ?? '', TREND_DAYS, signal),
+  )
+  const runs = useResource(tenantId ? `scans:${tenantId}:${RECENT_RUNS}` : null, (signal) =>
+    api.scans.list(tenantId ?? '', RECENT_RUNS, signal),
+  )
+
+  if (!tenant) {
+    return <p className="text-xs text-zinc-500">Select a registered workspace to see its overview.</p>
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      {overview.error ? (
+        <LoadError title="Overview unavailable" error={overview.error} onRetry={overview.reload} />
+      ) : !overview.data ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5" aria-busy="true">
+          {[0, 1, 2, 3].map((index) => (
+            <Skeleton key={index} className="h-28 bg-zinc-900" />
+          ))}
+        </div>
+      ) : (
+        <SummaryCards
+          overview={overview.data}
+          onOpenFindings={() => navigate('findings')}
+          onOpenPatches={() => navigate('remediation')}
+        />
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <div className="lg:col-span-8 min-w-0">
+          <OverviewTrendCard
+            days={TREND_DAYS}
+            points={trends.data?.points}
+            loading={trends.loading}
+            error={trends.error}
+            onRetry={trends.reload}
+          />
+        </div>
+        <div className="lg:col-span-4 min-w-0">
+          {overview.data ? <BreakdownCard overview={overview.data} /> : !overview.error && <Skeleton className="h-full min-h-60 bg-zinc-900" />}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
+        <div className="xl:col-span-4 min-w-0">
+          {overview.data ? <CoreSessionCard overview={overview.data} /> : !overview.error && <Skeleton className="h-64 bg-zinc-900" />}
+        </div>
+        <div className="xl:col-span-8 min-w-0">
+          <RecentRuns
+            runs={runs.data?.runs}
+            loading={runs.loading}
+            error={runs.error}
+            onRetry={runs.reload}
+            canScan={can('scan:run')}
+          />
+        </div>
+      </div>
     </div>
   )
 }

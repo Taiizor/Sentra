@@ -1,13 +1,13 @@
 # Sentra Adapter: Ollama Local AI Provider
 
-A reference subprocess adapter connecting local [Ollama](https://ollama.com/) instances to the **Sentra Security Platform** for air-gapped, zero-cloud patch generation.
+A reference subprocess adapter connecting local [Ollama](https://ollama.com/) instances to the **Sentra Security Platform** for local patch generation against a loopback Ollama daemon.
 
 ---
 
 ## Capabilities
 
-- **`patch_generation`**: Generates unified diff remediation proposals using local coding models (`deepseek-coder`, `qwen2.5-coder`, `llama3`).
-- **Network Egress Policy**: Bound strictly to `whitelisted_local_only` (connects only to `http://127.0.0.1:11434`; all public internet access is prohibited).
+- **`patch_generation`**: Sends the prompt to a local coding model (`deepseek-coder`, `qwen2.5-coder`, `llama3`) through the loopback Ollama API and asks for a unified diff. The patch text is not returned: the `execute` result carries only a summary with its size in bytes and the placeholder evidence label `sha256:patch-<task id>`. When the daemon does not answer, the adapter falls back to a fixed sample patch, reports `Simulated patch generated (Ollama offline fallback).` and still exits 0. Treat the output as test data.
+- **Network Egress Policy**: Declares `whitelisted_local_only` and only connects to `http://127.0.0.1:11434`. The host does not enforce the policy; nothing prevents other network access.
 
 ---
 

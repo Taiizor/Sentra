@@ -13,7 +13,8 @@ pub enum PluginRequest {
         /// Orchestrator host protocol version.
         host_version: u32,
     },
-    /// Probes target availability and prerequisites without code execution.
+    /// Asks the adapter whether it applies to a workspace. The adapter process runs
+    /// with the operator's privileges while answering.
     Probe {
         /// Canonical workspace root path.
         workspace_root: String,
@@ -25,12 +26,15 @@ pub enum PluginRequest {
     },
     /// Dispatches an authorized execution job.
     Execute {
-        /// Associated task identifier.
+        /// Associated task identifier; the adapter must echo it in `execute_result`.
         task_id: String,
         /// Dynamic authorization lease identifier.
         lease_id: String,
         /// Required capability being exercised.
         capability: PluginCapability,
+        /// Canonical workspace root validated by the host, when the caller supplied one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        workspace_root: Option<String>,
         /// Structured execution arguments.
         arguments: serde_json::Value,
     },
@@ -74,13 +78,13 @@ pub enum PluginResponse {
         /// Capabilities required during execution.
         required_capabilities: Vec<PluginCapability>,
     },
-    /// Execution outcome with exit code and evidence references.
+    /// Execution outcome with exit code and evidence references (all adapter-reported).
     ExecuteResult {
-        /// Target task identifier.
+        /// Target task identifier; must equal the request's task id.
         task_id: String,
-        /// Subprocess exit code (0 = success).
+        /// Adapter-reported outcome code (0 = success); not the process exit status.
         exit_code: i32,
-        /// Generated evidence blob IDs.
+        /// Adapter-reported evidence labels; never resolved or admitted as evidence.
         evidence_refs: Vec<String>,
         /// Concise summary of findings or results.
         summary: String,
@@ -129,10 +133,7 @@ pub fn decode_frame<'a, T: Deserialize<'a>>(
     }
 
     if trimmed.len() > max_frame_bytes {
-        return Err(PluginError::output_quota_exceeded(
-            trimmed.len(),
-            max_frame_bytes,
-        ));
+        return Err(PluginError::frame_too_large(trimmed.len(), max_frame_bytes));
     }
 
     serde_json::from_str(trimmed).map_err(|e| {

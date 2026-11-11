@@ -1,10 +1,47 @@
-//! JSON-RPC 2.0 message schemas, tool definitions, and transport gating (MCP Revision 2026-07-28, REQ-F17, ADR-0005).
+//! JSON-RPC 2.0 message schemas, protocol revision negotiation, tool definitions, and
+//! transport gating for the Model Context Protocol (REQ-F17, ADR-0005).
+//!
+//! Sentra implements the *legacy* (initialize-handshake) era of MCP: revisions
+//! `2025-11-25`, `2025-06-18`, `2025-03-26` and `2024-11-05`. The handshake-less
+//! *modern* revision `2026-07-28` (per-request `_meta`, `server/discover`,
+//! `UnsupportedProtocolVersionError` -32022) is published but NOT implemented, so
+//! the server never advertises it. Dual-era clients probing with `server/discover`
+//! receive a non-modern error (-32601) and fall back to `initialize`, as the
+//! 2026-07-28 stdio binding specifies.
+//! Source: <https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning>.
 
 use serde::{Deserialize, Serialize};
 
 use crate::mcp::error::McpErrorObject;
 
-/// Unique request identifier in JSON-RPC 2.0 (string or integer).
+/// Latest MCP protocol revision this server implements (legacy handshake era).
+pub const LATEST_PROTOCOL_VERSION: &str = "2025-11-25";
+
+/// Officially published legacy MCP revisions this server can negotiate, newest first.
+///
+/// Source: <https://modelcontextprotocol.io/llms.txt> (specification revisions
+/// 2024-11-05, 2025-03-26, 2025-06-18, 2025-11-25; 2026-07-28 is modern-only).
+pub const SUPPORTED_PROTOCOL_VERSIONS: [&str; 4] =
+    ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
+
+/// The only negotiated revision whose base protocol requires receiving JSON-RPC
+/// batches (2025-03-26 "MUST support receiving JSON-RPC batches"; removed in 2025-06-18).
+pub const BATCH_PROTOCOL_VERSION: &str = "2025-03-26";
+
+/// Negotiates the protocol revision for a legacy `initialize` request.
+///
+/// Per the 2025-11-25 lifecycle: when the server supports the requested revision it
+/// MUST respond with the same revision; otherwise it responds with the latest
+/// revision it supports.
+pub fn negotiate_protocol_version(requested: &str) -> &'static str {
+    SUPPORTED_PROTOCOL_VERSIONS
+        .iter()
+        .copied()
+        .find(|supported| *supported == requested)
+        .unwrap_or(LATEST_PROTOCOL_VERSION)
+}
+
+/// Unique request identifier in JSON-RPC 2.0 (string or integer; MCP forbids null).
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum RequestId {
@@ -14,7 +51,11 @@ pub enum RequestId {
     String(String),
 }
 
-/// JSON-RPC 2.0 compliant request envelope received over the transport.
+/// JSON-RPC 2.0 request envelope received over the transport.
+///
+/// `id: None` marks a notification. [`crate::mcp::McpServer::handle_request`] refuses
+/// to execute notifications; the transport routes them to
+/// [`crate::mcp::McpServer::handle_notification`] instead.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct McpRequest {
     /// Protocol version string (MUST be "2.0").
@@ -28,7 +69,10 @@ pub struct McpRequest {
     pub params: Option<serde_json::Value>,
 }
 
-/// JSON-RPC 2.0 compliant response envelope returned to the client.
+/// JSON-RPC 2.0 response envelope returned to the client.
+///
+/// `id: None` serializes as `"id": null`, which JSON-RPC 2.0 requires when the id of
+/// an invalid request or unparseable message cannot be determined.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct McpResponse {
     /// Protocol version string ("2.0").
@@ -65,6 +109,43 @@ impl McpResponse {
     }
 }
 
+/// Behavioural hints for a tool (MCP `ToolAnnotations`, revision 2025-03-26 and later).
+///
+/// Annotations are descriptive metadata for clients, never a security boundary; the
+/// server enforces confinement and approval itself.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolAnnotations {
+    /// Human-readable display title.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// True when the tool does not modify its environment.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub read_only_hint: Option<bool>,
+    /// True when a non-read-only tool may perform destructive updates.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub destructive_hint: Option<bool>,
+    /// True when repeated calls with the same arguments have no additional effect.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub idempotent_hint: Option<bool>,
+    /// True when the tool interacts with an open world of external entities.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub open_world_hint: Option<bool>,
+}
+
+impl ToolAnnotations {
+    /// Read-only, closed-world tool that only inspects local inputs.
+    pub fn read_only(title: &str) -> Self {
+        Self {
+            title: Some(title.to_string()),
+            read_only_hint: Some(true),
+            destructive_hint: None,
+            idempotent_hint: Some(true),
+            open_world_hint: Some(false),
+        }
+    }
+}
+
 /// Specification of an exposed application tool callable by an external model or agent.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolDefinition {
@@ -75,6 +156,9 @@ pub struct ToolDefinition {
     /// JSON Schema object describing the expected input parameters.
     #[serde(rename = "inputSchema")]
     pub input_schema: serde_json::Value,
+    /// Behavioural hints (descriptive only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub annotations: Option<ToolAnnotations>,
 }
 
 /// Verifies that the transport mechanism conforms to isolation boundaries (ADR-0005, EXTENSIONS.md).
@@ -93,57 +177,78 @@ pub fn verify_transport_allowed(transport: &str) -> Result<(), McpErrorObject> {
     }
 }
 
-/// Returns the 6 canonical tool definitions exposed by the Sentra MCP server.
+/// Generate-prompt roles accepted by `sentra_generate_prompt` (schema enum).
+pub const PROMPT_ROLES: [&str; 5] = ["scout", "analyst", "validator", "patch_author", "verifier"];
+
+/// Generate-prompt workflows accepted by `sentra_generate_prompt` (schema enum).
+pub const PROMPT_WORKFLOWS: [&str; 7] = [
+    "general",
+    "threat-model",
+    "api-bola",
+    "patch-remediation",
+    "skill-audit",
+    "scout",
+    "verify",
+];
+
+/// Returns the canonical tool definitions exposed by the Sentra MCP server.
+///
+/// Every tool is backed by a core service or reports an explicit tool error; none
+/// writes to the filesystem. Skill and MCP-config installation is an operator action
+/// available only through the CLI (`sentra install`), never to a model.
 pub fn canonical_tool_definitions() -> Vec<ToolDefinition> {
     vec![
         ToolDefinition {
             name: "sentra_discover_workspace".to_string(),
-            description: "Performs deterministic, metadata-only source discovery and component enumeration without executing target code (REQ-F01).".to_string(),
+            description: "Read-only lockfile inventory of a directory inside the server's launch root: lists discovered lockfiles (workspace-relative paths, format, OSV ecosystem, package counts, parse errors). Nothing is executed or written; links are not followed (REQ-F01).".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
                     "workspace_root": {
                         "type": "string",
-                        "description": "Path to the target workspace root directory"
+                        "description": "Directory to inventory, relative to the server's launch root (absolute paths must also resolve inside it). Defaults to the launch root."
+                    },
+                    "max_depth": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": crate::advisory::MAX_INVENTORY_DEPTH,
+                        "description": "Maximum directory depth to walk. Defaults to 6."
                     }
-                },
-                "required": ["workspace_root"]
+                }
             }),
+            annotations: Some(ToolAnnotations::read_only("Discover workspace lockfiles")),
         },
         ToolDefinition {
             name: "sentra_get_session_status".to_string(),
-            description: "Inspects active session state, current operating mode, and settled budget micro-USD metrics (REQ-F14).".to_string(),
+            description: "Reports the persisted Sentra session (state, classification floor, context generation, budget micro-USD) for the launch root from the local store passed at launch (`sentra mcp --database <file>`). Returns a tool error when no store is configured (REQ-F14).".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
-                "properties": {},
-                "required": []
+                "properties": {}
             }),
+            annotations: Some(ToolAnnotations::read_only("Get persisted session status")),
         },
         ToolDefinition {
             name: "sentra_audit_dependencies".to_string(),
-            description: "Audits Cargo.lock, package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lock, or deno.lock dependencies against the pinned advisory database (REQ-F07).".to_string(),
+            description: "Audits lockfile content (Cargo.lock, package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lock, deno.lock, requirements.txt, poetry.lock, Pipfile.lock, go.sum, composer.lock, packages.lock.json, Gemfile.lock) against the small bundled pinned advisory sample (REQ-F07). It is not a synchronized OSV or RustSec feed; the result reports the sample's curation date and whether it is stale.".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
                     "lockfile_content": {
                         "type": "string",
-                        "description": "Content of the lockfile to inspect (Cargo.lock, package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lock, deno.lock)"
+                        "description": "Content of the lockfile to inspect (must not be empty; content that is not a lockfile of the named kind is rejected with lockfile_parse_failed)"
                     },
                     "lockfile_name": {
                         "type": "string",
-                        "description": "Optional filename of the lockfile to determine ecosystem (e.g. package-lock.json, bun.lock). Defaults to Cargo.lock."
-                    },
-                    "cargo_lock_content": {
-                        "type": "string",
-                        "description": "Legacy alias for lockfile_content (Cargo.lock)"
+                        "description": "Lockfile filename that selects the parser (e.g. package-lock.json, bun.lock). Defaults to Cargo.lock; unsupported names are rejected."
                     }
                 },
-                "required": []
+                "required": ["lockfile_content"]
             }),
+            annotations: Some(ToolAnnotations::read_only("Audit dependencies")),
         },
         ToolDefinition {
             name: "sentra_list_findings".to_string(),
-            description: "Retrieves normalized candidate, validated, and inconclusive security findings with status transition reasons (REQ-F05, REQ-F06).".to_string(),
+            description: "Not implemented: Sentra Core does not persist findings yet, so this tool always returns a tool error explaining that no finding store exists. Use sentra_scan_code or sentra_audit_dependencies for on-demand, unverified candidate signals (REQ-F05, REQ-F06).".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -152,19 +257,19 @@ pub fn canonical_tool_definitions() -> Vec<ToolDefinition> {
                         "enum": ["INFORMATIONAL", "LOW", "MEDIUM", "HIGH", "CRITICAL"],
                         "description": "Optional minimum severity filter"
                     }
-                },
-                "required": []
+                }
             }),
+            annotations: Some(ToolAnnotations::read_only("List persisted findings")),
         },
         ToolDefinition {
             name: "sentra_propose_patch".to_string(),
-            description: "Proposes a candidate unified diff patch against a base revision with an expected test oracle (REQ-F11).".to_string(),
+            description: "Records a candidate unified diff proposal against a base revision and returns its content digest. The patch is never applied to any checkout (REQ-F11).".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
                     "base_revision": {
                         "type": "string",
-                        "description": "Base Git commit or snapshot revision SHA-256"
+                        "description": "Base Git commit or snapshot revision identifier"
                     },
                     "patch_diff": {
                         "type": "string",
@@ -177,10 +282,11 @@ pub fn canonical_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["base_revision", "patch_diff", "rationale"]
             }),
+            annotations: Some(ToolAnnotations::read_only("Propose patch")),
         },
         ToolDefinition {
             name: "sentra_request_approval".to_string(),
-            description: "Submits a human approval request for sensitive actions (e.g. checkout mutation, external dispatch). External agents CANNOT approve their own requests (REQ-S02, REQ-S10).".to_string(),
+            description: "Records a human approval request for a sensitive action in this server process's memory and returns an unpredictable ticket. External agents CANNOT approve their own requests, and no operator grant path is exposed over MCP (REQ-S02, REQ-S10).".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -195,23 +301,31 @@ pub fn canonical_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["action_name", "action_summary"]
             }),
+            annotations: Some(ToolAnnotations {
+                title: Some("Request human approval".to_string()),
+                read_only_hint: Some(false),
+                destructive_hint: Some(false),
+                idempotent_hint: Some(false),
+                open_world_hint: Some(false),
+            }),
         },
         ToolDefinition {
             name: "sentra_scan_code".to_string(),
-            description: "Scans workspace source files for secrets, API tokens, and critical code antipatterns using pure-Rust static analysis (REQ-F05).".to_string(),
+            description: "Scans a file or directory inside the server's launch root for secrets, API tokens, and code antipatterns using heuristic line-based rules. Paths outside the launch root, missing paths and unreadable files return a tool error. Results are unverified candidates (REQ-F05).".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "Directory or file to scan (defaults to current directory '.')"
+                        "description": "File or directory to scan, relative to the server's launch root (absolute paths must also resolve inside it). Defaults to the launch root."
                     }
                 }
             }),
+            annotations: Some(ToolAnnotations::read_only("Scan code")),
         },
         ToolDefinition {
             name: "sentra_codeql_ingest".to_string(),
-            description: "Ingests GitHub CodeQL SARIF v2.1.0 output into Sentra, extracting interprocedural taint flows (REQ-F05, REQ-F16).".to_string(),
+            description: "Parses GitHub CodeQL SARIF v2.1.0 content and summarizes its results and interprocedural taint flows (REQ-F05, REQ-F16). Nothing is persisted.".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -222,10 +336,11 @@ pub fn canonical_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["sarif_content"]
             }),
+            annotations: Some(ToolAnnotations::read_only("Ingest CodeQL SARIF")),
         },
         ToolDefinition {
             name: "sentra_get_security_guidance".to_string(),
-            description: "Retrieves complete zero-dependency AppSec playbooks, threat modeling guidelines, and cognitive prompt contracts from memory (REQ-F17).".to_string(),
+            description: "Retrieves a bundled AppSec playbook by skill identifier or search keyword (REQ-F17).".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -236,54 +351,22 @@ pub fn canonical_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["topic"]
             }),
-        },
-        ToolDefinition {
-            name: "sentra_install_skills".to_string(),
-            description: "Installs Sentra's built-in AppSec security skills directly into Claude Code, Antigravity, GitHub Copilot, Cursor, Windsurf, Cline, Roo Code, Continue.dev, Aider, OpenHands, Goose, Tabnine, Junie, Warp, Droid, Kiro, Codex, Zed, Amazon Q, Cody, Devin, OpenCode, Trae, Kimi, Qwen, Hermes, Replit, or Augment (REQ-F17).".to_string(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "target": {
-                        "type": "string",
-                        "enum": [
-                            "claude", "antigravity", "cursor", "windsurf", "cline",
-                            "roo", "continue", "aider", "amazonq", "cody", "devin",
-                            "codex", "copilot", "zed", "opencode", "trae", "kimi",
-                            "augment", "openhands", "goose", "tabnine", "junie",
-                            "warp", "droid", "kiro", "qwen", "hermes", "replit", "all"
-                        ],
-                        "description": "Target agent or IDE ecosystem to install skills for"
-                    },
-                    "global": {
-                        "type": "boolean",
-                        "description": "Install to user global directory instead of local workspace"
-                    },
-                    "skill": {
-                        "type": "string",
-                        "description": "Optional specific skill ID to install. If omitted, installs all built-in skills."
-                    },
-                    "workspace": {
-                        "type": "string",
-                        "description": "Optional target workspace directory. Defaults to current directory."
-                    }
-                },
-                "required": ["target"]
-            }),
+            annotations: Some(ToolAnnotations::read_only("Get security guidance")),
         },
         ToolDefinition {
             name: "sentra_generate_prompt".to_string(),
-            description: "Generates role-grounded AppSec prompts, STRIDE threat models, BOLA analyses, 3-tier patch remediation requests, or skill-injected reasoning templates for LLM agents (REQ-F04, REQ-F17).".to_string(),
+            description: "Generates role-grounded AppSec prompts (STRIDE threat models, BOLA analyses, 3-tier patch remediation requests, skill audits, reconnaissance, verification) with optional bundled-skill injection (REQ-F04, REQ-F17).".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
                     "role": {
                         "type": "string",
-                        "enum": ["scout", "analyst", "validator", "patch_author", "verifier"],
-                        "description": "AppSec research persona/role. Defaults to analyst."
+                        "enum": PROMPT_ROLES,
+                        "description": "AppSec research persona/role for the general workflow (default analyst). Other workflows use a fixed persona (scout and threat-model: scout; api-bola and skill-audit: analyst; patch-remediation: patch_author; verify: verifier); a different role is rejected. The result reports the persona actually used."
                     },
                     "workflow": {
                         "type": "string",
-                        "enum": ["threat-model", "api-bola", "patch-remediation", "skill-audit", "general"],
+                        "enum": PROMPT_WORKFLOWS,
                         "description": "Target AppSec reasoning workflow. Defaults to general."
                     },
                     "scope": {
@@ -293,7 +376,7 @@ pub fn canonical_tool_definitions() -> Vec<ToolDefinition> {
                     "skills": {
                         "type": "array",
                         "items": { "type": "string" },
-                        "description": "Optional skill IDs to inject into the system prompt (e.g. ['golang-security', 'auth-implementation-patterns'])"
+                        "description": "Optional bundled skill IDs to inject into the system prompt (e.g. ['golang-security', 'auth-implementation-patterns'])"
                     },
                     "context": {
                         "type": "string",
@@ -301,6 +384,7 @@ pub fn canonical_tool_definitions() -> Vec<ToolDefinition> {
                     }
                 }
             }),
+            annotations: Some(ToolAnnotations::read_only("Generate AppSec prompt")),
         },
     ]
 }

@@ -11,7 +11,13 @@ use crate::advisory::{
     multi_lock::split_package_specifier,
 };
 
+/// `PackageRecord::source` value for packages from the npm registry section.
+pub const DENO_NPM_SOURCE: &str = "npm";
+/// `PackageRecord::source` value for packages from the JSR registry section.
+pub const DENO_JSR_SOURCE: &str = "jsr";
+
 /// Parses a `deno.lock` string into a deduplicated list of package records.
+/// Each record's `source` names the registry section it came from (`npm` or `jsr`).
 pub fn parse_deno_lock(content: &str) -> Result<Vec<PackageRecord>, AdvisoryError> {
     let root: serde_json::Value = serde_json::from_str(content).map_err(|e| {
         AdvisoryError::new(
@@ -30,19 +36,19 @@ pub fn parse_deno_lock(content: &str) -> Result<Vec<PackageRecord>, AdvisoryErro
     // 1. Deno v3 format: "packages": { "npm": { "<name>@<version>": { "integrity": "..." } } }
     if let Some(serde_json::Value::Object(packages_val)) = root_obj.get("packages") {
         if let Some(serde_json::Value::Object(npm_val)) = packages_val.get("npm") {
-            parse_deno_npm_map(npm_val, &mut packages_map);
+            parse_deno_npm_map(npm_val, DENO_NPM_SOURCE, &mut packages_map);
         }
         if let Some(serde_json::Value::Object(jsr_val)) = packages_val.get("jsr") {
-            parse_deno_npm_map(jsr_val, &mut packages_map);
+            parse_deno_npm_map(jsr_val, DENO_JSR_SOURCE, &mut packages_map);
         }
     }
 
     // 2. Deno v2 format: top-level "npm": { "<name>@<version>": { ... } }
     if let Some(serde_json::Value::Object(npm_val)) = root_obj.get("npm") {
         if let Some(serde_json::Value::Object(packages_inner)) = npm_val.get("packages") {
-            parse_deno_npm_map(packages_inner, &mut packages_map);
+            parse_deno_npm_map(packages_inner, DENO_NPM_SOURCE, &mut packages_map);
         } else {
-            parse_deno_npm_map(npm_val, &mut packages_map);
+            parse_deno_npm_map(npm_val, DENO_NPM_SOURCE, &mut packages_map);
         }
     }
 
@@ -52,12 +58,14 @@ pub fn parse_deno_lock(content: &str) -> Result<Vec<PackageRecord>, AdvisoryErro
 /// Helper to parse key-value entries where keys are `"<name>@<version>"`.
 fn parse_deno_npm_map(
     map: &serde_json::Map<String, serde_json::Value>,
+    registry: &str,
     out: &mut BTreeMap<(String, String), PackageRecord>,
 ) {
     for (spec_key, val) in map {
         let clean_spec = spec_key.trim().strip_prefix("npm:").unwrap_or(spec_key);
         if let Some((name, version)) = split_package_specifier(clean_spec) {
             let mut record = PackageRecord::new(name, version);
+            record.source = Some(registry.to_string());
             if let Some(val_obj) = val.as_object() {
                 record.checksum = val_obj
                     .get("integrity")

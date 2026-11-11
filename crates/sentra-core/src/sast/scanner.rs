@@ -17,6 +17,42 @@ use crate::{
 /// Maximum file size scanned by the engine (2 MB) to prevent denial of service.
 pub const MAX_SCANNABLE_FILE_BYTES: u64 = 2 * 1024 * 1024;
 
+/// Lowercase identifier fragments that name an AWS secret access key (SENTRA-SEC-006).
+const AWS_SECRET_KEY_HINTS: &[&str] = &[
+    "secret_access_key",
+    "secretaccesskey",
+    "secret-access-key",
+    "aws_secret",
+    "awssecret",
+    "aws-secret",
+];
+
+/// Length of an AWS secret access key value.
+const AWS_SECRET_KEY_LEN: usize = 40;
+
+/// Keywords whose line is checked for a long quoted literal (SENTRA-SEC-005).
+const GENERIC_SECRET_KEYWORDS: &[&str] = &[
+    "api_key",
+    "apikey",
+    "api_secret",
+    "secret_key",
+    "secret",
+    "client_secret",
+    "access_token",
+    "auth_token",
+    "secret_token",
+    "password",
+];
+
+/// Minimum length of the quoted literal on a generic secret keyword line (SENTRA-SEC-005).
+const MIN_GENERIC_SECRET_LITERAL_LEN: usize = 16;
+
+/// Lowercase identifier endings that name a password value (SENTRA-SEC-005).
+const PASSWORD_IDENTIFIER_SUFFIXES: &[&str] = &["password", "passwd", "passphrase"];
+
+/// Minimum length of a literal assigned to a password identifier (SENTRA-SEC-005).
+const MIN_PASSWORD_LITERAL_LEN: usize = 6;
+
 /// A single matched SAST or secret signal before finding admission.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SastMatch {
@@ -194,8 +230,15 @@ impl SastScanner {
                 continue;
             }
 
+            let matches_before_secrets = matches.len();
+
             // 1. AWS Access Key Check (SENTRA-SEC-001)
             if let Some(m) = self.check_aws_key(rel_path, line_num, line) {
+                matches.push(m);
+            }
+
+            // 1b. AWS Secret Access Key Check (SENTRA-SEC-006)
+            if let Some(m) = self.check_aws_secret_key(rel_path, line_num, line) {
                 matches.push(m);
             }
 
@@ -214,8 +257,11 @@ impl SastScanner {
                 matches.push(m);
             }
 
-            // 5. Generic Hardcoded Secret (SENTRA-SEC-005)
-            if let Some(m) = self.check_generic_secret(rel_path, line_num, line) {
+            // 5. Generic Hardcoded Secret (SENTRA-SEC-005), only when no specific secret
+            // rule already reported this line, so one secret yields one finding.
+            if matches.len() == matches_before_secrets
+                && let Some(m) = self.check_generic_secret(rel_path, line_num, line)
+            {
                 matches.push(m);
             }
 
@@ -471,6 +517,49 @@ impl SastScanner {
         None
     }
 
+    /// Flags a 40-character AWS secret access key value that follows an identifier naming
+    /// one (`aws_secret_access_key`, `secretAccessKey`, `AWS_SECRET`). Like SENTRA-SEC-001,
+    /// documentation sample values are reported too: the scanner cannot tell them apart from
+    /// live keys, and the finding is what lets consumers redact the line.
+    fn check_aws_secret_key(&self, path: &str, line_num: u32, line: &str) -> Option<SastMatch> {
+        let lower = line.to_ascii_lowercase();
+        let hint_pos = AWS_SECRET_KEY_HINTS
+            .iter()
+            .filter_map(|hint| lower.find(hint))
+            .min()?;
+        let bytes = line.as_bytes();
+        let is_key_byte = |b: u8| b.is_ascii_alphanumeric() || b == b'/' || b == b'+';
+
+        let mut i = hint_pos;
+        while i < bytes.len() {
+            if !is_key_byte(bytes[i]) {
+                i += 1;
+                continue;
+            }
+            let start = i;
+            while i < bytes.len() && is_key_byte(bytes[i]) {
+                i += 1;
+            }
+            let token = &bytes[start..i];
+            // Base64 padding right after the run marks a longer encoded blob, not a key.
+            let padded = bytes.get(i) == Some(&b'=');
+            if token.len() == AWS_SECRET_KEY_LEN && !padded && is_mixed_key_material(token) {
+                let rule = find_rule_by_id("SENTRA-SEC-006")?.clone();
+                let prefix = std::str::from_utf8(&token[..4]).unwrap_or("****");
+                return Some(SastMatch {
+                    rule,
+                    file_path: path.to_string(),
+                    line_number: line_num,
+                    snippet: format!("{prefix}...[REDACTED]"),
+                    rationale:
+                        "Matched a 40-character AWS secret access key value next to an AWS secret key identifier"
+                            .to_string(),
+                });
+            }
+        }
+        None
+    }
+
     fn check_github_token(&self, path: &str, line_num: u32, line: &str) -> Option<SastMatch> {
         let prefixes = ["ghp_", "gho_", "ghu_", "ghs_", "ghr_"];
         for prefix in &prefixes {
@@ -559,73 +648,47 @@ impl SastScanner {
     }
 
     fn check_generic_secret(&self, path: &str, line_num: u32, line: &str) -> Option<SastMatch> {
-        let lower = line.to_ascii_lowercase();
-
-        // Check if line contains a secret indicator keyword
-        let keywords = [
-            "api_key",
-            "apikey",
-            "api_secret",
-            "secret_key",
-            "secret",
-            "client_secret",
-            "access_token",
-            "auth_token",
-            "secret_token",
-            "password",
-        ];
-
-        let has_keyword = keywords.iter().any(|k| lower.contains(k));
-        if !has_keyword {
-            return None;
-        }
-
         // Must have an assignment operator: '=' or ':'
         let has_assign = line.contains('=') || line.contains(':');
         if !has_assign {
             return None;
         }
 
-        // Avoid common safe patterns / placeholders
-        if lower.contains("process.env")
-            || lower.contains("env::var")
-            || lower.contains("std::env")
-            || lower.contains("os.environ")
-            || lower.contains("system.getenv")
-            || lower.contains("dummy")
-            || lower.contains("example")
-            || lower.contains("placeholder")
-            || lower.contains("todo")
-            || lower.contains("your_")
-            || lower.contains("<your")
-            || lower.contains("redacted")
-            || lower.contains("\"\"")
-            || lower.contains("''")
-        {
+        let lower = line.to_ascii_lowercase();
+        if is_placeholder_or_reference_line(&lower) {
             return None;
         }
 
-        // Extract string literal enclosed in quotes
-        if let Some(quote_start) = line.find('"').or_else(|| line.find('\'')) {
-            let quote_char = line.as_bytes()[quote_start] as char;
-            let after_start = &line[quote_start + 1..];
-            if let Some(quote_end) = after_start.find(quote_char) {
-                let literal = &after_start[..quote_end];
-                // Check if length is substantial (at least 16 chars) and not whitespace
-                if literal.len() >= 16
-                    && !literal.contains(' ')
-                    && literal.chars().any(|c| c.is_ascii_alphanumeric())
-                {
-                    let rule = find_rule_by_id("SENTRA-SEC-005")?.clone();
-                    return Some(SastMatch {
-                        rule,
-                        file_path: path.to_string(),
-                        line_number: line_num,
-                        snippet: format!("{}[REDACTED_SECRET]", &literal[..3]),
-                        rationale: "Detected hardcoded literal secret assignment".to_string(),
-                    });
-                }
-            }
+        // 1. Long quoted literal on a line that mentions a secret keyword.
+        if GENERIC_SECRET_KEYWORDS.iter().any(|k| lower.contains(k))
+            && let Some(literal) = first_quoted_literal(line)
+            && literal.len() >= MIN_GENERIC_SECRET_LITERAL_LEN
+            && !literal.contains(' ')
+            && literal.chars().any(|c| c.is_ascii_alphanumeric())
+        {
+            let rule = find_rule_by_id("SENTRA-SEC-005")?.clone();
+            let prefix: String = literal.chars().take(3).collect();
+            return Some(SastMatch {
+                rule,
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: format!("{prefix}[REDACTED_SECRET]"),
+                rationale: "Detected hardcoded literal secret assignment".to_string(),
+            });
+        }
+
+        // 2. Shorter literal assigned directly to a password identifier. Passwords are often
+        // well below the generic length threshold (`password = "hunter2"`).
+        if assigned_password_literal(path, line, &lower).is_some() {
+            let rule = find_rule_by_id("SENTRA-SEC-005")?.clone();
+            return Some(SastMatch {
+                rule,
+                file_path: path.to_string(),
+                line_number: line_num,
+                snippet: "[REDACTED_SECRET]".to_string(),
+                rationale: "Detected hardcoded password literal assigned to a password identifier"
+                    .to_string(),
+            });
         }
 
         None
@@ -1702,4 +1765,190 @@ impl SastScanner {
         }
         None
     }
+}
+
+/// Whether a key-alphabet token mixes upper case, lower case, and a digit or `/`/`+`.
+/// This separates random key material from identifiers and hex digests.
+fn is_mixed_key_material(token: &[u8]) -> bool {
+    let has_upper = token.iter().any(u8::is_ascii_uppercase);
+    let has_lower = token.iter().any(u8::is_ascii_lowercase);
+    let has_other = token
+        .iter()
+        .any(|b| b.is_ascii_digit() || *b == b'/' || *b == b'+');
+    has_upper && has_lower && has_other
+}
+
+/// Lines that read a secret from the environment or carry an obvious placeholder.
+fn is_placeholder_or_reference_line(lower: &str) -> bool {
+    lower.contains("process.env")
+        || lower.contains("env::var")
+        || lower.contains("std::env")
+        || lower.contains("os.environ")
+        || lower.contains("system.getenv")
+        || lower.contains("dummy")
+        || lower.contains("example")
+        || lower.contains("placeholder")
+        || lower.contains("todo")
+        || lower.contains("your_")
+        || lower.contains("<your")
+        || lower.contains("redacted")
+        || lower.contains("\"\"")
+        || lower.contains("''")
+}
+
+/// Body of the first double-quoted literal on the line, or else the first single-quoted one.
+fn first_quoted_literal(line: &str) -> Option<&str> {
+    let quote_start = line.find('"').or_else(|| line.find('\''))?;
+    let quote_char = line.as_bytes()[quote_start] as char;
+    let after_start = &line[quote_start + 1..];
+    let quote_end = after_start.find(quote_char)?;
+    Some(&after_start[..quote_end])
+}
+
+/// Returns the plausible password literal assigned to an identifier that ends with a
+/// password keyword (`password`, `dbPassword`, `DB_PASSWORD`, `"passwd"`).
+///
+/// Identifiers that only contain the keyword (`passwordLabel`, `PASSWORD_FILE`) are
+/// skipped, because their values are labels, paths, or references rather than passwords.
+fn assigned_password_literal<'a>(path: &str, line: &'a str, lower: &str) -> Option<&'a str> {
+    let bytes = line.as_bytes();
+    let unquoted_allowed = allows_unquoted_values(path);
+    for keyword in PASSWORD_IDENTIFIER_SUFFIXES {
+        let mut from = 0;
+        while let Some(found) = lower[from..].find(keyword) {
+            // Keywords are ASCII and `lower` has the byte layout of `line`, so `end` is a
+            // character boundary in both strings.
+            let end = from + found + keyword.len();
+            from = end;
+            if bytes
+                .get(end)
+                .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_')
+            {
+                continue;
+            }
+            if let Some(value) = assigned_value(&line[end..], unquoted_allowed)
+                && is_plausible_password_literal(value, keyword)
+            {
+                return Some(value);
+            }
+        }
+    }
+    None
+}
+
+/// Extracts the value assigned right after an identifier: `= "v"`, `: "v"`, `:= "v"`,
+/// `=> "v"`, or a typed form such as `: str = "v"`. Comparisons (`==`) are not
+/// assignments. Unquoted values are accepted only where `unquoted_allowed` is set
+/// (dotenv, YAML, properties, INI, shell, and Dockerfile sources).
+fn assigned_value(rest: &str, unquoted_allowed: bool) -> Option<&str> {
+    // Closing quote of a quoted key such as `"password": ...` or `'password' => ...`.
+    let rest = rest.strip_prefix(['"', '\'']).unwrap_or(rest).trim_start();
+    let value = if let Some(after) = rest.strip_prefix(":=").or_else(|| rest.strip_prefix("=>")) {
+        after
+    } else if rest.starts_with("==") {
+        return None;
+    } else if let Some(after) = rest.strip_prefix('=') {
+        after
+    } else {
+        skip_type_annotation(rest.strip_prefix(':')?)
+    };
+    let value = value.trim_start();
+    let quote = value.chars().next()?;
+    if matches!(quote, '"' | '\'' | '`') {
+        let body = &value[1..];
+        return body.find(quote).map(|end| &body[..end]);
+    }
+    if unquoted_allowed {
+        let end = value.find(char::is_whitespace).unwrap_or(value.len());
+        return Some(&value[..end]);
+    }
+    None
+}
+
+/// Skips a type annotation between `:` and `=` (`password: str = "v"`,
+/// `password: string = "v"`). Returns `rest` unchanged when there is none.
+fn skip_type_annotation(rest: &str) -> &str {
+    let trimmed = rest.trim_start();
+    let annotation_len = trimmed
+        .find(|c: char| {
+            !(c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '[' | ']' | '|' | ',' | ' '))
+        })
+        .unwrap_or(trimmed.len());
+    let after = &trimmed[annotation_len..];
+    if annotation_len > 0 && after.starts_with('=') && !after.starts_with("==") {
+        &after[1..]
+    } else {
+        rest
+    }
+}
+
+/// Whether a value assigned to a password identifier looks like a literal password rather
+/// than a label, translation key, path, mask, or interpolation.
+fn is_plausible_password_literal(value: &str, keyword: &str) -> bool {
+    if value.chars().count() < MIN_PASSWORD_LITERAL_LEN || value.chars().any(char::is_whitespace) {
+        return false;
+    }
+    // References, interpolations, paths, tags and placeholders (`${DB_PASSWORD}`,
+    // `{{ vault }}`, `%(pw)s`, `/run/secrets/db`, `!secret db`, `<password>`).
+    if value.starts_with(['$', '%', '{', '<', '!', '/', '.', '@'])
+        || value.contains("${")
+        || value.contains("{{")
+        || value.contains("%(")
+        || value.contains("://")
+    {
+        return false;
+    }
+    // Masks such as `********` carry no key material.
+    if !value.chars().any(|c| c.is_ascii_alphanumeric()) {
+        return false;
+    }
+    // Letters-only values are far more often labels or translations (`"Passwort"`).
+    if value.chars().all(char::is_alphabetic) {
+        return false;
+    }
+    // A label naming the field itself (`"Password:"`).
+    let alphanumeric: String = value.chars().filter(char::is_ascii_alphanumeric).collect();
+    if alphanumeric.eq_ignore_ascii_case(keyword) {
+        return false;
+    }
+    // Dotted identifiers are translation or configuration keys (`auth.password`).
+    let is_dotted_identifier = value.contains('.')
+        && value.split('.').all(|segment| {
+            !segment.is_empty()
+                && segment
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        });
+    !is_dotted_identifier
+}
+
+/// Configuration-style sources whose values are commonly written without quotes.
+/// Example, sample and template files are excluded to keep placeholder values quiet.
+fn allows_unquoted_values(path: &str) -> bool {
+    let name = path
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(path)
+        .to_ascii_lowercase();
+    if name.contains("example") || name.contains("sample") || name.contains("template") {
+        return false;
+    }
+    name == ".env"
+        || name.starts_with(".env.")
+        || name.ends_with(".env")
+        || name == "dockerfile"
+        || name.ends_with(".dockerfile")
+        || [
+            ".properties",
+            ".ini",
+            ".cfg",
+            ".conf",
+            ".yml",
+            ".yaml",
+            ".sh",
+            ".bash",
+            ".zsh",
+        ]
+        .iter()
+        .any(|ext| name.ends_with(ext))
 }

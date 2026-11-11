@@ -54,9 +54,10 @@ A human can preauthorize a bounded action set for a session. This avoids prompti
 | Read selected source/metadata and write session-local records | Allowed inside admitted scope | Project/session authorization and local storage policy |
 | Run trusted bounded metadata discovery | Allowed within profile | Explicit installed adapter capability; no target execution |
 | Run real target build/test/scanner/PoC | Denied until worker gate | Approved disposable VM profile and bounded execution plan; high-risk operations require additional approval |
+| Run CodeQL on the operator host against a workspace (build mode `none`; actions, cpp, javascript, python, ruby) | Denied (off by default) | Web console: an administrator enables host analysis in a setting that records the CodeQL terms acknowledgement. Core CLI: anyone who can run `sentra codeql analyze --accept-codeql-terms` on the host (an operator, a script or a coding agent with shell access); the flag acknowledges the licence and authorises nothing. Containment and limits of [ADR-0011](adr/0011-opt-in-host-codeql-analysis.md) apply to both. Not an exception for builds, tests, other build modes, languages or scanners |
 | Send source/context to hosted or remote inference | Denied | Endpoint, classification, input scope, purpose, retention assumptions, and budget grant |
 | Fetch dependencies, images, submodules, or private history | Denied unless in provisioning plan | Destination/artifact identity, allowed data, credentials and network grant |
-| Execute on operator host or mount home/credentials/engine socket | Denied | No initial exception for untrusted code; requires a new reviewed architecture, not an agent request |
+| Execute on operator host or mount home/credentials/engine socket | Denied | No initial exception for untrusted code; requires a new reviewed architecture, not an agent request. ADR-0011 (CodeQL extraction in build mode `none`, previous row) is the only reviewed exception |
 | Generate a local patch overlay | Allowed after admitted patch task | Session-local write capability; no checkout modification |
 | Apply patch to user's checkout | Denied | Exact patch/base approval and workspace-conflict checks |
 | Create PR/comment/check or publish report | Denied | Exact destination, audience, content digest, credentials, and current source/verification binding |

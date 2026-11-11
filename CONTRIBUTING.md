@@ -1,6 +1,6 @@
 # Contributing to Sentra
 
-Thank you for your interest in contributing to **Sentra**! Sentra is an open-source, dual-mode security research platform for autonomous vulnerability discovery, differential code review, and independently verified remediation.
+Thank you for your interest in contributing to **Sentra**! Sentra is an open-source, local-first security review toolkit (heuristic SAST rules, lockfile auditing, differential review, patch application and a web console). Scanner and model output are unverified candidates; see [docs/LIMITATIONS.md](docs/LIMITATIONS.md) for what is not implemented.
 
 To maintain our rigorous safety, determinism, and security standards, all contributions must adhere to the guidelines outlined below.
 

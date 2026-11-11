@@ -1,613 +1,601 @@
-import { useState, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  AlertTriangle,
+  ArrowRight,
+  Boxes,
+  CheckCircle2,
+  Circle,
+  CircleDashed,
+  Code2,
+  FileSearch,
+  Layers,
+  Loader2,
+  MinusCircle,
   Play,
   Square,
   Terminal,
-  CheckCircle2,
-  AlertCircle,
-  FolderGit2,
-  Cpu,
-  Layers,
-  Database,
-  ShieldCheck,
-  SearchCode,
-  Copy,
-  Check,
-  Maximize2,
-  Download,
-  ArrowRight,
-  RefreshCw,
+  XCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { copyText } from '@/lib/clipboard'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import {
-  streamLiveScan,
-  validateWorkspacePath,
-  transformMatchesToFindings,
-  type StreamLogItem,
-  type PathValidationResult,
-} from '@/lib/api-client'
-import type { FindingView, UserRole } from '@/types/sentra'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { ApiError, api, errorMessage } from '@/lib/api'
+import { useConsole } from '@/lib/console-context'
+import { cn } from '@/lib/utils'
+import type { ScanKind, ScanRunView, ScanStreamEvent } from '@/types/api'
+import { formatDuration, formatTime, minimumRoleFor } from './console-format'
+import { ConfirmDialog, CopyButton, GatedButton, NoTenantState } from './console-kit'
+import { ScanRunSummaryView } from './stream-summary'
 
-interface LiveStreamModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  initialWorkspace: string
-  currentRole: UserRole
-  onScanComplete: (findings: FindingView[], rawResult: any) => void
-  onNavigateToFindings: () => void
+type StageName = Extract<ScanStreamEvent, { type: 'stage' }>['stage']
+type StageStatus = 'pending' | Extract<ScanStreamEvent, { type: 'stage' }>['status']
+type Phase = 'idle' | 'running' | 'finished' | 'failed' | 'aborted'
+
+interface StageState {
+  name: StageName
+  status: StageStatus
+  message: string | null
 }
 
-const PRESETS = [
-  { label: 'Sentra Root', path: '.' },
-  { label: 'Core Tests', path: 'crates/sentra-core/tests' },
-  { label: 'Crates Workspace', path: 'crates' },
-  { label: 'Web Dashboard', path: 'web' },
+type LogEntry =
+  | { id: number; kind: 'log'; stream: 'stdout' | 'stderr' | 'bridge'; text: string; ts: string }
+  | { id: number; kind: 'stage'; stage: StageName; status: StageStatus; message: string }
+  | { id: number; kind: 'error'; code: string; message: string }
+
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never
+type NewLogEntry = DistributiveOmit<LogEntry, 'id'>
+
+interface LogState {
+  entries: LogEntry[]
+  /** Entries removed from the view because the in-memory cap was reached. */
+  dropped: number
+}
+
+const EMPTY_LOG: LogState = { entries: [], dropped: 0 }
+const MAX_LOG_ENTRIES = 4000
+
+const STAGE_LABEL: Record<StageName, string> = {
+  sast: 'Static analysis',
+  dependency: 'Dependency audit',
+  codeql: 'CodeQL (language probe, host analysis when enabled)',
+  persist: 'Persist run and reconcile findings',
+}
+
+/** Stages the bridge is expected to report per scan kind; unreported stages stay visible as such. */
+const KIND_STAGES: Record<ScanKind, StageName[]> = {
+  sast: ['sast', 'persist'],
+  dependency: ['dependency', 'persist'],
+  codeql: ['codeql', 'persist'],
+  all: ['sast', 'dependency', 'codeql', 'persist'],
+}
+
+const KIND_OPTIONS: { kind: ScanKind; label: string; icon: typeof Layers; description: string }[] = [
+  {
+    kind: 'sast',
+    label: 'Static analysis',
+    icon: FileSearch,
+    description: 'Runs the Sentra core heuristic rules (`sentra scan`) over the workspace. Matches are unverified candidates.',
+  },
+  {
+    kind: 'dependency',
+    label: 'Dependency audit',
+    icon: Boxes,
+    description:
+      'Reads lockfiles with `sentra inventory`, then queries OSV.dev for known vulnerabilities. Requires OSV lookups to be enabled; package names leave this host.',
+  },
+  {
+    kind: 'codeql',
+    label: 'CodeQL',
+    icon: Code2,
+    description:
+      'Counts files per CodeQL language (`sentra codeql`). When an admin enabled CodeQL host analysis (Settings > CodeQL), also runs `sentra codeql analyze` on the bridge host with build mode none; otherwise CodeQL is not run and the stage says why.',
+  },
+  {
+    kind: 'all',
+    label: 'All stages',
+    icon: Layers,
+    description: 'Runs static analysis, the dependency audit and the CodeQL stage in one run.',
+  },
 ]
 
+/** Wall-clock time for event handlers (kept outside components so render stays pure). */
+function currentTimeMs(): number {
+  return Date.now()
+}
+
+function initialStages(kind: ScanKind): StageState[] {
+  return KIND_STAGES[kind].map((name) => ({ name, status: 'pending', message: null }))
+}
+
+/**
+ * Starts a real scan through the bridge and renders its server-sent events: stage
+ * transitions, core process output and the persisted run summary. There is no synthetic
+ * progress; aborting closes the stream and the bridge terminates the core process.
+ */
 export function LiveStreamModal({
   open,
   onOpenChange,
-  initialWorkspace,
-  currentRole,
-  onScanComplete,
-  onNavigateToFindings,
-}: LiveStreamModalProps) {
-  const [workspace, setWorkspace] = useState(initialWorkspace)
-  const [scanType, setScanType] = useState<'all' | 'sast' | 'audit' | 'codeql'>('all')
-  const [persist, setPersist] = useState(true)
-
-  // Validation State
-  const [validating, setValidating] = useState(false)
-  const [pathInfo, setPathInfo] = useState<PathValidationResult | null>(null)
-
-  // Execution State
-  const [status, setStatus] = useState<'idle' | 'running' | 'completed' | 'error'>('idle')
-  const [currentStage, setCurrentStage] = useState('Ready to scan')
-  const [progressPercent, setProgressPercent] = useState(0)
-  const [logs, setLogs] = useState<StreamLogItem[]>([])
-  const [scanSummary, setScanSummary] = useState<any>(null)
-  const [elapsedSeconds, setElapsedSeconds] = useState(0)
-  const [copied, setCopied] = useState(false)
+  kind,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  kind: ScanKind
+}) {
+  const { tenant, navigate, invalidate } = useConsole()
+  const [selectedKind, setSelectedKind] = useState<ScanKind>(kind)
+  const [phase, setPhase] = useState<Phase>('idle')
+  const [stages, setStages] = useState<StageState[]>(() => initialStages(kind))
+  const [log, setLog] = useState<LogState>(EMPTY_LOG)
+  const [run, setRun] = useState<ScanRunView | null>(null)
+  const [failure, setFailure] = useState<unknown>(null)
+  const [startedAt, setStartedAt] = useState<number | null>(null)
+  const [endedAt, setEndedAt] = useState<number | null>(null)
+  const [now, setNow] = useState(() => Date.now())
+  const [confirm, setConfirm] = useState<'close' | 'stop' | null>(null)
   const [autoScroll, setAutoScroll] = useState(true)
 
-  const abortRef = useRef<(() => void) | null>(null)
-  const logContainerRef = useRef<HTMLDivElement>(null)
-  const timerRef = useRef<any>(null)
+  const controllerRef = useRef<AbortController | null>(null)
+  const nextIdRef = useRef(0)
+  const runIdRef = useRef<string | null>(null)
+  const logEndRef = useRef<HTMLDivElement | null>(null)
+  const wasOpenRef = useRef(open)
+
+  const resetToIdle = useCallback((nextKind: ScanKind) => {
+    setSelectedKind(nextKind)
+    setPhase('idle')
+    setStages(initialStages(nextKind))
+    setLog(EMPTY_LOG)
+    setRun(null)
+    setFailure(null)
+    setStartedAt(null)
+    setEndedAt(null)
+  }, [])
+
+  // Each time the dialog opens (and no scan is running) start from the requested kind.
+  useEffect(() => {
+    // controllerRef is only set while a stream is active.
+    if (open && !wasOpenRef.current && controllerRef.current === null) resetToIdle(kind)
+    wasOpenRef.current = open
+  }, [open, kind, resetToIdle])
+
+  // Abort a running stream if the modal is unmounted; the bridge then kills the core process.
+  useEffect(() => () => controllerRef.current?.abort(), [])
 
   useEffect(() => {
-    setWorkspace(initialWorkspace)
-  }, [initialWorkspace])
+    if (phase !== 'running') return
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [phase])
 
-  // Validate path on change or open
   useEffect(() => {
-    if (open && workspace) {
-      validatePath(workspace)
-    }
-  }, [open, workspace])
+    if (autoScroll) logEndRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [log, autoScroll])
 
-  // Timer while running
-  useEffect(() => {
-    if (status === 'running') {
-      const startTime = Date.now()
-      timerRef.current = setInterval(() => {
-        setElapsedSeconds(Math.floor((Date.now() - startTime) / 1000))
-      }, 500)
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current)
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current)
-    }
-  }, [status])
+  const appendEntry = useCallback((entry: NewLogEntry) => {
+    const id = nextIdRef.current++
+    setLog((current) => {
+      const entries = [...current.entries, { ...entry, id } as LogEntry]
+      if (entries.length <= MAX_LOG_ENTRIES) return { entries, dropped: current.dropped }
+      const overflow = entries.length - MAX_LOG_ENTRIES
+      return { entries: entries.slice(overflow), dropped: current.dropped + overflow }
+    })
+  }, [])
 
-  // Auto-scroll log container
-  useEffect(() => {
-    if (autoScroll && logContainerRef.current) {
-      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight
-    }
-  }, [logs, autoScroll])
+  const handleEvent = useCallback(
+    (event: ScanStreamEvent) => {
+      switch (event.type) {
+        case 'run':
+        case 'complete':
+          runIdRef.current = event.run.runId
+          setRun(event.run)
+          break
+        case 'stage':
+          setStages((current) => {
+            const exists = current.some((stage) => stage.name === event.stage)
+            const updated = current.map((stage) =>
+              stage.name === event.stage ? { ...stage, status: event.status, message: event.message } : stage,
+            )
+            return exists ? updated : [...updated, { name: event.stage, status: event.status, message: event.message }]
+          })
+          appendEntry({ kind: 'stage', stage: event.stage, status: event.status, message: event.message })
+          break
+        case 'log':
+          appendEntry({ kind: 'log', stream: event.stream, text: event.text, ts: event.ts })
+          break
+        case 'error':
+          appendEntry({ kind: 'error', code: event.code, message: event.message })
+          break
+      }
+    },
+    [appendEntry],
+  )
 
-  async function validatePath(pathStr: string) {
-    setValidating(true)
+  const startScan = async () => {
+    if (!tenant || controllerRef.current !== null) return
+    const controller = new AbortController()
+    controllerRef.current = controller
+    setStages(initialStages(selectedKind))
+    setLog(EMPTY_LOG)
+    setRun(null)
+    runIdRef.current = null
+    setFailure(null)
+    const started = currentTimeMs()
+    setStartedAt(started)
+    setNow(started)
+    setEndedAt(null)
+    setPhase('running')
     try {
-      const res = await validateWorkspacePath(pathStr)
-      setPathInfo(res)
+      const finalRun = await api.scans.stream(tenant.tenantId, selectedKind, handleEvent, controller.signal)
+      setRun(finalRun)
+      setPhase(finalRun.status === 'failed' ? 'failed' : 'finished')
+      if (finalRun.status === 'failed') toast.error(`Scan failed${finalRun.error ? `: ${finalRun.error}` : ''}`)
+      else toast.success(`Scan ${finalRun.runId} finished`)
+      invalidate()
+    } catch (error) {
+      const aborted = controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')
+      if (!aborted) setFailure(error)
+      setPhase(aborted ? 'aborted' : 'failed')
+      // The run may have been persisted before the stream ended; show the bridge's record of it.
+      await refreshPersistedRun(tenant.tenantId)
+      invalidate()
     } finally {
-      setValidating(false)
+      setEndedAt(currentTimeMs())
+      if (controllerRef.current === controller) controllerRef.current = null
     }
   }
 
-  function handleStartScan() {
-    if (currentRole === 'Viewer') {
-      toast.error('Action Denied: Viewer Role', {
-        description: 'Viewer role has read-only access. Switch to Operator or Admin to execute scans.',
-      })
+  /** Re-reads the run from the bridge; a run that is still marked running is not summarised. */
+  const refreshPersistedRun = async (tenantId: string) => {
+    const runId = runIdRef.current
+    if (!runId) {
+      setRun(null)
       return
     }
-    setStatus('running')
-    setLogs([])
-    setProgressPercent(5)
-    setCurrentStage('Starting scan worker stream...')
-    setElapsedSeconds(0)
-    setScanSummary(null)
-
-    const abortFn = streamLiveScan({
-      workspace,
-      scanType,
-      persist,
-      onLog: (item) => {
-        setLogs((prev) => [...prev, item])
-      },
-      onProgress: (stage, percent) => {
-        setCurrentStage(stage)
-        setProgressPercent(percent)
-      },
-      onComplete: (data) => {
-        setStatus('completed')
-        setProgressPercent(100)
-        setCurrentStage('Scan successfully completed')
-        setScanSummary(data)
-
-        if (data.scan && data.scan.matches) {
-          const findings = transformMatchesToFindings(data.scan.matches)
-          onScanComplete(findings, data)
-        }
-
-        toast.success('Live Security Scan Complete', {
-          description: `Finished in ${elapsedSeconds}s. SQLite WAL session committed.`,
-        })
-      },
-      onError: (err) => {
-        setStatus('error')
-        setCurrentStage(`Scan error: ${err.message || 'Unknown error'}`)
-        toast.error('Scan Failed', {
-          description: err.message || 'Error occurred during streaming.',
-        })
-      },
-    })
-
-    abortRef.current = abortFn
-  }
-
-  function handleStopScan() {
-    if (abortRef.current) {
-      abortRef.current()
-      abortRef.current = null
-      setStatus('error')
-      setCurrentStage('Scan aborted by operator.')
-      toast.info('Scan Aborted')
+    try {
+      const persisted = await api.scans.get(tenantId, runId)
+      setRun(persisted.status === 'running' ? null : persisted)
+    } catch {
+      setRun(null)
     }
   }
 
-  async function handleCopyLogs() {
-    const text = logs.map((l) => `[${l.timestamp.slice(11, 19)}] ${l.text}`).join('\n')
-    await copyText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-    toast.success('Logs copied to clipboard')
+  const abortScan = () => {
+    controllerRef.current?.abort()
   }
 
-  function formatLogText(text: string) {
-    if (text.startsWith('[SENTRA]')) {
-      return <span className="text-cyan-400 font-semibold">{text}</span>
+  const handleDialogOpenChange = (next: boolean) => {
+    if (!next && phase === 'running') {
+      setConfirm('close')
+      return
     }
-    if (text.startsWith('[STORAGE]')) {
-      return <span className="text-purple-400">{text}</span>
-    }
-    if (text.startsWith('[AUDIT]')) {
-      return <span className="text-blue-400">{text}</span>
-    }
-    if (text.startsWith('[CODEQL]')) {
-      return <span className="text-teal-400">{text}</span>
-    }
-    if (text.startsWith('[SAST]')) {
-      return <span className="text-amber-400 font-semibold">{text}</span>
-    }
-    if (text.startsWith('[DONE]')) {
-      return <span className="text-emerald-400 font-bold">{text}</span>
-    }
-    if (text.startsWith('[ERROR]')) {
-      return <span className="text-rose-400 font-bold">{text}</span>
-    }
-    if (text.includes('[CRITICAL]')) {
-      return <span className="text-rose-400">{text}</span>
-    }
-    if (text.includes('[HIGH]')) {
-      return <span className="text-amber-400">{text}</span>
-    }
-    return <span className="text-zinc-300">{text}</span>
+    onOpenChange(next)
   }
+
+  const confirmAbort = () => {
+    const closing = confirm === 'close'
+    abortScan()
+    setConfirm(null)
+    if (closing) onOpenChange(false)
+  }
+
+  const elapsedMs = startedAt === null ? null : (endedAt ?? now) - startedAt
+  // Match the error code, not the HTTP status: the bridge can also report `scan_in_progress` as an
+  // in-stream error event (a scan started between its pre-check and the run), which carries no status.
+  const scanInProgressConflict = failure instanceof ApiError && failure.code === 'scan_in_progress'
+  const { entries, dropped: droppedEntries } = log
+  const logText = entries.map(entryToText).join('\n')
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden bg-background/95 border-border/80 text-foreground shadow-2xl backdrop-blur-md">
-        {/* Sticky Header */}
-        <DialogHeader className="px-5 py-3.5 border-b border-border/60 bg-card/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pr-12">
-          <div className="flex flex-col gap-0.5 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Terminal className="size-4 text-primary shrink-0" />
-              <DialogTitle className="text-sm font-semibold tracking-tight text-foreground">
-                Live Security Scan Console
-              </DialogTitle>
-              <Badge variant="outline" className="text-[10px] font-mono border-primary/30 text-primary shrink-0 px-1.5 py-0">
-                sentra.exe core
-              </Badge>
-            </div>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Real-time SSE event stream from pure-Rust engine to SQLite WAL storage.
-            </DialogDescription>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent className="flex max-h-[92vh] w-full max-w-4xl flex-col gap-0 overflow-hidden border-border/80 bg-background p-0 sm:max-w-4xl">
+        <DialogHeader className="gap-1 border-b border-border/60 bg-card/60 px-5 py-3 pr-12">
+          <div className="flex flex-wrap items-center gap-2">
+            <Terminal className="size-4 shrink-0 text-primary" />
+            <DialogTitle className="text-sm font-semibold">Workspace scan</DialogTitle>
+            <PhaseBadge phase={phase} elapsedMs={elapsedMs} />
           </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            {status === 'running' && (
-              <Badge variant="secondary" className="text-[11px] font-mono flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 border-emerald-500/30 px-2 py-0.5">
-                <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Live: {elapsedSeconds}s
-              </Badge>
+          <DialogDescription className="text-xs">
+            {tenant ? (
+              <>
+                <span className="text-zinc-300">{tenant.name}</span> ·{' '}
+                <span className="break-all font-mono text-[11px]">{tenant.workspace}</span>
+              </>
+            ) : (
+              'No workspace selected.'
             )}
-            {status === 'completed' && (
-              <Badge variant="secondary" className="text-[11px] font-mono bg-emerald-500/10 text-emerald-400 border-emerald-500/30 px-2 py-0.5">
-                <CheckCircle2 className="size-3 mr-1 inline" /> Completed ({elapsedSeconds}s)
-              </Badge>
-            )}
-          </div>
+          </DialogDescription>
         </DialogHeader>
 
-        {/* Configuration Section (Visible when idle) */}
-        {status === 'idle' && (
-          <div className="p-4 sm:p-6 flex flex-col gap-5 bg-zinc-900/30 border-b border-zinc-800">
-            {/* Target Path Selector */}
-            <div className="flex flex-col gap-2">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <label className="text-xs font-semibold text-zinc-200 flex items-center gap-1.5 shrink-0">
-                  <FolderGit2 className="size-3.5 text-primary" /> Target Workspace Directory:
-                </label>
-                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 max-w-full">
-                  <span className="text-[11px] text-zinc-400 mr-1 shrink-0">Quick Presets:</span>
-                  {PRESETS.map((p) => (
-                    <Button
-                      key={p.label}
-                      variant="outline"
-                      size="sm"
-                      className="h-6 text-[10px] px-2 bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-300 shrink-0"
-                      onClick={() => setWorkspace(p.path)}
-                    >
-                      {p.label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
+          {!tenant ? (
+            <NoTenantState feature="Scanning" />
+          ) : phase === 'idle' ? (
+            <KindSelector selected={selectedKind} onSelect={setSelectedKind} workspaceExists={tenant.workspaceExists} />
+          ) : (
+            <>
+              <StageList stages={stages} phase={phase} />
 
-              <div className="flex items-center gap-2">
-                <Input
-                  value={workspace}
-                  onChange={(e) => setWorkspace(e.target.value)}
-                  placeholder="Absolute folder path on host..."
-                  className="h-9 text-xs font-mono bg-zinc-950 border-zinc-800 focus-visible:ring-primary/40 text-zinc-200"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => validatePath(workspace)}
-                  disabled={validating}
-                  className="h-9 text-xs border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 shrink-0"
-                >
-                  <RefreshCw className={`size-3.5 mr-1.5 ${validating ? 'animate-spin' : ''}`} />
-                  Validate
-                </Button>
-              </div>
-
-              {/* Path Info Chips */}
-              {pathInfo && (
-                <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
-                  {pathInfo.exists ? (
-                    <>
-                      <Badge variant="outline" className="text-[11px] text-emerald-400 border-emerald-500/30 bg-emerald-500/5">
-                        <CheckCircle2 className="size-3 mr-1 inline" /> Directory Exists ({pathInfo.fileCount} entries)
-                      </Badge>
-                      {pathInfo.isGitRepo && (
-                        <Badge variant="outline" className="text-[11px] text-zinc-300 border-zinc-700">
-                          Git Repository
-                        </Badge>
-                      )}
-                      {pathInfo.ecosystems?.rust && (
-                        <Badge variant="outline" className="text-[11px] text-amber-400 border-amber-500/30 bg-amber-500/5">
-                          Rust / Cargo.lock
-                        </Badge>
-                      )}
-                      {pathInfo.ecosystems?.bun && (
-                        <Badge variant="outline" className="text-[11px] text-pink-400 border-pink-500/30 bg-pink-500/5">
-                          Bun / bun.lock
-                        </Badge>
-                      )}
-                      {pathInfo.ecosystems?.node && (
-                        <Badge variant="outline" className="text-[11px] text-emerald-400 border-emerald-500/30 bg-emerald-500/5">
-                          Node.js / package.json
-                        </Badge>
-                      )}
-                    </>
-                  ) : (
-                    <Badge variant="destructive" className="text-[11px]">
-                      <AlertCircle className="size-3 mr-1 inline" /> {pathInfo.error || 'Path not found'}
-                    </Badge>
-                  )}
+              {failure !== null && (
+                <div className="flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/5 p-3 text-xs text-rose-200">
+                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-rose-400" />
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-semibold">
+                      {scanInProgressConflict ? 'A scan is already running for this workspace' : 'The scan did not complete'}
+                    </span>
+                    <span className="break-words">{errorMessage(failure)}</span>
+                  </div>
                 </div>
               )}
-            </div>
-
-            {/* Scope Selection */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <button
-                type="button"
-                onClick={() => setScanType('all')}
-                className={`p-3 rounded-lg border text-left flex flex-col gap-1 transition-all ${
-                  scanType === 'all'
-                    ? 'border-primary bg-primary/10 shadow-sm'
-                    : 'border-zinc-800 bg-zinc-950/60 hover:border-zinc-700'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-zinc-100 flex items-center gap-1.5">
-                    <Layers className="size-3.5 text-primary" /> Full Security Suite
-                  </span>
-                  {scanType === 'all' && <CheckCircle2 className="size-3.5 text-primary" />}
+              {phase === 'aborted' && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-200">
+                  The stream was closed by you. The bridge stops the core process when the stream is cancelled; partial
+                  results are only shown if the bridge persisted them.
                 </div>
-                <p className="text-[11px] text-zinc-400">
-                  SAST, Semantic Taint Analysis, Lockfile Audit &amp; CodeQL Probe.
-                </p>
-              </button>
+              )}
 
-              <button
-                type="button"
-                onClick={() => setScanType('sast')}
-                className={`p-3 rounded-lg border text-left flex flex-col gap-1 transition-all ${
-                  scanType === 'sast'
-                    ? 'border-primary bg-primary/10 shadow-sm'
-                    : 'border-zinc-800 bg-zinc-950/60 hover:border-zinc-700'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-zinc-100 flex items-center gap-1.5">
-                    <Cpu className="size-3.5 text-amber-400" /> Pure-Rust SAST &amp; Taint
+              <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950">
+                <div className="flex items-center justify-between gap-2 border-b border-zinc-800 bg-zinc-900/70 px-3 py-1.5">
+                  <span className="font-mono text-[11px] text-zinc-400">
+                    Event log ({entries.length.toLocaleString()} entries
+                    {droppedEntries > 0 ? `, ${droppedEntries.toLocaleString()} earlier entries not shown` : ''})
                   </span>
-                  {scanType === 'sast' && <CheckCircle2 className="size-3.5 text-primary" />}
-                </div>
-                <p className="text-[11px] text-zinc-400">
-                  Zero-unsafe ReDoS-proof AST scanning, secrets &amp; taint data-flows.
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setScanType('audit')}
-                className={`p-3 rounded-lg border text-left flex flex-col gap-1 transition-all ${
-                  scanType === 'audit'
-                    ? 'border-primary bg-primary/10 shadow-sm'
-                    : 'border-zinc-800 bg-zinc-950/60 hover:border-zinc-700'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-zinc-100 flex items-center gap-1.5">
-                    <ShieldCheck className="size-3.5 text-blue-400" /> Multi-Lockfile Audit
-                  </span>
-                  {scanType === 'audit' && <CheckCircle2 className="size-3.5 text-primary" />}
-                </div>
-                <p className="text-[11px] text-zinc-400">
-                  Audit Cargo.lock, bun.lock, package-lock.json against OSV database.
-                </p>
-              </button>
-            </div>
-
-            {/* Options */}
-            <div className="flex items-center justify-between pt-1">
-              <label className="flex items-center gap-2 cursor-pointer text-xs text-zinc-300">
-                <input
-                  type="checkbox"
-                  checked={persist}
-                  onChange={(e) => setPersist(e.target.checked)}
-                  className="rounded border-zinc-700 bg-zinc-900 text-primary focus:ring-primary/40 size-3.5"
-                />
-                <span className="flex items-center gap-1">
-                  <Database className="size-3.5 text-purple-400 inline" />
-                  Persist Session &amp; Audit Trail into SQLite WAL (<code className="font-mono text-[10px] text-zinc-400">sentra.db</code>)
-                </span>
-              </label>
-
-              <div className="flex items-center gap-3">
-                {currentRole === 'Viewer' && (
-                  <span className="text-[11px] text-amber-400 font-medium">
-                    Viewer mode: Scans disabled
-                  </span>
-                )}
-                <Button
-                  onClick={handleStartScan}
-                  disabled={!pathInfo?.exists || currentRole === 'Viewer'}
-                  className="h-9 px-4 text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 shadow-md disabled:opacity-40"
-                  title={currentRole === 'Viewer' ? "Viewer role is read-only. Switch to Operator or Admin to execute scans." : undefined}
-                >
-                  <Play className="size-3.5 mr-1.5 fill-current" />
-                  Start Live Streaming Scan
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Live Streaming Stage & Log Console (Visible when running or completed) */}
-        {status !== 'idle' && (
-          <div className="p-6 flex flex-col gap-4 flex-1 overflow-hidden">
-            {/* Progress & Stage Banner */}
-            <div className="flex flex-col gap-2 p-3.5 rounded-lg border border-zinc-800 bg-zinc-900/60">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-zinc-200 flex items-center gap-2">
-                  {status === 'running' && <span className="size-2 rounded-full bg-emerald-400 animate-ping" />}
-                  {currentStage}
-                </span>
-                <span className="font-mono font-bold text-primary">{progressPercent}%</span>
-              </div>
-              <Progress value={progressPercent} className="h-2 bg-zinc-800" />
-            </div>
-
-            {/* Terminal Log Console */}
-            <div className="flex flex-col flex-1 rounded-lg border border-zinc-800 bg-zinc-950 overflow-hidden shadow-inner">
-              {/* Terminal Title Bar */}
-              <div className="px-3 py-2 border-b border-zinc-800/80 bg-zinc-900/80 flex items-center justify-between text-xs text-zinc-400">
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <span className="size-2.5 rounded-full bg-rose-500/80 inline-block" />
-                    <span className="size-2.5 rounded-full bg-amber-500/80 inline-block" />
-                    <span className="size-2.5 rounded-full bg-emerald-500/80 inline-block" />
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      className={cn('text-[10px]', autoScroll ? 'text-primary' : 'text-zinc-500')}
+                      onClick={() => setAutoScroll((value) => !value)}
+                    >
+                      Follow: {autoScroll ? 'on' : 'off'}
+                    </Button>
+                    {logText && <CopyButton text={logText} label="Copy log" />}
                   </div>
-                  <span className="font-mono text-[11px] text-zinc-300">sentra-stream-worker://stdio</span>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setAutoScroll(!autoScroll)}
-                    className={`text-[10px] px-2 py-0.5 rounded border ${
-                      autoScroll ? 'border-primary/40 text-primary bg-primary/10' : 'border-zinc-700 text-zinc-400'
-                    }`}
-                  >
-                    Auto-scroll: {autoScroll ? 'ON' : 'OFF'}
-                  </button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleCopyLogs}
-                    className="h-6 px-2 text-[10px] text-zinc-400 hover:text-zinc-100"
-                  >
-                    {copied ? <Check className="size-3 mr-1 text-emerald-400" /> : <Copy className="size-3 mr-1" />}
-                    Copy Logs
-                  </Button>
+                <div className="h-64 overflow-auto p-3 font-mono text-[11px] leading-relaxed">
+                  {entries.length === 0 ? (
+                    <p className="py-6 text-center italic text-zinc-500">
+                      {phase === 'running' ? 'Waiting for the first event from the bridge…' : 'No events were received.'}
+                    </p>
+                  ) : (
+                    entries.map((entry) => <LogLine key={entry.id} entry={entry} />)
+                  )}
+                  <div ref={logEndRef} />
                 </div>
               </div>
 
-              {/* Monospace Output with shadcn ScrollArea */}
-              <ScrollArea
-                ref={logContainerRef}
-                className="font-mono text-xs h-[260px] leading-relaxed selection:bg-primary/30"
-              >
-                <div className="p-4 flex flex-col gap-1">
-                {logs.length === 0 ? (
-                  <div className="text-zinc-500 italic py-8 text-center">
-                    Connecting to sentra.exe stream...
-                  </div>
-                ) : (
-                  logs.map((log) => (
-                    <div key={log.id} className="flex items-start gap-2 break-all">
-                      <span className="text-zinc-600 select-none text-[10px] shrink-0 pt-0.5">
-                        {log.timestamp.slice(11, 19)}
-                      </span>
-                      <div className="flex-1">{formatLogText(log.text)}</div>
-                    </div>
-                  ))
-                )}
-                </div>
-              </ScrollArea>
-            </div>
+              {run && phase !== 'running' && <ScanRunSummaryView run={run} />}
+              {run && phase === 'running' && (
+                <p className="font-mono text-[11px] text-muted-foreground">
+                  Run {run.runId} started {formatTime(run.startedAt)} by {run.actor}
+                </p>
+              )}
+            </>
+          )}
+        </div>
 
-            {/* Summary Banner when Completed */}
-            {status === 'completed' && scanSummary && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-lg border border-emerald-500/30 bg-emerald-500/5">
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-zinc-400 uppercase font-semibold">Files Scanned</span>
-                  <span className="text-base font-bold font-mono text-zinc-100">
-                    {scanSummary.scan?.files_scanned || 0}
-                  </span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-zinc-400 uppercase font-semibold">Signals Detected</span>
-                  <span className="text-base font-bold font-mono text-amber-400">
-                    {scanSummary.scan?.signals_found || 0}
-                  </span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-zinc-400 uppercase font-semibold">Audited Packages</span>
-                  <span className="text-base font-bold font-mono text-blue-400">
-                    {scanSummary.audit?.packages_audited || 0}
-                  </span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-zinc-400 uppercase font-semibold">SQLite WAL Events</span>
-                  <span className="text-base font-bold font-mono text-purple-400">
-                    {scanSummary.auditEvents?.length || 0} committed
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Footer Actions */}
-        <div className="px-5 py-3 border-t border-border/60 bg-card/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-          <div className="text-xs text-muted-foreground font-mono">
-            {status === 'running' ? 'Scanning active... Fail-closed boundary intact' : 'Zero untrusted execution'}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
-            {status === 'running' && (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={handleStopScan}
-                className="h-7 text-xs font-medium gap-1.5"
-              >
-                <Square className="size-3 fill-current" />
-                <span>Abort Scan</span>
-              </Button>
-            )}
-
-            {status === 'completed' && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setStatus('idle')}
-                  className="h-7 text-xs border-border/70"
-                >
-                  Run Another Scan
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    onOpenChange(false)
-                    onNavigateToFindings()
-                  }}
-                  className="h-7 text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm gap-1.5"
-                >
-                  <span>Explore Findings</span>
-                  <ArrowRight className="size-3" />
-                </Button>
-              </>
-            )}
-
-            {status === 'idle' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onOpenChange(false)}
-                className="h-7 text-xs border-border/70"
-              >
+        <div className="flex flex-col gap-2 border-t border-border/60 bg-card/60 px-5 py-3 sm:flex-row sm:items-center sm:justify-end">
+          {phase === 'idle' && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
                 Close
               </Button>
-            )}
-          </div>
+              <GatedButton
+                permission="scan:run"
+                blockedReason={
+                  !tenant
+                    ? 'Select a workspace first'
+                    : !tenant.workspaceExists
+                      ? 'The registered workspace directory does not exist on the bridge host'
+                      : null
+                }
+                size="sm"
+                onClick={() => void startScan()}
+              >
+                <Play className="fill-current" />
+                Start scan
+              </GatedButton>
+            </>
+          )}
+          {phase === 'running' && (
+            <Button variant="destructive" size="sm" onClick={() => setConfirm('stop')}>
+              <Square className="fill-current" />
+              Stop scan
+            </Button>
+          )}
+          {(phase === 'finished' || phase === 'failed' || phase === 'aborted') && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => resetToIdle(selectedKind)}>
+                New scan
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+                Close
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  onOpenChange(false)
+                  navigate('findings')
+                }}
+              >
+                View findings
+                <ArrowRight />
+              </Button>
+            </>
+          )}
         </div>
       </DialogContent>
+
+      <ConfirmDialog
+        open={confirm !== null}
+        onOpenChange={(next) => !next && setConfirm(null)}
+        title={confirm === 'close' ? 'Close and stop the running scan?' : 'Stop the running scan?'}
+        description={
+          <>
+            <p>
+              This cancels the event stream. The bridge then terminates the running <code>sentra</code> process for this
+              workspace.
+            </p>
+            <p>Stages that already finished may have been persisted; unfinished stages produce no results.</p>
+          </>
+        }
+        confirmLabel="Stop scan"
+        destructive
+        onConfirm={confirmAbort}
+      />
     </Dialog>
   )
+}
+
+function PhaseBadge({ phase, elapsedMs }: { phase: Phase; elapsedMs: number | null }) {
+  if (phase === 'idle') return null
+  const elapsed = elapsedMs === null ? '' : ` · ${formatDuration(elapsedMs)}`
+  const styles: Record<Exclude<Phase, 'idle'>, string> = {
+    running: 'border-sky-500/30 bg-sky-500/10 text-sky-300',
+    finished: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+    failed: 'border-rose-500/30 bg-rose-500/10 text-rose-300',
+    aborted: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
+  }
+  return (
+    <Badge variant="outline" className={cn('font-mono text-[10px]', styles[phase])}>
+      {phase === 'running' && <Loader2 className="animate-spin" />}
+      {phase}
+      {elapsed}
+    </Badge>
+  )
+}
+
+function KindSelector({
+  selected,
+  onSelect,
+  workspaceExists,
+}: {
+  selected: ScanKind
+  onSelect: (kind: ScanKind) => void
+  workspaceExists: boolean
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <span className="text-xs font-semibold text-zinc-200">What to run</span>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {KIND_OPTIONS.map((option) => {
+          const Icon = option.icon
+          const active = option.kind === selected
+          return (
+            <button
+              key={option.kind}
+              type="button"
+              onClick={() => onSelect(option.kind)}
+              aria-pressed={active}
+              className={cn(
+                'flex flex-col gap-1 rounded-lg border p-3 text-left transition-colors',
+                active ? 'border-primary bg-primary/10' : 'border-zinc-800 bg-zinc-950/60 hover:border-zinc-700',
+              )}
+            >
+              <span className="flex items-center justify-between gap-2 text-xs font-semibold text-zinc-100">
+                <span className="flex items-center gap-1.5">
+                  <Icon className="size-3.5 text-primary" />
+                  {option.label}
+                </span>
+                {active && <CheckCircle2 className="size-3.5 text-primary" />}
+              </span>
+              <span className="text-[11px] text-zinc-400">{option.description}</span>
+            </button>
+          )
+        })}
+      </div>
+      {!workspaceExists && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5 text-xs text-amber-200">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+          The registered workspace directory was not found on the bridge host, so it cannot be scanned. Restore it at the
+          registered path, or have someone with the {minimumRoleFor('tenant:create')} role unregister this workspace
+          (Settings → Workspaces) and register the new location under a new workspace id.
+        </div>
+      )}
+      <p className="text-[11px] text-muted-foreground">
+        The scan runs on the bridge host. Findings are reconciled against previous runs of this workspace; nothing is
+        written to the workspace itself.
+      </p>
+    </div>
+  )
+}
+
+function StageList({ stages, phase }: { stages: StageState[]; phase: Phase }) {
+  return (
+    <ol className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+      {stages.map((stage) => {
+        const pendingLabel = phase === 'running' ? 'waiting' : 'not reported by the bridge'
+        return (
+          <li
+            key={stage.name}
+            className="flex items-start gap-2 rounded-lg border border-border/60 bg-card/40 px-2.5 py-2 text-xs"
+          >
+            <StageIcon status={stage.status} running={phase === 'running'} />
+            <div className="flex min-w-0 flex-col">
+              <span className="font-medium text-zinc-100">
+                {STAGE_LABEL[stage.name]}{' '}
+                <span className="font-mono text-[10px] text-zinc-500">
+                  {stage.status === 'pending' ? pendingLabel : stage.status}
+                </span>
+              </span>
+              {stage.message && <span className="break-words text-[11px] text-zinc-400">{stage.message}</span>}
+            </div>
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
+function StageIcon({ status, running }: { status: StageStatus; running: boolean }) {
+  const className = 'mt-0.5 size-3.5 shrink-0'
+  switch (status) {
+    case 'started':
+      return running ? (
+        <Loader2 className={cn(className, 'animate-spin text-sky-400')} />
+      ) : (
+        <Circle className={cn(className, 'text-sky-400')} />
+      )
+    case 'completed':
+      return <CheckCircle2 className={cn(className, 'text-emerald-400')} />
+    case 'failed':
+      return <XCircle className={cn(className, 'text-rose-400')} />
+    case 'skipped':
+      return <MinusCircle className={cn(className, 'text-zinc-500')} />
+    default:
+      return <CircleDashed className={cn(className, 'text-zinc-600')} />
+  }
+}
+
+const STREAM_CLASS = { stdout: 'text-zinc-200', stderr: 'text-amber-300', bridge: 'text-sky-300' } as const
+
+function LogLine({ entry }: { entry: LogEntry }) {
+  if (entry.kind === 'stage') {
+    return (
+      <div className="my-0.5 text-violet-300">
+        ── stage {entry.stage}: {entry.status}
+        {entry.message ? ` — ${entry.message}` : ''}
+      </div>
+    )
+  }
+  if (entry.kind === 'error') {
+    return (
+      <div className="text-rose-300">
+        error [{entry.code}]: {entry.message}
+      </div>
+    )
+  }
+  return (
+    <div className="flex gap-2">
+      <span className="shrink-0 select-none text-zinc-600">{formatTime(entry.ts)}</span>
+      <span className="w-12 shrink-0 select-none text-zinc-600">{entry.stream}</span>
+      <span className={cn('min-w-0 whitespace-pre-wrap break-all', STREAM_CLASS[entry.stream])}>{entry.text}</span>
+    </div>
+  )
+}
+
+function entryToText(entry: LogEntry): string {
+  if (entry.kind === 'stage') return `-- stage ${entry.stage}: ${entry.status}${entry.message ? ` - ${entry.message}` : ''}`
+  if (entry.kind === 'error') return `error [${entry.code}]: ${entry.message}`
+  return `${entry.ts} ${entry.stream} ${entry.text}`
 }

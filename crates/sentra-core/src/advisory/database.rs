@@ -86,54 +86,27 @@ impl AdvisoryAuditResult {
     ) -> Vec<Finding> {
         self.matches
             .iter()
-            .map(|m| {
-                let id = FindingId::new();
-                let title = format!(
-                    "Vulnerability in {}: {} ({})",
-                    m.package, m.advisory.title, m.advisory.id
-                );
-                let description = format!(
-                    "Package '{}' version '{}' is affected by advisory {}.\n\nDescription: {}\n\nRecommended patch: {}",
-                    m.package,
-                    m.installed_version,
-                    m.advisory.id,
-                    m.advisory.description,
-                    m.recommended_patch.as_deref().unwrap_or("None available")
-                );
+            .map(|m| match_to_finding(m, session_id, task_id, now, lockfile_path))
+            .collect()
+    }
 
-                let source = if lockfile_path == "Cargo.lock" {
-                    FindingSource::CargoLockAdvisory {
-                        advisory_id: m.advisory.id.clone(),
-                        package: m.package.clone(),
-                        version: m.installed_version.clone(),
-                    }
-                } else {
-                    FindingSource::DependencyLockAdvisory {
-                        advisory_id: m.advisory.id.clone(),
-                        package: m.package.clone(),
-                        version: m.installed_version.clone(),
-                        lockfile_path: lockfile_path.to_string(),
-                    }
-                };
-
-                Finding::new_candidate(
-                    id,
-                    session_id,
-                    task_id,
-                    title,
-                    description,
-                    m.advisory.severity,
-                    Confidence::Confirmed,
-                    m.reachability, // Preserves Reachability::PresentOnly per F-07
-                    source,
-                    Some(TargetLocation {
-                        path: lockfile_path.to_string(),
-                        start_line: None,
-                        end_line: None,
-                    }),
-                    None,
-                    now,
-                )
+    /// Converts matched advisories into candidate findings, each located at the lockfile its
+    /// package was read from. `lockfiles` holds one workspace-relative lockfile path per entry
+    /// of `matches`, in the same order; a match without an entry is attributed to `Cargo.lock`,
+    /// like [`Self::to_candidate_findings`].
+    pub fn to_candidate_findings_per_lockfile(
+        &self,
+        session_id: SessionId,
+        task_id: TaskId,
+        now: TimestampUtc,
+        lockfiles: &[String],
+    ) -> Vec<Finding> {
+        self.matches
+            .iter()
+            .enumerate()
+            .map(|(index, m)| {
+                let lockfile = lockfiles.get(index).map_or("Cargo.lock", String::as_str);
+                match_to_finding(m, session_id, task_id, now, lockfile)
             })
             .collect()
     }
@@ -148,6 +121,71 @@ impl AdvisoryAuditResult {
         self.to_candidate_findings_for_lockfile(session_id, task_id, now, "Cargo.lock")
     }
 }
+
+/// One candidate finding for one advisory match, located at `lockfile_path`.
+fn match_to_finding(
+    m: &AdvisoryMatch,
+    session_id: SessionId,
+    task_id: TaskId,
+    now: TimestampUtc,
+    lockfile_path: &str,
+) -> Finding {
+    let title = format!(
+        "Vulnerability in {}: {} ({})",
+        m.package, m.advisory.title, m.advisory.id
+    );
+    let description = format!(
+        "Package '{}' version '{}' is affected by advisory {}.\n\nDescription: {}\n\nRecommended patch: {}",
+        m.package,
+        m.installed_version,
+        m.advisory.id,
+        m.advisory.description,
+        m.recommended_patch.as_deref().unwrap_or("None available")
+    );
+
+    let source = if lockfile_path == "Cargo.lock" {
+        FindingSource::CargoLockAdvisory {
+            advisory_id: m.advisory.id.clone(),
+            package: m.package.clone(),
+            version: m.installed_version.clone(),
+        }
+    } else {
+        FindingSource::DependencyLockAdvisory {
+            advisory_id: m.advisory.id.clone(),
+            package: m.package.clone(),
+            version: m.installed_version.clone(),
+            lockfile_path: lockfile_path.to_string(),
+        }
+    };
+
+    Finding::new_candidate(
+        FindingId::new(),
+        session_id,
+        task_id,
+        title,
+        description,
+        m.advisory.severity,
+        Confidence::Confirmed,
+        m.reachability, // Preserves Reachability::PresentOnly per F-07
+        source,
+        Some(TargetLocation {
+            path: lockfile_path.to_string(),
+            start_line: None,
+            end_line: None,
+        }),
+        None,
+        now,
+    )
+}
+
+/// When the entries of [`AdvisoryDatabase::pinned_advisories`] were last edited, in
+/// milliseconds since the Unix epoch: 2026-11-08T23:43:22Z, the commit time of repository
+/// commit `f753e09`.
+///
+/// The bundled set is a small hand-written sample. It is not synchronized with OSV,
+/// RustSec or GHSA, so its age is this curation date and never the time a command runs.
+/// Freshness checks against it therefore report real staleness.
+pub const PINNED_ADVISORY_SET_CURATED_AT_MILLIS: u64 = 1_794_181_402_000;
 
 /// Pinned advisory database maintaining security advisories.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -173,9 +211,25 @@ impl AdvisoryDatabase {
         }
     }
 
-    /// Creates a bundled, pinned reference advisory database for offline auditing (Requirement F-07).
-    pub fn default_pinned(updated_at: TimestampUtc) -> Self {
-        let advisories = vec![
+    /// Creates the bundled pinned advisory database for offline auditing (Requirement F-07).
+    ///
+    /// The snapshot is stamped with [`Self::pinned_curated_at`], the date its entries were
+    /// last edited, so `is_stale` reflects the real age of this small fixed sample.
+    pub fn default_pinned() -> Self {
+        Self::new(Self::pinned_advisories(), Self::pinned_curated_at())
+    }
+
+    /// Curation timestamp of the bundled pinned advisory set.
+    pub const fn pinned_curated_at() -> TimestampUtc {
+        TimestampUtc::from_epoch_millis(PINNED_ADVISORY_SET_CURATED_AT_MILLIS)
+    }
+
+    /// Returns the hand-written advisory entries bundled with Sentra.
+    ///
+    /// Callers that need these entries under a different snapshot timestamp (for example a
+    /// test that pins its clock) must say so explicitly through [`Self::new`].
+    pub fn pinned_advisories() -> Vec<Advisory> {
+        vec![
             Advisory {
                 id: "RUSTSEC-2021-0145".to_string(),
                 package: "atty".to_string(),
@@ -242,16 +296,17 @@ impl AdvisoryDatabase {
                 published_at: "2023-11-01T00:00:00Z".to_string(),
                 aliases: vec!["CVE-2023-45857".to_string()],
             },
-        ];
-        Self {
-            advisories,
-            updated_at,
-        }
+        ]
     }
 
     /// Returns the database last update timestamp.
     pub fn updated_at(&self) -> TimestampUtc {
         self.updated_at
+    }
+
+    /// Returns the number of advisories held by the database.
+    pub fn advisory_count(&self) -> usize {
+        self.advisories.len()
     }
 
     /// Checks if the advisory database exceeds the freshness threshold (Requirement F-07).
@@ -286,6 +341,10 @@ impl AdvisoryDatabase {
     }
 
     /// Audits a slice of package records against all registered advisories (Requirement F-07).
+    ///
+    /// Advisories are matched by package name (ASCII case-insensitive) and version range
+    /// only: [`Advisory`] carries no ecosystem, so a same-named package from another
+    /// ecosystem matches too.
     pub fn audit_packages(
         &self,
         packages: &[PackageRecord],

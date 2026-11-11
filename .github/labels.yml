@@ -56,7 +56,7 @@
 
 - name: "scope:advisory"
   color: "d93f0b"
-  description: "Multi-ecosystem lockfile auditing and OSV/RustSec advisory ingestion."
+  description: "Multi-ecosystem lockfile auditing and local OSV advisory parsing."
 
 - name: "scope:remediation"
   color: "0052cc"

@@ -10,6 +10,36 @@ use crate::{
     verification::WorkerArchitecture,
 };
 
+/// Containment readiness of a worker fleet, as far as Sentra can establish it.
+///
+/// There is deliberately no "ready" variant: Sentra cannot yet verify a worker's isolation
+/// boundary, so it never reports containment as ready.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ContainmentReadiness {
+    /// No workers are registered, so nothing can run under worker containment.
+    NoWorkers,
+    /// Workers are registered, but none has attested containment evidence.
+    Unattested,
+}
+
+impl ContainmentReadiness {
+    /// Stable machine-readable label.
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::NoWorkers => "no_workers",
+            Self::Unattested => "unattested",
+        }
+    }
+
+    /// Whether untrusted execution may rely on worker containment. Never true without
+    /// attestation evidence, which Sentra does not collect.
+    pub const fn is_ready(&self) -> bool {
+        match self {
+            Self::NoWorkers | Self::Unattested => false,
+        }
+    }
+}
+
 /// High-level fleet manager coordinating remote disposable execution workers.
 ///
 /// Enforces exclusive single-tenant worker leases, prevents cross-tenant contamination
@@ -26,71 +56,16 @@ impl WorkerFleetManager {
         Self::default()
     }
 
-    /// Creates a local development fleet populated with standard isolated worker nodes.
-    pub fn new_local_development() -> Self {
-        let mut fleet = Self::new();
-        let nodes = vec![
-            (
-                "worker-x86-01",
-                "https://worker-node-1.internal:8443",
-                WorkerArchitecture::LinuxX86_64,
-                crate::verification::ContainmentLevel::DisposableVm,
-                crate::verification::WorkerResourceCaps {
-                    max_memory_bytes: 4 * 1024 * 1024 * 1024,
-                    max_cpu_cores: 4,
-                    max_disk_bytes: 20 * 1024 * 1024 * 1024,
-                    timeout_seconds: 1800,
-                },
-                crate::verification::EgressPolicy::StrictlyDenied,
-            ),
-            (
-                "worker-win-02",
-                "https://worker-node-2.internal:8443",
-                WorkerArchitecture::WindowsX64,
-                crate::verification::ContainmentLevel::IsolatedContainer,
-                crate::verification::WorkerResourceCaps {
-                    max_memory_bytes: 2 * 1024 * 1024 * 1024,
-                    max_cpu_cores: 2,
-                    max_disk_bytes: 10 * 1024 * 1024 * 1024,
-                    timeout_seconds: 900,
-                },
-                crate::verification::EgressPolicy::StrictlyDenied,
-            ),
-            (
-                "worker-sub-03",
-                "https://worker-node-3.internal:8443",
-                WorkerArchitecture::LinuxX86_64,
-                crate::verification::ContainmentLevel::FailClosedSubprocess,
-                crate::verification::WorkerResourceCaps {
-                    max_memory_bytes: 512 * 1024 * 1024,
-                    max_cpu_cores: 1,
-                    max_disk_bytes: 2 * 1024 * 1024 * 1024,
-                    timeout_seconds: 300,
-                },
-                crate::verification::EgressPolicy::StrictlyDenied,
-            ),
-            (
-                "worker-ent-04",
-                "https://worker-node-4.internal:8443",
-                WorkerArchitecture::LinuxX86_64,
-                crate::verification::ContainmentLevel::DisposableVm,
-                crate::verification::WorkerResourceCaps {
-                    max_memory_bytes: 8 * 1024 * 1024 * 1024,
-                    max_cpu_cores: 8,
-                    max_disk_bytes: 50 * 1024 * 1024 * 1024,
-                    timeout_seconds: 3600,
-                },
-                crate::verification::EgressPolicy::StrictlyDenied,
-            ),
-        ];
-
-        for (id, url, arch, cont, caps, egress) in nodes {
-            if let Ok(worker_id) = RemoteWorkerId::new(id) {
-                let worker = RemoteWorkerNode::new(worker_id, url, arch, cont, caps, egress);
-                let _ = fleet.register_worker(worker);
-            }
+    /// Evaluates whether untrusted execution may rely on worker containment.
+    ///
+    /// A worker's declared [`crate::verification::ContainmentLevel`] is an operator claim.
+    /// Sentra has no worker attestation protocol, so no fleet is ever reported as ready.
+    pub fn containment_readiness(&self) -> ContainmentReadiness {
+        if self.workers.is_empty() {
+            ContainmentReadiness::NoWorkers
+        } else {
+            ContainmentReadiness::Unattested
         }
-        fleet
     }
 
     /// Registers a newly provisioned remote worker node into the fleet.

@@ -13,7 +13,7 @@ pub mod worker;
 
 pub use audit::{AuditStatus, MultiUserAuditReport, MultiUserSecurityAudit};
 pub use error::{FleetError, FleetErrorKind};
-pub use manager::WorkerFleetManager;
+pub use manager::{ContainmentReadiness, WorkerFleetManager};
 pub use matrix::{
     AdapterActionCapability, EvidenceMethod, HostPlatform, SupportMatrix, SupportedTargetTuple,
     TargetLanguage,

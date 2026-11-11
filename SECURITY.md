@@ -2,13 +2,15 @@
 
 ## Current project status
 
-Sentra provides a complete, independently verified security analysis platform implemented entirely in safe Rust (`#![forbid(unsafe_code)]`):
+Sentra is a security analysis platform implemented entirely in safe Rust (`#![forbid(unsafe_code)]`). Several components below are models whose execution side does not exist yet; the correction that follows and [docs/LIMITATIONS.md](docs/LIMITATIONS.md) say which:
 - **Core Governance & Audit:** Strict session lifecycles, default-deny policy engine, SQLite WAL persistence, and content-addressed evidence storage with immutable source snapshots.
-- **Differential Review & Advisory Auditing:** Base/head differential analysis, offline zero-dependency advisory auditing, capability-scoped AI reasoning, and disposable worker patch verification.
-- **Autonomous Research Engine:** Deep security research campaigns, multi-agent Scout/Analyst task fanout, structured coverage ledgers, and Linux C/C++ user-space fuzzing integration with root-cause crash minimization.
+- **Differential Review & Advisory Auditing:** Base/head differential analysis, offline advisory matching against a 6-record bundled sample (2 RustSec and 4 GHSA records, not a synchronized feed), capability-scoped AI reasoning, and a patch verification model that no disposable worker executes yet.
+- **Research Models:** Security research campaign, Scout/Analyst task, coverage ledger and fuzzing campaign models with an input-minimization helper. No fuzzer or target is executed.
 - **Extensibility & Agent Interoperability:** Subprocess plugin SDK with capability fencing and local Model Context Protocol (MCP) server for Claude Desktop, Cursor, and custom IDEs.
 - **Continuous Hosted Integrations:** Authenticated webhook intake with RFC 2104 / RFC 4231 HMAC-SHA256 signatures, replay defense, and approval-gated remediation proposals with zero-secret fork boundaries.
-- **Fleet Orchestration & Web Management:** Enterprise management dashboard, multi-tenant session isolation, role-based access control (RBAC), supported-target capability matrices, and remote worker fleet isolation audits.
+- **Fleet Orchestration & Web Management:** Web console with role-based access control (RBAC), operator-declared tenant rows and supported-target capability matrices. No remote worker fleet exists, so no fleet isolation audit is performed.
+
+Correction (2026-11-11): this section used to describe a "complete, independently verified" platform with disposable worker patch verification and remote worker fleet isolation audits. None of these exists. `sentra fleet` reports an empty registry, and `sentra verify-audit` is not implemented: it exits 5 with `not_implemented`, because there is no worker registry, secret-inheritance check or tamper-evident audit trail to assess. Worker and plugin egress policies are declarations, not measurements or enforcement. No disposable VM profile has been exercised, and no isolated runner executes verification bundles, so no patch has been verified that way. See [docs/LIMITATIONS.md](docs/LIMITATIONS.md#6-web-console-and-pinned-core-commands).
 
 Untrusted target repository execution remains **strictly disabled and fail-closed** by default on the host development machine (`FailClosedBackend`). Target code execution requires an approved, isolated disposable Linux VM worker (`ADR-0004`).
 
@@ -38,7 +40,7 @@ The Sentra project takes the security of its platform and users seriously. We ma
 ## Required Security Posture & Invariants
 
 1. **Explicit Scope & Authorization:** Every security analysis session must specify an explicit repository boundary. Reparse points, symlinks escaping the workspace, and parent components are rejected.
-2. **Fail-Closed Execution:** Real untrusted builds, procedural macros, tests, scanners, and PoCs must never execute on the host developer workstation. A dedicated disposable Linux VM boundary with `StrictlyDenied` network egress is mandatory (`ADR-0004`).
+2. **Fail-Closed Execution:** Real untrusted builds, procedural macros, tests, scanners, and PoCs must never execute on the host developer workstation. A dedicated disposable Linux VM boundary with `StrictlyDenied` network egress is mandatory (`ADR-0004`). The one reviewed exception (`ADR-0011`, 2026-11-11) is opt-in CodeQL analysis in build mode `none`: CodeQL may parse, but not build or run, a workspace on the host when an operator passes `--accept-codeql-terms` to `sentra codeql analyze` (a licence acknowledgement, not an authorisation check) or when a web console administrator enables it after acknowledging the CodeQL terms, for five languages and under the limits listed in [docs/LIMITATIONS.md](docs/LIMITATIONS.md#9-codeql-host-analysis-and-import). CodeQL runs unsandboxed with the account's privileges.
 3. **Zero Secret Inheritance:** Worker execution environments must never receive host tokens, API keys, or write credentials. Untrusted fork PR runs unconditionally enforce `secrets_permitted: false`.
 4. **Three-Tier Patch Verification:** An automated remediation proposal is verified only when original baseline tests fail, target tests pass on patched code, and all regression suites pass without regression.
 5. **Anti-Collusion & Confused Deputy Prevention:** AI models and automated agents cannot self-approve remediation proposals. All sensitive operations require explicit human operator admission (`HumanApprovalRequired`).

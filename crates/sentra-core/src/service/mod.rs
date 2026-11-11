@@ -23,6 +23,7 @@ pub use lifecycle::{
     SessionResumeReport,
 };
 pub use local_workspace::{
-    LocalAuditReport, LocalScanReport, LocalSessionSummary, LocalWorkspace, LocalWorkspaceError,
-    LocalWorkspaceErrorKind, LocalWorkspaceReport, TenantRecord,
+    LocalAuditReport, LocalInventoryReport, LocalPatchReport, LocalRollbackReport, LocalScanReport,
+    LocalSessionSummary, LocalWorkspace, LocalWorkspaceError, LocalWorkspaceErrorKind,
+    LocalWorkspaceReport, TenantRecord,
 };

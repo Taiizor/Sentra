@@ -9,7 +9,7 @@
 
 ## Implementation status and scope boundaries
 
-- Core capabilities across continuous security review, differential analysis, autonomous research, MCP server, webhook intake, and multi-tenant fleet management are implemented and verified under `#![forbid(unsafe_code)]`.
+- Implemented under `#![forbid(unsafe_code)]`: heuristic SAST scanning, lockfile inventory and sample-based auditing, differential snapshot comparison, positional patch application, the stdio MCP server, plugin adapter hosting and the web console with webhook intake. Not implemented: autonomous research, a worker fleet or VM containment, and independent patch verification. [docs/LIMITATIONS.md](docs/LIMITATIONS.md) is the authoritative status.
 - Follow the roadmap in [ROADMAP.md](ROADMAP.md) and release requirements in [docs/RELEASE_GATES_AUDIT.md](docs/RELEASE_GATES_AUDIT.md).
 - Keep prototypes separate from the production core/CLI and report incomplete or blocked gates explicitly.
 - Do not turn a proposed ADR into a validated technology claim without recording its required experiments.

@@ -474,6 +474,45 @@ fn symlink_root_storage_parent_and_database_are_rejected() {
     fs::remove_file(&f.db).unwrap();
 }
 
+/// Unix counterpart of the Windows link tests, for links in an ancestor: a workspace
+/// or storage directory reached through a symbolic link is refused even though the
+/// link resolves to the same ordinary directory, and nothing is created. This is why
+/// macOS paths under `/tmp` or `/var` (links to `/private/tmp` and `/private/var`)
+/// must be given in their canonical form.
+#[cfg(unix)]
+#[test]
+fn symlinked_ancestors_of_root_and_storage_are_rejected_on_unix() {
+    use std::os::unix::fs::symlink;
+    let f = Fixture::new();
+    let alias = f.root.join("alias");
+    symlink(&f.root, &alias).unwrap();
+
+    let workspace_via_alias = alias.join(f.workspace.file_name().unwrap());
+    assert!(workspace_via_alias.is_dir(), "the link resolves");
+    assert_eq!(
+        LocalWorkspace::initialize(&workspace_via_alias, &f.db)
+            .unwrap_err()
+            .kind,
+        LocalWorkspaceErrorKind::Workspace
+    );
+    let db_via_alias = alias.join("storage").join("local.db");
+    assert_eq!(
+        LocalWorkspace::initialize(&f.workspace, &db_via_alias)
+            .unwrap_err()
+            .kind,
+        LocalWorkspaceErrorKind::StorageLocation
+    );
+    assert_eq!(fs::read_dir(f.root.join("storage")).unwrap().count(), 0);
+
+    // The canonical spelling of the same directories is accepted.
+    assert!(
+        LocalWorkspace::initialize(&f.workspace, &f.db)
+            .unwrap()
+            .created
+    );
+    fs::remove_file(alias).unwrap();
+}
+
 #[cfg(windows)]
 #[test]
 fn quarantined_internal_symlinks_are_not_followed_by_initialization() {
@@ -649,4 +688,219 @@ fn recover_absent_database_fails_closed() {
 
     let err = LocalWorkspace::recover(&f.workspace, &missing_db).unwrap_err();
     assert_eq!(err.kind, LocalWorkspaceErrorKind::Incomplete);
+}
+
+const PATCH_ORIGINAL: &str = "fn main() {\n    let old = 1;\n}\n";
+const PATCH_DIFF: &str = "--- a/main.rs\n+++ b/main.rs\n@@ -1,3 +1,3 @@\n fn main() {\n-    let old = 1;\n+    let new = 2;\n }\n";
+
+fn write_patch_case(f: &Fixture) -> (PathBuf, PathBuf) {
+    let target = f.workspace.join("main.rs");
+    fs::write(&target, PATCH_ORIGINAL).unwrap();
+    let patch = f.root.join("fix.patch");
+    fs::write(&patch, PATCH_DIFF).unwrap();
+    (target, patch)
+}
+
+#[test]
+fn patch_is_reverted_when_its_audit_event_cannot_be_committed() {
+    let f = Fixture::new();
+    let report = LocalWorkspace::initialize(&f.workspace, &f.db).unwrap();
+    let session = report.session.unwrap().session_id;
+    {
+        // A terminal session refuses new audit events.
+        let (service, manager) = f.service();
+        service
+            .transition_session(session, SessionState::Cancelled, "test: terminal session")
+            .unwrap();
+        manager.shutdown().unwrap();
+    }
+    let (target, patch) = write_patch_case(&f);
+    let before = f.rows();
+    let error = LocalWorkspace::apply_patch(&f.workspace, &patch, None, None, Some(&f.db), false)
+        .unwrap_err();
+    assert_eq!(error.kind, LocalWorkspaceErrorKind::Persistence);
+    assert_eq!(fs::read_to_string(&target).unwrap(), PATCH_ORIGINAL);
+    assert_eq!(f.rows(), before, "no audit row and no other domain change");
+}
+
+#[test]
+fn patch_dry_run_and_apply_report_digests_without_a_store() {
+    let f = Fixture::new();
+    let (target, patch) = write_patch_case(&f);
+    let dry = LocalWorkspace::apply_patch(&f.workspace, &patch, None, None, None, true).unwrap();
+    assert!(dry.result.dry_run && !dry.audit_recorded);
+    assert_eq!(dry.result.target_path, "main.rs");
+    assert_eq!(fs::read_to_string(&target).unwrap(), PATCH_ORIGINAL);
+    let applied =
+        LocalWorkspace::apply_patch(&f.workspace, &patch, None, None, None, false).unwrap();
+    assert!(!applied.result.dry_run && !applied.audit_recorded);
+    assert_eq!(
+        applied.result.post_image_sha256,
+        dry.result.post_image_sha256
+    );
+    assert_eq!(
+        applied.result.pre_image_sha256,
+        sentra_core::sha256_digest(PATCH_ORIGINAL.as_bytes())
+    );
+    assert_eq!(
+        fs::read_to_string(&target).unwrap(),
+        "fn main() {\n    let new = 2;\n}\n"
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn patch_targets_behind_links_are_refused() {
+    use std::os::windows::fs::symlink_dir;
+    let f = Fixture::new();
+    let outside = f.root.join("outside");
+    fs::create_dir(&outside).unwrap();
+    fs::write(outside.join("main.rs"), PATCH_ORIGINAL).unwrap();
+    let link = f.workspace.join("linked");
+    symlink_dir(&outside, &link).expect(
+        "Windows symlink fixture requires pre-existing Developer Mode; never silently skip",
+    );
+    let patch = f.root.join("fix.patch");
+    fs::write(&patch, PATCH_DIFF).unwrap();
+    let error = LocalWorkspace::apply_patch(
+        &f.workspace,
+        &patch,
+        Some(std::path::Path::new("linked/main.rs")),
+        None,
+        None,
+        false,
+    )
+    .unwrap_err();
+    assert_eq!(error.kind, LocalWorkspaceErrorKind::PatchTarget);
+    assert_eq!(
+        fs::read_to_string(outside.join("main.rs")).unwrap(),
+        PATCH_ORIGINAL
+    );
+    fs::remove_dir(link).unwrap();
+}
+
+#[test]
+fn inventory_validates_depth_and_workspace() {
+    let f = Fixture::new();
+    fs::write(
+        f.workspace.join("Cargo.lock"),
+        "version = 3\n\n[[package]]\nname = \"serde\"\nversion = \"1.0.0\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\n",
+    )
+    .unwrap();
+    let report = LocalWorkspace::inventory(&f.workspace, 6).unwrap();
+    assert_eq!(report.inventory.lockfiles.len(), 1);
+    assert_eq!(report.inventory.total_packages, 1);
+    assert_eq!(
+        report.workspace_root,
+        fs::canonicalize(&f.workspace).unwrap()
+    );
+    assert_eq!(
+        LocalWorkspace::inventory(&f.workspace, sentra_core::MAX_INVENTORY_DEPTH + 1)
+            .unwrap_err()
+            .kind,
+        LocalWorkspaceErrorKind::InvalidRequest
+    );
+    assert_eq!(
+        LocalWorkspace::inventory(&f.root.join("missing"), 6)
+            .unwrap_err()
+            .kind,
+        LocalWorkspaceErrorKind::Workspace
+    );
+}
+
+#[test]
+fn operator_events_require_object_details_and_a_known_session() {
+    let f = Fixture::new();
+    let report = LocalWorkspace::initialize(&f.workspace, &f.db).unwrap();
+    let session = report.session.unwrap().session_id;
+    let manager = SqliteConnectionManager::open_existing(&f.db, &SystemClock).unwrap();
+    let (repository, _) = PersistenceRepository::with_authority(manager.clone());
+    let kind = sentra_core::persistence::OperatorEventKind::PatchApplied;
+    assert!(
+        repository
+            .record_operator_event(
+                session,
+                kind,
+                sentra_core::EventId::new(),
+                &serde_json::json!("not an object"),
+                &SystemClock
+            )
+            .is_err()
+    );
+    assert!(
+        repository
+            .record_operator_event(
+                SessionId::new(),
+                kind,
+                sentra_core::EventId::new(),
+                &serde_json::json!({}),
+                &SystemClock
+            )
+            .is_err()
+    );
+    let sequence = repository
+        .record_operator_event(
+            session,
+            kind,
+            sentra_core::EventId::new(),
+            &serde_json::json!({"target_path": "main.rs"}),
+            &SystemClock,
+        )
+        .unwrap();
+    let events = repository.audit_events(session, 0, 1000).unwrap();
+    let last = events.last().unwrap();
+    assert_eq!(last.sequence_number, sequence);
+    assert_eq!(last.event_kind, "PatchApplied");
+    assert!(last.details_json.contains("\"target_path\":\"main.rs\""));
+    manager.shutdown().unwrap();
+}
+
+#[test]
+fn add_tenant_refuses_core_stores_without_modifying_them() {
+    let f = Fixture::new();
+    LocalWorkspace::initialize(&f.workspace, &f.db).unwrap();
+    let before = fs::read(&f.db).unwrap();
+    let error = LocalWorkspace::add_tenant(&f.db, "custom-corp", "Custom Corp", None, None, None)
+        .unwrap_err();
+    assert_eq!(error.kind, LocalWorkspaceErrorKind::StorageLocation);
+    assert_eq!(fs::read(&f.db).unwrap(), before);
+    // The core store keeps its exact schema and stays usable.
+    assert!(
+        LocalWorkspace::status(&f.workspace, &f.db)
+            .unwrap()
+            .initialized
+    );
+    let has_tenants: bool = rusqlite::Connection::open(&f.db)
+        .unwrap()
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE name = 'tenants')",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert!(!has_tenants);
+
+    // A migration table alone (no application id yet) also marks a core store.
+    let partial = f.root.join("storage/partial.db");
+    rusqlite::Connection::open(&partial)
+        .unwrap()
+        .execute_batch("CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY);")
+        .unwrap();
+    let partial_before = fs::read(&partial).unwrap();
+    let error =
+        LocalWorkspace::add_tenant(&partial, "custom-corp", "Custom Corp", None, None, None)
+            .unwrap_err();
+    assert_eq!(error.kind, LocalWorkspaceErrorKind::StorageLocation);
+    assert_eq!(fs::read(&partial).unwrap(), partial_before);
+
+    // Unmarked SQLite files and missing files keep working as tenant registries.
+    let registry = f.root.join("storage/tenants.db");
+    let created =
+        LocalWorkspace::add_tenant(&registry, "custom-corp", "Custom Corp", None, None, None)
+            .unwrap();
+    assert_eq!(created.tenant_id, "custom-corp");
+    let second =
+        LocalWorkspace::add_tenant(&registry, "other-corp", "Other", None, None, None).unwrap();
+    assert_eq!(second.tenant_id, "other-corp");
+    assert_eq!(LocalWorkspace::list_tenants(&registry).unwrap().len(), 2);
 }

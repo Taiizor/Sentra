@@ -22,6 +22,15 @@ pub enum DiffErrorKind {
     AntiRegressionViolation(String),
     /// Filesystem or I/O error during content retrieval.
     Io(String),
+    /// The unified diff is malformed, empty, multi-file, binary or otherwise unsupported.
+    InvalidPatch(String),
+    /// The unified diff is well formed but its hunks do not match the target content.
+    PatchDoesNotApply(String),
+    /// The patch or rollback target is outside the workspace, missing, not an
+    /// ordinary file, or reached through a symbolic link or junction.
+    InvalidTarget(String),
+    /// The rollback backup is missing, unreadable, too large or not an ordinary file.
+    InvalidBackup(String),
 }
 
 /// Strongly typed error returned during snapshot diffing and hunk extraction.
@@ -59,6 +68,26 @@ impl DiffError {
     pub fn anti_regression(msg: impl Into<String>) -> Self {
         Self::new(DiffErrorKind::AntiRegressionViolation(msg.into()))
     }
+
+    /// Constructs a malformed or unsupported patch error.
+    pub fn invalid_patch(msg: impl Into<String>) -> Self {
+        Self::new(DiffErrorKind::InvalidPatch(msg.into()))
+    }
+
+    /// Constructs an error for a well-formed patch whose hunks do not match the target.
+    pub fn does_not_apply(msg: impl Into<String>) -> Self {
+        Self::new(DiffErrorKind::PatchDoesNotApply(msg.into()))
+    }
+
+    /// Constructs an invalid patch or rollback target error.
+    pub fn invalid_target(msg: impl Into<String>) -> Self {
+        Self::new(DiffErrorKind::InvalidTarget(msg.into()))
+    }
+
+    /// Constructs an I/O error from a standard I/O failure.
+    pub fn io(error: &std::io::Error) -> Self {
+        Self::new(DiffErrorKind::Io(error.kind().to_string()))
+    }
 }
 
 impl fmt::Display for DiffError {
@@ -77,6 +106,10 @@ impl fmt::Display for DiffError {
                 write!(f, "Anti-regression violation: {msg}")
             }
             DiffErrorKind::Io(msg) => write!(f, "I/O error during diff: {msg}"),
+            DiffErrorKind::InvalidPatch(msg) => write!(f, "Invalid patch: {msg}"),
+            DiffErrorKind::PatchDoesNotApply(msg) => write!(f, "Patch does not apply: {msg}"),
+            DiffErrorKind::InvalidTarget(msg) => write!(f, "Invalid patch target: {msg}"),
+            DiffErrorKind::InvalidBackup(msg) => write!(f, "Invalid rollback backup: {msg}"),
         }
     }
 }

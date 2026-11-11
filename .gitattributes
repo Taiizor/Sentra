@@ -1,2 +1,10 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Vendored agent skills are hashed (skills-lock.json `computedHash`) and
+# embedded into the binary, so text files must check out with LF on every
+# host. `text=auto` keeps binary files (such as images) untouched.
+crates/sentra-core/assets/skills/** text=auto eol=lf
+crates/sentra-core/assets/skills-lock.json text eol=lf
+.agents/skills/** text=auto eol=lf
+skills-lock.json text eol=lf

@@ -31,6 +31,162 @@ Third-Party Software Notices & Acknowledgments
    Copyright (c) 2016-2024 RustCrypto Developers
    Website: https://github.com/RustCrypto/hashes
 
+4a. win32job (Windows builds only) and its dependencies (windows, windows-core and
+    related windows-* crates, thiserror)
+   License: MIT License or Apache-2.0
+   Copyright (c) 2020-2025 Ohad Ravid (win32job); Microsoft Corporation (windows-rs);
+   David Tolnay (thiserror)
+   Website: https://github.com/ohadravid/win32job-rs
+
+===============================================================================
+Bundled Third-Party Agent Skills
+===============================================================================
+
+The Agent Skills under crates/sentra-core/assets/skills/<skill>/ are vendored
+without modification from the upstream repositories below. They are pinned to
+the listed commits in crates/sentra-core/assets/skills-lock.json, compiled into
+the sentra-core binary (every file of each skill directory), and written to
+agent skill directories by `sentra install`. They are third-party playbooks,
+not Sentra code, and remain under their upstream licenses. Each skill directory
+carries the upstream license text: LICENSE (copied by Sentra from the
+repository root at the pinned commit) or LICENSE.txt (shipped by upstream
+inside the skill directory).
+
+5. usestrix/strix
+   Source:    https://github.com/usestrix/strix
+   Commit:    685bbc8138d35fc9fe378ac37ec0d9198b9c46a3
+   License:   Apache-2.0 (Apache License, Version 2.0)
+   Copyright: Copyright 2025 OmniSecure Inc. (as stated in the upstream LICENSE)
+   License text: <skill>/LICENSE
+   Skills:
+   - api-security-testing
+   - application-security-testing
+   - ci-security-scanning-with-strix
+   - find-security-vulnerabilities-in-code
+   - fix-security-vulnerabilities-with-strix
+   - owasp-top-10-testing
+
+6. wshobson/agents
+   Source:    https://github.com/wshobson/agents
+   Commit:    9c61ab243def98f72da12abd41cfcf5bcd91af9d
+   License:   MIT
+   Copyright: Copyright (c) 2024 Seth Hobson
+   License text: <skill>/LICENSE
+   Skills:
+   - attack-tree-construction
+   - auth-implementation-patterns
+   - solidity-security
+   - stride-analysis-patterns
+   - threat-mitigation-mapping
+
+7. superagent-ai/skills
+   Source:    https://github.com/superagent-ai/skills
+   Commit:    0da315b873ed141025fa601ed6e0ebe0c878d5af
+   License:   MIT
+   Copyright: Copyright (c) 2026 Superagent
+   License text: <skill>/LICENSE
+   Skills:
+   - ci-cd-security
+   - skill-security
+
+8. affaan-m/ecc
+   Source:    https://github.com/affaan-m/ecc
+   Commit:    d2ef2680594f9a17526a6e1a2e18b3d242c5d17b
+   License:   MIT
+   Copyright: Copyright (c) 2026 Affaan Mustafa
+   License text: <skill>/LICENSE
+   Skills:
+   - django-security
+   - laravel-security
+   - security-review
+   - security-scan
+   - springboot-security
+
+9. samber/cc-skills-golang
+   Source:    https://github.com/samber/cc-skills-golang
+   Commit:    d68d80aec298e1b74b37c2a472c002b5217248b3
+   License:   MIT
+   Copyright: Copyright (c) 2026 Samuel Berthe
+   License text: <skill>/LICENSE
+   Skills:
+   - golang-security
+
+10. google/skills
+   Source:    https://github.com/google/skills
+   Commit:    64d010629e61e4a7d59fc21e042362f370b5888b
+   License:   Apache-2.0 (Apache License, Version 2.0)
+   Copyright: no copyright line in the upstream LICENSE
+   License text: <skill>/LICENSE
+   Skills:
+   - google-cloud-waf-security
+
+11. addyosmani/agent-skills
+   Source:    https://github.com/addyosmani/agent-skills
+   Commit:    301b02b12bff98e4688e6984af6556802322bbde
+   License:   MIT
+   Copyright: Copyright (c) 2025 Addy Osmani
+   License text: <skill>/LICENSE
+   Skills:
+   - security-and-hardening
+
+12. cloudflare/security-audit-skill
+   Source:    https://github.com/cloudflare/security-audit-skill
+   Commit:    c1c8a8c1471069fb0e188eeaff69b8e8db6564a8
+   License:   MIT
+   Copyright: Copyright (c) 2025-2026 Cloudflare, Inc.
+   License text: <skill>/LICENSE
+   Skills:
+   - security-audit
+
+13. openai/skills
+   Source:    https://github.com/openai/skills
+   Commit:    49f948faa9258a0c61caceaf225e179651397431
+   License:   Apache-2.0 (Apache License, Version 2.0), per skill; the
+              repository has no top-level license
+   Copyright: no copyright line in the upstream LICENSE.txt
+   License text: <skill>/LICENSE.txt (shipped by upstream)
+   Skills:
+   - security-best-practices
+   - security-threat-model
+
+===============================================================================
+Development-Only Agent Skills
+===============================================================================
+
+The skills under .agents/skills/ are development aids for contributors. They
+are tracked in this repository but are not compiled into Sentra or installed
+by it. They are pinned in skills-lock.json at the repository root.
+
+14. shadcn/ui
+   Source:    https://github.com/shadcn/ui
+   Commit:    8ab27715521cbd4f87ae6886cd989cbb678f6de7
+   License:   MIT
+   Skills:
+   - migrate-radix-to-base
+   - shadcn
+
+   MIT License
+
+   Copyright (c) 2023 shadcn
+
+   Permission is hereby granted, free of charge, to any person obtaining a copy
+   of this software and associated documentation files (the "Software"), to deal
+   in the Software without restriction, including without limitation the rights
+   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+   copies of the Software, and to permit persons to whom the Software is
+   furnished to do so, subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be included in all
+   copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
 ===============================================================================
 Security Invariant Notice
 ===============================================================================

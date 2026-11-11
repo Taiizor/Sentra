@@ -4,8 +4,8 @@ use sentra_core::{
     dashboard::{IsolationLevel, TenantContext, TenantId},
     domain::time::TimestampUtc,
     fleet::{
-        AdapterActionCapability, AuditStatus, EvidenceMethod, FleetErrorKind, HostPlatform,
-        MultiUserSecurityAudit, RemoteWorkerId, RemoteWorkerNode, SupportMatrix,
+        AdapterActionCapability, AuditStatus, ContainmentReadiness, EvidenceMethod, FleetErrorKind,
+        HostPlatform, MultiUserSecurityAudit, RemoteWorkerId, RemoteWorkerNode, SupportMatrix,
         SupportedTargetTuple, TargetLanguage, WorkerFleetManager,
     },
     verification::{ContainmentLevel, EgressPolicy, WorkerArchitecture, WorkerResourceCaps},
@@ -147,6 +147,41 @@ fn test_reference_platform_matrix_queries() {
         matrix
             .find_supporting_adapters(&unsupported_query)
             .is_empty()
+    );
+}
+
+#[test]
+fn test_containment_readiness_is_never_claimed_without_attestation() {
+    let mut fleet = WorkerFleetManager::new();
+    let readiness = fleet.containment_readiness();
+    assert_eq!(readiness, ContainmentReadiness::NoWorkers);
+    assert_eq!(readiness.as_str(), "no_workers");
+    assert!(!readiness.is_ready());
+
+    // A declared containment level is an operator claim, not attestation evidence.
+    let worker = RemoteWorkerNode::new(
+        RemoteWorkerId::new("worker-declared-vm").unwrap(),
+        "https://worker-declared.internal:8443",
+        WorkerArchitecture::LinuxX86_64,
+        ContainmentLevel::DisposableVm,
+        WorkerResourceCaps::default(),
+        EgressPolicy::StrictlyDenied,
+    );
+    fleet.register_worker(worker).unwrap();
+    let readiness = fleet.containment_readiness();
+    assert_eq!(readiness, ContainmentReadiness::Unattested);
+    assert_eq!(readiness.as_str(), "unattested");
+    assert!(!readiness.is_ready());
+}
+
+#[test]
+fn test_local_workspace_fleet_registry_is_empty() {
+    let fleet = sentra_core::service::LocalWorkspace::fleet_manager();
+    assert_eq!(fleet.total_workers(), 0);
+    assert_eq!(fleet.iter_workers().count(), 0);
+    assert_eq!(
+        fleet.containment_readiness(),
+        ContainmentReadiness::NoWorkers
     );
 }
 
@@ -331,17 +366,20 @@ fn test_multi_user_hosting_security_audit_gates() {
 
     fleet.register_worker(worker).unwrap();
 
-    // Run independent security audit
+    // Gates 1-3 are evaluated against the registry and pass. Gates 4 and 5 have no
+    // implemented check, so they are reported as not assessed and block approval.
     let report = MultiUserSecurityAudit::run_assessment(&fleet);
 
-    assert_eq!(report.overall_status, AuditStatus::Approved);
-    assert!(report.is_approved());
+    assert_eq!(report.overall_status, AuditStatus::Blocked);
+    assert!(!report.is_approved());
     assert!(report.gate_tenant_isolation);
     assert!(report.gate_worker_egress_containment);
     assert!(report.gate_cross_tenant_worker_reuse);
-    assert!(report.gate_zero_secret_inheritance);
-    assert!(report.gate_immutable_audit_trail);
-    assert!(report.findings.is_empty());
+    assert!(!report.gate_zero_secret_inheritance);
+    assert!(!report.gate_immutable_audit_trail);
+    assert_eq!(report.findings.len(), 2);
+    assert!(report.findings[0].starts_with("Gate 4 Not Assessed"));
+    assert!(report.findings[1].starts_with("Gate 5 Not Assessed"));
 
     // Introduce a non-compliant worker permitting network egress
     let rogue_worker = RemoteWorkerNode::new(
@@ -363,4 +401,28 @@ fn test_multi_user_hosting_security_audit_gates() {
     assert!(!blocked_report.gate_worker_egress_containment);
     assert!(!blocked_report.findings.is_empty());
     assert!(blocked_report.findings[0].contains("Gate 2 Failed"));
+}
+
+#[test]
+fn test_multi_user_audit_never_approves_an_empty_registry() {
+    // Regression: an empty registry used to pass the egress and worker-reuse gates
+    // vacuously, and gates 4 and 5 were hard-coded to pass.
+    let report = MultiUserSecurityAudit::run_assessment(&WorkerFleetManager::new());
+
+    assert_eq!(report.overall_status, AuditStatus::Blocked);
+    assert!(report.gate_tenant_isolation);
+    assert!(!report.gate_worker_egress_containment);
+    assert!(!report.gate_cross_tenant_worker_reuse);
+    assert!(!report.gate_zero_secret_inheritance);
+    assert!(!report.gate_immutable_audit_trail);
+    for gate in ["Gate 2", "Gate 3", "Gate 4", "Gate 5"] {
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|f| f.starts_with(&format!("{gate} Not Assessed"))),
+            "{gate} must be reported as not assessed: {:?}",
+            report.findings
+        );
+    }
 }

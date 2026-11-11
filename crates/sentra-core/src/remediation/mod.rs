@@ -1,7 +1,8 @@
-//! Automated Remediation PR Proposer and Patch Packaging (REQ-F11, REQ-F18, Remediation Specification).
+//! Draft pull request previews for remediation (REQ-F11, REQ-F18, Remediation Specification).
 //!
-//! Generates cryptographically signed, immutable Pull Request proposal packages
-//! under strict human-in-the-loop governance without autonomous Git write mutations.
+//! Builds local, unsigned preview packages (title, body, commit message, an illustrative
+//! diff and a suggested `gh` command) for human review. Nothing here writes to Git, pushes,
+//! or contacts a forge, and nothing is verified: the body states which checks were not done.
 
 use serde::{Deserialize, Serialize};
 
@@ -14,22 +15,60 @@ use crate::{
     },
 };
 
-/// A production-ready Pull Request proposal package ready for human review and GitHub/GitLab dispatch.
+/// Replaces every character that has a meaning inside double quotes in POSIX shells,
+/// PowerShell or `cmd.exe` (for example `$`, backticks, `"`, `\`, `!`, `%`, `^`, `&` and
+/// parentheses), and every non-ASCII or control character, with `_`.
+fn paste_safe(value: &str) -> String {
+    value
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric()
+                || matches!(
+                    c,
+                    ' ' | '.' | '_' | '-' | ':' | '+' | '/' | ',' | '=' | '@' | '[' | ']'
+                )
+            {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+/// Suggested `gh pr create` command that can be pasted into a POSIX shell, PowerShell or
+/// `cmd.exe` as shown: double-quoted arguments without shell metacharacters, and the body
+/// read from `<proposal_id>.md` instead of being inlined.
+fn suggested_gh_command(title: &str, branch_name: &str, proposal_id: &str) -> String {
+    format!(
+        "gh pr create --draft --title \"{}\" --head \"{}\" --body-file \"{}.md\"",
+        paste_safe(title),
+        paste_safe(branch_name),
+        paste_safe(proposal_id)
+    )
+}
+
+/// A local draft pull request preview for human review. Creating the branch, commit and
+/// pull request is left to the operator; Sentra does none of it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemediationPrPackage {
     /// Deterministic proposal identifier (e.g. `prop-c39f18a2...`).
     pub proposal_id: String,
-    /// Git feature branch name (e.g. `sentra/remediate-ghsa-p6mc-m468-83gw`).
+    /// Suggested Git branch name (e.g. `sentra/remediate-ghsa-p6mc-m468-83gw`); not created.
     pub branch_name: String,
     /// Pull request title.
     pub title: String,
     /// Conventional commit message.
     pub commit_message: String,
-    /// Rich Markdown pull request body.
+    /// Markdown pull request body, including the checks that were and were not done.
     pub body_markdown: String,
-    /// Unified diff patch payload.
+    /// Illustrative diff. It is not computed from the file contents and does not apply as-is.
     pub patch_diff: String,
-    /// One-click command for operator dispatch via official GitHub CLI (`gh`).
+    /// Suggested GitHub CLI (`gh`) command; Sentra never runs it. It needs the branch to exist
+    /// on the remote and `body_markdown` saved as `<proposal_id>.md`: the body is not inlined,
+    /// because its Markdown backticks and `$` would be expanded by a shell. In the title and
+    /// branch, every character a shell could interpret is replaced with `_`, since lockfile
+    /// versions come from the scanned repository.
     pub gh_command: String,
     /// Affected component or package name.
     pub target_component: String,
@@ -44,7 +83,8 @@ pub struct RemediationPrPackage {
 }
 
 impl RemediationPrPackage {
-    /// Generates a unified diff for upgrading a dependency version in a manifest file.
+    /// Generates an illustrative version-bump diff for `manifest_path`. The hunk is a fixed
+    /// JSON-style line pair, not read from the file, so it does not apply to real lockfiles.
     pub fn create_version_bump_diff(
         manifest_path: &str,
         package: &str,
@@ -56,11 +96,16 @@ impl RemediationPrPackage {
         )
     }
 
-    /// Generates a complete remediation PR proposal from an advisory match.
+    /// Generates a draft pull request preview from an advisory match.
+    ///
+    /// `manifest_filename` is the lockfile the package was read from. `advisory_source`
+    /// describes the advisory data the match came from (for example the bundled pinned
+    /// sample) and is quoted in the body, which never claims a check that was not done.
     pub fn from_advisory_match(
         m: &AdvisoryMatch,
         manifest_filename: &str,
         base_commit_sha: &str,
+        advisory_source: &str,
     ) -> Self {
         let advisory_id = &m.advisory.id;
         let package = &m.package;
@@ -91,38 +136,32 @@ impl RemediationPrPackage {
         };
 
         let body_markdown = format!(
-            "### 🛡️ Sentra Automated Security Remediation\n\n\
+            "### Sentra Remediation Preview\n\n\
             | Property | Value |\n\
             | :--- | :--- |\n\
             | **Advisory ID** | `{advisory_id}` |\n\
             | **Aliases** | {aliases_text} |\n\
             | **Affected Component** | `{package}` |\n\
+            | **Lockfile** | `{manifest_filename}` |\n\
             | **Installed Version** | `{installed}` |\n\
             | **Remediation Target** | `^{patch_target}` |\n\
-            | **Severity** | `{}` |\n\n\
+            | **Severity** | `{severity}` |\n\n\
             #### Vulnerability Summary\n\
-            {}\n\n\
+            {summary}\n\n\
             #### Description\n\
-            {}\n\n\
-            #### Verification & Containment Evidence\n\
-            - [x] Lockfile parsed with pure-Rust zero-subprocess engine\n\
-            - [x] Advisory matched against canonical OSV/RustSec/GHSA database\n\
-            - [x] Reachability confirmed: `{}` per Requirement F-07\n\
-            - [x] Host execution contained (`FailClosedBackend` enforced)\n\
-            - [x] Strict draft PR invariant enforced (`is_draft_only: true`)\n\n\
+            {description}\n\n\
+            #### What Sentra Checked\n\
+            - [x] `{manifest_filename}` was parsed by Sentra's built-in lockfile parser (no subprocess).\n\
+            - [x] The package name and version were matched against: {advisory_source}.\n\
+            - [ ] Reachability was not analysed; the match records `{reachability}`.\n\
+            - [ ] The version bump was not applied, built or tested; the diff in this preview is illustrative and does not apply as-is.\n\
+            - [x] No target code was executed to produce this preview.\n\n\
             ---\n\
-            *Proposed by [Sentra](https://github.com/sentra-sec/sentra) under Human-in-the-Loop Governance. Base commit: `{base_commit_sha}`.*",
-            m.advisory.severity,
-            m.advisory.title,
-            m.advisory.description,
-            m.reachability.as_str()
-        );
-
-        let gh_command = format!(
-            "gh pr create --draft --title \"{}\" --body \"{}\" --head \"{}\"",
-            title.replace('"', "\\\""),
-            body_markdown.replace('"', "\\\"").replace('\n', " "),
-            branch_name
+            *Draft preview generated locally by [Sentra](https://github.com/Taiizor/Sentra) for human review. Sentra did not create a branch, commit or pull request. Base: `{base_commit_sha}`.*",
+            severity = m.advisory.severity,
+            summary = m.advisory.title,
+            description = m.advisory.description,
+            reachability = m.reachability.as_str(),
         );
 
         let mut id_payload = Vec::new();
@@ -135,6 +174,7 @@ impl RemediationPrPackage {
         id_payload.extend_from_slice(patch_diff.as_bytes());
 
         let proposal_id = format!("prop-{}", &sha256_digest(&id_payload)[..16]);
+        let gh_command = suggested_gh_command(&title, &branch_name, &proposal_id);
 
         Self {
             proposal_id,
@@ -152,7 +192,10 @@ impl RemediationPrPackage {
         }
     }
 
-    /// Generates a remediation PR proposal from an authoritative finding.
+    /// Generates a draft pull request preview from a (candidate) finding.
+    ///
+    /// The diff is a placeholder that names the finding location; the finding carries no
+    /// fix, so the body marks the fix and its verification as not done.
     pub fn from_finding(finding: &Finding, base_commit_sha: &str) -> Self {
         let (id, target) = match finding.source() {
             FindingSource::CargoLockAdvisory {
@@ -188,7 +231,7 @@ impl RemediationPrPackage {
         );
 
         let body_markdown = format!(
-            "### 🛡️ Sentra Automated Security Remediation\n\n\
+            "### Sentra Remediation Preview\n\n\
             **Finding ID:** `{}`\n\
             **Rule / Advisory:** `{id}`\n\
             **Severity:** `{}`\n\
@@ -196,12 +239,11 @@ impl RemediationPrPackage {
             **Reachability:** `{}`\n\n\
             #### Description\n\
             {}\n\n\
-            #### Verification Invariants\n\
-            - [x] Evaluated under Sentra default-deny authorization policy\n\
-            - [x] Host-side untrusted execution prevented by `FailClosedBackend`\n\
-            - [x] Invariant enforced: Proposal is draft-only and cannot auto-merge\n\n\
+            #### What Sentra Checked\n\
+            - [ ] No fix was written, applied, built or tested; the diff in this preview is a placeholder.\n\
+            - [ ] The finding is a candidate; it has not been independently verified.\n\n\
             ---\n\
-            *Proposed by [Sentra](https://github.com/sentra-sec/sentra) under Human-in-the-Loop Governance. Base: `{base_commit_sha}`.*",
+            *Draft preview generated locally by [Sentra](https://github.com/Taiizor/Sentra) for human review. Sentra did not create a branch, commit or pull request. Base: `{base_commit_sha}`.*",
             finding.id(),
             finding.severity(),
             finding.confidence(),
@@ -209,6 +251,7 @@ impl RemediationPrPackage {
             finding.description()
         );
 
+        // Placeholder only: the finding carries no fix, so no real diff can be produced.
         let patch_diff = if let Some(loc) = finding.location() {
             format!(
                 "--- a/{path}\n+++ b/{path}\n@@ -{line},1 +{line},1 @@\n- // Vulnerable code at line {line}\n+ // Remediated code\n",
@@ -219,13 +262,6 @@ impl RemediationPrPackage {
             "--- a/remediation.patch\n+++ b/remediation.patch\n@@ -0,0 +1,1 @@\n+// Remediation patch pending human review\n".to_string()
         };
 
-        let gh_command = format!(
-            "gh pr create --draft --title \"{}\" --body \"{}\" --head \"{}\"",
-            title.replace('"', "\\\""),
-            body_markdown.replace('"', "\\\"").replace('\n', " "),
-            branch_name
-        );
-
         let mut id_payload = Vec::new();
         id_payload.extend_from_slice(target.as_bytes());
         id_payload.push(b':');
@@ -234,6 +270,7 @@ impl RemediationPrPackage {
         id_payload.extend_from_slice(base_commit_sha.as_bytes());
 
         let proposal_id = format!("prop-{}", &sha256_digest(&id_payload)[..16]);
+        let gh_command = suggested_gh_command(&title, &branch_name, &proposal_id);
 
         Self {
             proposal_id,

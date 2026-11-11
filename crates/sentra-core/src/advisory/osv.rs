@@ -1,8 +1,11 @@
-//! Open Source Vulnerability (OSV) v1.6 schema ingestion (REQ-F07, EXTENSIONS.md).
+//! Parsing of local Open Source Vulnerability (OSV) JSON records (REQ-F07, EXTENSIONS.md).
 //!
-//! Parses universal OSV JSON advisories and feeds (adopted by Google OSV, RustSec,
-//! GitHub Security Advisory Database, npm, PyPI, and Alpine) into Sentra's
-//! zero-subprocess advisory evaluation database.
+//! Converts OSV records (a single object or an array) from local files into in-memory
+//! [`Advisory`] entries, one per affected package. This is a subset of the OSV schema:
+//! only `introduced` and `fixed` range events are read, and they are evaluated as
+//! semver-like ranges whatever the range type; `last_affected` and `limit` events, the
+//! package ecosystem and `withdrawn` are not used. Nothing is downloaded, and nothing is
+//! persisted: the entries live only in the [`AdvisoryDatabase`] passed in.
 
 use std::{collections::BTreeMap, fs, path::Path};
 
@@ -257,11 +260,36 @@ pub fn parse_osv_payload(json_str: &str) -> Result<Vec<Advisory>, AdvisoryError>
     }
 }
 
+/// What [`ingest_osv_directory_report`] read from a local OSV directory.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct OsvDirectoryIngest {
+    /// Advisory entries added to the database: one per affected package of each record.
+    pub advisory_entries: usize,
+    /// Top-level `.json` files that were read and parsed.
+    pub files_parsed: usize,
+    /// Top-level `.json` files that could not be read or parsed; nothing was taken from them.
+    pub files_skipped: usize,
+}
+
 /// Ingests all `.json` OSV advisories located in a directory into the given database.
+///
+/// Returns the number of advisory entries added. Only top-level `.json` files are read;
+/// files that cannot be read or parsed are skipped. Use [`ingest_osv_directory_report`]
+/// to learn how many files were skipped.
 pub fn ingest_osv_directory(
     database: &mut AdvisoryDatabase,
     dir_path: &Path,
 ) -> Result<usize, AdvisoryError> {
+    ingest_osv_directory_report(database, dir_path).map(|report| report.advisory_entries)
+}
+
+/// Ingests the top-level `.json` OSV files of a directory into the given (in-memory)
+/// database and reports how many files were parsed and skipped. Subdirectories are not
+/// searched and non-`.json` files are ignored.
+pub fn ingest_osv_directory_report(
+    database: &mut AdvisoryDatabase,
+    dir_path: &Path,
+) -> Result<OsvDirectoryIngest, AdvisoryError> {
     if !dir_path.is_dir() {
         return Err(AdvisoryError::new(
             AdvisoryErrorKind::InvalidDatabase,
@@ -279,7 +307,7 @@ pub fn ingest_osv_directory(
         )
     })?;
 
-    let mut count = 0;
+    let mut report = OsvDirectoryIngest::default();
     for entry in entries {
         let entry = match entry {
             Ok(e) => e,
@@ -287,20 +315,25 @@ pub fn ingest_osv_directory(
         };
 
         let path = entry.path();
-        if path.is_file()
-            && let Some(ext) = path.extension()
-            && ext == "json"
-            && let Ok(content) = fs::read_to_string(&path)
-            && let Ok(advisories) = parse_osv_payload(&content)
-        {
-            for adv in advisories {
-                database.add_advisory(adv);
-                count += 1;
+        if !path.is_file() || path.extension().is_none_or(|ext| ext != "json") {
+            continue;
+        }
+        let parsed = fs::read_to_string(&path)
+            .ok()
+            .and_then(|content| parse_osv_payload(&content).ok());
+        match parsed {
+            Some(advisories) => {
+                report.files_parsed += 1;
+                for adv in advisories {
+                    database.add_advisory(adv);
+                    report.advisory_entries += 1;
+                }
             }
+            None => report.files_skipped += 1,
         }
     }
 
-    Ok(count)
+    Ok(report)
 }
 
 #[cfg(test)]
@@ -447,5 +480,42 @@ mod tests {
             result.matches[0].recommended_patch.as_deref(),
             Some("1.5.0")
         );
+    }
+
+    #[test]
+    fn test_osv_directory_report_counts_skipped_files() {
+        let dir = std::env::temp_dir().join(format!(
+            "sentra-osv-dir-{}-{}",
+            std::process::id(),
+            crate::domain::id::SessionId::new()
+        ));
+        fs::create_dir_all(dir.join("nested")).unwrap();
+        let record = r#"{"id":"GHSA-dir-1","affected":[
+            {"package":{"name":"a"},"ranges":[{"type":"SEMVER","events":[{"introduced":"0"},{"fixed":"1.0.0"}]}]},
+            {"package":{"name":"b"},"versions":["0.1.0"]}
+        ]}"#;
+        fs::write(dir.join("one.json"), record).unwrap();
+        fs::write(dir.join("broken.json"), "{ not json").unwrap();
+        fs::write(dir.join("readme.txt"), "not an advisory").unwrap();
+        // Subdirectories are not searched.
+        fs::write(dir.join("nested").join("two.json"), record).unwrap();
+
+        let mut db = AdvisoryDatabase::empty(TimestampUtc::now());
+        let report = ingest_osv_directory_report(&mut db, &dir).unwrap();
+        assert_eq!(
+            report,
+            OsvDirectoryIngest {
+                advisory_entries: 2,
+                files_parsed: 1,
+                files_skipped: 1,
+            }
+        );
+        assert_eq!(db.advisory_count(), 2);
+
+        // The count-only wrapper reports the same entries.
+        let mut db = AdvisoryDatabase::empty(TimestampUtc::now());
+        assert_eq!(ingest_osv_directory(&mut db, &dir).unwrap(), 2);
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }

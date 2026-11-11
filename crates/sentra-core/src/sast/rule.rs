@@ -129,8 +129,17 @@ pub static BUILTIN_RULES: &[SastRule] = &[
         category: RuleCategory::Secret,
         severity: Severity::High,
         cwe_id: "CWE-798",
-        description: "Variable assignment with high-entropy literal secret or API key detected. Hardcoded secrets in code files risk exposure across forks, logs, and artifacts.",
+        description: "Hardcoded literal assigned to a secret, API key, token, or password identifier. Hardcoded secrets in code files risk exposure across forks, logs, and artifacts.",
         recommendation: "Extract credentials to `.env` (ignored by git) or dedicated configuration stores.",
+    },
+    SastRule {
+        id: "SENTRA-SEC-006",
+        name: "AwsSecretAccessKey",
+        category: RuleCategory::Secret,
+        severity: Severity::Critical,
+        cwe_id: "CWE-798",
+        description: "Hardcoded AWS Secret Access Key detected: a 40-character key value on a line that names an AWS secret access key. Together with an access key ID it grants the IAM principal's full API access.",
+        recommendation: "Deactivate and rotate the key pair in AWS IAM immediately and load credentials from environment variables, AWS Secrets Manager, or IAM roles.",
     },
     SastRule {
         id: "SENTRA-SAST-001",

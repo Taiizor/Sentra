@@ -1,6 +1,6 @@
 # Release-Wide Quality & Security Gates Audit
 
-**Status:** ALL GATES PASSED  
+**Status:** ALL GATES PASSED as recorded on 2026-11-08; the evidence of Gates 2, 3 and 7 is not supported as written (see the correction below)  
 **Audit Date:** 2026-11-08  
 **Auditor:** Sentra Independent Security & Quality Review  
 **Reference:** [ROADMAP.md § Release-wide gates](../ROADMAP.md#release-wide-gates), [ADR-0007](adr/0007-open-source-and-integration-licensing.md)  
@@ -10,6 +10,13 @@
 ## 1. Executive Summary
 
 This report performs the formal audit of the **Release-wide gates** mandated by [ROADMAP.md](../ROADMAP.md#release-wide-gates) prior to public platform distribution. All mandatory technical, isolation, dependency, documentation, and licensing gates have been audited and verified.
+
+Correction (2026-11-11): the report is kept as written for history, but the evidence recorded for three gates does not exist as described, so their PASS outcomes need a new audit:
+- Gate 2: no remote workers exist (`sentra fleet` reports an empty registry), so `EgressPolicy::StrictlyDenied` is enforced on none. Egress policies of workers and plugin adapters are declarations; the plugin host does not enforce them.
+- Gate 3: no disposable VM profile has been exercised. Host execution of target code stays disabled (`FailClosedBackend`), but no isolated worker or runner exists, and `sentra verify-audit` is not implemented (exit 5, `not_implemented`).
+- Gate 7: the bundled advisory data is a 6-record sample of 2 RustSec and 4 GHSA records, not a set of RustSec entries.
+
+Sections 3.2 and 3.3 make the same claims about remote workers. See [LIMITATIONS.md](LIMITATIONS.md#6-web-console-and-pinned-core-commands).
 
 ---
 

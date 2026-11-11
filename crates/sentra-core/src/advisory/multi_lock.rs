@@ -81,6 +81,21 @@ impl LockfileKind {
         }
     }
 
+    /// OSV ecosystem name (<https://ossf.github.io/osv-schema/#affectedpackage-field>)
+    /// of the packages this lockfile format records. Deno lockfiles can also carry
+    /// JSR packages; those are tagged per package by the inventory.
+    pub const fn osv_ecosystem(&self) -> &'static str {
+        match self {
+            Self::Cargo => "crates.io",
+            Self::PackageLock | Self::Yarn | Self::Pnpm | Self::Bun | Self::Deno => "npm",
+            Self::RequirementsTxt | Self::Poetry | Self::Pipfile => "PyPI",
+            Self::GoSum => "Go",
+            Self::Composer => "Packagist",
+            Self::NuGet => "NuGet",
+            Self::Gemfile => "RubyGems",
+        }
+    }
+
     /// Detects the lockfile kind from a given filename or path.
     pub fn detect_from_filename(filename: &str) -> Option<Self> {
         let name = Path::new(filename)

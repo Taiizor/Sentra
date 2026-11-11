@@ -16,3 +16,11 @@ pub use model::{
     DiscoveryLimits, DiscoveryResult, IncompleteReason, QuarantineReason, QuarantinedEntry,
     RepositoryMetadataKind, WorkspaceEntry, WorkspaceEntryKind,
 };
+
+/// Classify no-follow metadata (from [`std::fs::symlink_metadata`]) with the same
+/// rules as the boundary: symbolic links, junctions and other reparse points,
+/// devices and recall-on-access placeholders are never reported as ordinary
+/// files or directories. This is an observation, not an access grant.
+pub fn classify_entry_metadata(metadata: &std::fs::Metadata) -> WorkspaceEntryKind {
+    platform::kind(metadata)
+}

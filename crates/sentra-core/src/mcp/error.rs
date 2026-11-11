@@ -3,7 +3,9 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-/// Standard JSON-RPC 2.0 and MCP domain error codes (MCP Revision 2026-07-28).
+/// Standard JSON-RPC 2.0 codes plus Sentra implementation-defined server error codes
+/// (the JSON-RPC 2.0 reserved range -32000 to -32099). Sentra speaks the legacy MCP
+/// handshake era (2025-11-25 and earlier); see [`crate::mcp::protocol`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum McpErrorCode {
     /// Invalid JSON was received by the server (-32700).
@@ -90,6 +92,13 @@ impl McpErrorObject {
             McpErrorCode::MethodNotFound,
             format!("Method '{m}' not found"),
         )
+    }
+
+    /// Helper for an unknown tool name in `tools/call` (-32602), as in the MCP tools
+    /// specification example (`"Unknown tool: invalid_tool_name"`).
+    pub fn unknown_tool(name: impl Into<String>) -> Self {
+        let n = name.into();
+        Self::new(McpErrorCode::InvalidParams, format!("Unknown tool: {n}"))
     }
 
     /// Helper for invalid parameters (-32602).
