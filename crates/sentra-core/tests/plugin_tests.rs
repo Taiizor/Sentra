@@ -788,23 +788,31 @@ wait();
             .unwrap()
             .program;
         let never = std::sync::atomic::AtomicBool::new(false);
-        let mut polls = 0_usize;
+        let mut poll_times = Vec::new();
         let started = Instant::now();
         let run = run_contained_observed(
             &bun,
-            &["-e".into(), "setTimeout(() => {}, 600)".into()],
+            &["-e".into(), "setTimeout(() => {}, 1500)".into()],
             root.path(),
             &env,
             Duration::from_secs(20),
             4096,
             &never,
-            &mut || polls += 1,
+            &mut || poll_times.push(started.elapsed()),
         )
         .unwrap();
         assert_eq!(run.exit_code, Some(0), "{run:?}");
-        assert!(started.elapsed() >= Duration::from_millis(600));
-        // About one poll per 20 ms while the program ran.
-        assert!(polls >= 10, "{polls} polls");
+        assert!(started.elapsed() >= Duration::from_millis(1500));
+        // The callback runs repeatedly while the program is still running, not only
+        // once at the end. The loop sleeps 20 ms between polls, but the count is not
+        // asserted: on GitHub's macOS runners a 20 ms sleep took about 90 ms (7 polls
+        // in 600 ms), so only "several polls spread over the run" is checked.
+        assert!(poll_times.len() >= 3, "{} polls", poll_times.len());
+        let spread = *poll_times.last().unwrap() - poll_times[0];
+        assert!(
+            spread >= Duration::from_millis(500),
+            "polls spread over {spread:?}"
+        );
     }
 
     #[test]

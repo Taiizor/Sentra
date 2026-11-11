@@ -187,6 +187,9 @@ function baseView(app: PacksApp, context: PacksContext): Omit<CodeqlPacksView, "
   };
 }
 
+/** Shown when parsing the core's packs report threw something other than an Error. */
+const PACKS_REPORT_UNREADABLE = "The core's query pack report could not be read.";
+
 function unavailable(app: PacksApp, context: PacksContext, problem: string): CodeqlPacksView {
   return { ...baseView(app, context), available: false, problem, languages: [], missing: [] };
 }
@@ -223,7 +226,9 @@ export async function readPacks(app: PacksApp, options: { fresh?: boolean; signa
   try {
     parsed = parsePacksDocument(result.json);
   } catch (error) {
-    return unavailable(app, context, error instanceof Error ? error.message : String(error));
+    // parsePacksDocument throws Errors with a validation message; any other thrown value is not
+    // echoed to the client (it could carry anything, a stack trace included).
+    return unavailable(app, context, error instanceof Error ? error.message : PACKS_REPORT_UNREADABLE);
   }
   return { ...baseView(app, context), suite: parsed.suite ?? app.codeql.settings().suite, available: true, problem: null, languages: parsed.languages, missing: missingLanguages(parsed.languages) };
 }
@@ -320,7 +325,7 @@ export function interpretDownload(
     try {
       entries = parsePacksDocument(result.json).languages;
     } catch (error) {
-      documentProblem = error instanceof Error ? error.message : String(error);
+      documentProblem = error instanceof Error ? error.message : PACKS_REPORT_UNREADABLE;
     }
   } else {
     entries = parsePackEntries(core?.details.languages);
