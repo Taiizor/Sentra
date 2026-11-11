@@ -2,8 +2,9 @@ import { afterAll, describe, expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { CoverageUnitView, ModelReconReportView, TopologyReportView } from "../../src/types/api.ts";
+import type { CoverageUnitView, ModelReconReportView, ToolAvailability, TopologyReportView } from "../../src/types/api.ts";
 import { openWebDb } from "../db.ts";
+import { describeSearchScope } from "../executables.ts";
 import { HttpError } from "../http-error.ts";
 import { listModelReports, MODEL_RECON_DISCLAIMER, parsePromptOutput, saveModelReport } from "../routes/research.ts";
 import {
@@ -427,13 +428,29 @@ describe("workspace walk", () => {
   });
 });
 
+const FAKE_TOOL: ToolAvailability = {
+  name: "git",
+  available: false,
+  path: null,
+  resolvedPath: null,
+  resolvedVia: null,
+  source: null,
+  onProcessPath: false,
+  binary: null,
+  usage: "not_used",
+  usageNote: "Never executed.",
+  shadowed: [],
+};
+
 function fakeSources(overrides: Partial<TopologySources> = {}): TopologySources {
   return {
     languageProbe: async () => ({ primaryLanguage: "rust", languages: [{ language: "rust", filesCount: 2 }] }),
     lockfileInventory: async () => {
       throw new Error("sentra inventory failed: invalid_workspace");
     },
-    tools: () => [{ name: "git", available: false, path: null }],
+    tools: async () => [FAKE_TOOL],
+    // A host where the persisted PATH read failed: the note must not claim it was searched.
+    toolSearchScope: () => describeSearchScope({ persistedPathRead: false, persistedPathError: "powershell.exe exited with code 1" }, "win32"),
     ...overrides,
   };
 }
@@ -475,7 +492,13 @@ describe("topology report", () => {
     expect(report.packagesTotal).toBe(0);
     expect(report.notes.some((note) => note.includes("Lockfile inventory unavailable") && note.includes("invalid_workspace"))).toBe(true);
     expect(report.notes.some((note) => note.includes("heuristic"))).toBe(true);
-    expect(report.tools).toEqual([{ name: "git", available: false, path: null }]);
+    expect(report.tools).toEqual([FAKE_TOOL]);
+    const toolNote = report.notes.find((note) => note.startsWith("Tool availability"));
+    expect(toolNote).toBe(
+      "Tool availability on the Sentra host searched the bridge process PATH and standard install locations; the persisted system and user PATH (registry) could not be read (powershell.exe exited with code 1). Executable headers were read; no tool was executed.",
+    );
+    const unscoped = await computeTopology(root, fakeSources({ toolSearchScope: undefined }));
+    expect(unscoped.notes).toContain("Tool availability was determined on the Sentra host from file lookups and executable headers; no tool was executed.");
   });
 
   test("reports a failed language probe instead of guessing", async () => {

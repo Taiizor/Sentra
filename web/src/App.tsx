@@ -17,7 +17,9 @@ import { ScannerConsole } from '@/components/dashboard/scanner-console'
 import { SettingsTab } from '@/components/dashboard/settings-tab'
 import { ThreatIntelTab } from '@/components/dashboard/threat-intel-tab'
 import { WebhookTab } from '@/components/dashboard/webhook-tab'
+import { ViewErrorBoundary } from '@/components/dashboard/view-error-boundary'
 import { WorkerFleetTab } from '@/components/dashboard/worker-fleet-tab'
+import { BridgeContractBanner } from '@/components/layout/bridge-contract-banner'
 import { CommandPalette } from '@/components/layout/command-palette'
 import { Header } from '@/components/layout/header'
 import { navItem } from '@/components/layout/nav-items'
@@ -32,6 +34,7 @@ import { api, errorMessage } from '@/lib/api'
 import { useConsole } from '@/lib/console-context'
 import { ConsoleProvider } from '@/lib/console-provider'
 import type { TabId } from '@/lib/router'
+import { useBridgeContract } from '@/lib/use-bridge-contract'
 import { useResource } from '@/lib/use-resource'
 import type { ScanKind, SessionInfo } from '@/types/api'
 
@@ -107,6 +110,8 @@ function ConsoleShell() {
     remediation: overview.data ? overview.data.patches.proposed : null,
   }
   const coreVersion = system.data?.core.version ?? null
+  // Vite hot-reloads the console in development while the bridge keeps running its old code.
+  const contract = useBridgeContract(system.data)
   const openPalette = useCallback(() => setPaletteOpen(true), [])
   const openRegister = useCallback(() => setRegisterOpen(true), [])
   const toggleConsole = useCallback(() => setConsoleOpen((value) => !value), [])
@@ -135,6 +140,7 @@ function ConsoleShell() {
         />
 
         <main className="flex-1 p-3 sm:p-4 md:p-6 flex flex-col gap-4 sm:gap-6 max-w-[1600px] w-full mx-auto">
+          {contract && <BridgeContractBanner mismatch={contract} />}
           {!tenantsLoaded ? (
             <div className="flex flex-col gap-4" aria-busy="true">
               <Skeleton className="h-14 w-full bg-zinc-900" />
@@ -227,7 +233,13 @@ function ActiveView({
     return null
   }
   const View = TAB_COMPONENTS[tab]
-  return <View />
+  // One boundary per tab (keyed by it): a view that fails to render shows the error and a hint
+  // instead of blanking the console, and switching tabs starts with a fresh boundary.
+  return (
+    <ViewErrorBoundary key={tab} title={`The ${navItem(tab).label} view could not be shown`}>
+      <View />
+    </ViewErrorBoundary>
+  )
 }
 
 export default App

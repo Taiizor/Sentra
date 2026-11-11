@@ -63,7 +63,8 @@ async function runTopology(app: AppContext, tenant: TenantRecord, principal: Pri
             const inventory = await app.osv.inventory(root);
             return { lockfiles: inventory.lockfiles, totalPackages: inventory.totalPackages };
           },
-          tools: toolAvailability,
+          tools: () => toolAvailability(app),
+          toolSearchScope: async () => app.executables.searchScope(await app.executables.current()),
         });
         const report: TopologyReportView = {
           reportId: crypto.randomUUID(),

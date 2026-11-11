@@ -2,7 +2,9 @@ import type { Database } from "bun:sqlite";
 import type { AuditLog } from "./audit-log.ts";
 import type { AuthService } from "./auth.ts";
 import type { ServerConfig } from "./config.ts";
+import type { ExecutableLocator } from "./executables.ts";
 import type { GitHubService } from "./github.ts";
+import type { HostPlatform } from "./host-platform.ts";
 import type { LlmGateway } from "./llm.ts";
 import type { SecretStore } from "./secrets.ts";
 import type { SentraCli } from "./sentra-cli.ts";
@@ -27,4 +29,8 @@ export interface AppContext {
   coreStore: CoreStoreReader;
   osv: OsvService;
   scans: ScanService;
+  /** Executable search over the process PATH, the persisted PATH and well-known install directories. */
+  executables: ExecutableLocator;
+  /** Host OS facts: native architecture, OS name, available memory, persisted PATH. */
+  hostPlatform: HostPlatform;
 }

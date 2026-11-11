@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { findOnProcessPathForExecution } from "./executables.ts";
 
 /** Server-side roles. The UI labels them Viewer / Operator / SecurityAdmin. */
 export type Role = "viewer" | "operator" | "admin";
@@ -12,6 +13,13 @@ export interface TokenGrant {
   label: string;
   /** SHA-256 digest of the token; the raw token is never kept in memory after load. */
   digest: Buffer;
+  /** Set on the loopback-only admin grant generated when SENTRA_WEB_TOKENS is empty. */
+  generated?: true;
+}
+
+/** Number of grants configured through SENTRA_WEB_TOKENS (the generated local admin token excluded). */
+export function configuredGrantCount(config: Pick<ServerConfig, "tokenGrants">): number {
+  return config.tokenGrants.filter((grant) => !grant.generated).length;
 }
 
 export interface ServerConfig {
@@ -142,7 +150,10 @@ function resolveSentraBinary(repoRoot: string): string {
     const candidate = path.resolve(repoRoot, "target", profile, exe);
     if (fs.existsSync(candidate)) return candidate;
   }
-  const onPath = Bun.which("sentra");
+  // The binary is executed for every core call, so it is taken from the bridge process PATH only,
+  // never from standard install locations (some can be created by any local user). Relative and
+  // UNC entries are skipped, and on Windows only sentra.exe/.com is accepted (no batch wrapper).
+  const onPath = findOnProcessPathForExecution("sentra");
   if (onPath) return onPath;
   // Resolved lazily: health reports the binary as missing instead of crashing startup.
   return path.resolve(repoRoot, "target", "release", exe);
@@ -238,7 +249,7 @@ export function loadConfig(): ServerConfig {
       );
     }
     generatedAdminToken = loadOrCreateLocalAdminToken(dataDir);
-    tokenGrants.push({ role: "admin", label: "local-admin", digest: sha256(generatedAdminToken) });
+    tokenGrants.push({ role: "admin", label: "local-admin", digest: sha256(generatedAdminToken), generated: true });
   }
 
   const allowedOrigins = new Set<string>();

@@ -4,7 +4,9 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SentraLogo } from '@/components/ui/sentra-logo'
+import { BridgeContractBanner } from '@/components/layout/bridge-contract-banner'
 import { api, errorMessage } from '@/lib/api'
+import { contractMismatch, reportedContractVersion } from '@/lib/contract'
 import type { HealthResponse, SessionInfo } from '@/types/api'
 import { readAndStripFragmentToken } from './session-bootstrap'
 
@@ -130,9 +132,15 @@ export function LoginScreen({ initialError, onSignedIn }: LoginScreenProps) {
         </div>
 
         <BridgeHealth state={health} onRetry={retryHealth} />
+        {health.kind === 'ok' && <ContractNotice health={health.health} />}
       </div>
     </div>
   )
+}
+
+function ContractNotice({ health }: { health: HealthResponse }) {
+  const mismatch = contractMismatch(reportedContractVersion(health))
+  return mismatch ? <BridgeContractBanner mismatch={mismatch} /> : null
 }
 
 function BridgeHealth({ state, onRetry }: { state: HealthState; onRetry: () => void }) {

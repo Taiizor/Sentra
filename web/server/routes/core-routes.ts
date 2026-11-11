@@ -1,23 +1,25 @@
-import os from "node:os";
-import type {
-  AuditLogPage,
-  AuditVerificationView,
-  HealthResponse,
-  HostInfo,
-  SessionInfo,
-  SystemStatus,
-  TenantView,
-  ToolAvailability,
+import {
+  API_CONTRACT_VERSION,
+  type AuditLogPage,
+  type AuditVerificationView,
+  type HealthResponse,
+  type HostInfo,
+  type SessionInfo,
+  type SystemStatus,
+  type TenantView,
+  type ToolAvailability,
 } from "../../src/types/api.ts";
 import type { AppContext } from "../app-context.ts";
 import { markAuditHandled } from "../audit-log.ts";
 import { AttemptLimiter } from "../auth.ts";
+import { inspectBinary } from "../binary-info.ts";
+import { configuredGrantCount } from "../config.ts";
+import { collectHostInfo, describeTools, hostArch } from "../host-tools.ts";
 import { HttpError, json, type Router } from "../http.ts";
 import { permissionsFor, ROLE_LABEL } from "../permissions.ts";
 import { asObject, oneOf, optionalString, requiredString, TENANT_ID_PATTERN } from "../validate.ts";
 import { actorOf, audited, intParam, tenantParam } from "./helpers.ts";
 
-const TOOL_NAMES = ["git", "gh", "cargo", "bun", "codeql", "semgrep", "osv-scanner", "docker"];
 export const AUDIT_VERIFICATIONS_PER_MINUTE = 6;
 
 let cachedCoreVersion: { value: string | null; error: string | null; at: number } | null = null;
@@ -38,31 +40,14 @@ async function coreVersion(app: AppContext): Promise<{ value: string | null; err
   return cachedCoreVersion;
 }
 
-export function hostInfo(app: AppContext): HostInfo {
-  const cpus = os.cpus();
-  return {
-    hostname: os.hostname(),
-    platform: os.platform(),
-    release: os.release(),
-    arch: os.arch(),
-    cpuModel: cpus[0]?.model ?? null,
-    cpuCount: cpus.length,
-    loadAverage: process.platform === "win32" ? null : os.loadavg(),
-    totalMemoryBytes: os.totalmem(),
-    freeMemoryBytes: os.freemem(),
-    uptimeSeconds: Math.round(os.uptime()),
-    processRssBytes: process.memoryUsage().rss,
-    bunVersion: Bun.version,
-    cliQueued: app.cli.queued,
-    sampledAt: new Date().toISOString(),
-  };
+/** Host facts for the system page (native architecture, OS name, available memory, real runtime). */
+export function hostInfo(app: Pick<AppContext, "executables" | "hostPlatform" | "cli">): Promise<HostInfo> {
+  return collectHostInfo(app, app.cli.queued);
 }
 
-export function toolAvailability(): ToolAvailability[] {
-  return TOOL_NAMES.map((name) => {
-    const found = Bun.which(name);
-    return { name, available: !!found, path: found ?? null };
-  });
+/** Reported tools, located through the executable search snapshot; nothing is executed. */
+export function toolAvailability(app: Pick<AppContext, "executables" | "hostPlatform">): Promise<ToolAvailability[]> {
+  return describeTools(app);
 }
 
 function sessionInfo(principal: { role: SessionInfo["role"]; label: string; via: SessionInfo["via"] }, expiresAt: string | null): SessionInfo {
@@ -80,7 +65,8 @@ function sessionInfo(principal: { role: SessionInfo["role"]; label: string; via:
 export function registerCoreRoutes(router: Router, app: AppContext): void {
   // ── health (public, minimal) ────────────────────────────────────────────
   router.get("/api/health", { auth: "public" }, () => {
-    const body: HealthResponse = { status: "ok", coreAvailable: app.cli.available() };
+    // The contract version lets a console loaded from newer (or older) code detect the mismatch.
+    const body: HealthResponse = { status: "ok", coreAvailable: app.cli.available(), apiContractVersion: API_CONTRACT_VERSION };
     return json(body);
   });
 
@@ -114,14 +100,24 @@ export function registerCoreRoutes(router: Router, app: AppContext): void {
 
   // ── system ──────────────────────────────────────────────────────────────
   router.get("/api/system", { auth: "session", permission: "read" }, async () => {
-    const version = await coreVersion(app);
+    // The first response waits for the persisted PATH read; later ones use the cached snapshot.
+    const snapshot = await app.executables.current();
+    const corePresent = app.cli.available();
+    const [version, host, tools, coreBinary] = await Promise.all([
+      coreVersion(app),
+      hostInfo(app),
+      describeTools(app, { snapshot }),
+      corePresent ? hostArch(app).then((arch) => inspectBinary(app.config.sentraBin, arch)) : Promise.resolve(null),
+    ]);
     const ai = app.llm.status();
     const body: SystemStatus = {
+      apiContractVersion: API_CONTRACT_VERSION,
       mode: app.config.production ? "production" : "development",
-      core: { binaryPath: app.config.sentraBin, present: app.cli.available(), version: version.value, error: version.error },
+      core: { binaryPath: app.config.sentraBin, present: corePresent, version: version.value, error: version.error, binary: coreBinary },
       dataDir: app.config.dataDir,
-      host: hostInfo(app),
-      tools: toolAvailability(),
+      host,
+      tools,
+      toolSearch: app.executables.status(snapshot),
       integrations: {
         githubCredentialSource: app.github.resolveAuth()?.source ?? null,
         osvEnabled: app.osv.enabled(),
@@ -131,7 +127,7 @@ export function registerCoreRoutes(router: Router, app: AppContext): void {
         gitlabWebhookTokenConfigured: !!app.config.gitlabWebhookToken,
       },
       auth: {
-        configuredGrants: app.config.tokenGrants.length,
+        configuredGrants: configuredGrantCount(app.config),
         generatedLocalToken: !!app.config.generatedAdminToken,
         bindHost: app.config.host,
         loopbackOnly: app.config.isLoopbackBind,
@@ -145,7 +141,7 @@ export function registerCoreRoutes(router: Router, app: AppContext): void {
     return json(body);
   });
 
-  router.get("/api/system/host", { auth: "session", permission: "read" }, () => json(hostInfo(app)));
+  router.get("/api/system/host", { auth: "session", permission: "read" }, async () => json(await hostInfo(app)));
 
   // ── tenants ─────────────────────────────────────────────────────────────
   router.get("/api/tenants", { auth: "session", permission: "read" }, async () => {

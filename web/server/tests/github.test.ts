@@ -36,7 +36,9 @@ const SHA_B = "b".repeat(40);
 const created: { dir: string; close: () => void }[] = [];
 
 function freshDb() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sentra-gh-"));
+  // Canonical: PR scan workspaces are compared with realpath results (/private/var on macOS, long
+  // names instead of 8.3 short names on Windows CI runners).
+  const dir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "sentra-gh-")));
   const db = openWebDb(path.join(dir, "web.db"));
   created.push({ dir, close: () => db.close() });
   return { dir, db };

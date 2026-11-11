@@ -8,6 +8,7 @@ import type { ScanStreamEvent } from "../../src/types/api.ts";
 import type { AppContext } from "../app-context.ts";
 import { AuditLog } from "../audit-log.ts";
 import { openWebDb } from "../db.ts";
+import { ExecutableLocator } from "../executables.ts";
 import { HttpError } from "../http-error.ts";
 import { cliFailure, type CliResult, type CliRunOptions } from "../sentra-cli.ts";
 import {
@@ -408,7 +409,18 @@ function cliResult(json: unknown, code = 0): CliResult {
 
 type CliHandler = (args: string[], options: CliRunOptions) => Promise<CliResult> | CliResult;
 
-function pipelineHarness(handler: CliHandler, fetcher?: OsvFetcher) {
+/** Executable search stand-in: codeql is "installed" without touching the real host. */
+const FAKE_CODEQL = "/opt/codeql/codeql";
+const FAKE_EXECUTABLES = new ExecutableLocator({
+  platform: "linux",
+  env: { PATH: "/opt/codeql" },
+  homedir: "/home/test",
+  isDirectory: () => false,
+  listDirectory: (dir) => (dir === "/opt/codeql" ? ["codeql"] : []),
+  isExecutableFile: () => true,
+});
+
+function pipelineHarness(handler: CliHandler, fetcher?: OsvFetcher, executables: ExecutableLocator = FAKE_EXECUTABLES) {
   const db = tempDb();
   const settings = new SettingsStore(db);
   const audit = new AuditLog(db, crypto.randomBytes(32));
@@ -446,6 +458,7 @@ function pipelineHarness(handler: CliHandler, fetcher?: OsvFetcher) {
     cli,
     osv,
     config: { cliLongTimeoutMs: 5_000, cliTimeoutMs: 5_000 },
+    executables,
     workspaces: {
       get: (tenantId: string) => {
         if (tenantId !== "t1") throw new HttpError(404, "tenant_not_found", "not registered");
@@ -482,7 +495,8 @@ describe("scan pipeline", () => {
     expect(run.packagesAudited).toBeNull();
     expect(run.summary?.dependencySkippedReason).toContain("disabled by policy");
     expect(run.summary?.dependency).toBeNull();
-    expect(run.summary?.codeql?.codeqlInstalled).toBe(!!Bun.which("codeql"));
+    expect(run.summary?.codeql?.codeqlInstalled).toBe(true);
+    expect(events.some((event) => event.type === "stage" && event.stage === "codeql" && event.message.includes(`installed at ${FAKE_CODEQL}`))).toBe(true);
     expect(run.summary).toMatchObject({ newFindings: 2, resolvedFindings: 0, stillOpen: 0, stageErrors: [] });
     expect(harness.calls.map((args) => args[0])).toEqual(["scan", "codeql"]);
     expect(harness.calls[0]).toContain("--database");
@@ -494,6 +508,34 @@ describe("scan pipeline", () => {
     sastMatches = [SECRET_MATCH];
     const second = await harness.service.run({ tenantId: "t1", kind: "sast", trigger: "operator", actor });
     expect(second.summary).toMatchObject({ newFindings: 0, resolvedFindings: 1, stillOpen: 1 });
+  });
+
+  test("a codeql that was not found names only the locations that were actually searched", async () => {
+    const noCodeql = new ExecutableLocator({
+      platform: "win32",
+      env: { Path: "C:\\Windows\\System32" },
+      homedir: "C:\\Users\\test",
+      isDirectory: () => false,
+      listDirectory: () => [],
+      isExecutableFile: () => true,
+      loadPersisted: async () => ({ entries: { system: [], user: [] }, read: false, error: "powershell.exe exited with code 1" }),
+    });
+    const harness = pipelineHarness(
+      (args) => {
+        if (args[0] === "scan") return cliResult(scanJson([]));
+        if (args[0] === "codeql") return cliResult(codeqlJson());
+        throw new Error(`unexpected command ${args[0]}`);
+      },
+      undefined,
+      noCodeql,
+    );
+    const events: ScanStreamEvent[] = [];
+    const run = await harness.service.run({ tenantId: "t1", kind: "all", trigger: "operator", actor, onEvent: (event) => events.push(event) });
+    expect(run.summary?.codeql?.codeqlInstalled).toBe(false);
+    const message = events.find((event) => event.type === "stage" && event.stage === "codeql" && event.status === "completed");
+    expect(message && "message" in message ? message.message : "").toContain(
+      "codeql is not found (searched the bridge process PATH and standard install locations; the persisted system and user PATH (registry) could not be read (powershell.exe exited with code 1))",
+    );
   });
 
   test("a failed stage marks the run failed and resolves nothing", async () => {

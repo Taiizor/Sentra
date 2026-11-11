@@ -25,7 +25,7 @@ configured, the UI shows that state and does not substitute sample data.
 | PR security scans | The PR's changed files at the head commit, fetched from GitHub into a private temp directory and scanned with `sentra scan`. |
 | Webhook deliveries | Persisted only after HMAC (GitHub) or token (GitLab) verification. |
 | Operator audit log | Append-only chain in `sentra-web.db`. Each entry is HMAC-SHA256 linked to the previous one and can be verified from the Audit tab. |
-| Host information | The bridge host's real OS metrics. The core has no remote-worker registry, and the UI says so. |
+| Host information | The bridge host's real OS metrics and tool locations, read from the OS and from files (see *Host and tool detection*). The core has no remote-worker registry, and the UI says so. |
 
 ## Requirements
 
@@ -40,7 +40,7 @@ configured, the UI shows that state and does not substitute sample data.
   1. `SENTRA_BIN`
   2. `target/release/sentra[.exe]`
   3. `target/debug/sentra[.exe]`
-  4. `sentra` on `PATH`
+  4. `sentra` on the bridge process `PATH` (on Windows only `sentra.exe`/`.com`, never a batch wrapper). Standard install locations such as `~/.cargo/bin` are not used for the binary, because it is executed; see [Host and tool detection](#host-and-tool-detection).
 
 ## Running
 
@@ -177,6 +177,129 @@ On first start, the bridge reads the earlier store `<data dir>/sentra.db` in rea
 
 That file contains `tenants` and `system_settings` tables that the earlier bridge added. These tables make every core command on that store fail its schema check, which is why each workspace now uses a fresh store under `core-stores/`. Once you have checked the import, you can delete the legacy `sentra.db*` and `ws_*.db*` files.
 
+## Host and tool detection
+
+*Host & workers* and *Settings → System* describe the machine that runs the bridge. Detection never runs a tool it finds. The only programs the bridge starts for it are fixed system programs, called by absolute path without a shell, with a minimal environment and a short timeout; their results are cached:
+
+| Host OS | Programs | Used for |
+| --- | --- | --- |
+| Windows | `%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe` | One registry read: the persisted system and user `Path` and the hardware `PROCESSOR_ARCHITECTURE`. |
+| macOS | `/usr/bin/sw_vers`, `/usr/sbin/sysctl`, `/usr/bin/vm_stat` | OS name and version, Rosetta 2 / Apple silicon detection, available memory. |
+| Linux | none | Everything is read from files. |
+
+Everything else is read from files, with bounded reads.
+
+On Windows, PowerShell is started as `powershell.exe -NoProfile -NonInteractive -NoLogo -Command -`, and the fixed, single-line registry script is written to its standard input. The command line carries no `-EncodedCommand` payload and no `-ExecutionPolicy` override, which endpoint security products commonly flag. A successful registry read is reused for 10 minutes. A failed one (PowerShell exits non-zero, times out after 5 seconds, prints output that cannot be parsed, or cannot be started, for example because Constrained Language Mode under WDAC or AppLocker blocks the script) is reused too: PowerShell is started again after 1, 2, 4 and 8 minutes, then at most once every 10 minutes, and the page shows when the next attempt is due. Directory contents are listed again every 60 seconds.
+
+### Why the bridge's own PATH is not enough
+
+A process copies `PATH` when it starts. A directory added to `PATH` after the bridge (or the terminal that launched it) started, for example by an installer, is not on the bridge's `PATH`, so tools in it are invisible to the bridge's own lookups. A tool installed later into a directory that was already on its `PATH` (such as `~\scoop\shims`, `~/.cargo/bin` or `/opt/homebrew/bin`) is found. Services also start with a reduced `PATH`:
+
+- macOS: `/etc/paths` and `/etc/paths.d` are applied by `path_helper` in login shells only. Processes started by launchd (LaunchAgents and LaunchDaemons, apps opened from the Dock or Finder, and what they start) get launchd's minimal `PATH`, and shell profiles (`~/.zprofile`, `~/.zshrc`), where `brew shellenv` usually adds `/opt/homebrew/bin`, are not read either.
+- Linux: `/etc/environment` is applied by `pam_env` at login. systemd services, cron jobs and containers do not read it, nor shell profiles (`~/.profile`, `~/.bashrc`) that add `~/.local/bin`, `~/.cargo/bin` or `/home/linuxbrew/.linuxbrew/bin`.
+
+### Search order
+
+Each tool is looked up in these directories, in order. Empty, relative and duplicate entries are dropped. On Windows, UNC (`\\server\share`) and device (`\\?\`, `\\.\`) entries are skipped on purpose, because listing a share would make the bridge authenticate to that host on every refresh; the page shows how many were skipped. Standard install locations under such a path are dropped as well, before anything is listed, for example the Python directories under an `APPDATA` that Folder Redirection points to a share. The first match is reported, and up to four later matches are listed as shadowed. The same file reached through another directory (for example `/bin` and `/usr/bin` on merged-`/usr` Linux distributions, or a symlinked directory) is reported once. A row shows a resolved target only when the path or one of its directories is a symlink or junction; a path that differs from its canonical form only through a Windows 8.3 short name (`C:\PROGRA~1`), a `subst` or mapped drive, or letter case is shown as it is.
+
+Directories are checked and listed asynchronously when the search is refreshed, each with a 2-second deadline; a directory that does not answer in time is treated as empty (a standard install location as missing) until the next refresh.
+
+1. **Process PATH** — the bridge's own environment; this is what its subprocesses inherit.
+2. **Persisted system PATH**
+   - Windows: `HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment\Path`. `%VAR%` references in these `REG_EXPAND_SZ` values are expanded from the bridge's environment; an entry that names a variable the bridge does not know (for example one created after it started) is skipped.
+   - macOS: `/etc/paths`, then the files in `/etc/paths.d/`. If one of these files cannot be read, the entries that were read are still searched, and the page reports a partial read.
+   - Linux: the `PATH=` line of `/etc/environment`.
+3. **Persisted user PATH** — Windows: `HKCU\Environment\Path`. macOS and Linux have no persisted user PATH.
+4. **Standard install locations** — per-OS directories that package managers and installers use, such as `~/.bun/bin`, `~/.cargo/bin`, `/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, `/snap/bin` and `/home/linuxbrew/.linuxbrew/bin`. On Windows, Chocolatey's `bin` directory is included only when `ChocolateyInstall` is set; there is no `%ProgramData%\chocolatey` fallback, because any local user can create that directory.
+
+Each match records its source and whether it is on the process PATH. If the persisted PATH could not be read, the page and scan messages say so and name only the locations that were searched.
+
+When a tool is found only through steps 2–4, the page explains why the bridge cannot see it and what to change, depending on where it was found and on the host OS. The running Bun is left out of this notice: starting the bridge by absolute path from a directory that is not on `PATH` is normal.
+
+| Found in | Windows | macOS | Linux |
+| --- | --- | --- | --- |
+| Persisted PATH (steps 2–3) | The bridge, or the terminal or application it was started from, predates the `PATH` change. Restart the bridge from a terminal opened from the Start menu or Explorer. A terminal inside an application that was already running (for example VS Code) inherits that application's old `PATH`, so restart the application first. A bridge run as a Windows service gets `PATH` changes only after a reboot, unless its service configuration sets `PATH`. | launchd did not apply `/etc/paths(.d)`, or the shell was opened before the change. Start the bridge from a new login shell, or set `PATH` under `EnvironmentVariables` in its launchd plist. | systemd, cron or a container did not apply `/etc/environment`, or the session predates the change. Set `Environment=PATH=…` in the systemd unit, or start the bridge from a new login shell. |
+| Standard install location only (step 4) | The installer did not add the directory to any `PATH`. Add it to the user or system `Path` if other programs need it, then restart as above. | The directory is usually added by a shell profile (`~/.zprofile`) that launchd never reads. Start the bridge from a login shell, or add the directory in the launchd plist or `/etc/paths.d`. | The directory is usually added by a shell profile (`~/.profile`, `~/.bashrc`) that systemd and cron never read. Start the bridge from a login shell, or set `Environment=PATH=…` in its unit. `/snap/bin` is the exception: snapd adds it for login shells (`/etc/profile.d/apps-bin-path.sh`) and, through its systemd environment generator, for systemd services, so it is missing from cron jobs, containers, units that set their own `PATH` and sessions started before snapd was installed. |
+
+The second row assumes the persisted PATH was read. If it could not be read, or was only partly read, the page does not claim that no `PATH` lists the directory: it says that this is unknown and gives both the restart advice and how to add the directory.
+
+#### Package-manager shims (Windows)
+
+- **Scoop** puts a copy of its generic `shim.exe` in `~\scoop\shims` for every command (for example `bun.exe`), next to a `bun.shim` text file whose `path = "…"` line names the real executable, usually under `~\scoop\apps\<app>\current` (not on `PATH`, so not searched). When a located `<name>.exe` has such a sibling `.shim` file, the row shows the shim's path with the target as its resolved path ("Scoop shim"), the architecture is read from the target, and the Bun runtime is matched against the target. The `.shim` file is read with a size limit; only an absolute drive path is accepted as its target, and the target is never run by detection.
+- **Chocolatey** shims in `%ChocolateyInstall%\bin` are generated by shimgen and carry their target inside the executable. They are not resolved: the row reports the shim itself, and a note says that the architecture shown is the shim's.
+
+#### Which file is run
+
+Finding a tool and running it are separate decisions. Standard install locations are searched only to report what is installed: some can be created by any local user, and on macOS and Linux they may belong to a different user than the one running the bridge. The bridge itself runs only two programs found this way:
+
+- **`gh`** (`gh auth token`): taken from the process PATH or the persisted PATH, never from a standard install location. On Windows only a `.exe` or `.com` is started, never a `.cmd`/`.bat` (those run through `cmd.exe`); a script earlier in the search order is skipped in favour of a later `gh.exe`. On macOS and Linux, a match from the persisted PATH is run only if the directory it was found in, the file it resolves to and that file's directory are each owned by root or the bridge user and writable neither by others nor by a group other than root. A match that fails is skipped, and the *gh* row's usage note gives the reason, which names the path and one of:
+  - "owned by uid N, which is neither root nor the bridge user (uid M)";
+  - "writable by others";
+  - "writable by group admin (gid 80), which is not root" (the group name comes from `/etc/group` when it is listed there). This is the case for Homebrew's `/opt/homebrew/bin` and, on Intel Macs, `/usr/local/bin`, which are group-writable by the `admin` group: any admin could replace the file. Such a `gh` is run only when its directory is on the bridge's process PATH.
+
+  Process-PATH matches are not checked (the operator chose that `PATH`). On Windows, directory ACLs are not checked (reading them would mean starting another program); the persisted PATH is trusted as much as the process PATH, which Windows builds from it. `gh` runs with an allow-listed environment that excludes the bridge's secrets (`SENTRA_WEB_SECRET_KEY`, `SENTRA_WEB_TOKENS`, webhook secrets), and is stopped after 5 seconds. The *gh* row's usage note names the file that is run, or why none is.
+- **`sentra`**: see [the binary lookup order](#requirements); only the process PATH is used, not the persisted PATH or standard install locations.
+
+Programs the bridge starts, such as the core CLI and through it plugin adapters, look tools up on the bridge's own process PATH, not at the paths shown on this page.
+
+#### Bun runtime
+
+`bun run` prepends a temporary `bun-node-<hex>` directory inside the system temp directory, holding entries named `bun` and `node`. Detection skips these shim directories. The *bun* row and the *Bun runtime* field show the located installation that is the same file as the running executable, compared by device and inode rather than by path string:
+
+- On Windows the shim entries are hard links, and `process.execPath` names the shim; the row shows the install it links to (for example `~/.bun/bin/bun.exe`).
+- On macOS and Linux the shim entries are symlinks, and `process.execPath` is already the resolved file, for example `/opt/homebrew/Cellar/bun/<version>/bin/bun` for a Homebrew install. The row shows the `PATH` entry (`/opt/homebrew/bin/bun`) with the resolved file as its symlink target.
+- With Scoop, the located `~\scoop\shims\bun.exe` is a shim copy, so its `.shim` target (`~\scoop\apps\bun\current\bun.exe`) is compared instead; the row shows the shim with that target.
+
+If no located `bun` is the same file (the `bun run` shim is a copy, or Bun was started from outside the searched directories), no other installation is substituted: the row shows the running file, and when that is a shim, a note says the install path is unknown.
+
+### Architecture
+
+The architecture of each match, and of the `sentra` binary, is read from the file header. Nothing is executed:
+
+- **PE** (Windows): the COFF machine type.
+- **ELF** (Linux): `e_machine`.
+- **Mach-O** (macOS): the CPU type. A universal (fat) binary lists every architecture it contains.
+- **Scripts:** files that start with `#!` are reported as scripts, with the interpreter line as a note.
+
+The result is compared with the host's native architecture:
+
+| Result | Meaning |
+| --- | --- |
+| native | Matches the hardware. |
+| emulated | Runs under emulation, for example an x64 binary on Windows on Arm, or under Rosetta 2 on Apple silicon. |
+| 32-bit | Runs through a 64-bit OS's 32-bit compatibility layer: x86 under WOW64 on Windows (also on Windows on Arm), i386 on Linux x64, and 32-bit Arm on Linux arm64, which runs only if the CPU and kernel support AArch32 (many arm64 servers and boards do; some recent cores do not). |
+| incompatible | Cannot run on this host. This includes 32-bit Arm on Windows on Arm (Windows 11 24H2 and later do not run 32-bit Arm apps) and any 32-bit code on macOS. |
+| unknown | The header was not recognised or could not be read, for example a Windows App Execution Alias. |
+
+The same rules decide which architecture-suffixed release assets (such as `osv-scanner_linux_arm`) count as present; none of those tools is run by the bridge.
+
+### Host fields
+
+| Field | Windows | macOS | Linux |
+| --- | --- | --- | --- |
+| OS name | `os.version()`; "Windows 10" becomes "Windows 11" on build 22000 or later, because Windows 11 keeps the old product name in the registry | `sw_vers` product name and version | `PRETTY_NAME` from `/etc/os-release`, else `/usr/lib/os-release` |
+| Native architecture | `PROCESSOR_ARCHITECTURE` from the registry, else `PROCESSOR_ARCHITEW6432` / `PROCESSOR_ARCHITECTURE` from the environment | `sysctl.proc_translated` (Rosetta 2) and `hw.optional.arm64` | `os.machine()` |
+| Available memory | `os.freemem()` (available physical memory) | `vm_stat` page counts | `MemAvailable` from `/proc/meminfo` |
+| Load average | not reported | `os.loadavg()` | `os.loadavg()` |
+
+The *Architecture* field shows the process architecture (`os.arch()`). When the process architecture differs from the hardware, the field says so, for example "x64 process on arm64 hardware (emulated)". On macOS, `os.freemem()` counts only free pages, so it would overstate memory use.
+
+### What the bridge uses each tool for
+
+| Tool | Usage | Detail |
+| --- | --- | --- |
+| `gh` | executed | `gh auth token` reads the GitHub CLI session when no token is stored in the console and `GITHUB_TOKEN`/`GH_TOKEN` are unset. See [Which file is run](#which-file-is-run). |
+| `bun` | runtime | Runs the bridge. |
+| `codeql` | presence only | The language probe and topology reports say whether CodeQL is installed. CodeQL is never run. |
+| `git` | not used | Repository metadata is parsed from `.git` directly; `git` is never run. |
+| `cargo`, `docker` | not used | Listed for information only. The core binary is never built by the bridge. |
+| `semgrep` | not used | The bridge never runs it. A semgrep plugin adapter (see `examples/adapters`) that is installed in the plugin directory and started from the *Plugins* tab runs it; the adapter looks `semgrep` up on the `PATH` the bridge passes on, which is the bridge's own process PATH, not the path shown here. Example adapters are never loaded implicitly. |
+| `osv-scanner` | not used | OSV lookups use the OSV.dev API. |
+
+Presence does not show a tool's version or licence, or whether it works.
+
+Only Windows 11 x64 has been exercised on a real host. The CI workflow's `web-test` job runs the bridge unit tests on GitHub's `ubuntu-latest`, `windows-latest` and `macos-latest` runners; on Linux and macOS this includes the real-file-system tests that are skipped on Windows (ownership and mode checks, running a stand-in `gh` with the allow-listed environment and timeout). The persisted PATH sources, emulation detection and memory sources are tested with injected OS answers, and the bridge itself has not been run on macOS, Linux or Arm hosts.
+
 ## Limitations
 
 - SAST is the core's heuristic, line-based rule set. Findings are candidates until a human triages them.
@@ -193,3 +316,14 @@ bun run typecheck   # UI + bridge type-check (tsc -b)
 bun run test        # bridge unit tests (bun test server/tests)
 bun run lint        # oxlint
 ```
+
+### Bridge and console versions
+
+`bun run dev` hot-reloads the console when `src/` changes, but the bridge (`server.ts`) keeps running the code it started with. To make that visible, `src/types/api.ts` defines `API_CONTRACT_VERSION`, which the bridge reports as `apiContractVersion` in `GET /api/health` (public) and `GET /api/system`. The console checks `/api/health` on load, every 30 seconds while visible, and when the window regains focus. When the versions differ, or the bridge reports none (it predates version 2), a banner says which side is older:
+
+- **Bridge older than the console** (it was not restarted after an update, or after `bun run build` in production): the banner asks you to restart the bridge (stop it and rerun `bun run dev`, or `bun run start`).
+- **Bridge newer than the console**: the banner asks you to reload the page. If the banner stays, in production (`bun run start`) the console is the prebuilt `web/dist`, which a reload serves unchanged, so rebuild it with `bun run build` and reload; in development, the bridge was started from another checkout, so restart it from this one.
+
+Views whose data has the old shape show a "restart the bridge" placeholder, and each tab renders inside an error boundary, so a view that still fails shows the error instead of a blank page.
+
+Bump `API_CONTRACT_VERSION` whenever a response shape changes incompatibly: a field is removed, renamed or changes type, or the console starts to require a new field.

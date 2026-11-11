@@ -3,6 +3,7 @@ import { HttpError } from "./http-error.ts";
 import { log } from "./logger.ts";
 import { fetchWithLimits } from "./net-guard.ts";
 import type { SecretStore } from "./secrets.ts";
+import { envValue, findOnProcessPathForExecution } from "./executables.ts";
 import { isValidRepoRef, type GitHubRepoRef } from "./git-meta.ts";
 
 /**
@@ -25,6 +26,56 @@ const API_BASE = (process.env.SENTRA_GITHUB_API_URL ?? "https://api.github.com")
 const GRAPHQL_URL = API_BASE.endsWith("/api/v3") ? `${API_BASE.slice(0, -3)}graphql` : `${API_BASE}/graphql`;
 export const GITHUB_WEB_HOST = API_BASE === "https://api.github.com" ? "github.com" : new URL(API_BASE).host;
 
+/** Time `gh auth token` may take before it is killed; it only reads local config or the OS credential store. */
+export const GH_TOKEN_TIMEOUT_MS = 5_000;
+
+/**
+ * Variables `gh auth token` may see: what it needs to find its configuration and the OS credential
+ * store (Windows Credential Manager, macOS Keychain, the Secret Service over D-Bus on Linux).
+ * The bridge's own secrets (SENTRA_WEB_SECRET_KEY, SENTRA_WEB_TOKENS, webhook secrets) are never
+ * passed.
+ */
+const GH_ENV_ALLOWLIST = [
+  "PATH",
+  "PATHEXT",
+  "SYSTEMROOT",
+  "SYSTEMDRIVE",
+  "WINDIR",
+  "TEMP",
+  "TMP",
+  "TMPDIR",
+  "HOME",
+  "USERPROFILE",
+  "HOMEDRIVE",
+  "HOMEPATH",
+  "APPDATA",
+  "LOCALAPPDATA",
+  "PROGRAMDATA",
+  "USER",
+  "LOGNAME",
+  "LANG",
+  "LC_ALL",
+  "XDG_CONFIG_HOME",
+  "XDG_DATA_HOME",
+  "XDG_STATE_HOME",
+  "XDG_RUNTIME_DIR",
+  "DBUS_SESSION_BUS_ADDRESS",
+  "GH_CONFIG_DIR",
+];
+
+/** Allow-listed environment for `gh auth token` (prompts, colour and update checks disabled). */
+export function ghEnvironment(
+  source: Readonly<Record<string, string | undefined>> = process.env,
+  platform: NodeJS.Platform = process.platform,
+): Record<string, string> {
+  const env: Record<string, string> = { GH_PROMPT_DISABLED: "1", GH_NO_UPDATE_NOTIFIER: "1", NO_COLOR: "1" };
+  for (const name of GH_ENV_ALLOWLIST) {
+    const value = envValue(source, name, platform);
+    if (value !== undefined) env[name] = value;
+  }
+  return env;
+}
+
 /** Default cap for REST/GraphQL response bodies. */
 const DEFAULT_MAX_RESPONSE_BYTES = 32 * 1024 * 1024;
 /** Upper bound of open pull requests read per listing (10 GraphQL pages of 100). */
@@ -42,6 +93,14 @@ export interface GitHubServiceOptions {
   fetcher?: GitHubFetcher;
   /** Replaces `gh auth token` discovery (tests, or hosts where gh must not be consulted). */
   ghTokenReader?: () => string | null;
+  /**
+   * Absolute path of the gh executable to run, or null when none qualifies. Defaults to the bridge
+   * process PATH only; the app passes the locator's execution lookup (process PATH and persisted
+   * PATH, never standard install locations).
+   */
+  locateGh?: () => string | null;
+  /** Timeout for `gh auth token` (default GH_TOKEN_TIMEOUT_MS). */
+  ghTimeoutMs?: number;
 }
 
 export interface GitHubViewer {
@@ -179,7 +238,7 @@ function errorMessageFrom(text: string): string | null {
 }
 
 export class GitHubService {
-  private ghCache: { token: string | null; at: number } | null = null;
+  private ghCache: { token: string | null; at: number; ghPath: string | null } | null = null;
   private readonly pullCache = new Map<string, { at: number; data: PullRequestSummary[] }>();
   private readonly viewerCache = new Map<string, { at: number; viewer: GitHubViewer }>();
   private readonly secrets: SecretStore;
@@ -187,6 +246,8 @@ export class GitHubService {
   private readonly ghCwd: string;
   private readonly fetcher: GitHubFetcher;
   private readonly ghTokenReader: (() => string | null) | null;
+  private readonly locateGh: () => string | null;
+  private readonly ghTimeoutMs: number;
 
   constructor(secrets: SecretStore, envToken: string | null, ghCwd: string, options: GitHubServiceOptions = {}) {
     this.secrets = secrets;
@@ -194,34 +255,50 @@ export class GitHubService {
     this.ghCwd = ghCwd;
     this.fetcher = options.fetcher ?? fetchWithLimits;
     this.ghTokenReader = options.ghTokenReader ?? null;
+    this.locateGh = options.locateGh ?? (() => findOnProcessPathForExecution("gh"));
+    this.ghTimeoutMs = options.ghTimeoutMs ?? GH_TOKEN_TIMEOUT_MS;
   }
 
-  /** Reads `gh auth token` (cached for five minutes). Runs outside any workspace. */
+  /**
+   * Reads `gh auth token` (cached for five minutes, and read again when a different gh is
+   * located). Runs outside any workspace, with an allow-listed environment and a timeout. On
+   * Windows only a .exe/.com is started, never a batch script (which would run through cmd.exe).
+   */
   private ghCliToken(): string | null {
     const now = Date.now();
-    if (this.ghCache && now - this.ghCache.at < 5 * 60_000) return this.ghCache.token;
+    const gh = this.ghTokenReader ? null : this.locateGh();
+    if (this.ghCache && now - this.ghCache.at < 5 * 60_000 && this.ghCache.ghPath === gh) return this.ghCache.token;
     let token: string | null = null;
     if (this.ghTokenReader) {
       token = this.ghTokenReader();
+    } else if (gh && process.platform === "win32" && !/\.(exe|com)$/i.test(gh)) {
+      log.warn("the located gh is not a Windows executable; it is not started", { path: gh });
     } else {
-      const gh = Bun.which("gh");
       if (gh) {
         try {
           const proc = Bun.spawnSync([gh, "auth", "token", "--hostname", GITHUB_WEB_HOST], {
             cwd: this.ghCwd,
+            stdin: "ignore",
             stdout: "pipe",
             stderr: "pipe",
             windowsHide: true,
-            env: { ...process.env, GH_PROMPT_DISABLED: "1", NO_COLOR: "1" },
+            env: ghEnvironment(),
+            timeout: this.ghTimeoutMs,
+            killSignal: "SIGKILL",
+            maxBuffer: 64 * 1024,
           });
-          const out = proc.stdout.toString().trim();
-          if (proc.exitCode === 0 && /^[A-Za-z0-9_]{20,255}$/.test(out)) token = out;
+          if (proc.exitedDueToTimeout) {
+            log.warn("gh auth token did not finish in time and was stopped", { path: gh, timeoutMs: this.ghTimeoutMs });
+          } else {
+            const out = proc.stdout.toString().trim();
+            if (proc.exitCode === 0 && /^[A-Za-z0-9_]{20,255}$/.test(out)) token = out;
+          }
         } catch (error) {
           log.warn("gh auth token failed", { error: String(error) });
         }
       }
     }
-    this.ghCache = { token, at: now };
+    this.ghCache = { token, at: now, ghPath: gh };
     return token;
   }
 

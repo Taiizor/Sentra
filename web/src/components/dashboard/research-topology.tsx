@@ -6,8 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api } from '@/lib/api'
 import { useConsole } from '@/lib/console-context'
 import { useResource } from '@/lib/use-resource'
-import type { TenantView, TopologyReportView } from '@/types/api'
-import { formatDateTime } from './console-format'
+import type { TenantView, ToolAvailability, TopologyReportView } from '@/types/api'
+import { formatDateTime, TOOL_USAGE_LABEL } from './console-format'
 import { EmptyBlock, ErrorAlert, GatedButton, KeyValue, LoadingBlock, SectionCard } from './console-kit'
 import { LockfileList } from './stream-summary'
 
@@ -102,10 +102,10 @@ function TopologyDetails({ report }: { report: TopologyReportView }) {
         )}
       </SectionCard>
 
-      <SectionCard title="Tools on the bridge host" description="Presence on PATH when the report was created.">
+      <SectionCard title="Tools on the bridge host" description="Presence when the report was created. Tools are located, never run.">
         <div className="flex flex-wrap gap-1.5">
           {report.tools.map((tool) => (
-            <span key={tool.name} className="inline-flex items-center gap-1 text-[11px]" title={tool.path ?? 'not found'}>
+            <span key={tool.name} className="inline-flex items-center gap-1 text-[11px]" title={topologyToolTitle(tool)}>
               {tool.available ? <CheckCircle2 className="size-3 text-emerald-400" /> : <XCircle className="size-3 text-zinc-600" />}
               <span className="font-mono">{tool.name}</span>
             </span>
@@ -217,4 +217,11 @@ function Mono({ children }: { children: ReactNode }) {
 
 function Muted({ children }: { children: ReactNode }) {
   return <p className="text-xs text-muted-foreground">{children}</p>
+}
+
+/** Reports persisted before the tool search recorded usage carry only name, availability and path. */
+function topologyToolTitle(tool: ToolAvailability): string {
+  const lines = [tool.path ?? 'not found']
+  if (tool.usage) lines.push(`Used by the bridge: ${TOOL_USAGE_LABEL[tool.usage]}`)
+  return lines.join('\n')
 }

@@ -102,40 +102,150 @@ export interface SessionInfo {
   expiresAt: string | null
 }
 
+/**
+ * Version of the HTTP contract in this file. The bridge reports it in /api/health and /api/system,
+ * and the console compares it with its own copy: in development Vite hot-reloads the UI while the
+ * bridge keeps running older code, and the console then shows a "restart the bridge" banner instead
+ * of failing on fields the old bridge does not send.
+ *
+ * Bump it whenever a response shape changes incompatibly (a field is removed, renamed, or changes
+ * type, or a new field is required by the UI). Version 1 is the contract before this constant
+ * existed; such bridges do not report a version at all.
+ * - 2: HostInfo.freeMemoryBytes replaced by availableMemoryBytes and memorySource; HostInfo adds
+ *   osName, nativeArch, archEmulated, runtimePath and runtimePathNote; ToolAvailability adds the
+ *   search source, resolved target, binary header, usage and shadowed matches; SystemStatus adds
+ *   apiContractVersion, toolSearch and core.binary; HealthResponse adds apiContractVersion.
+ */
+export const API_CONTRACT_VERSION = 2
+
 export interface HealthResponse {
   status: 'ok'
   coreAvailable: boolean
+  /** API_CONTRACT_VERSION of the running bridge; absent on bridges older than version 2. */
+  apiContractVersion: number
 }
+
+/** CPU architecture names (Node/Bun `os.arch()` vocabulary). */
+export type CpuArch = 'x64' | 'arm64' | 'ia32' | 'arm' | 'riscv64' | 'ppc64' | 's390x' | 'loong64' | 'unknown'
 
 export interface HostInfo {
   hostname: string
   platform: string
+  /** Kernel release from os.release(): the Darwin version on macOS, "10.0.<build>" on Windows. */
   release: string
+  /** Friendly OS name: Windows product name, macOS product name and version, Linux PRETTY_NAME. */
+  osName: string | null
+  /** Architecture of the bridge process (os.arch()); differs from nativeArch under emulation. */
   arch: string
+  /** Native hardware architecture of the host OS; null when it could not be determined. */
+  nativeArch: CpuArch | null
+  /** True when the process architecture differs from nativeArch and runs under emulation. */
+  archEmulated: boolean | null
   cpuModel: string | null
   cpuCount: number
+  /** Null on Windows, which has no load average. */
   loadAverage: number[] | null
   totalMemoryBytes: number
-  freeMemoryBytes: number
+  /** Memory available to new work without swapping (not just free pages); see memorySource. */
+  availableMemoryBytes: number
+  /** os: os.freemem() (Windows: available physical memory); proc_meminfo: MemAvailable; vm_stat: macOS page statistics. */
+  memorySource: 'os' | 'proc_meminfo' | 'vm_stat'
   uptimeSeconds: number
   processRssBytes: number
   bunVersion: string
+  /**
+   * Bun executable running the bridge: the located install that is the same file as the running
+   * executable (so the temporary bun-node shim of `bun run` is resolved away), else process.execPath.
+   */
+  runtimePath: string
+  /** Set when runtimePath could not be tied to an install (an unmatched bun-node shim); explains why. */
+  runtimePathNote: string | null
   cliQueued: number
   sampledAt: string
 }
 
+/** Where an executable's directory came from in the bridge's search order. */
+export type ExecutableSource = 'process_path' | 'persisted_system_path' | 'persisted_user_path' | 'well_known'
+export type BinaryFormat = 'pe' | 'elf' | 'macho' | 'macho_universal' | 'script' | 'unknown'
+export type BinaryCompatibility = 'native' | 'emulated' | 'compatible_32bit' | 'incompatible' | 'script' | 'unknown'
+
+/** Executable header facts read from the file (the file is never executed). */
+export interface BinaryInfo {
+  format: BinaryFormat
+  /** Architectures in the file (several for a macOS universal binary); empty for scripts/unknown. */
+  architectures: CpuArch[]
+  compatibility: BinaryCompatibility
+  /** e.g. "x64 binary runs under Windows on Arm emulation", "#!/usr/bin/env python3", "App Execution Alias (not readable)". */
+  note: string | null
+}
+
+/** executed: the bridge runs it; runtime: it runs the bridge; presence_only: only its presence is reported; not_used: not used by the bridge. */
+export type ToolUsage = 'executed' | 'runtime' | 'presence_only' | 'not_used'
+
 export interface ToolAvailability {
   name: string
   available: boolean
+  /** Absolute path of the first match in search order (symlinks NOT resolved here; see resolvedPath). */
   path: string | null
+  /**
+   * The file `path` leads to, when different from path: the target after resolving symlinks, or the
+   * executable named by a Scoop shim's `.shim` file (see resolvedVia). Null when no component of
+   * path is a link, even if its canonical form differs (a Windows 8.3 short name, a subst or mapped
+   * drive, letter case).
+   */
+  resolvedPath: string | null
+  /** How resolvedPath was obtained: a symlink or junction, or a Scoop shim; null when resolvedPath is null. */
+  resolvedVia: 'link' | 'scoop_shim' | null
+  source: ExecutableSource | null
+  /** True when the match is visible on the bridge process's own PATH (what its subprocesses inherit). */
+  onProcessPath: boolean
+  binary: BinaryInfo | null
+  usage: ToolUsage
+  usageNote: string
+  /**
+   * Further matches later in the search order (max 4), absolute paths; the same file reached through
+   * another directory (merged /usr, symlinked bin directories) is not repeated. For bun: the other
+   * installs, i.e. matches that are not the running executable.
+   */
+  shadowed: string[]
+}
+
+/** The executable search snapshot behind SystemStatus.tools. */
+export interface ToolSearchStatus {
+  /**
+   * True when the persisted (registry / /etc) PATH was read for this snapshot, also when only part
+   * of it was (persistedPathError then names the sources that failed).
+   */
+  persistedPathRead: boolean
+  persistedPathError: string | null
+  /**
+   * Distinct absolute directories in the search order. Removed: empty, relative and duplicate
+   * entries, Bun shim directories, and on Windows UNC (\\server\share) and device (\\?\, \\.\)
+   * paths, which are never touched because listing them would authenticate to a remote host. This
+   * covers standard install locations under such a path (an APPDATA redirected to a share) too.
+   */
+  searchedDirectories: number
+  /** PATH entries skipped because they are UNC or device paths (Windows only; 0 elsewhere). */
+  skippedNetworkEntries: number
+  refreshedAt: string
 }
 
 export interface SystemStatus {
+  /** API_CONTRACT_VERSION of the running bridge; absent on bridges older than version 2. */
+  apiContractVersion: number
   mode: 'production' | 'development'
-  core: { binaryPath: string; present: boolean; version: string | null; error: string | null }
+  core: {
+    binaryPath: string
+    present: boolean
+    version: string | null
+    error: string | null
+    /** Header of the sentra binary; null when it is missing. */
+    binary: BinaryInfo | null
+  }
   dataDir: string
   host: HostInfo
   tools: ToolAvailability[]
+  toolSearch: ToolSearchStatus
   integrations: {
     githubCredentialSource: GitHubCredentialSource | null
     osvEnabled: boolean
@@ -144,7 +254,13 @@ export interface SystemStatus {
     githubWebhookSecretConfigured: boolean
     gitlabWebhookTokenConfigured: boolean
   }
-  auth: { configuredGrants: number; generatedLocalToken: boolean; bindHost: string; loopbackOnly: boolean }
+  auth: {
+    /** Grants from SENTRA_WEB_TOKENS only; the generated local admin token is reported by generatedLocalToken. */
+    configuredGrants: number
+    generatedLocalToken: boolean
+    bindHost: string
+    loopbackOnly: boolean
+  }
   /** The core has no persisted remote-worker registry; this is reported, never simulated. */
   remoteWorkers: { registry: 'not_available'; note: string }
 }

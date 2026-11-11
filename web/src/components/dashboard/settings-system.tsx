@@ -3,9 +3,21 @@ import { Cpu, HardDrive, Lock, Plug, Wrench } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { api } from '@/lib/api'
 import { useResource } from '@/lib/use-resource'
-import type { SystemStatus } from '@/types/api'
+import type { SystemStatus, ToolAvailability } from '@/types/api'
+import {
+  BINARY_COMPATIBILITY_CLASS,
+  describeBinary,
+  describeToolPath,
+  describeToolSearchScope,
+  formatBinaryArchitectures,
+  formatBinaryCompatibility,
+  hasCurrentToolShape,
+  TOOL_USAGE_LABEL,
+  type ToolSearchContext,
+} from './console-format'
 import { CREDENTIAL_SOURCE_LABEL } from './settings-format'
 import { ErrorState, LoadingRows } from './settings-kit'
+import { ViewErrorBoundary } from './view-error-boundary'
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -36,11 +48,20 @@ export function SettingsSystem() {
   const status = useResource('settings:system', (signal) => api.system.status(signal))
   if (status.error) return <ErrorState title="Could not load the bridge status" error={status.error} onRetry={status.reload} />
   if (!status.data) return <LoadingRows rows={3} className="h-24" />
-  return <SystemDetails system={status.data} />
+  // A rendering failure here (for example a response shape this console does not expect) stays in
+  // this section; the other settings sections keep working.
+  return (
+    <ViewErrorBoundary title="The bridge status could not be shown">
+      <SystemDetails system={status.data} />
+    </ViewErrorBoundary>
+  )
 }
 
 function SystemDetails({ system }: { system: SystemStatus }) {
   const { core, auth, integrations } = system
+  // A bridge running older code (contract version 1) sends no tool search details.
+  const currentTools = hasCurrentToolShape(system)
+  const search: ToolSearchContext | null = currentTools ? { toolSearch: system.toolSearch, platform: system.host.platform } : null
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
       <Section icon={<Cpu className="size-3" />} title="Sentra core">
@@ -52,6 +73,18 @@ function SystemDetails({ system }: { system: SystemStatus }) {
           <YesNo value={core.present} />
         </Row>
         <Row label="Version">{core.version ? <span className="font-mono">{core.version}</span> : <span className="text-muted-foreground">unknown</span>}</Row>
+        <Row label="Binary architecture">
+          {core.binary ? (
+            <span className="font-mono" title={describeBinary(core.binary)}>
+              {formatBinaryArchitectures(core.binary)}
+              {formatBinaryCompatibility(core.binary) && (
+                <span className={BINARY_COMPATIBILITY_CLASS[core.binary.compatibility]}> ({formatBinaryCompatibility(core.binary)})</span>
+              )}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">{core.present ? 'not read' : 'n/a'}</span>
+          )}
+        </Row>
         {core.error && (
           <Row label="Version check error">
             <span className="text-rose-400">{core.error}</span>
@@ -77,7 +110,13 @@ function SystemDetails({ system }: { system: SystemStatus }) {
             <span className="text-amber-400">(not loopback: reachable from the network)</span>
           )}
         </Row>
-        <Row label="Configured token grants">{auth.configuredGrants}</Row>
+        <Row label="Configured token grants">
+          {auth.configuredGrants}{' '}
+          <span className="text-muted-foreground">
+            from SENTRA_WEB_TOKENS
+            {auth.configuredGrants === 0 && auth.generatedLocalToken ? ' (not set; the generated local admin token is in use)' : ''}
+          </span>
+        </Row>
         <Row label="Generated local admin token">
           {auth.generatedLocalToken ? 'yes (web-admin.token in the data directory)' : 'no'}
         </Row>
@@ -103,24 +142,41 @@ function SystemDetails({ system }: { system: SystemStatus }) {
       </Section>
 
       <div className="xl:col-span-2">
-        <Section icon={<Wrench className="size-3" />} title="Tools found on the bridge PATH">
-          <div className="flex flex-wrap gap-1.5 py-1">
-            {system.tools.map((tool) => (
-              <Badge
-                key={tool.name}
-                variant="outline"
-                title={tool.path ?? 'not found on PATH'}
-                className={`text-[10px] font-mono ${tool.available ? 'border-emerald-500/30 text-emerald-400' : 'text-muted-foreground'}`}
-              >
-                {tool.name}: {tool.available ? 'found' : 'not found'}
-              </Badge>
-            ))}
-          </div>
-          <span className="text-[10px] text-muted-foreground">
-            Presence on the bridge&apos;s PATH only; it does not mean the console uses or has run the tool.
-          </span>
+        <Section icon={<Wrench className="size-3" />} title="Tools on the bridge host">
+          {search ? (
+            <>
+              <div className="flex flex-wrap gap-1.5 py-1">
+                {system.tools.map((tool) => (
+                  <Badge
+                    key={tool.name}
+                    variant="outline"
+                    title={toolTitle(tool, search)}
+                    className={`text-[10px] font-mono ${tool.available ? 'border-emerald-500/30 text-emerald-400' : 'text-muted-foreground'}`}
+                  >
+                    {tool.name}: {tool.available ? 'found' : 'not found'} · {TOOL_USAGE_LABEL[tool.usage]}
+                  </Badge>
+                ))}
+              </div>
+              <span className="text-[10px] text-muted-foreground">
+                Searched {describeToolSearchScope(search.toolSearch, search.platform)}, without running any tool. The second label
+                says how the bridge uses the tool; hover a tool for its path, or open Host &amp; workers for architectures and details.
+              </span>
+            </>
+          ) : (
+            <span className="text-[11px] text-amber-400 py-1">
+              The bridge did not send the tool search details: it is running older code than this console. Restart the bridge (for
+              example stop and rerun <span className="font-mono">bun run dev</span>).
+            </span>
+          )}
         </Section>
       </div>
     </div>
   )
+}
+
+function toolTitle(tool: ToolAvailability, search: ToolSearchContext): string {
+  const lines = [describeToolPath(tool, search)]
+  if (tool.binary) lines.push(describeBinary(tool.binary))
+  lines.push(`Used by the bridge: ${TOOL_USAGE_LABEL[tool.usage]}${tool.usageNote ? ` (${tool.usageNote})` : ''}`)
+  return lines.join('\n')
 }

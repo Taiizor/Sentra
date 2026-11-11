@@ -30,6 +30,8 @@ import { LlmGateway } from "./llm.ts";
 import { CoreStoreReader } from "./services/core-store.ts";
 import { createOsvService } from "./services/osv.ts";
 import { createScanService } from "./services/scans.ts";
+import { ExecutableLocator } from "./executables.ts";
+import { HostPlatform } from "./host-platform.ts";
 import { SettingsStore } from "./services/settings-store.ts";
 import { TENANT_ID_RE, WorkspaceService } from "./services/workspaces.ts";
 
@@ -142,7 +144,20 @@ function serveStatic(config: ServerConfig, pathname: string): Response | null {
   });
 }
 
-export function createApp(config: ServerConfig): { app: AppContext; router: Router } {
+/** Host services that tests may replace (they otherwise read the real host lazily). */
+export type HostServices = Pick<AppContext, "executables" | "hostPlatform">;
+
+export function createHostServices(): HostServices {
+  const hostPlatform = new HostPlatform();
+  const executables = new ExecutableLocator({
+    loadPersisted: () => hostPlatform.persistedPaths(),
+    nativeArch: () => hostPlatform.knownNativeArch() ?? hostPlatform.processArch,
+  });
+  return { executables, hostPlatform };
+}
+
+export function createApp(config: ServerConfig, hostServices: HostServices = createHostServices()): { app: AppContext; router: Router } {
+  const { executables, hostPlatform } = hostServices;
   const db = openWebDb(config.webDbPath);
   const secrets = new SecretStore(db, config.secretKey);
   const settings = new SettingsStore(db);
@@ -159,9 +174,13 @@ export function createApp(config: ServerConfig): { app: AppContext; router: Rout
     settings,
     cli,
     llm: new LlmGateway(db, secrets),
-    github: new GitHubService(secrets, config.githubTokenFromEnv, config.dataDir),
+    // gh is run only from the process PATH or the persisted PATH, never from a standard install
+    // location; the system page reports this same choice in the gh row's usage note.
+    github: new GitHubService(secrets, config.githubTokenFromEnv, config.dataDir, { locateGh: () => executables.locateForExecution("gh").path }),
     workspaces,
     coreStore: new CoreStoreReader(cli, workspaces),
+    executables,
+    hostPlatform,
   };
   const osv = createOsvService(partial);
   const app: AppContext = { ...partial, osv, scans: createScanService({ ...partial, osv }) };
@@ -277,6 +296,11 @@ export function startServer(): Server<unknown> {
     throw error;
   }
   const { app, router } = createApp(config);
+  // Warm the executable search (persisted PATH read) and host detection without blocking startup.
+  // The first GitHub credential lookup may run before this finishes; it then sees the process PATH only.
+  void app.executables.refresh();
+  void app.hostPlatform.nativeArch();
+  void app.hostPlatform.osName();
 
   const server = Bun.serve({
     hostname: config.host,

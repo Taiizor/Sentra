@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { LockfileView, ToolAvailability, TopologyReportView } from "../../src/types/api.ts";
 import { parseJsonColumn } from "../db.ts";
+import { normalizeStoredTool } from "../host-tools.ts";
 import { isWithin } from "../paths.ts";
 
 /**
@@ -738,11 +739,16 @@ export interface LockfileInventory {
   totalPackages: number;
 }
 
-/** Real data sources injected by the route (core CLI probes, PATH lookups). */
+/** Real data sources injected by the route (core CLI probes, executable search). */
 export interface TopologySources {
   languageProbe(): Promise<LanguageProbe>;
   lockfileInventory(): Promise<LockfileInventory>;
-  tools(): ToolAvailability[];
+  tools(): Promise<ToolAvailability[]> | ToolAvailability[];
+  /**
+   * What the tool search covered (it names the persisted PATH only when that was read). Without it
+   * the report note does not list the searched locations.
+   */
+  toolSearchScope?(): Promise<string> | string;
 }
 
 function errorText(error: unknown): string {
@@ -787,6 +793,13 @@ export async function computeTopology(root: string, sources: TopologySources, li
     (value) => ({ ok: true as const, value }),
     (error: unknown) => ({ ok: false as const, error: errorText(error) }),
   );
+
+  const toolsPromise = Promise.resolve()
+    .then(() => sources.tools())
+    .then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error: errorText(error) }),
+    );
 
   const walk = walkWorkspace(root, limits);
 
@@ -898,7 +911,22 @@ export async function computeTopology(root: string, sources: TopologySources, li
   } else {
     notes.push(`Lockfile inventory unavailable (sentra inventory): ${inventoryResult.error}. Lockfiles and the package total are empty in this report.`);
   }
-  notes.push("Tool availability is a PATH lookup on the Sentra host; no tool was executed.");
+  const toolsResult = await toolsPromise;
+  if (toolsResult.ok) {
+    let scope: string | null = null;
+    try {
+      scope = sources.toolSearchScope ? await sources.toolSearchScope() : null;
+    } catch {
+      scope = null;
+    }
+    notes.push(
+      scope
+        ? `Tool availability on the Sentra host searched ${scope}. Executable headers were read; no tool was executed.`
+        : "Tool availability was determined on the Sentra host from file lookups and executable headers; no tool was executed.",
+    );
+  } else {
+    notes.push(`Tool availability could not be determined: ${toolsResult.error}`);
+  }
   notes.push(`The bridge only read files; no project code was executed and nothing was written to the workspace. Computed in ${walkMs} ms.`);
 
   return {
@@ -911,7 +939,7 @@ export async function computeTopology(root: string, sources: TopologySources, li
     entrypoints: entryScan.entrypoints,
     lockfiles: inventoryResult.ok ? inventoryResult.value.lockfiles : [],
     packagesTotal: inventoryResult.ok ? inventoryResult.value.totalPackages : 0,
-    tools: sources.tools(),
+    tools: toolsResult.ok ? toolsResult.value : [],
     notes,
   };
 }
@@ -933,7 +961,12 @@ export function latestTopologyReport(db: Database, tenantId: string): TopologyRe
     .get(tenantId) as { content_json: string } | null;
   if (!row) return null;
   const parsed = parseJsonColumn<TopologyReportView | null>(row.content_json, null);
-  return parsed && typeof parsed.reportId === "string" ? parsed : null;
+  if (!parsed || typeof parsed.reportId !== "string") return null;
+  // Reports stored by older bridges carry tools as {name, available, path}.
+  const tools = Array.isArray(parsed.tools)
+    ? parsed.tools.map((tool) => normalizeStoredTool(tool)).filter((tool): tool is ToolAvailability => tool !== null)
+    : [];
+  return { ...parsed, tools };
 }
 
 // ───────────────────────────── model grounding ─────────────────────────────
