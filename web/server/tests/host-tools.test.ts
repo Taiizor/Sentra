@@ -48,6 +48,7 @@ import {
   registryRetryDelayMs,
   resolveNativeArch,
   SYSTEM_PROGRAM_TIMEOUT_MS,
+  WINDOWS_JSON_STRING_FUNCTION,
   WINDOWS_POWERSHELL_ARGS,
   WINDOWS_REGISTRY_SCRIPT,
   WINDOWS_REGISTRY_TIMEOUT_MS,
@@ -1049,6 +1050,32 @@ describe("host platform facts", () => {
       expect(persisted.read).toBe(true);
       expect(persisted.entries.system.length).toBeGreaterThan(0);
       expect(["x64", "arm64", "ia32", "arm"]).toContain((await host.nativeArch()) as string);
+    },
+    WINDOWS_REGISTRY_TIMEOUT_MS + 15_000,
+  );
+
+  test("Windows: the registry script calls no cmdlet, so PowerShell never auto-loads or analyzes a module", () => {
+    // A cmdlet (Verb-Noun) other than the script's own functions would make Windows PowerShell 5.1
+    // load its module; on a CI runner with an empty module analysis cache that took over 15 s.
+    const ownFunctions = new Set(["Read-Value"]);
+    const cmdlets = (WINDOWS_REGISTRY_SCRIPT.match(/\b[A-Z][a-z]+-[A-Z][A-Za-z]+\b/g) ?? []).filter((name) => !ownFunctions.has(name));
+    expect(cmdlets).toEqual([]);
+    expect(WINDOWS_REGISTRY_SCRIPT).not.toContain("New-Object");
+    expect(WINDOWS_REGISTRY_SCRIPT).not.toContain("ConvertTo-Json");
+  });
+
+  test.if(process.platform === "win32")(
+    "Windows: the script's JSON encoding round-trips quotes, backslashes, control and non-ASCII characters without any module",
+    async () => {
+      const env = { SystemRoot: process.env.SystemRoot ?? process.env.windir };
+      const value = "([string][char]0x61 + [char]0x22 + [char]0x5c + [char]9 + [char]1 + [char]0x15f)";
+      const script = `$ErrorActionPreference = 'Stop'; [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); ${WINDOWS_JSON_STRING_FUNCTION}; [Console]::Out.Write('[' + (JsonString ${value}) + ',' + (JsonString $null) + ']')`;
+      const result = await createSystemProgramRunner("win32", env, WINDOWS_REGISTRY_TIMEOUT_MS)(windowsPowerShellPath(env), [...WINDOWS_POWERSHELL_ARGS], {
+        input: `${script}\r\n`,
+      });
+      expect(result.timedOut).toBe(false);
+      expect(result.code).toBe(0);
+      expect(JSON.parse(result.stdout)).toEqual(['a"\\\t\u0001ş', null]);
     },
     WINDOWS_REGISTRY_TIMEOUT_MS + 15_000,
   );

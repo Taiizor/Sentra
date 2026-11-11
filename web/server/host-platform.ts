@@ -280,15 +280,29 @@ export function parseWindowsRegistryJson(text: string): WindowsRegistryEnvironme
  * Reads the persisted user and machine PATH unexpanded (REG_EXPAND_SZ kept as written) plus the
  * native PROCESSOR_ARCHITECTURE, and prints them as one UTF-8 JSON object. Fixed text with no
  * external input. It is a single line because `-Command -` executes standard input line by line.
+ *
+ * It uses only .NET calls and language features, never a cmdlet: the first use of a cmdlet such as
+ * ConvertTo-Json or New-Object makes Windows PowerShell 5.1 auto-load its module, and on a host
+ * with many modules and an empty module analysis cache (a fresh CI runner) that took longer than
+ * 15 seconds. The JSON is therefore built by WINDOWS_JSON_STRING_FUNCTION.
  */
+export const WINDOWS_JSON_STRING_FUNCTION =
+  "function JsonString($value) { if ($null -eq $value) { return 'null' }; " +
+  "$text = ([string]$value).Replace('\\', '\\\\').Replace('\"', '\\\"'); " +
+  "$text = [regex]::Replace($text, '[\\u0000-\\u001f]', { param($match) '\\u' + ([int][char]$match.Value).ToString('x4') }); " +
+  "return '\"' + $text + '\"' }";
+
 export const WINDOWS_REGISTRY_SCRIPT = [
   "$ErrorActionPreference = 'Stop'",
-  "[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false",
+  "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)",
   "$opt = [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames",
   "function Read-Value($root, $subKey, $name) { $key = $root.OpenSubKey($subKey); if ($null -eq $key) { return $null }; try { return $key.GetValue($name, $null, $opt) } finally { $key.Close() } }",
+  WINDOWS_JSON_STRING_FUNCTION,
   "$machineKey = 'SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment'",
-  "$result = [ordered]@{ userPath = (Read-Value ([Microsoft.Win32.Registry]::CurrentUser) 'Environment' 'Path'); systemPath = (Read-Value ([Microsoft.Win32.Registry]::LocalMachine) $machineKey 'Path'); processorArchitecture = (Read-Value ([Microsoft.Win32.Registry]::LocalMachine) $machineKey 'PROCESSOR_ARCHITECTURE') }",
-  "[Console]::Out.Write(($result | ConvertTo-Json -Compress))",
+  "$userPath = Read-Value ([Microsoft.Win32.Registry]::CurrentUser) 'Environment' 'Path'",
+  "$systemPath = Read-Value ([Microsoft.Win32.Registry]::LocalMachine) $machineKey 'Path'",
+  "$arch = Read-Value ([Microsoft.Win32.Registry]::LocalMachine) $machineKey 'PROCESSOR_ARCHITECTURE'",
+  "[Console]::Out.Write('{\"userPath\":' + (JsonString $userPath) + ',\"systemPath\":' + (JsonString $systemPath) + ',\"processorArchitecture\":' + (JsonString $arch) + '}')",
 ].join("; ");
 
 /**
@@ -321,6 +335,9 @@ function minimalEnvironment(platform: NodeJS.Platform, env: Readonly<Record<stri
       SystemRoot: systemRoot,
       windir: systemRoot,
       PATH: `${systemRoot}\\System32;${systemRoot}`,
+      // Only PowerShell's own modules: nothing from Program Files or the user's Documents is
+      // discovered or analyzed, even if a cmdlet were ever auto-loaded.
+      PSModulePath: `${systemRoot}\\System32\\WindowsPowerShell\\v1.0\\Modules`,
     };
     // PowerShell needs a profile-less user context (temp and app-data folders) to start.
     for (const name of ["SystemDrive", "TEMP", "TMP", "USERPROFILE", "LOCALAPPDATA", "APPDATA", "ProgramData"]) {
