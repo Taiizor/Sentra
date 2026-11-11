@@ -22,7 +22,7 @@ Built from the ground up in Safe Rust (`#![forbid(unsafe_code)]`), Sentra pairs 
 - 📦 **Multi-Ecosystem Lockfile Parsing:** Pure-Rust parsers for Cargo, Bun, npm (v1/v3), Yarn (classic/berry), pnpm (v6/v9), Poetry, Pip `requirements.txt`, Go `go.sum`, Composer, Gemfile, NuGet, and Deno, exposed as a package inventory by `sentra inventory`. The `sentra audit` command matches against a small pinned advisory set; the web console matches the inventory against live [OSV.dev](https://osv.dev) data (opt-in).
 - 🧪 **The Three-Tier Verification Invariant:** Remediation patches are marked verified if and only if: (1) baseline fails on unpatched code, (2) target passes on remediated code, and (3) zero regressions across existing test suites.
 - 🖥️ **Web Operations Console:** React 19 + Tailwind CSS v4 console backed by an authenticated Bun bridge (role-based access, CSRF/DNS-rebinding guards, HMAC-chained operator audit log). It shows only real data: persisted scan history and findings, OSV dependency vulnerabilities, GitHub pull requests and CI runs, verified webhook deliveries, and model-generated patch candidates that are never labelled verified. See [web/README.md](web/README.md).
-- 🤖 **Native Model Context Protocol (MCP) Server:** Built-in JSON-RPC 2.0 stdio transport (`sentra mcp`) enabling deep autonomous collaboration with AI coding assistants (Cursor, Claude Desktop, Antigravity).
+- 🤖 **Native Model Context Protocol (MCP) Server:** Local stdio server (`sentra mcp`, legacy MCP revisions 2025-11-25, 2025-06-18, 2025-03-26 and 2024-11-05; 2026-07-28 is not implemented) with read-only tools confined to the launch workspace. `sentra install <agent> --mcp` registers it in the documented config file of 29 agent targets without rewriting files it cannot edit losslessly; see [docs/EXTENSIONS.md](docs/EXTENSIONS.md) for supported and unsupported targets.
 - 🔍 **Pure-Rust Differential Review Engine:** Base/head directory delta analysis with SHA-256 snapshot hashing, 1:1 rename tracking, and context-bounded hunk generation.
 - 🔒 **Fail-Closed Host Isolation:** Untrusted target builds, procedural macros, and reproduction scripts never execute on the operator host. Dedicated disposable Linux VM workers (`ContainmentLevel::DisposableVm`) with strictly denied network egress.
 - 📊 **OASIS SARIF v2.1.0 Standard:** Native import and export for seamless integration with GitHub Code Scanning, GitLab SAST, and CodeQL.
@@ -114,10 +114,15 @@ sentra diff --base ./repo-v1 --head ./repo-v2
 # Ingest CodeQL SARIF logs or probe workspace languages
 sentra codeql --workspace ./my-project --sarif ./codeql-results.sarif
 
-# Discover, probe, and run external subprocess security adapters (Semgrep, Snyk, Ollama)
-sentra plugin list
-sentra plugin probe --id org.sentra.adapter.snyk
-sentra plugin run --id org.sentra.adapter.snyk --capability dependency_audit
+# Discover, probe, and run subprocess adapters from an explicit directory (or SENTRA_PLUGIN_DIR).
+# Adapters run on this host with your privileges; the bundled examples return synthetic output.
+sentra plugin list --dir ./examples/adapters
+sentra plugin probe --id org.sentra.adapter.snyk --dir ./examples/adapters --workspace ./my-project
+sentra plugin run --id org.sentra.adapter.snyk --dir ./examples/adapters --capability dependency_audit --workspace ./my-project
+
+# Install the bundled AppSec skills for an agent, or register the MCP server in its config
+sentra install claude --skill golang-security --workspace ./my-project
+sentra install claude --mcp --workspace ./my-project
 
 # Export all findings to OASIS SARIF v2.1.0 (for GitHub Code Scanning)
 sentra export sarif --database ./sentra.db --workspace ./my-project --output ./results.sarif
@@ -125,8 +130,8 @@ sentra export sarif --database ./sentra.db --workspace ./my-project --output ./r
 # Recover an interrupted or incomplete initialization store
 sentra recover --workspace ./my-project --database ./sentra.db
 
-# Launch the native Model Context Protocol (MCP) stdio server
-sentra mcp
+# Launch the local Model Context Protocol (MCP) stdio server, confined to a workspace
+sentra mcp --workspace ./my-project
 ```
 
 ### 4. Run the Web Operations Dashboard

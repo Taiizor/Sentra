@@ -58,10 +58,11 @@ function skillSummary(value: unknown, command: string): SkillSummaryView {
   return { id: record.id, name: record.name, category: record.category, description: record.description, tags };
 }
 
-/** `sentra skills list --json` prints a bare array (no schema_version envelope). */
+/** `sentra skills list --json` prints `{schema_version: 1, command: "skills list", count, skills: [...]}`. */
 export function parseSkillsList(output: unknown): SkillSummaryView[] {
-  if (!Array.isArray(output)) throw invalidOutput("skills list");
-  return output.map((entry) => skillSummary(entry, "skills list"));
+  const record = asRecord(output);
+  if (!record || record.schema_version !== 1 || !Array.isArray(record.skills)) throw invalidOutput("skills list");
+  return record.skills.map((entry) => skillSummary(entry, "skills list"));
 }
 
 export function parseSkillDetail(output: unknown): SkillDetailView {

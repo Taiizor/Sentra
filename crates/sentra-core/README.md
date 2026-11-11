@@ -20,7 +20,7 @@ Strictly implemented under `#![forbid(unsafe_code)]` in Safe Rust.
 - **Positional Patch Engine:** `UnifiedPatch` / `PatchPlan` apply a single-file unified diff by hunk position with exact context and a bounded offset search. All hunks apply or nothing is written. Line endings are preserved. A patch is reported as already applied only when every hunk's post-image is at its own position.
 - **Pure-Rust Differential Review:** Directory snapshot comparisons with SHA-256 tree hashing, 1:1 rename detection, and bounded hunk generation.
 - **Three-Tier Verification Engine:** Strict verification invariant ensuring remediation patches reproduce original failures, pass on patched code, and break zero regression suites.
-- **Model Context Protocol (MCP):** JSON-RPC 2.0 stdio server for seamless AI coding assistant integrations.
+- **Model Context Protocol (MCP):** local stdio server for the legacy initialize-handshake revisions (2025-11-25, 2025-06-18, 2025-03-26, 2024-11-05) with read-only, workspace-confined tools; the 2026-07-28 revision is not implemented.
 - **Durable Persistence:** ACID transactions with SQLite WAL mode and content-addressed CAS blob storage.
 
 ## Usage

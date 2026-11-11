@@ -150,7 +150,7 @@ describe("plugin output mapping", () => {
     expectHttpError(() => mapProbe({ plugin_id: "x" }, "x"), 502, "core_output_invalid");
   });
 
-  test("run output is adapter-reported and carries the workspace note", () => {
+  test("run output is adapter-reported", () => {
     const view = mapRun(
       { plugin_id: plugin.id, task_id: "task-1", capability: "static_analysis", exit_code: 3, summary: "2 issues", evidence_refs: ["sha256:abc"] },
       plugin,
@@ -161,7 +161,7 @@ describe("plugin output mapping", () => {
     expect(view.taskId).toBe("task-1");
     expect(view.reportedEvidenceRefs).toEqual(["sha256:abc"]);
     expect(view.summary.startsWith("2 issues")).toBe(true);
-    expect(view.summary).toContain("not in the tenant workspace");
+    expect(view.summary).toBe("2 issues");
     expect(view.stdout).toContain("[truncated at");
     expectHttpError(() => mapRun({ summary: "x" }, plugin, "static_analysis", { stdout: "", stderr: "" }), 502);
   });

@@ -13,19 +13,29 @@ use sentra_core::{
     AdvisoryDatabase, CodeQlProbeReport, CodeQlSarifIngestResult, ContainmentLevel,
     ContainmentReadiness, DEFAULT_INVENTORY_MAX_DEPTH, DEFAULT_MAX_LINE_BYTES, DiscoveredPlugin,
     EgressPolicy, FileDeltaKind, MAX_INVENTORY_DEPTH, McpServer, MultiUserAuditReport,
-    MultiUserSecurityAudit, PluginCapability, PluginDriver, PluginExecutionOutput,
-    PluginProbeOutput, RemediationPrPackage, RemoteWorkerId, RemoteWorkerNode, SastReport,
-    SessionId, SnapshotDiff, TaskId, TenantRecord, TimestampUtc, WorkerArchitecture,
-    WorkerFleetManager, WorkerResourceCaps, discover_plugins, find_plugin_by_id,
+    MultiUserSecurityAudit, PluginCapability, PluginDriver, PluginError, PluginErrorKind,
+    PluginExecutionOutput, PluginProbeOutput, RemediationPrPackage, RemoteWorkerId,
+    RemoteWorkerNode, SastReport, SessionId, SnapshotDiff, TaskId, TenantRecord, TimestampUtc,
+    WorkerArchitecture, WorkerFleetManager, WorkerResourceCaps,
     fleet::AuditStatus,
-    process_transport_line,
+    mcp::{LATEST_PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS, run_stdio},
+    plugin::{
+        DiagnosticSeverity, DiscoveryDiagnostic, PluginSessionReport, default_plugin_dir,
+        plugin_dir_env_diagnostic, resolve_plugin, scan_plugin_dirs,
+    },
+    research::SkillPromptError,
     service::{
         LocalAuditReport, LocalInventoryReport, LocalPatchReport, LocalRollbackReport,
         LocalWorkspace, LocalWorkspaceError, LocalWorkspaceErrorKind, LocalWorkspaceReport,
     },
+    skills::{
+        AgentTarget, McpBatchReport, McpFileAction, McpInstallError, McpInstallOptions,
+        McpInstallReport, McpScope, McpTarget,
+        installer::{FileStatus, InstallError, InstallReport},
+    },
 };
 
-pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra recover --database <file> [--workspace <directory>] [--json]\n  sentra audit --database <file> [--workspace <directory>] [--json]\n  sentra inventory [--workspace <directory>] [--max-depth <n>] [--json]\n  sentra scan [--workspace <directory>] [--snippet <string>] [-] [--file-name <name>] [--database <file>] [--sarif <file>] [--json]\n  sentra patch apply --patch <file> --workspace <directory> [--target <file>] [--backup-dir <directory>] [--database <file>] [--dry-run] [--json]\n  sentra patch rollback --backup <file> --workspace <directory> --target <file> [--database <file>] [--json]\n  sentra install <target> [--mcp] [--global] [--skill <id>] [--workspace <directory>] [--json]\n  sentra install mcp <target> [--global] [--workspace <directory>] [--json]\n  sentra skills list [--json]\n  sentra skills show <id> [--json]\n  sentra prompt <workflow> [--scope <path>] [--skills <skill-ids>] [--json]\n  sentra tenant list --database <file> [--json]\n  sentra tenant add --id <id> --name <name> [--workspace <directory>] [--isolation <level>] --database <file> [--json]\n  sentra config show [--key <key>] --database <file> [--json]\n  sentra config set --key <key> --value <value> --database <file> [--json]\n  sentra config test --provider <name> [--api-key <key>] [--model <model>] [--json]\n  sentra fleet list [--json]\n  sentra fleet status [--json]\n  sentra plugin list [--dir <directory>] [--json]\n  sentra plugin probe (--id <id> | --manifest <file>) [--dir <directory>] [--workspace <directory>] [--json]\n  sentra plugin run (--id <id> | --manifest <file>) --capability <capability> [--args <json>] [--dir <directory>] [--workspace <directory>] [--json]\n  sentra sync-advisories --source <directory-or-file> [--database <file>] [--json]\n  sentra propose-pr --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra codeql [--workspace <directory>] [--sarif <file>] [--database <file>] [--json]\n  sentra diff --base <directory> --head <directory> [--json]\n  sentra verify-audit [--json]\n  sentra export sarif --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra mcp [install <target> [--global] [--workspace <directory>]]\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session/audit default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\nAudit analyzes multi-ecosystem lockfiles (Cargo, npm, yarn, pnpm, bun, deno, pip, poetry, go, composer, nuget, rubygems) against a small bundled pinned advisory sample, not a synchronized OSV or RustSec feed; is_stale reflects the sample's curation date.\nInventory lists lockfiles found recursively (depth 6 by default; dependency, build and VCS directories skipped; links not followed) and their parsed packages with OSV ecosystem names. Read-only; nothing is executed.\nScan runs heuristic line-based pattern rules for secrets and code antipatterns on workspaces or snippets; --file-name labels a snippet and selects its language rules. Results are unverified candidates.\nPatch applies a single-file unified diff positionally with exact context; all hunks apply or nothing is written. --dry-run validates without writing. --database records PatchApplied/PatchRolledBack events in the local store.\nInstall deploys built-in AppSec security skills or configures the Sentra stdio MCP server (--mcp) locally or globally across 28 AI agent ecosystems: Claude, Antigravity, GitHub Copilot, Cursor, Windsurf, Cline, Roo, Continue, Aider, OpenHands, Goose, Tabnine, Junie, Warp, Droid, Kiro, Codex, Zed, Amazon Q, Cody, Devin, OpenCode, Trae, Kimi, Qwen, Hermes, Replit, or Augment.\nSkills lists or inspects embedded zero-dependency cognitive security playbooks.\nPrompt generates parameter-grounded AppSec prompts (threat-model, api-bola, patch-remediation, skill-audit, scout, verify) with cognitive skill injection for LLM agents.\nTenant lists or adds operator-declared tenant rows (labels only; no isolation is provisioned). List is read-only and never seeds rows.\nConfig manages provider API credentials and security policy configuration.\nFleet reports the in-process worker registry, which is empty because no worker registry source exists; containment readiness is never reported as ready without worker attestation.\nPlugin discovers, probes, and executes capability-fenced subprocess security adapters.\nSync-advisories ingests universal OSV JSON advisories into the advisory database.\nPropose-pr packages verified vulnerabilities into GitHub Draft PR proposals.\nCodeql probes workspace for languages, generates CLI commands, or ingests CodeQL SARIF logs.\nDiff compares base and head directory snapshots with pure-Rust hashing.\nVerify-audit evaluates the 5 mandatory multi-user hosting security containment gates.\nExport sarif converts dependency and SAST findings into an OASIS SARIF v2.1.0 document.\nMcp runs the JSON-RPC 2.0 Model Context Protocol stdio transport server or configures it into agents.\n";
+pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra recover --database <file> [--workspace <directory>] [--json]\n  sentra audit --database <file> [--workspace <directory>] [--json]\n  sentra inventory [--workspace <directory>] [--max-depth <n>] [--json]\n  sentra scan [--workspace <directory>] [--snippet <string>] [-] [--file-name <name>] [--database <file>] [--sarif <file>] [--json]\n  sentra patch apply --patch <file> --workspace <directory> [--target <file>] [--backup-dir <directory>] [--database <file>] [--dry-run] [--json]\n  sentra patch rollback --backup <file> --workspace <directory> --target <file> [--database <file>] [--json]\n  sentra install <target> [--global] [--skill <id>[,<id>...]] [--workspace <directory>] [--json]\n  sentra install <target> --mcp [--global] [--workspace <directory>] [--command <path>] [--json]\n  sentra install mcp <target> [--global] [--workspace <directory>] [--command <path>] [--json]\n  sentra mcp install <target> [--global] [--workspace <directory>] [--command <path>] [--json]\n  sentra skills list [--json]\n  sentra skills show <id> [--json]\n  sentra prompt <workflow> [--scope <path>] [--skills <id>[,<id>...]] [--json]\n  sentra tenant list --database <file> [--json]\n  sentra tenant add --id <id> --name <name> [--workspace <directory>] [--isolation <level>] --database <file> [--json]\n  sentra config show [--key <key>] --database <file> [--json]\n  sentra config set --key <key> --value <value> --database <file> [--json]\n  sentra config test --provider <name> [--api-key <key>] [--model <model>] [--json]\n  sentra fleet list [--json]\n  sentra fleet status [--json]\n  sentra plugin list [--dir <directory>] [--json]\n  sentra plugin probe (--id <id> | --manifest <file>) [--dir <directory>] [--workspace <directory>] [--json]\n  sentra plugin run (--id <id> | --manifest <file>) --capability <capability> [--args <json>] [--dir <directory>] [--workspace <directory>] [--json]\n  sentra sync-advisories --source <directory-or-file> [--database <file>] [--json]\n  sentra propose-pr --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra codeql [--workspace <directory>] [--sarif <file>] [--database <file>] [--json]\n  sentra diff --base <directory> --head <directory> [--json]\n  sentra verify-audit [--json]\n  sentra export sarif --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra mcp [--workspace <directory>] [--database <file>]\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session/audit default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\nAudit analyzes multi-ecosystem lockfiles (Cargo, npm, yarn, pnpm, bun, deno, pip, poetry, go, composer, nuget, rubygems) against a small bundled pinned advisory sample, not a synchronized OSV or RustSec feed; is_stale reflects the sample's curation date.\nInventory lists lockfiles found recursively (depth 6 by default; dependency, build and VCS directories skipped; links not followed) and their parsed packages with OSV ecosystem names. Read-only; nothing is executed.\nScan runs heuristic line-based pattern rules for secrets and code antipatterns on workspaces or snippets; --file-name labels a snippet and selects its language rules. Results are unverified candidates.\nPatch applies a single-file unified diff positionally with exact context; all hunks apply or nothing is written. --dry-run validates without writing. --database records PatchApplied/PatchRolledBack events in the local store.\nInstall copies the bundled third-party AppSec skills as on-demand <skills dir>/<id>/SKILL.md trees (with every supporting file) into the location each agent documents. Skill targets: claude, antigravity, copilot, cursor, windsurf, cline, roo, continue, aider, openhands, goose, tabnine, junie, warp, droid, kiro, codex, zed, amazonq, devin, opencode, trae, kimi, qwen, hermes, replit, augment, amp, or all. Cody has no documented skills location (unsupported_target); Amazon Q, Continue and Replit are workspace-only (unsupported_scope); Aider gets read: entries in .aider.conf.yml and requires --skill because it loads every listed file into every chat (skill_selection_required, exit 2; exit 6 with the snippet to add by hand when the file cannot be edited losslessly), and all skips Aider. Unknown --skill ids fail with skill_not_found (exit 7) before anything is written; changed files are backed up first (skill files to <skills dir>/.sentra-backups/<id>/, other files to <file>.bak).\nInstall --mcp registers the stdio MCP server (this executable's absolute path, or --command, with the argument mcp) in the config file each agent documents. MCP targets are the skill targets; aider, openhands, replit and cody have no file-based stdio MCP configuration (mcp_unsupported_target); cline, goose and hermes are global-only and roo, trae and continue are workspace-only (unsupported_scope). Existing files are edited in place (comments, key order and formatting kept) after a <file>.bak backup; a file that cannot be edited losslessly is left untouched and the command exits 4 with the snippet to add by hand. --skill cannot be combined with --mcp.\nSkills lists or inspects the bundled third-party skill playbooks (SKILL.md plus supporting files, licenses in NOTICE).\nPrompt renders AppSec prompt templates (threat-model, api-bola, patch-remediation, skill-audit, scout, verify); --skills appends the named playbooks to the workflow prompt, keeping its rules and expected schema, and unknown ids fail with skill_not_found (exit 7).\nTenant lists or adds operator-declared tenant rows (labels only; no isolation is provisioned). List is read-only and never seeds rows.\nConfig manages provider API credentials and security policy configuration.\nFleet reports the in-process worker registry, which is empty because no worker registry source exists; containment readiness is never reported as ready without worker attestation.\nPlugin discovers adapters only in --dir or the default plugin directory (SENTRA_PLUGIN_DIR, else %APPDATA%/sentra/plugins on Windows, ~/Library/Application Support/sentra/plugins on macOS, $XDG_CONFIG_HOME/sentra/plugins or ~/.config/sentra/plugins elsewhere); the current directory and its parents are never searched and duplicate plugin ids are rejected. Probe and run start adapter code as a subprocess with the operator's privileges and an allowlisted environment; the time limit and frame/output quotas are enforced and the process tree is killed when the session ends, while declared memory and egress limits are not enforced. Run passes --workspace (default: current directory) to the adapter; its exit code, summary and evidence refs are adapter-reported.\nSync-advisories ingests universal OSV JSON advisories into the advisory database.\nPropose-pr packages verified vulnerabilities into GitHub Draft PR proposals.\nCodeql probes workspace for languages, generates CLI commands, or ingests CodeQL SARIF logs.\nDiff compares base and head directory snapshots with pure-Rust hashing.\nVerify-audit evaluates the 5 mandatory multi-user hosting security containment gates.\nExport sarif converts dependency and SAST findings into an OASIS SARIF v2.1.0 document.\nMcp runs the local stdio MCP server (legacy initialize-handshake revisions 2025-11-25, 2025-06-18, 2025-03-26 and 2024-11-05; the 2026-07-28 revision is not implemented). Tools are read-only and confined to --workspace (default: current directory); --database enables persisted session status. Skill installation is not exposed over MCP; use sentra install. Mcp install is an alias of install mcp.\n";
 
 /// Actions supported by the `sentra skills` command.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -194,9 +204,13 @@ pub enum Command {
     Install {
         target: String,
         global: bool,
+        /// Register the MCP server instead of installing skills.
         mcp: bool,
+        /// Comma-separated skill ids (skills only; rejected together with `mcp`).
         skill: Option<String>,
         workspace: Option<PathBuf>,
+        /// Executable registered as the MCP server command (MCP only).
+        command: Option<PathBuf>,
     },
     Skills {
         action: SkillsAction,
@@ -206,7 +220,11 @@ pub enum Command {
         scope: Option<String>,
         skills: Option<String>,
     },
-    Mcp,
+    /// Local stdio MCP server confined to `workspace` (default: current directory).
+    Mcp {
+        workspace: Option<PathBuf>,
+        database: Option<PathBuf>,
+    },
     VerifyAudit,
 }
 
@@ -238,6 +256,54 @@ fn parse_max_depth(value: &str) -> Option<usize> {
         .parse::<usize>()
         .ok()
         .filter(|depth| *depth <= MAX_INVENTORY_DEPTH)
+}
+
+/// Grammar shared by `install <target> [--mcp]`, `install mcp <target>` and
+/// `mcp install <target>`. Every flag may appear once; `--command` only applies
+/// to MCP registration. `--skill` is accepted here so that combining it with
+/// MCP registration fails with an explanatory error instead of a bare parse error.
+fn parse_install(words: Vec<&str>, mut mcp: bool) -> Result<Command, ParseError> {
+    let invalid = || ParseError::InvalidArguments;
+    let mut target = None;
+    let mut global = false;
+    let mut skill = None;
+    let mut workspace = None;
+    let mut command = None;
+    let mut rest = words.into_iter();
+    while let Some(arg) = rest.next() {
+        match arg {
+            "--global" | "-g" if !global => global = true,
+            "--mcp" if !mcp => mcp = true,
+            "mcp" if !mcp && target.is_none() => mcp = true,
+            "--skill" | "--workspace" | "--command" => {
+                let value = rest.next().ok_or_else(invalid)?;
+                if value.is_empty() || value.starts_with('-') {
+                    return Err(invalid());
+                }
+                let first = match arg {
+                    "--skill" => skill.replace(value.to_string()).is_none(),
+                    "--workspace" => workspace.replace(PathBuf::from(value)).is_none(),
+                    _ => command.replace(PathBuf::from(value)).is_none(),
+                };
+                if !first {
+                    return Err(invalid());
+                }
+            }
+            _ if !arg.starts_with('-') && target.is_none() => target = Some(arg.to_string()),
+            _ => return Err(invalid()),
+        }
+    }
+    if command.is_some() && !mcp {
+        return Err(invalid());
+    }
+    Ok(Command::Install {
+        target: target.ok_or_else(invalid)?,
+        global,
+        mcp,
+        skill,
+        workspace,
+        command,
+    })
 }
 
 /// Small fixed command grammar; no shell evaluation, plugins or environment
@@ -735,52 +801,31 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
     }
     if name == "mcp" {
         if words.first().copied() == Some("install") {
-            let mut target = None;
-            let mut global = false;
-            let mut workspace = None;
-            let mut rest = words.into_iter().skip(1);
-            while let Some(arg) = rest.next() {
-                if arg == "--global" || arg == "-g" {
-                    if global {
-                        return Err(invalid());
-                    }
-                    global = true;
-                    continue;
-                }
-                if arg == "--workspace" {
-                    if workspace.is_some() {
-                        return Err(invalid());
-                    }
-                    let val = rest.next().ok_or_else(invalid)?;
-                    if val.is_empty() || val.starts_with('-') {
-                        return Err(invalid());
-                    }
-                    workspace = Some(PathBuf::from(val));
-                    continue;
-                }
-                if !arg.starts_with('-') && target.is_none() {
-                    target = Some(arg.to_string());
-                    continue;
-                }
-                return Err(invalid());
-            }
-            let target = target.ok_or_else(invalid)?;
+            words.remove(0);
             return Ok(Invocation {
-                command: Command::Install {
-                    target,
-                    global,
-                    mcp: true,
-                    skill: None,
-                    workspace,
-                },
+                command: parse_install(words, true)?,
                 json,
             });
         }
-        if !words.is_empty() {
-            return Err(invalid());
+        let mut workspace = None;
+        let mut database = None;
+        let mut rest = words.into_iter();
+        while let Some(flag) = rest.next() {
+            let value = rest.next().ok_or_else(invalid)?;
+            if value.is_empty() || value.starts_with('-') {
+                return Err(invalid());
+            }
+            match flag {
+                "--workspace" if workspace.is_none() => workspace = Some(PathBuf::from(value)),
+                "--database" if database.is_none() => database = Some(PathBuf::from(value)),
+                _ => return Err(invalid()),
+            }
         }
         return Ok(Invocation {
-            command: Command::Mcp,
+            command: Command::Mcp {
+                workspace,
+                database,
+            },
             json,
         });
     }
@@ -895,59 +940,8 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
         }
     }
     if name == "install" {
-        if words.is_empty() {
-            return Err(invalid());
-        }
-        let mut target = None;
-        let mut global = false;
-        let mut mcp = false;
-        let mut skill = None;
-        let mut workspace = None;
-        let mut rest = words.into_iter();
-        while let Some(arg) = rest.next() {
-            if arg == "--global" || arg == "-g" {
-                global = true;
-                continue;
-            }
-            if arg == "--mcp" {
-                mcp = true;
-                continue;
-            }
-            if arg == "mcp" && target.is_none() {
-                mcp = true;
-                continue;
-            }
-            if arg == "--skill" {
-                let val = rest.next().ok_or_else(invalid)?;
-                if val.is_empty() || val.starts_with('-') {
-                    return Err(invalid());
-                }
-                skill = Some(val.to_string());
-                continue;
-            }
-            if arg == "--workspace" {
-                let val = rest.next().ok_or_else(invalid)?;
-                if val.is_empty() || val.starts_with('-') {
-                    return Err(invalid());
-                }
-                workspace = Some(PathBuf::from(val));
-                continue;
-            }
-            if !arg.starts_with('-') && target.is_none() {
-                target = Some(arg.to_string());
-                continue;
-            }
-            return Err(invalid());
-        }
-        let target = target.ok_or_else(invalid)?;
         return Ok(Invocation {
-            command: Command::Install {
-                target,
-                global,
-                mcp,
-                skill,
-                workspace,
-            },
+            command: parse_install(words, false)?,
             json,
         });
     }
@@ -1003,23 +997,16 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
         let mut skills = None;
         let mut rest = words.into_iter();
         while let Some(flag) = rest.next() {
-            match flag {
-                "--scope" | "--target" => {
-                    let val = rest.next().ok_or_else(invalid)?;
-                    if val.is_empty() || val.starts_with('-') {
-                        return Err(invalid());
-                    }
-                    scope = Some(val.to_string());
-                }
-                "--skills" | "--skill" => {
-                    let val = rest.next().ok_or_else(invalid)?;
-                    if val.is_empty() || val.starts_with('-') {
-                        return Err(invalid());
-                    }
-                    skills = Some(val.to_string());
-                }
+            let slot = match flag {
+                "--scope" | "--target" => &mut scope,
+                "--skills" | "--skill" => &mut skills,
                 _ => return Err(invalid()),
+            };
+            let val = rest.next().ok_or_else(invalid)?;
+            if val.is_empty() || val.starts_with('-') || slot.is_some() {
+                return Err(invalid());
             }
+            *slot = Some(val.to_string());
         }
         return Ok(Invocation {
             command: Command::Prompt {
@@ -1107,6 +1094,46 @@ fn error(code: &'static str, exit_code: u8, json: bool) -> Response {
     }
 }
 
+/// Error with an explanation and machine-readable details. JSON mode prints one
+/// object on stderr: `{schema_version, error, message, ...details}` (details never
+/// override the first three keys); text mode prints `error: <code>` and the message.
+fn detailed_error(
+    code: &str,
+    exit_code: u8,
+    json: bool,
+    message: &str,
+    details: serde_json::Value,
+) -> Response {
+    let stderr = if json {
+        let body = serde_json::json!({
+            "schema_version": 1,
+            "error": code,
+            "message": message,
+        });
+        json_text(&merge_json(body, details))
+    } else {
+        format!("error: {code}\n{message}\n")
+    };
+    Response {
+        stdout: String::new(),
+        stderr,
+        exit_code,
+    }
+}
+
+/// One JSON document followed by a newline (serde_json escapes every string).
+fn json_text(value: &impl serde::Serialize) -> String {
+    match serde_json::to_string(value) {
+        Ok(text) => format!("{text}\n"),
+        Err(_) => "{\"schema_version\":1,\"error\":\"serialization_failed\"}\n".to_string(),
+    }
+}
+
+/// Core exit codes are small positive integers; anything else maps to 5 (failure).
+fn exit_status(code: i32) -> u8 {
+    u8::try_from(code).ok().filter(|c| *c != 0).unwrap_or(5)
+}
+
 fn core_error(source: LocalWorkspaceError, json: bool) -> Response {
     let (code, exit) = match source.kind {
         LocalWorkspaceErrorKind::Workspace => ("invalid_workspace", 4),
@@ -1135,21 +1162,97 @@ fn absolute(path: &Path, cwd: &Path) -> PathBuf {
     }
 }
 
-fn default_plugin_search_paths(cwd: &Path, directory: Option<&Path>) -> Vec<PathBuf> {
+/// Plugin directories to scan: `--dir` when given, otherwise the operator's single
+/// documented default directory. The current directory, its parents and the
+/// repository examples are never searched implicitly.
+fn plugin_dirs(cwd: &Path, directory: Option<&Path>, json: bool) -> Result<Vec<PathBuf>, Response> {
     if let Some(dir) = directory {
-        return vec![absolute(dir, cwd)];
+        return Ok(vec![absolute(dir, cwd)]);
     }
-    let mut paths = vec![
-        absolute(Path::new(".sentra/plugins"), cwd),
-        absolute(Path::new("examples/adapters"), cwd),
-    ];
-    if let Some(p1) = cwd.parent() {
-        paths.push(p1.join("examples/adapters"));
-        if let Some(p2) = p1.parent() {
-            paths.push(p2.join("examples/adapters"));
+    match default_plugin_dir() {
+        Some(dir) => Ok(vec![dir]),
+        None => Err(detailed_error(
+            "plugin_dir_unavailable",
+            2,
+            json,
+            "no plugin directory: pass --dir or set SENTRA_PLUGIN_DIR to an absolute path",
+            serde_json::json!({}),
+        )),
+    }
+}
+
+/// Maps a plugin failure to its stable code and exit status, with the sanitized
+/// reason and the host-observed facts of the adapter process when one was started.
+fn plugin_error(err: &PluginError, session: Option<&PluginSessionReport>, json: bool) -> Response {
+    let exit = match err.kind() {
+        PluginErrorKind::InvalidManifest { .. }
+        | PluginErrorKind::DuplicatePluginId { .. }
+        | PluginErrorKind::ExecutableRejected { .. } => 4,
+        PluginErrorKind::PluginNotFound { .. } => 7,
+        PluginErrorKind::InvalidWorkspace { .. } => 2,
+        _ => 5,
+    };
+    let mut details = serde_json::json!({ "reason": err.reason() });
+    if let (Some(session), Some(object)) = (session, details.as_object_mut()) {
+        object.insert(
+            "process_exit_code".into(),
+            serde_json::json!(session.process_exit_code),
+        );
+        object.insert("timed_out".into(), session.timed_out.into());
+        object.insert("killed_by_host".into(), session.killed_by_host.into());
+    }
+    detailed_error(err.code(), exit, json, err.reason(), details)
+}
+
+/// Loads the plugin named by `--manifest` or resolved by `--id` in the plugin directories.
+fn select_plugin(
+    id: Option<String>,
+    manifest: Option<PathBuf>,
+    directory: Option<&Path>,
+    cwd: &Path,
+    json: bool,
+) -> Result<DiscoveredPlugin, Response> {
+    if let Some(man_path) = manifest {
+        return DiscoveredPlugin::from_manifest_file(absolute(&man_path, cwd))
+            .map_err(|e| plugin_error(&e, None, json));
+    }
+    let Some(plugin_id) = id else {
+        return Err(error("invalid_arguments", 2, json));
+    };
+    let dirs = plugin_dirs(cwd, directory, json)?;
+    resolve_plugin(&dirs, &plugin_id).map_err(|e| {
+        if !matches!(e.kind(), PluginErrorKind::PluginNotFound { .. }) {
+            return plugin_error(&e, None, json);
         }
-    }
-    paths
+        // A manifest that failed validation is skipped by discovery; point at it
+        // instead of only reporting that no manifest declares the id.
+        let skipped: Vec<serde_json::Value> = scan_plugin_dirs(&dirs)
+            .diagnostics
+            .iter()
+            .filter(|d| d.severity == DiagnosticSeverity::Error)
+            .map(|d| {
+                serde_json::json!({
+                    "path": display_path(&d.path),
+                    "code": d.code,
+                    "message": d.message,
+                })
+            })
+            .collect();
+        let mut message = e.reason().to_string();
+        if !skipped.is_empty() {
+            message.push_str(&format!(
+                "; {} manifest(s) in the plugin directories were skipped because they are invalid (see `sentra plugin list`)",
+                skipped.len()
+            ));
+        }
+        detailed_error(
+            e.code(),
+            7,
+            json,
+            &message,
+            serde_json::json!({ "reason": e.reason(), "skipped_manifests": skipped }),
+        )
+    })
 }
 
 /// Run an invocation against standard in-memory buffer handling.
@@ -1196,38 +1299,32 @@ where
         }
     };
 
-    if let Command::Mcp = invocation.command {
+    if let Command::Mcp {
+        workspace,
+        database,
+    } = &invocation.command
+    {
+        // stdout carries only JSON-RPC lines; startup errors go to stderr.
         let mut server = McpServer::new(SessionId::new());
-        let mut line = String::new();
-        loop {
-            line.clear();
-            match input.read_line(&mut line) {
-                Ok(0) => break, // EOF reached
-                Ok(_) => match process_transport_line(&mut server, &line, DEFAULT_MAX_LINE_BYTES) {
-                    Ok(Some(response_json)) => {
-                        if output.write_all(response_json.as_bytes()).is_err()
-                            || output.flush().is_err()
-                        {
-                            return 8;
-                        }
-                    }
-                    Ok(None) => {}
-                    Err(e) => {
-                        let err_resp = format!(
-                            "{{\"jsonrpc\":\"2.0\",\"error\":{{\"code\":{},\"message\":\"{}\"}},\"id\":null}}\n",
-                            e.code,
-                            e.message.replace('"', "\\\"")
-                        );
-                        if output.write_all(err_resp.as_bytes()).is_err() || output.flush().is_err()
-                        {
-                            return 8;
-                        }
-                    }
-                },
-                Err(_) => return 8,
-            }
+        let launch_root = absolute(workspace.as_deref().unwrap_or(cwd), cwd);
+        if workspace.is_some() && !launch_root.is_dir() {
+            let resp = error("invalid_workspace", 4, invocation.json);
+            let _ = err_output.write_all(resp.stderr.as_bytes());
+            return resp.exit_code;
         }
-        return 0;
+        if !launch_root.as_os_str().is_empty() {
+            server = server.with_launch_root(launch_root);
+        }
+        if let Some(db) = database {
+            server = server.with_database(absolute(db, cwd));
+        }
+        // Lines are read with a streaming byte quota; oversized lines and invalid
+        // UTF-8 are answered with JSON-RPC errors and the server keeps serving.
+        // Only stdin/stdout I/O failures end the loop with exit 8.
+        return match run_stdio(&mut server, input, output, DEFAULT_MAX_LINE_BYTES) {
+            Ok(()) => 0,
+            Err(_) => 8,
+        };
     }
 
     if let Command::Scan {
@@ -1282,7 +1379,21 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
     match invocation.command {
         Command::Help => Response {
             stdout: if json {
-                "{\"schema_version\":1,\"commands\":[\"init\",\"status\",\"session show\",\"recover\",\"audit\",\"inventory\",\"scan\",\"patch\",\"tenant\",\"config\",\"fleet\",\"plugin\",\"diff\",\"verify-audit\",\"export sarif\",\"mcp\"],\"offline\":true,\"untrusted_execution\":false}\n".into()
+                json_text(&serde_json::json!({
+                    "schema_version": 1,
+                    "commands": [
+                        "init", "status", "session show", "recover", "audit", "inventory",
+                        "scan", "patch", "install", "skills", "prompt", "tenant", "config",
+                        "fleet", "plugin", "sync-advisories", "propose-pr", "codeql", "diff",
+                        "verify-audit", "export sarif", "mcp",
+                    ],
+                    "mcp_protocol_versions": SUPPORTED_PROTOCOL_VERSIONS,
+                    "mcp_latest_protocol_version": LATEST_PROTOCOL_VERSION,
+                    "skill_targets": AgentTarget::CONCRETE.map(|t| t.as_str()),
+                    "mcp_targets": McpTarget::ALL.map(McpTarget::as_str),
+                    "offline": true,
+                    "untrusted_execution": false,
+                }))
             } else {
                 HELP.into()
             },
@@ -1735,9 +1846,17 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
         }
         Command::Plugin { action } => match action {
             PluginAction::List { directory } => {
-                let search_paths = default_plugin_search_paths(cwd, directory.as_deref());
-                let plugins = discover_plugins(&search_paths);
-                render_plugin_list(&plugins, json)
+                let dirs = match plugin_dirs(cwd, directory.as_deref(), json) {
+                    Ok(dirs) => dirs,
+                    Err(response) => return response,
+                };
+                let mut discovery = scan_plugin_dirs(&dirs);
+                if directory.is_none()
+                    && let Some(ignored) = plugin_dir_env_diagnostic()
+                {
+                    discovery.diagnostics.insert(0, ignored);
+                }
+                render_plugin_list(&dirs, &discovery.plugins, &discovery.diagnostics, json)
             }
             PluginAction::Probe {
                 id,
@@ -1745,30 +1864,18 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
                 directory,
                 workspace,
             } => {
-                let plugin = if let Some(man_path) = manifest {
-                    match DiscoveredPlugin::from_manifest_file(absolute(&man_path, cwd)) {
-                        Ok(p) => p,
-                        Err(_) => return error("invalid_manifest", 4, json),
-                    }
-                } else if let Some(plugin_id) = id {
-                    let search_paths = default_plugin_search_paths(cwd, directory.as_deref());
-                    match find_plugin_by_id(&search_paths, &plugin_id) {
-                        Some(p) => p,
-                        None => return error("plugin_not_found", 7, json),
-                    }
-                } else {
-                    return error("invalid_arguments", 2, json);
+                let plugin = match select_plugin(id, manifest, directory.as_deref(), cwd, json) {
+                    Ok(plugin) => plugin,
+                    Err(response) => return response,
                 };
-
                 let ws_path = absolute(workspace.as_deref().unwrap_or(cwd), cwd);
                 let mut driver = match PluginDriver::new(plugin) {
                     Ok(d) => d,
-                    Err(_) => return error("plugin_initialization_failed", 5, json),
+                    Err(e) => return plugin_error(&e, None, json),
                 };
-
                 match driver.probe(&ws_path) {
                     Ok(report) => render_plugin_probe(&report, json),
-                    Err(_) => error("plugin_probe_failed", 5, json),
+                    Err(e) => plugin_error(&e, driver.last_session(), json),
                 }
             }
             PluginAction::Run {
@@ -1777,21 +1884,11 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
                 directory,
                 capability,
                 arguments,
-                workspace: _,
+                workspace,
             } => {
-                let plugin = if let Some(man_path) = manifest {
-                    match DiscoveredPlugin::from_manifest_file(absolute(&man_path, cwd)) {
-                        Ok(p) => p,
-                        Err(_) => return error("invalid_manifest", 4, json),
-                    }
-                } else if let Some(plugin_id) = id {
-                    let search_paths = default_plugin_search_paths(cwd, directory.as_deref());
-                    match find_plugin_by_id(&search_paths, &plugin_id) {
-                        Some(p) => p,
-                        None => return error("plugin_not_found", 7, json),
-                    }
-                } else {
-                    return error("invalid_arguments", 2, json);
+                let plugin = match select_plugin(id, manifest, directory.as_deref(), cwd, json) {
+                    Ok(plugin) => plugin,
+                    Err(response) => return response,
                 };
 
                 let cap = match capability.parse::<PluginCapability>() {
@@ -1808,15 +1905,16 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
                     serde_json::json!({})
                 };
 
+                let ws_path = absolute(workspace.as_deref().unwrap_or(cwd), cwd);
                 let mut driver = match PluginDriver::new(plugin) {
                     Ok(d) => d,
-                    Err(_) => return error("plugin_initialization_failed", 5, json),
+                    Err(e) => return plugin_error(&e, None, json),
                 };
 
                 let task_id = format!("task-{}", SessionId::new());
-                match driver.execute(&task_id, cap, args) {
-                    Ok(report) => render_plugin_run(&report, json),
-                    Err(_) => error("plugin_execution_failed", 5, json),
+                match driver.execute_in_workspace(&ws_path, &task_id, cap, args) {
+                    Ok(report) => render_plugin_run(&report, driver.last_session(), json),
+                    Err(e) => plugin_error(&e, driver.last_session(), json),
                 }
             }
         },
@@ -1826,32 +1924,22 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
             mcp,
             skill,
             workspace,
+            command,
         } => {
-            let agent_target = match sentra_core::skills::AgentTarget::parse(&target) {
-                Some(t) => t,
-                None => return error("invalid_target", 2, json),
-            };
+            if mcp && skill.is_some() {
+                return detailed_error(
+                    "invalid_arguments",
+                    2,
+                    json,
+                    "--skill cannot be combined with --mcp; run the skill install and the MCP registration separately",
+                    serde_json::json!({ "command": "install" }),
+                );
+            }
             let ws_path = absolute(workspace.as_deref().unwrap_or(cwd), cwd);
             if mcp {
-                match sentra_core::skills::configure_agent_mcp(agent_target, global, &ws_path) {
-                    Ok(rep) => render_mcp_install(&rep, json),
-                    Err(_) => error("mcp_install_failed", 5, json),
-                }
+                execute_mcp_install(&target, global, ws_path, command.as_deref(), cwd, json)
             } else {
-                let report = if let Some(skill_id) = skill {
-                    sentra_core::skills::install_selected_skills(
-                        &[&skill_id],
-                        agent_target,
-                        global,
-                        &ws_path,
-                    )
-                } else {
-                    sentra_core::skills::install_all_skills(agent_target, global, &ws_path)
-                };
-                match report {
-                    Ok(rep) => render_install(&rep, json),
-                    Err(_) => error("install_failed", 5, json),
-                }
+                execute_skill_install(&target, global, &ws_path, skill.as_deref(), json)
             }
         }
         Command::Skills { action } => match action {
@@ -1861,7 +1949,13 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
             }
             SkillsAction::Show { id } => match sentra_core::skills::find_skill_by_id(&id) {
                 Some(skill) => render_skill_show(skill, json),
-                None => error("skill_not_found", 7, json),
+                None => detailed_error(
+                    "skill_not_found",
+                    7,
+                    json,
+                    "no bundled skill has this id; run `sentra skills list`",
+                    serde_json::json!({ "command": "skills show" }),
+                ),
             },
         },
         Command::Prompt {
@@ -1874,7 +1968,7 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
             skills.as_deref(),
             json,
         ),
-        Command::Mcp => unreachable!("handled in run_stream"),
+        Command::Mcp { .. } => unreachable!("handled in run_stream"),
     }
 }
 
@@ -1922,39 +2016,291 @@ fn render_diff(diff: &SnapshotDiff, json: bool) -> Response {
     }
 }
 
-fn render_install(report: &sentra_core::skills::InstallReport, json: bool) -> Response {
+fn scope_label(global: bool) -> &'static str {
+    if global {
+        "global (user-wide)"
+    } else {
+        "workspace (project)"
+    }
+}
+
+/// `all` / `*` expand to every target; everything else names one target.
+fn is_all_target(target: &str) -> bool {
+    let target = target.trim();
+    target == "*" || target.eq_ignore_ascii_case("all")
+}
+
+/// Merges `extra` into a JSON object without overriding existing keys.
+fn merge_json(mut base: serde_json::Value, extra: serde_json::Value) -> serde_json::Value {
+    if let (Some(object), serde_json::Value::Object(extra)) = (base.as_object_mut(), extra) {
+        for (key, value) in extra {
+            object.entry(key).or_insert(value);
+        }
+    }
+    base
+}
+
+fn execute_skill_install(
+    target: &str,
+    global: bool,
+    ws_path: &Path,
+    skill: Option<&str>,
+    json: bool,
+) -> Response {
+    let Some(agent_target) = AgentTarget::parse(target) else {
+        return detailed_error(
+            "invalid_target",
+            2,
+            json,
+            "unknown skill target; run `sentra --help` for the list of targets",
+            serde_json::json!({
+                "command": "install",
+                "targets": AgentTarget::CONCRETE.map(|t| t.as_str()),
+            }),
+        );
+    };
+    // Every id is resolved before anything is written.
+    let result = match skill {
+        Some(ids) => {
+            sentra_core::skills::install_selected_skills(&[ids], agent_target, global, ws_path)
+        }
+        None => sentra_core::skills::install_all_skills(agent_target, global, ws_path),
+    };
+    match result {
+        Ok(report) => render_install(&report, json),
+        Err(err) => install_error(&err, json),
+    }
+}
+
+/// Skill installation failure. JSON mode prints the core error body on stderr.
+/// A required manual config edit (Aider) still prints the install summary on
+/// stdout, because the skills themselves were installed.
+fn install_error(err: &InstallError, json: bool) -> Response {
+    let exit_code = exit_status(err.exit_code());
+    if json {
+        return Response {
+            stdout: String::new(),
+            stderr: json_text(&err.to_json()),
+            exit_code,
+        };
+    }
+    let mut stderr = format!("error: {}\n{err}\n", err.code());
+    let stdout = match err {
+        InstallError::ManualStepRequired { report, .. } => {
+            render_install_text(report, "incomplete (manual config edit required)")
+        }
+        InstallError::SkillNotFound { .. } => {
+            stderr.push_str("Run `sentra skills list` for the bundled skill ids.\n");
+            String::new()
+        }
+        _ => String::new(),
+    };
+    Response {
+        stdout,
+        stderr,
+        exit_code,
+    }
+}
+
+fn render_install(report: &InstallReport, json: bool) -> Response {
     let stdout = if json {
-        let files_json = serde_json::to_string(
-            &report
-                .installed_files
-                .iter()
-                .map(|p| p.display().to_string())
-                .collect::<Vec<_>>(),
-        )
-        .unwrap_or_default();
-        format!(
-            "{{\"schema_version\":1,\"command\":\"install\",\"target\":\"{}\",\"global\":{},\"destination\":\"{}\",\"count\":{},\"files\":{}}}\n",
-            report.target.as_str(),
-            report.is_global,
-            report.destination_dir.display(),
-            report.installed_files.len(),
-            files_json
-        )
+        json_text(&report.to_json())
+    } else {
+        render_install_text(report, "success")
+    };
+    Response {
+        stdout,
+        stderr: String::new(),
+        exit_code: 0,
+    }
+}
+
+fn render_install_text(report: &InstallReport, status: &str) -> String {
+    let mut text = format!(
+        "Sentra AppSec skill installation: {status}\nTarget: {}\nScope: {}\nDestination: {}\nInstalled skills: {} ({} files)\n",
+        report.target.as_str(),
+        scope_label(report.is_global),
+        display_path(&report.destination_dir),
+        report.skills.len(),
+        report.installed_files.len(),
+    );
+    for file in report.written_files() {
+        text.push_str(&format!(
+            "  [{}] {}",
+            file.status.as_str(),
+            display_path(&file.path)
+        ));
+        if let Some(backup) = &file.backup {
+            text.push_str(&format!(" (backup: {})", display_path(backup)));
+        }
+        text.push('\n');
+    }
+    let unchanged = report
+        .files
+        .iter()
+        .filter(|file| file.status == FileStatus::Unchanged)
+        .count();
+    if unchanged > 0 {
+        text.push_str(&format!("Unchanged files: {unchanged}\n"));
+    }
+    for outcome in &report.targets {
+        if let Some(reason) = &outcome.skipped {
+            text.push_str(&format!(
+                "  [skipped] {}: {reason}\n",
+                outcome.target.as_str()
+            ));
+        }
+    }
+    for item in &report.legacy {
+        text.push_str(&format!(
+            "  [{}] {} (skill {})",
+            item.action.as_str(),
+            display_path(&item.path),
+            item.skill_id
+        ));
+        if let Some(backup) = &item.backup {
+            text.push_str(&format!(" (backup: {})", display_path(backup)));
+        }
+        if item.action.needs_manual_review() {
+            text.push_str(" - edited by hand; review and remove it manually");
+        }
+        text.push('\n');
+    }
+    for note in &report.notes {
+        text.push_str(&format!("Note: {note}\n"));
+    }
+    text
+}
+
+/// The executable to register: bare names stay as given (resolved by the agent's
+/// PATH lookup); paths are made absolute against the invocation directory.
+fn registered_command(command: &Path, cwd: &Path) -> PathBuf {
+    let bare = command.components().count() == 1 && !command.is_absolute();
+    if bare {
+        command.to_path_buf()
+    } else {
+        absolute(command, cwd)
+    }
+}
+
+fn execute_mcp_install(
+    target: &str,
+    global: bool,
+    ws_path: PathBuf,
+    command: Option<&Path>,
+    cwd: &Path,
+    json: bool,
+) -> Response {
+    let single = if is_all_target(target) {
+        None
+    } else {
+        match McpTarget::parse(target) {
+            Some(target) => Some(target),
+            None => {
+                return detailed_error(
+                    "invalid_target",
+                    2,
+                    json,
+                    "unknown MCP target; run `sentra --help` for the list of targets",
+                    serde_json::json!({
+                        "command": "install",
+                        "mcp": true,
+                        "targets": McpTarget::ALL.map(McpTarget::as_str),
+                    }),
+                );
+            }
+        }
+    };
+    let scope = McpScope::from_global(global);
+    if scope == McpScope::Workspace && !ws_path.is_dir() {
+        return detailed_error(
+            "workspace_not_found",
+            2,
+            json,
+            &format!(
+                "workspace directory {} does not exist",
+                display_path(&ws_path)
+            ),
+            serde_json::json!({ "command": "install", "mcp": true, "path": display_path(&ws_path) }),
+        );
+    }
+    let command = command.map(|c| registered_command(c, cwd));
+    // A path (not a bare name looked up on PATH) must name an existing file.
+    if let Some(path) = command
+        .as_deref()
+        .filter(|p| p.components().count() > 1 && !p.is_file())
+    {
+        return detailed_error(
+            "mcp_command_not_found",
+            2,
+            json,
+            &format!("--command {} is not an existing file", display_path(path)),
+            serde_json::json!({ "command": "install", "mcp": true, "path": display_path(path) }),
+        );
+    }
+    let mut options = McpInstallOptions::new(scope, ws_path);
+    options.command = command;
+    match single {
+        Some(target) => match sentra_core::skills::install_mcp_server(target, &options) {
+            Ok(report) => render_mcp_install(&report, json),
+            Err(err) => mcp_install_error(target, &err, json),
+        },
+        None => render_mcp_batch(&sentra_core::skills::install_mcp_server_all(&options), json),
+    }
+}
+
+fn mcp_action_label(action: McpFileAction) -> &'static str {
+    match action {
+        McpFileAction::Created => "created",
+        McpFileAction::Updated => "updated",
+        McpFileAction::Unchanged => "unchanged",
+    }
+}
+
+/// `[action] path (backup: ...)` lines for every file of one target.
+fn mcp_file_lines(report: &McpInstallReport, indent: &str) -> String {
+    let mut text = String::new();
+    for file in &report.files {
+        text.push_str(&format!(
+            "{indent}[{}] {}",
+            mcp_action_label(file.action),
+            display_path(&file.path)
+        ));
+        if let Some(backup) = &file.backup_file {
+            text.push_str(&format!(" (backup: {})", display_path(backup)));
+        }
+        text.push('\n');
+    }
+    text
+}
+
+fn render_mcp_install(report: &McpInstallReport, json: bool) -> Response {
+    let stdout = if json {
+        // `command` names the CLI command in every envelope, so the registered
+        // executable is reported as `server_command`.
+        let mut body = serde_json::to_value(report).unwrap_or_default();
+        if let Some(object) = body.as_object_mut()
+            && let Some(executable) = object.remove("command")
+        {
+            object.insert("server_command".into(), executable);
+        }
+        let envelope = serde_json::json!({
+            "schema_version": 1,
+            "command": "install",
+            "mcp": true,
+        });
+        json_text(&merge_json(envelope, body))
     } else {
         let mut text = format!(
-            "Sentra AppSec Skill Installation: success\nTarget: {}\nScope: {}\nDestination: {}\nInstalled skills: {}\n",
-            report.target.as_str(),
-            if report.is_global {
-                "global (user-wide)"
-            } else {
-                "project (local workspace)"
-            },
-            report.destination_dir.display(),
-            report.installed_files.len(),
+            "Sentra MCP server registration: {}\nTarget: {}\nScope: {}\nServer: \"{}\" -> {} {}\nFiles:\n",
+            mcp_action_label(report.action),
+            report.target,
+            scope_label(report.is_global),
+            report.server_name,
+            report.command,
+            report.args.join(" "),
         );
-        for file in &report.installed_files {
-            text.push_str(&format!("  [installed] {}\n", file.display()));
-        }
+        text.push_str(&mcp_file_lines(report, "  "));
         text
     };
     Response {
@@ -1964,31 +2310,106 @@ fn render_install(report: &sentra_core::skills::InstallReport, json: bool) -> Re
     }
 }
 
-fn render_mcp_install(report: &sentra_core::McpInstallReport, json: bool) -> Response {
-    let stdout = if json {
-        serde_json::to_string(report).unwrap_or_default() + "\n"
+/// Human-readable manual step: what to do, which file, and the exact snippet.
+fn manual_step_text(err: &McpInstallError) -> String {
+    match err.manual_step() {
+        Some(step) => format!(
+            "Manual step: {}\nFile: {}\n----- snippet -----\n{}{}----- end snippet -----\n",
+            step.instructions,
+            display_path(&step.path),
+            step.snippet,
+            if step.snippet.ends_with('\n') {
+                ""
+            } else {
+                "\n"
+            },
+        ),
+        None => String::new(),
+    }
+}
+
+fn mcp_install_error(target: McpTarget, err: &McpInstallError, json: bool) -> Response {
+    let stderr = if json {
+        let envelope = serde_json::json!({
+            "schema_version": 1,
+            "command": "install",
+            "mcp": true,
+            "target": target.as_str(),
+            "error": err.code(),
+        });
+        json_text(&merge_json(envelope, err.to_json()))
     } else {
-        format!(
-            "Sentra MCP Server Configuration: success\nTarget: {}\nScope: {}\nConfig file: {}\nAction: {}\nMCP Server: \"{}\" -> sentra mcp\n",
-            report.target,
-            if report.is_global {
-                "global (user-wide)"
-            } else {
-                "project (local workspace)"
-            },
-            report.config_file.display(),
-            if report.created_new_file {
-                "created new file"
-            } else {
-                "merged into existing configuration"
-            },
-            report.server_name,
-        )
+        format!("error: {}: {err}\n{}", err.code(), manual_step_text(err))
     };
     Response {
+        stdout: String::new(),
+        stderr,
+        exit_code: err.exit_code(),
+    }
+}
+
+/// `install mcp all`: installed, skipped (target or scope without file-based MCP)
+/// and failed targets. The report goes to stdout; failures exit non-zero with the
+/// first failure's exit code, and their manual steps go to stderr in text mode.
+fn render_mcp_batch(batch: &McpBatchReport, json: bool) -> Response {
+    let exit_code = batch
+        .failed
+        .first()
+        .map_or(0, |issue| issue.error.exit_code());
+    if json {
+        let envelope = serde_json::json!({
+            "schema_version": 1,
+            "command": "install",
+            "mcp": true,
+            "target": "all",
+            "success": batch.is_success(),
+        });
+        return Response {
+            stdout: json_text(&merge_json(
+                envelope,
+                serde_json::to_value(batch).unwrap_or_default(),
+            )),
+            stderr: String::new(),
+            exit_code,
+        };
+    }
+    let mut stdout = format!(
+        "Sentra MCP server registration (all targets): {}\nScope: {}\nInstalled: {}  Skipped: {}  Failed: {}\n",
+        if batch.is_success() {
+            "success"
+        } else {
+            "failed for some targets"
+        },
+        scope_label(batch.scope == McpScope::Global),
+        batch.installed.len(),
+        batch.skipped.len(),
+        batch.failed.len(),
+    );
+    for report in &batch.installed {
+        stdout.push_str(&format!("  {}:\n", report.target));
+        stdout.push_str(&mcp_file_lines(report, "    "));
+    }
+    for issue in &batch.skipped {
+        stdout.push_str(&format!(
+            "  [skipped] {}: {}\n",
+            issue.target,
+            issue.error.code()
+        ));
+    }
+    let mut stderr = String::new();
+    for issue in &batch.failed {
+        stderr.push_str(&format!(
+            "error: {}: {}: {}\n{}",
+            issue.target,
+            issue.error.code(),
+            issue.error,
+            manual_step_text(&issue.error)
+        ));
+    }
+    Response {
         stdout,
-        stderr: String::new(),
-        exit_code: 0,
+        stderr,
+        exit_code,
     }
 }
 
@@ -2006,10 +2427,12 @@ fn render_skills_list(skills: &[sentra_core::skills::SkillDefinition], json: boo
                 })
             })
             .collect();
-        format!(
-            "{}\n",
-            serde_json::to_string_pretty(&items).unwrap_or_default()
-        )
+        json_text(&serde_json::json!({
+            "schema_version": 1,
+            "command": "skills list",
+            "count": items.len(),
+            "skills": items,
+        }))
     } else {
         let mut text = format!(
             "Sentra Built-in AppSec Skills ({} available):\n\n",
@@ -2023,7 +2446,7 @@ fn render_skills_list(skills: &[sentra_core::skills::SkillDefinition], json: boo
                 s.description
             ));
         }
-        text.push_str("\nInstall skills into your AI assistant using: sentra install <claude|antigravity|cursor|zed|all> [--global]\n");
+        text.push_str("\nInstall skills into your AI assistant using: sentra install <target|all> [--skill <id>] [--global] (targets: sentra --help)\n");
         text
     };
     Response {
@@ -2035,18 +2458,17 @@ fn render_skills_list(skills: &[sentra_core::skills::SkillDefinition], json: boo
 
 fn render_skill_show(skill: &sentra_core::skills::SkillDefinition, json: bool) -> Response {
     let stdout = if json {
-        let val = serde_json::json!({
+        json_text(&serde_json::json!({
+            "schema_version": 1,
+            "command": "skills show",
             "id": skill.id,
             "name": skill.name,
             "category": skill.category.as_str(),
             "description": skill.description,
             "tags": skill.tags,
+            "files": skill.files().iter().map(|(path, _)| *path).collect::<Vec<_>>(),
             "content": skill.content,
-        });
-        format!(
-            "{}\n",
-            serde_json::to_string_pretty(&val).unwrap_or_default()
-        )
+        }))
     } else {
         format!("{}\n", skill.content)
     };
@@ -2055,6 +2477,31 @@ fn render_skill_show(skill: &sentra_core::skills::SkillDefinition, json: bool) -
         stderr: String::new(),
         exit_code: 0,
     }
+}
+
+fn prompt_skill_error(err: &SkillPromptError, json: bool) -> Response {
+    let SkillPromptError::UnknownSkills { ids } = err;
+    let available: Vec<&str> = sentra_core::skills::list_builtin_skills()
+        .iter()
+        .map(|skill| skill.id)
+        .collect();
+    let mut response = detailed_error(
+        err.code(),
+        exit_status(err.exit_code()),
+        json,
+        &err.to_string(),
+        serde_json::json!({
+            "command": "prompt",
+            "unknown_skills": ids,
+            "available_skills": available,
+        }),
+    );
+    if !json {
+        response
+            .stderr
+            .push_str("Run `sentra skills list` for the bundled skill ids.\n");
+    }
+    response
 }
 
 fn render_prompt(workflow: &str, scope: &str, skills: Option<&str>, json: bool) -> Response {
@@ -2079,7 +2526,7 @@ fn render_prompt(workflow: &str, scope: &str, skills: Option<&str>, json: bool) 
                 );
             (
                 "Threat Modeling (STRIDE)",
-                sentra_core::research::ResearchRole::Analyst,
+                sentra_core::research::ResearchRole::Scout,
                 p,
             )
         }
@@ -2116,7 +2563,7 @@ fn render_prompt(workflow: &str, scope: &str, skills: Option<&str>, json: bool) 
             );
             (
                 "Agent Skill Safety Audit",
-                sentra_core::research::ResearchRole::Validator,
+                sentra_core::research::ResearchRole::Analyst,
                 p,
             )
         }
@@ -2134,36 +2581,33 @@ fn render_prompt(workflow: &str, scope: &str, skills: Option<&str>, json: bool) 
                 p,
             )
         }
-        other => {
-            return Response {
-                stdout: String::new(),
-                stderr: format!(
-                    "Unknown prompt workflow: '{other}'. Expected scout, threat-model, api-bola, patch-remediation, skill-audit, or verify\n"
-                ),
-                exit_code: 2,
-            };
+        _ => {
+            return detailed_error(
+                "unknown_workflow",
+                2,
+                json,
+                "unknown prompt workflow; expected scout, threat-model, api-bola, patch-remediation, skill-audit or verify",
+                serde_json::json!({
+                    "command": "prompt",
+                    "workflows": ["scout", "threat-model", "api-bola", "patch-remediation", "skill-audit", "verify"],
+                }),
+            );
         }
     };
 
-    let skill_ids: Vec<&str> = skills
-        .map(|s| {
-            s.split(',')
-                .map(|id| id.trim())
-                .filter(|id| !id.is_empty())
-                .collect()
-        })
+    let requested: Vec<&str> = skills
+        .map(|s| s.split(',').map(str::trim).collect())
         .unwrap_or_default();
-
-    let final_prompt = if !skill_ids.is_empty() {
-        sentra_core::research::SkillPromptComposer::compose_role_prompt(
-            role,
-            &prompt.user_prompt,
-            &skill_ids,
-            &format!("Target scope: {scope}"),
-        )
-    } else {
-        prompt
-    };
+    // The playbooks are appended to the workflow's own prompt, so its grounding
+    // rules and expected schema stay in force; ids are de-duplicated and unknown
+    // ids are rejected instead of silently dropped.
+    let (final_prompt, skill_ids) =
+        match sentra_core::research::SkillPromptComposer::augment_prompt_with_ids(
+            prompt, &requested,
+        ) {
+            Ok(value) => value,
+            Err(err) => return prompt_skill_error(&err, json),
+        };
 
     let stdout = if json {
         let val = serde_json::json!({
@@ -3061,7 +3505,27 @@ fn render_fleet_status(fleet: &WorkerFleetManager, json: bool) -> Response {
 struct PluginQuotasJson {
     max_memory_mib: u32,
     max_execution_time_secs: u32,
+    max_frame_bytes: usize,
+    max_total_output_bytes: usize,
 }
+
+/// Which declared manifest limits the plugin host actually enforces.
+#[derive(serde::Serialize)]
+struct PluginEnforcementJson {
+    max_execution_time_secs: bool,
+    max_frame_bytes: bool,
+    max_total_output_bytes: bool,
+    max_memory_mib: bool,
+    egress_policy: bool,
+}
+
+const PLUGIN_ENFORCEMENT: PluginEnforcementJson = PluginEnforcementJson {
+    max_execution_time_secs: true,
+    max_frame_bytes: true,
+    max_total_output_bytes: true,
+    max_memory_mib: false,
+    egress_policy: false,
+};
 
 #[derive(serde::Serialize)]
 struct PluginListEntryJson<'a> {
@@ -3074,6 +3538,15 @@ struct PluginListEntryJson<'a> {
     capabilities: Vec<&'a str>,
     egress_policy: String,
     quotas: PluginQuotasJson,
+    enforced: PluginEnforcementJson,
+}
+
+#[derive(serde::Serialize)]
+struct PluginDiagnosticJson<'a> {
+    path: String,
+    severity: &'static str,
+    code: &'a str,
+    message: &'a str,
 }
 
 #[derive(serde::Serialize)]
@@ -3081,8 +3554,25 @@ struct PluginListJson<'a> {
     schema_version: u8,
     command: &'static str,
     action: &'static str,
+    directories: Vec<String>,
     count: usize,
     plugins: Vec<PluginListEntryJson<'a>>,
+    /// True when a diagnostic has severity `error` (an entry was skipped).
+    has_errors: bool,
+    diagnostics: Vec<PluginDiagnosticJson<'a>>,
+}
+
+fn diagnostics_have_errors(diagnostics: &[DiscoveryDiagnostic]) -> bool {
+    diagnostics
+        .iter()
+        .any(|d| d.severity == DiagnosticSeverity::Error)
+}
+
+fn diagnostic_severity(diagnostic: &DiscoveryDiagnostic) -> &'static str {
+    match diagnostic.severity {
+        sentra_core::plugin::DiagnosticSeverity::Warning => "warning",
+        sentra_core::plugin::DiagnosticSeverity::Error => "error",
+    }
 }
 
 #[derive(serde::Serialize)]
@@ -3098,6 +3588,9 @@ struct PluginProbeJson<'a> {
     capabilities: Vec<&'a str>,
 }
 
+/// Fields a plugin run reports that come from the adapter, not from the host.
+const ADAPTER_REPORTED_RUN_FIELDS: [&str; 3] = ["exit_code", "summary", "evidence_refs"];
+
 #[derive(serde::Serialize)]
 struct PluginRunJson<'a> {
     schema_version: u8,
@@ -3109,9 +3602,17 @@ struct PluginRunJson<'a> {
     exit_code: i32,
     summary: &'a str,
     evidence_refs: &'a [String],
+    adapter_reported: [&'static str; 3],
+    process_exit_code: Option<i32>,
+    workspace_root: Option<String>,
 }
 
-fn render_plugin_list(plugins: &[DiscoveredPlugin], json: bool) -> Response {
+fn render_plugin_list(
+    dirs: &[PathBuf],
+    plugins: &[DiscoveredPlugin],
+    diagnostics: &[DiscoveryDiagnostic],
+    json: bool,
+) -> Response {
     if json {
         let entries = plugins
             .iter()
@@ -3132,18 +3633,38 @@ fn render_plugin_list(plugins: &[DiscoveredPlugin], json: bool) -> Response {
                 quotas: PluginQuotasJson {
                     max_memory_mib: p.manifest.quotas.max_memory_mib,
                     max_execution_time_secs: p.manifest.quotas.max_execution_time_secs,
+                    max_frame_bytes: p.manifest.quotas.max_frame_bytes,
+                    max_total_output_bytes: p.manifest.quotas.max_total_output_bytes,
                 },
+                enforced: PLUGIN_ENFORCEMENT,
+            })
+            .collect();
+        let diagnostic_entries = diagnostics
+            .iter()
+            .map(|d| PluginDiagnosticJson {
+                path: display_path(&d.path),
+                severity: diagnostic_severity(d),
+                code: &d.code,
+                message: &d.message,
             })
             .collect();
         json_line(&PluginListJson {
             schema_version: 1,
             command: "plugin",
             action: "list",
+            directories: dirs.iter().map(|d| display_path(d)).collect(),
             count: plugins.len(),
             plugins: entries,
+            has_errors: diagnostics_have_errors(diagnostics),
+            diagnostics: diagnostic_entries,
         })
     } else {
-        let mut out = format!("Sentra discovered plugins (count: {}):\n", plugins.len());
+        let directories: Vec<String> = dirs.iter().map(|d| display_path(d)).collect();
+        let mut out = format!(
+            "Sentra discovered plugins (count: {}):\nPlugin directories: {}\n",
+            plugins.len(),
+            directories.join(", ")
+        );
         for p in plugins {
             let caps: Vec<&str> = p
                 .manifest
@@ -3152,14 +3673,28 @@ fn render_plugin_list(plugins: &[DiscoveredPlugin], json: bool) -> Response {
                 .map(|c| c.as_str())
                 .collect();
             out.push_str(&format!(
-                "  • {} v{} ({})\n    Manifest: {}\n    Capabilities: {}\n    Egress: {:?}\n\n",
+                "  • {} v{} ({})\n    Manifest: {}\n    Capabilities: {}\n    Time limit: {}s (enforced)\n    Memory: {} MiB (declared, not enforced)\n    Egress: {:?} (declared, not enforced)\n\n",
                 p.manifest.id,
                 p.manifest.version,
                 p.manifest.family.as_str(),
                 display_path(&p.manifest_path),
                 caps.join(", "),
+                p.manifest.quotas.max_execution_time_secs,
+                p.manifest.quotas.max_memory_mib,
                 p.manifest.egress_policy
             ));
+        }
+        if !diagnostics.is_empty() {
+            out.push_str("Diagnostics:\n");
+            for d in diagnostics {
+                out.push_str(&format!(
+                    "  [{}] {}: {} ({})\n",
+                    diagnostic_severity(d),
+                    d.code,
+                    d.message,
+                    display_path(&d.path)
+                ));
+            }
         }
         Response {
             stdout: out,
@@ -3203,7 +3738,15 @@ fn render_plugin_probe(output: &PluginProbeOutput, json: bool) -> Response {
     }
 }
 
-fn render_plugin_run(output: &PluginExecutionOutput, json: bool) -> Response {
+fn render_plugin_run(
+    output: &PluginExecutionOutput,
+    session: Option<&PluginSessionReport>,
+    json: bool,
+) -> Response {
+    let process_exit_code = session.and_then(|s| s.process_exit_code);
+    let workspace_root = session
+        .and_then(|s| s.workspace_root.as_deref())
+        .map(|root| display_path(Path::new(root)));
     if json {
         json_line(&PluginRunJson {
             schema_version: 1,
@@ -3215,15 +3758,20 @@ fn render_plugin_run(output: &PluginExecutionOutput, json: bool) -> Response {
             exit_code: output.exit_code,
             summary: &output.summary,
             evidence_refs: &output.evidence_refs,
+            adapter_reported: ADAPTER_REPORTED_RUN_FIELDS,
+            process_exit_code,
+            workspace_root,
         })
     } else {
         Response {
             stdout: format!(
-                "Sentra plugin execution: completed\nPlugin: {}\nTask ID: {}\nCapability: {}\nExit Code: {}\nSummary: {}\nEvidence Refs: {}\n",
+                "Sentra plugin execution: completed\nPlugin: {}\nTask ID: {}\nCapability: {}\nWorkspace: {}\nExit Code (adapter-reported): {}\nProcess exit code (host-observed): {}\nSummary (adapter-reported): {}\nEvidence Refs (adapter-reported labels): {}\n",
                 output.plugin_id,
                 output.task_id,
                 output.capability.as_str(),
+                workspace_root.as_deref().unwrap_or("none"),
                 output.exit_code,
+                process_exit_code.map_or_else(|| "unknown".to_string(), |c| c.to_string()),
                 output.summary,
                 if output.evidence_refs.is_empty() {
                     "none".to_string()
@@ -3276,9 +3824,16 @@ mod plugin_json_tests {
             manifest_path: PathBuf::from(r"\\?\C:\plugins\scan dir\manifest.json"),
             adapter_dir: PathBuf::from(r"\\?\C:\plugins\scan dir"),
         };
-        let response = render_plugin_list(std::slice::from_ref(&plugin), true);
+        let dirs = [PathBuf::from(r"\\?\C:\plugins")];
+        let diagnostics = [DiscoveryDiagnostic {
+            path: PathBuf::from(r"C:\plugins\broken\manifest.json"),
+            severity: sentra_core::plugin::DiagnosticSeverity::Error,
+            code: "manifest_invalid_json".to_string(),
+            message: TRICKY.to_string(),
+        }];
+        let response = render_plugin_list(&dirs, std::slice::from_ref(&plugin), &diagnostics, true);
         assert!(response.stdout.starts_with(
-            "{\"schema_version\":1,\"command\":\"plugin\",\"action\":\"list\",\"count\":1,\"plugins\":[{\"id\":"
+            "{\"schema_version\":1,\"command\":\"plugin\",\"action\":\"list\",\"directories\":[\"C:/plugins\"],\"count\":1,\"plugins\":[{\"id\":"
         ));
         let json = single_json_line(&response);
         assert_eq!(
@@ -3287,6 +3842,7 @@ mod plugin_json_tests {
                 "schema_version": 1,
                 "command": "plugin",
                 "action": "list",
+                "directories": ["C:/plugins"],
                 "count": 1,
                 "plugins": [{
                     "id": "org.example.\"esc\\aped\"",
@@ -3297,14 +3853,42 @@ mod plugin_json_tests {
                     "executable_path": "C:/tools/scan.exe --rule \"x\"\n",
                     "capabilities": ["static_analysis", "dependency_audit"],
                     "egress_policy": "StrictlyDenied",
-                    "quotas": {"max_memory_mib": 256, "max_execution_time_secs": 30}
+                    "quotas": {
+                        "max_memory_mib": 256,
+                        "max_execution_time_secs": 30,
+                        "max_frame_bytes": 1024,
+                        "max_total_output_bytes": 4096
+                    },
+                    "enforced": {
+                        "max_execution_time_secs": true,
+                        "max_frame_bytes": true,
+                        "max_total_output_bytes": true,
+                        "max_memory_mib": false,
+                        "egress_policy": false
+                    }
+                }],
+                "has_errors": true,
+                "diagnostics": [{
+                    "path": "C:/plugins/broken/manifest.json",
+                    "severity": "error",
+                    "code": "manifest_invalid_json",
+                    "message": TRICKY
                 }]
             })
         );
 
-        let empty = single_json_line(&render_plugin_list(&[], true));
+        let empty = single_json_line(&render_plugin_list(&dirs, &[], &[], true));
         assert_eq!(empty["count"], 0);
         assert_eq!(empty["plugins"], serde_json::json!([]));
+        assert_eq!(empty["diagnostics"], serde_json::json!([]));
+        assert_eq!(empty["has_errors"], false);
+
+        let text = render_plugin_list(&dirs, std::slice::from_ref(&plugin), &diagnostics, false);
+        assert!(
+            text.stdout
+                .contains("Egress: StrictlyDenied (declared, not enforced)")
+        );
+        assert!(text.stdout.contains("[error] manifest_invalid_json"));
     }
 
     #[test]
@@ -3360,7 +3944,17 @@ mod plugin_json_tests {
             summary: TRICKY.to_string(),
             evidence_refs: vec!["sha256:abc".to_string(), TRICKY.to_string()],
         };
-        let response = render_plugin_run(&output, true);
+        let session = PluginSessionReport {
+            resolved_executable: PathBuf::from(r"C:\tools\bun.exe"),
+            args: vec!["adapter.ts".to_string()],
+            workspace_root: Some(r"C:\work\repo".to_string()),
+            process_exit_code: Some(0),
+            killed_by_host: false,
+            timed_out: false,
+            stderr_bytes: 0,
+            stderr_tail: String::new(),
+        };
+        let response = render_plugin_run(&output, Some(&session), true);
         assert!(response.stdout.starts_with(
             "{\"schema_version\":1,\"command\":\"plugin\",\"action\":\"run\",\"plugin_id\":"
         ));
@@ -3375,8 +3969,84 @@ mod plugin_json_tests {
                 "capability": TRICKY,
                 "exit_code": -3,
                 "summary": TRICKY,
-                "evidence_refs": ["sha256:abc", TRICKY]
+                "evidence_refs": ["sha256:abc", TRICKY],
+                "adapter_reported": ["exit_code", "summary", "evidence_refs"],
+                "process_exit_code": 0,
+                "workspace_root": "C:/work/repo"
             })
         );
+
+        let without_session = single_json_line(&render_plugin_run(&output, None, true));
+        assert!(without_session["process_exit_code"].is_null());
+        assert!(without_session["workspace_root"].is_null());
+
+        let text = render_plugin_run(&output, Some(&session), false).stdout;
+        assert!(text.contains("Exit Code (adapter-reported): -3"));
+        assert!(text.contains("Process exit code (host-observed): 0"));
+        assert!(text.contains("Workspace: C:/work/repo"));
+    }
+
+    #[test]
+    fn install_parser_rejects_duplicates_and_misplaced_flags() {
+        let parse_words = |words: &[&str]| {
+            parse(
+                &words
+                    .iter()
+                    .map(std::ffi::OsString::from)
+                    .collect::<Vec<_>>(),
+            )
+        };
+        let parsed = parse_words(&["install", "mcp", "claude", "--command", "sentra"]).unwrap();
+        assert!(matches!(
+            parsed.command,
+            Command::Install { mcp: true, command: Some(ref c), .. } if c == Path::new("sentra")
+        ));
+        let parsed = parse_words(&["mcp", "install", "zed", "--global"]).unwrap();
+        assert!(matches!(
+            parsed.command,
+            Command::Install {
+                mcp: true,
+                global: true,
+                ..
+            }
+        ));
+        // --skill with MCP parses, so execution can explain the conflict.
+        assert!(parse_words(&["install", "claude", "--mcp", "--skill", "x"]).is_ok());
+        for words in [
+            &["install", "claude", "--global", "--global"][..],
+            &["install", "claude", "--skill", "a", "--skill", "b"],
+            &["install", "claude", "--workspace", "a", "--workspace", "b"],
+            &["install", "claude", "--command", "sentra"],
+            &["install", "mcp", "claude", "--mcp"],
+            &["install", "claude", "cursor"],
+            &["install"],
+            &["mcp", "install"],
+            &["mcp", "unexpected"],
+            &["mcp", "--workspace"],
+            &["mcp", "--database", "a", "--database", "b"],
+            &["prompt", "scout", "--skills", "a", "--skills", "b"],
+        ] {
+            assert!(parse_words(words).is_err(), "{words:?}");
+        }
+        let parsed = parse_words(&["mcp", "--workspace", "ws", "--database", "db"]).unwrap();
+        assert!(matches!(
+            parsed.command,
+            Command::Mcp { workspace: Some(ref w), database: Some(ref d) }
+                if w == Path::new("ws") && d == Path::new("db")
+        ));
+    }
+
+    #[test]
+    fn mcp_command_override_is_absolute_unless_bare() {
+        let cwd = Path::new("/work");
+        assert_eq!(
+            registered_command(Path::new("sentra"), cwd),
+            PathBuf::from("sentra")
+        );
+        assert_eq!(
+            registered_command(Path::new("bin/sentra"), cwd),
+            Path::new("/work").join("bin/sentra")
+        );
+        assert!(is_all_target("ALL") && is_all_target("*") && !is_all_target("claude"));
     }
 }

@@ -92,6 +92,7 @@ impl SampleAdapter {
                 lease_id: _,
                 capability: _,
                 arguments,
+                ..
             } => {
                 match self.mode {
                     SampleAdapterMode::OversizedOutput => {

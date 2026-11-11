@@ -23,14 +23,9 @@ export const PLUGINS_NOT_CONFIGURED_NOTE =
 
 const PLUGINS_CONFIGURED_NOTE =
   "Adapters are discovered from SENTRA_PLUGIN_DIR (a manifest.json in that directory or in its immediate subdirectories). " +
-  "Probe and run start the adapter as a subprocess on the Sentra host with a minimal environment; no isolation profile is applied, " +
-  "and the declared egress policy and memory/time quotas are not enforced. Results are reported by the adapter itself.";
-
-/**
- * The core's `plugin run` accepts --workspace but does not pass it to the adapter, which runs
- * in its own directory (crates/sentra-cli/src/lib.rs, PluginAction::Run `workspace: _`).
- */
-const CORE_RUN_IGNORES_WORKSPACE = true;
+  "Probe and run start the adapter as a subprocess on the Sentra host with an allowlisted environment; no isolation profile is applied. " +
+  "The core enforces the time limit and frame/output quotas and kills the adapter process tree when a session ends; " +
+  "the declared egress policy and memory quota are not enforced. Results are reported by the adapter itself.";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
@@ -130,12 +125,9 @@ export function mapRun(document: unknown, plugin: PluginView, capability: string
   if (!doc || typeof doc.exit_code !== "number" || typeof doc.summary !== "string") {
     throw invalidOutput("plugin run", "no exit_code/summary");
   }
-  let summary = doc.summary;
-  if (CORE_RUN_IGNORES_WORKSPACE) {
-    summary +=
-      `\n\n[Sentra bridge note] The core does not pass the workspace to adapters for 'plugin run'; ` +
-      `this adapter ran in its own directory (${path.dirname(plugin.manifestPath).replace(/\\/g, "/")}), not in the tenant workspace.`;
-  }
+  // The core sends the tenant workspace to the adapter (Execute frame `workspace_root`);
+  // exit code, summary and evidence references remain adapter-reported.
+  const summary = doc.summary;
   return {
     pluginId: typeof doc.plugin_id === "string" ? doc.plugin_id : plugin.id,
     capability: typeof doc.capability === "string" ? doc.capability : capability,

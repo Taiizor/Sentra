@@ -190,15 +190,17 @@ const SKILLS_OUTPUT = [
   },
   { category: "secrets", description: "Find secrets.", id: "secret-scanning", name: "Secret Scanning", tags: [] },
 ];
+const SKILLS_LIST_OUTPUT = { schema_version: 1, command: "skills list", count: SKILLS_OUTPUT.length, skills: SKILLS_OUTPUT };
 
 describe("skills and prompt parsing", () => {
-  test("parses the bare skills array and skill details", () => {
-    const skills = parseSkillsList(SKILLS_OUTPUT);
+  test("parses the skills list envelope and skill details", () => {
+    const skills = parseSkillsList(SKILLS_LIST_OUTPUT);
     expect(skills.map((skill) => skill.id)).toEqual(["api-security-testing", "secret-scanning"]);
     expect(skills[0].tags).toEqual(["api", "owasp"]);
     expect(parseSkillDetail({ ...SKILLS_OUTPUT[0], content: "# Skill" }).content).toBe("# Skill");
+    expect(httpError(() => parseSkillsList(SKILLS_OUTPUT)).code).toBe("core_invalid_output");
     expect(httpError(() => parseSkillsList({ skills: [] })).code).toBe("core_invalid_output");
-    expect(httpError(() => parseSkillsList([{ id: 1 }])).code).toBe("core_invalid_output");
+    expect(httpError(() => parseSkillsList({ schema_version: 1, skills: [{ id: 1 }] })).code).toBe("core_invalid_output");
     expect(httpError(() => parseSkillDetail(SKILLS_OUTPUT[0])).code).toBe("core_invalid_output");
   });
 
@@ -254,7 +256,7 @@ describe("skills and prompt routes", () => {
       binaryPath: "/fake/sentra",
       async run(args: string[]): Promise<CliResult> {
         calls.push(args);
-        if (args[0] === "skills" && args[1] === "list") return result(SKILLS_OUTPUT);
+        if (args[0] === "skills" && args[1] === "list") return result(SKILLS_LIST_OUTPUT);
         if (args[0] === "skills" && args[1] === "show") {
           const skill = SKILLS_OUTPUT.find((entry) => entry.id === args[2]);
           if (!skill) return { ...result({ schema_version: 1, error: "skill_not_found" }, 7) };

@@ -49,11 +49,34 @@ pub fn parse_cargo_lock(content: &str) -> Result<Vec<PackageRecord>, AdvisoryErr
     let mut current_source: Option<String> = None;
     let mut current_checksum: Option<String> = None;
     let mut in_package_block = false;
+    let mut has_content = false;
+    let mut has_lock_marker = false;
 
     for (line_no, raw_line) in content.lines().enumerate() {
         let line = raw_line.trim();
         if line.is_empty() || line.starts_with('#') {
             continue;
+        }
+        // Cargo writes only table headers, `key = value` pairs and the items and
+        // closing bracket of multi-line arrays. Anything else means the content is
+        // not a Cargo.lock, which must not be reported as a clean audit.
+        let recognized = (line.starts_with('[') && line.ends_with(']'))
+            || line.contains('=')
+            || line.starts_with('"')
+            || line.starts_with(']');
+        if !recognized {
+            return Err(AdvisoryError::new(
+                AdvisoryErrorKind::MalformedLockfile,
+                format!(
+                    "line {} is not a Cargo.lock table header, key or array item",
+                    line_no + 1
+                ),
+            ));
+        }
+        has_content = true;
+        if line == "[[package]]" || (!in_package_block && parse_key_value_raw(line).0 == "version")
+        {
+            has_lock_marker = true;
         }
 
         if line == "[[package]]" {
@@ -94,6 +117,13 @@ pub fn parse_cargo_lock(content: &str) -> Result<Vec<PackageRecord>, AdvisoryErr
         }
     }
 
+    if has_content && !has_lock_marker {
+        return Err(AdvisoryError::new(
+            AdvisoryErrorKind::MalformedLockfile,
+            "no [[package]] table or top-level `version` key; this is not a Cargo.lock",
+        ));
+    }
+
     // Flush final package block
     if in_package_block && let (Some(name), Some(version)) = (current_name, current_version) {
         let semver = SemverVersion::from_str(&version).map_err(|e| e.to_string());
@@ -109,10 +139,44 @@ pub fn parse_cargo_lock(content: &str) -> Result<Vec<PackageRecord>, AdvisoryErr
     Ok(packages)
 }
 
+/// Splits `key = value` without interpreting the value (`("", line)` without `=`).
+fn parse_key_value_raw(line: &str) -> (&str, &str) {
+    match line.split_once('=') {
+        Some((key, value)) => (key.trim(), value.trim()),
+        None => ("", line),
+    }
+}
+
 fn parse_key_value(line: &str) -> Option<(&str, &str)> {
     let (key_part, val_part) = line.split_once('=')?;
     let key = key_part.trim();
     let val = val_part.trim();
     let unquoted_val = val.strip_prefix('"')?.strip_suffix('"')?;
     Some((key, unquoted_val))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn content_that_is_not_a_cargo_lock_is_rejected() {
+        for content in ["garbage[[[", "name = \"x\"\n", "[[package]]\ngarbage\n"] {
+            let error = parse_cargo_lock(content).unwrap_err();
+            assert_eq!(
+                error.kind(),
+                AdvisoryErrorKind::MalformedLockfile,
+                "{content}"
+            );
+        }
+    }
+
+    #[test]
+    fn comments_only_and_multi_line_arrays_are_accepted() {
+        assert!(parse_cargo_lock("# Lock file\n").unwrap().is_empty());
+        assert!(parse_cargo_lock("").unwrap().is_empty());
+        let lock = "version = 4\n\n[[package]]\nname = \"a\"\nversion = \"1.0.0\"\ndependencies = [\n \"b\",\n]\n\n[[package]]\nname = \"b\"\nversion = \"2.0.0\"\n";
+        let packages = parse_cargo_lock(lock).unwrap();
+        assert_eq!(packages.len(), 2);
+    }
 }

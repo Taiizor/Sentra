@@ -626,11 +626,17 @@ fn diff_parses_arguments() {
 fn verify_audit_and_mcp_parse_arguments() {
     let mcp = parse(&args(&["mcp"])).unwrap();
     assert!(!mcp.json);
-    assert!(matches!(mcp.command, CliCommand::Mcp));
+    assert!(matches!(
+        mcp.command,
+        CliCommand::Mcp {
+            workspace: None,
+            database: None
+        }
+    ));
 
     let mcp_json = parse(&args(&["mcp", "--json"])).unwrap();
     assert!(mcp_json.json);
-    assert!(matches!(mcp_json.command, CliCommand::Mcp));
+    assert!(matches!(mcp_json.command, CliCommand::Mcp { .. }));
 
     assert!(parse(&args(&["mcp", "unexpected"])).is_err());
 
@@ -790,7 +796,7 @@ fn mcp_stdio_server_loop() {
 
     // Response 1: initialize result
     assert!(lines[0].contains("\"id\":1"));
-    assert!(lines[0].contains("\"protocolVersion\":\"2026-07-28\""));
+    assert!(lines[0].contains("\"protocolVersion\":\"2024-11-05\""));
     assert!(lines[0].contains("\"name\":\"sentra-mcp\""));
 
     // Response 2: tools/list
@@ -829,7 +835,7 @@ fn binary_mcp_and_diff_and_verify_audit_subprocesses() {
     assert!(mcp_out.status.success());
     let mcp_stdout = String::from_utf8(mcp_out.stdout).unwrap();
     assert!(mcp_stdout.contains("\"id\":99"));
-    assert!(mcp_stdout.contains("\"protocolVersion\":\"2026-07-28\""));
+    assert!(mcp_stdout.contains("\"protocolVersion\":\"2024-11-05\""));
     assert!(mcp_stdout.contains("\"name\":\"sentra-mcp\""));
 }
 
@@ -2022,80 +2028,180 @@ fn binary_patch_with_foreign_or_missing_store_does_not_touch_the_file() {
     assert!(!case.backups.exists());
 }
 
+/// The repository's example adapters, relative to the integration-test working
+/// directory (`crates/sentra-cli`). They are only loaded through an explicit `--dir`.
+const EXAMPLE_ADAPTERS: &str = "../../examples/adapters";
+
+fn stderr_json(output: &Output) -> serde_json::Value {
+    assert!(
+        !output.status.success(),
+        "stdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    serde_json::from_slice(&output.stderr).expect("stderr is one JSON document")
+}
+
 #[test]
 fn binary_plugin_commands() {
-    // 1. Plugin List (JSON)
-    let list_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args(["plugin", "list", "--json"])
-        .output()
-        .unwrap();
-    assert!(list_out.status.success());
-    let list_str = String::from_utf8(list_out.stdout).unwrap();
-    assert!(list_str.contains("\"command\":\"plugin\""));
-    assert!(list_str.contains("\"action\":\"list\""));
-    assert!(list_str.contains("org.sentra.adapter.snyk"));
-    assert!(list_str.contains("org.sentra.adapter.semgrep"));
-    assert!(list_str.contains("org.sentra.adapter.ollama"));
-
-    let bun_available = Command::new("bun")
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-
-    if bun_available {
-        // 2. Plugin Probe (Human & JSON)
-        let probe_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
-            .args([
-                "plugin",
-                "probe",
-                "--id",
-                "org.sentra.adapter.snyk",
-                "--workspace",
-                "../..",
-                "--json",
-            ])
-            .output()
-            .unwrap();
-        assert!(probe_out.status.success());
-        let probe_str = String::from_utf8(probe_out.stdout).unwrap();
-        assert!(probe_str.contains("\"plugin_id\":\"org.sentra.adapter.snyk\""));
-        assert!(probe_str.contains("\"applicable\":true"));
-
-        // 3. Plugin Run (Execute authorized capability)
-        let run_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
-            .args([
-                "plugin",
-                "run",
-                "--id",
-                "org.sentra.adapter.snyk",
-                "--capability",
-                "dependency_audit",
-                "--json",
-            ])
-            .output()
-            .unwrap();
-        assert!(run_out.status.success());
-        let run_str = String::from_utf8(run_out.stdout).unwrap();
-        assert!(run_str.contains("\"action\":\"run\""));
-        assert!(run_str.contains("\"capability\":\"dependency_audit\""));
-        assert!(run_str.contains("\"exit_code\":0"));
+    // 1. Plugin List (JSON) from an explicit directory.
+    let list_out = sentra(&["plugin", "list", "--dir", EXAMPLE_ADAPTERS, "--json"]);
+    let list = stdout_json(&list_out);
+    assert_eq!(list["command"], "plugin");
+    assert_eq!(list["action"], "list");
+    let ids: Vec<&str> = list["plugins"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p["id"].as_str().unwrap())
+        .collect();
+    for id in [
+        "org.sentra.adapter.snyk",
+        "org.sentra.adapter.semgrep",
+        "org.sentra.adapter.ollama",
+    ] {
+        assert!(ids.contains(&id), "{ids:?}");
     }
+    let snyk = list["plugins"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["id"] == "org.sentra.adapter.snyk")
+        .unwrap();
+    assert_eq!(snyk["enforced"]["egress_policy"], false);
+    assert_eq!(snyk["enforced"]["max_memory_mib"], false);
+    assert_eq!(snyk["enforced"]["max_execution_time_secs"], true);
+    assert!(list["diagnostics"].is_array());
 
-    // 4. Plugin Run (Undeclared capability rejected)
-    let bad_run_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args([
+    if bun_available() {
+        // 2. Plugin Probe (JSON)
+        let probe_out = sentra(&[
+            "plugin",
+            "probe",
+            "--id",
+            "org.sentra.adapter.snyk",
+            "--dir",
+            EXAMPLE_ADAPTERS,
+            "--workspace",
+            "../..",
+            "--json",
+        ]);
+        let probe = stdout_json(&probe_out);
+        assert_eq!(probe["plugin_id"], "org.sentra.adapter.snyk");
+        assert_eq!(probe["applicable"], true);
+
+        // 3. Plugin Run passes the workspace to the adapter.
+        let run_out = sentra(&[
             "plugin",
             "run",
             "--id",
             "org.sentra.adapter.snyk",
+            "--dir",
+            EXAMPLE_ADAPTERS,
             "--capability",
-            "fuzz_execution",
+            "dependency_audit",
+            "--workspace",
+            "../..",
             "--json",
-        ])
-        .output()
-        .unwrap();
-    assert!(!bad_run_out.status.success());
+        ]);
+        let run = stdout_json(&run_out);
+        assert_eq!(run["action"], "run");
+        assert_eq!(run["capability"], "dependency_audit");
+        assert_eq!(run["exit_code"], 0);
+        assert_eq!(
+            run["adapter_reported"],
+            serde_json::json!(["exit_code", "summary", "evidence_refs"])
+        );
+        let reported = run["workspace_root"].as_str().unwrap();
+        assert_eq!(
+            fs::canonicalize(reported).unwrap(),
+            fs::canonicalize("../..").unwrap()
+        );
+    }
+
+    // 4. Plugin Run (Undeclared capability rejected before the adapter starts).
+    let bad_run_out = sentra(&[
+        "plugin",
+        "run",
+        "--id",
+        "org.sentra.adapter.snyk",
+        "--dir",
+        EXAMPLE_ADAPTERS,
+        "--capability",
+        "fuzz_execution",
+        "--json",
+    ]);
+    assert_eq!(bad_run_out.status.code(), Some(5));
+    assert_eq!(
+        stderr_json(&bad_run_out)["error"],
+        "plugin_undeclared_capability"
+    );
+}
+
+#[test]
+fn binary_plugin_discovery_is_explicit_and_rejects_duplicates() {
+    let f = Fixture::new();
+    let empty = f.root.join("empty-plugins");
+    fs::create_dir(&empty).unwrap();
+    let repo_root = fs::canonicalize("../..").unwrap();
+    let plugin_cmd = |extra: &[&str], plugin_dir: Option<&Path>| {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_sentra"));
+        // Run from the repository root, where examples/adapters exists.
+        command.current_dir(&repo_root).arg("plugin").args(extra);
+        for var in ["SENTRA_PLUGIN_DIR", "APPDATA", "HOME", "XDG_CONFIG_HOME"] {
+            command.env_remove(var);
+        }
+        if let Some(dir) = plugin_dir {
+            command.env("SENTRA_PLUGIN_DIR", dir);
+        }
+        command.output().unwrap()
+    };
+
+    // The default directory comes from SENTRA_PLUGIN_DIR; the cwd is never searched.
+    let listed = stdout_json(&plugin_cmd(&["list", "--json"], Some(&empty)));
+    assert_eq!(listed["count"], 0);
+    assert_eq!(
+        fs::canonicalize(listed["directories"][0].as_str().unwrap()).unwrap(),
+        fs::canonicalize(&empty).unwrap()
+    );
+    let probe = plugin_cmd(
+        &["probe", "--id", "org.sentra.adapter.snyk", "--json"],
+        Some(&empty),
+    );
+    assert_eq!(probe.status.code(), Some(7));
+    assert_eq!(stderr_json(&probe)["error"], "plugin_not_found");
+
+    // Without SENTRA_PLUGIN_DIR or a platform config directory there is no default.
+    let unavailable = plugin_cmd(&["list", "--json"], None);
+    assert_eq!(unavailable.status.code(), Some(2));
+    assert_eq!(stderr_json(&unavailable)["error"], "plugin_dir_unavailable");
+
+    // Two manifests declaring the same id: both are excluded and reported.
+    let plugins = f.root.join("plugins");
+    write_plugin_manifest(&plugins.join("a"), "org.example.same", "A", "adapter.exe");
+    write_plugin_manifest(&plugins.join("b"), "org.example.same", "B", "adapter.exe");
+    let dir = plugins.to_str().unwrap();
+    let listed = stdout_json(&sentra(&["plugin", "list", "--dir", dir, "--json"]));
+    assert_eq!(listed["count"], 0);
+    let codes: Vec<&str> = listed["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d["code"].as_str().unwrap())
+        .collect();
+    assert_eq!(codes, ["duplicate_plugin_id", "duplicate_plugin_id"]);
+    let human = sentra(&["plugin", "list", "--dir", dir]);
+    assert!(String::from_utf8_lossy(&human.stdout).contains("[error] duplicate_plugin_id"));
+    let ambiguous = sentra(&[
+        "plugin",
+        "probe",
+        "--id",
+        "org.example.same",
+        "--dir",
+        dir,
+        "--json",
+    ]);
+    assert_eq!(ambiguous.status.code(), Some(4));
+    assert_eq!(stderr_json(&ambiguous)["error"], "plugin_duplicate_id");
 }
 
 /// Backslashes, both quote kinds, a newline, a tab and a control character.
@@ -2134,12 +2240,19 @@ fn binary_plugin_list_json_escapes_manifest_strings() {
     } else {
         "adapter \"q\" 'q' ü"
     });
-    let id = "org.example.\"esc\\aped\"";
+    let id = "org.example.escaped";
     let manifest = write_plugin_manifest(
         &adapter_dir,
         id,
         PLUGIN_TRICKY,
         "C:\\tools\\scan.exe --rule \"x\"",
+    );
+    // An id outside the manifest grammar is skipped and reported, not loaded.
+    write_plugin_manifest(
+        &plugins.join("invalid id"),
+        "org.example.\"esc\\aped\"",
+        PLUGIN_TRICKY,
+        "scan.exe",
     );
 
     let output = sentra(&[
@@ -2168,8 +2281,17 @@ fn binary_plugin_list_json_escapes_manifest_strings() {
     assert_eq!(entry["egress_policy"], "StrictlyDenied");
     assert_eq!(
         entry["quotas"],
-        serde_json::json!({"max_memory_mib": 256, "max_execution_time_secs": 30})
+        serde_json::json!({
+            "max_memory_mib": 256,
+            "max_execution_time_secs": 30,
+            "max_frame_bytes": 1048576,
+            "max_total_output_bytes": 10485760
+        })
     );
+    let diagnostics = json["diagnostics"].as_array().unwrap();
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+    assert_eq!(diagnostics[0]["severity"], "error");
+    assert!(!diagnostics[0]["path"].as_str().unwrap().contains('\\'));
     let reported = entry["manifest_path"].as_str().unwrap();
     assert!(!reported.contains('\\'), "{reported}");
     assert_eq!(
@@ -2218,7 +2340,7 @@ fn binary_plugin_probe_and_run_json_escape_adapter_strings() {
     let adapter_dir = f.root.join("adapter 'q' ü");
     let id = "org.example.escape";
     let manifest = write_plugin_manifest(&adapter_dir, id, PLUGIN_TRICKY, "bun run adapter.ts");
-    let refs = [String::from("sha256:abc"), String::from(PLUGIN_TRICKY)];
+    let refs = [String::from("sha256:abc"), String::from("example:escape-1")];
     let script = ESCAPE_ADAPTER
         .replace("__ID__", &serde_json::to_string(id).unwrap())
         .replace("__TEXT__", &serde_json::to_string(PLUGIN_TRICKY).unwrap())
@@ -2257,6 +2379,8 @@ fn binary_plugin_probe_and_run_json_escape_adapter_strings() {
         manifest_arg,
         "--capability",
         "static_analysis",
+        "--workspace",
+        f.workspace.to_str().unwrap(),
         "--json",
     ]);
     let run = stdout_json(&run_out);
@@ -2270,370 +2394,720 @@ fn binary_plugin_probe_and_run_json_escape_adapter_strings() {
     assert_eq!(run["exit_code"], 0);
     assert_eq!(run["summary"], PLUGIN_TRICKY);
     assert_eq!(run["evidence_refs"], serde_json::json!(refs));
+    assert_eq!(
+        fs::canonicalize(run["workspace_root"].as_str().unwrap()).unwrap(),
+        fs::canonicalize(&f.workspace).unwrap()
+    );
+
+    // Evidence refs outside the `<scheme>:<value>` label grammar are rejected.
+    let forged_dir = f.root.join("forged adapter");
+    let forged_manifest =
+        write_plugin_manifest(&forged_dir, id, PLUGIN_TRICKY, "bun run adapter.ts");
+    let forged = ESCAPE_ADAPTER
+        .replace("__ID__", &serde_json::to_string(id).unwrap())
+        .replace("__TEXT__", &serde_json::to_string(PLUGIN_TRICKY).unwrap())
+        .replace(
+            "__REFS__",
+            &serde_json::to_string(&[PLUGIN_TRICKY]).unwrap(),
+        );
+    fs::write(forged_dir.join("adapter.ts"), forged).unwrap();
+    let rejected = sentra(&[
+        "plugin",
+        "run",
+        "--manifest",
+        forged_manifest.to_str().unwrap(),
+        "--capability",
+        "static_analysis",
+        "--workspace",
+        f.workspace.to_str().unwrap(),
+        "--json",
+    ]);
+    assert_eq!(rejected.status.code(), Some(5));
+    let error = stderr_json(&rejected);
+    assert_eq!(error["error"], "plugin_result_mismatch");
+    assert!(error["reason"].is_string());
 }
 
 #[test]
 fn binary_skills_list_and_show() {
-    let list_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args(["skills", "list"])
-        .output()
-        .unwrap();
+    let list_out = sentra(&["skills", "list"]);
     assert!(list_out.status.success());
     let list_str = String::from_utf8(list_out.stdout).unwrap();
     assert!(list_str.contains("api-security-testing"));
     assert!(list_str.contains("security-threat-model"));
     assert!(list_str.contains("auth-implementation-patterns"));
 
-    let list_json = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args(["skills", "list", "--json"])
-        .output()
-        .unwrap();
-    assert!(list_json.status.success());
-    let json_str = String::from_utf8(list_json.stdout).unwrap();
-    assert!(json_str.contains("\"id\": \"api-security-testing\""));
+    let list_json = sentra(&["skills", "list", "--json"]);
+    assert_eq!(list_json.stdout.iter().filter(|b| **b == b'\n').count(), 1);
+    let list = stdout_json(&list_json);
+    assert_eq!(list["schema_version"], 1);
+    assert_eq!(list["command"], "skills list");
+    let skills = list["skills"].as_array().unwrap();
+    assert_eq!(list["count"], skills.len());
+    assert!(skills.iter().any(|s| s["id"] == "api-security-testing"));
 
-    let show_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args(["skills", "show", "api-security-testing"])
-        .output()
-        .unwrap();
+    let show_out = sentra(&["skills", "show", "api-security-testing"]);
     assert!(show_out.status.success());
     let show_str = String::from_utf8(show_out.stdout).unwrap();
     assert!(show_str.contains("name: api-security-testing"));
     assert!(show_str.contains("BOLA/IDOR"));
+
+    let show = stdout_json(&sentra(&["skills", "show", "golang-security", "--json"]));
+    assert_eq!(show["schema_version"], 1);
+    assert_eq!(show["command"], "skills show");
+    assert_eq!(show["id"], "golang-security");
+    let files: Vec<&str> = show["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f.as_str().unwrap())
+        .collect();
+    assert!(files.contains(&"SKILL.md") && files.contains(&"LICENSE"));
+    assert!(files.contains(&"references/checklist.md"));
+
+    let missing = sentra(&["skills", "show", "does-not-exist", "--json"]);
+    assert_eq!(missing.status.code(), Some(7));
+    assert_eq!(stderr_json(&missing)["error"], "skill_not_found");
+}
+
+/// Variables the skill installer and the MCP installer read to find user-scope
+/// configuration. Every one is redirected or removed for child processes.
+const REDIRECTED_HOME_VARS: [&str; 5] = [
+    "USERPROFILE",
+    "HOME",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "XDG_CONFIG_HOME",
+];
+const REMOVED_CONFIG_VARS: [&str; 8] = [
+    "CLAUDE_CONFIG_DIR",
+    "CODEX_HOME",
+    "COPILOT_HOME",
+    "KIMI_CODE_HOME",
+    "CLINE_MCP_SETTINGS_PATH",
+    "CLINE_DATA_DIR",
+    "CLINE_DIR",
+    "SENTRA_PLUGIN_DIR",
+];
+
+/// Runs the binary with the home and configuration directories redirected into
+/// `f.root/home`, so no test ever reads or writes the real user configuration.
+fn sandboxed(f: &Fixture, arguments: &[&str]) -> Output {
+    let home = f.root.join("home");
+    let mut command = Command::new(env!("CARGO_BIN_EXE_sentra"));
+    command.args(arguments).current_dir(&f.workspace);
+    for var in REDIRECTED_HOME_VARS {
+        let dir = home.join(var.to_ascii_lowercase());
+        fs::create_dir_all(&dir).unwrap();
+        command.env(var, dir);
+    }
+    for var in REMOVED_CONFIG_VARS {
+        command.env_remove(var);
+    }
+    command.output().unwrap()
+}
+
+fn sandbox_home(f: &Fixture) -> PathBuf {
+    f.root
+        .join("home")
+        .join(if cfg!(windows) { "userprofile" } else { "home" })
 }
 
 #[test]
-fn binary_install_claude_and_antigravity_skills() {
+fn binary_install_skill_targets_use_documented_locations() {
     let f = Fixture::new();
-    let tmp_path = f.workspace.to_str().unwrap();
+    let ws = f.workspace.to_str().unwrap();
+    let install = |target: &str, skill: &str| {
+        let output = sandboxed(
+            &f,
+            &["install", target, "--workspace", ws, "--skill", skill],
+        );
+        assert!(
+            output.status.success(),
+            "{target}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout).unwrap()
+    };
+    let skill_md = |parts: &[&str]| parts.iter().fold(f.workspace.clone(), |p, s| p.join(s));
 
-    // 1. Install Claude skills into temporary workspace
-    let install_claude = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args([
-            "install",
-            "claude",
-            "--workspace",
-            tmp_path,
-            "--skill",
-            "api-security-testing",
-        ])
-        .output()
-        .unwrap();
-    assert!(install_claude.status.success());
-    let claude_skill = f
-        .workspace
-        .join(".claude")
-        .join("skills")
-        .join("api-security-testing")
-        .join("SKILL.md");
-    assert!(claude_skill.exists());
-    let content = fs::read_to_string(&claude_skill).unwrap();
-    assert!(content.contains("api-security-testing"));
+    let text = install("claude", "api-security-testing");
+    assert!(text.contains("Sentra AppSec skill installation: success"));
+    assert!(text.contains("[created]"));
+    for (path, bytes) in sentra_core::skills::skill_files("api-security-testing").unwrap() {
+        let installed = f
+            .workspace
+            .join(".claude/skills/api-security-testing")
+            .join(path);
+        let on_disk = fs::read(&installed).unwrap();
+        let normalize = |b: &[u8]| String::from_utf8_lossy(b).replace("\r\n", "\n");
+        assert_eq!(normalize(&on_disk), normalize(bytes), "{path}");
+    }
 
-    // 2. Install Antigravity skills with --json
-    let install_agy = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args([
+    // JSON output is built with serde, so Windows paths are escaped correctly.
+    let agy = sandboxed(
+        &f,
+        &[
             "install",
             "antigravity",
             "--workspace",
-            tmp_path,
+            ws,
             "--skill",
             "security-threat-model",
             "--json",
-        ])
-        .output()
-        .unwrap();
-    assert!(install_agy.status.success());
-    let agy_str = String::from_utf8(install_agy.stdout).unwrap();
-    assert!(agy_str.contains("\"target\":\"antigravity\""));
-    assert!(agy_str.contains("\"count\":1"));
-    let agy_skill = f
-        .workspace
-        .join(".agents")
-        .join("skills")
-        .join("security-threat-model")
-        .join("SKILL.md");
-    assert!(agy_skill.exists());
+        ],
+    );
+    let agy = stdout_json(&agy);
+    assert_eq!(agy["target"], "antigravity");
+    assert_eq!(agy["count"], 1);
+    assert_eq!(agy["skills"], serde_json::json!(["security-threat-model"]));
+    assert!(agy["file_count"].as_u64().unwrap() >= 1);
+    assert!(skill_md(&[".agents", "skills", "security-threat-model", "SKILL.md"]).exists());
 
-    // 3. Install Cursor rules
-    let install_cursor = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args([
+    install("cursor", "golang-security");
+    assert!(skill_md(&[".cursor", "skills", "golang-security", "SKILL.md"]).exists());
+    assert!(
+        skill_md(&[
+            ".cursor",
+            "skills",
+            "golang-security",
+            "references",
+            "checklist.md"
+        ])
+        .exists()
+    );
+    assert!(!f.workspace.join(".cursorrules").exists());
+
+    install("windsurf", "django-security");
+    assert!(skill_md(&[".agents", "skills", "django-security", "SKILL.md"]).exists());
+
+    install("copilot", "ci-cd-security");
+    assert!(skill_md(&[".github", "skills", "ci-cd-security", "SKILL.md"]).exists());
+    assert!(!f.workspace.join(".github/copilot-instructions.md").exists());
+
+    install("aider", "api-security-testing");
+    assert!(skill_md(&[".agents", "skills", "api-security-testing", "SKILL.md"]).exists());
+    let aider_conf = fs::read_to_string(f.workspace.join(".aider.conf.yml")).unwrap();
+    assert!(aider_conf.contains(".agents/skills/api-security-testing/SKILL.md"));
+    assert!(!f.workspace.join("CONVENTIONS.md").exists());
+
+    install("roo", "solidity-security");
+    assert!(skill_md(&[".roo", "skills", "solidity-security", "SKILL.md"]).exists());
+
+    install("continue", "springboot-security");
+    let rule = fs::read_to_string(
+        f.workspace
+            .join(".continue/rules/sentra-springboot-security.md"),
+    )
+    .unwrap();
+    assert!(rule.contains("alwaysApply: false"));
+    assert!(skill_md(&[".agents", "skills", "springboot-security", "SKILL.md"]).exists());
+
+    // A rerun leaves identical files untouched.
+    let rerun = install("claude", "api-security-testing");
+    assert!(rerun.contains("Unchanged files:"));
+    assert!(!rerun.contains("[created]"));
+}
+
+#[test]
+fn binary_install_skill_errors_are_specific_and_write_nothing() {
+    let f = Fixture::new();
+    let ws = f.workspace.to_str().unwrap();
+
+    let global = sandboxed(
+        &f,
+        &[
             "install",
-            "cursor",
-            "--workspace",
-            tmp_path,
+            "claude",
             "--skill",
             "golang-security",
-        ])
-        .output()
-        .unwrap();
-    assert!(install_cursor.status.success());
-    let cursor_rule = f
-        .workspace
-        .join(".cursor")
-        .join("rules")
-        .join("golang-security.mdc");
-    assert!(cursor_rule.exists());
+            "--global",
+            "--json",
+        ],
+    );
+    let report = stdout_json(&global);
+    assert_eq!(report["scope"], "global");
+    assert!(
+        sandbox_home(&f)
+            .join(".claude/skills/golang-security/SKILL.md")
+            .exists()
+    );
 
-    // 4. Install Windsurf rules
-    let install_windsurf = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args([
+    let unknown = sandboxed(
+        &f,
+        &[
             "install",
-            "windsurf",
+            "claude",
             "--workspace",
-            tmp_path,
+            ws,
             "--skill",
-            "django-security",
-        ])
-        .output()
-        .unwrap();
-    assert!(install_windsurf.status.success());
-    let windsurf_rule = f
-        .workspace
-        .join(".windsurf")
-        .join("rules")
-        .join("django-security.md");
-    assert!(windsurf_rule.exists());
+            "golang-security,does-not-exist",
+            "--json",
+        ],
+    );
+    assert_eq!(unknown.status.code(), Some(7));
+    let body = stderr_json(&unknown);
+    assert_eq!(body["error"], "skill_not_found");
+    assert_eq!(
+        body["unknown_skills"],
+        serde_json::json!(["does-not-exist"])
+    );
+    assert!(!f.workspace.join(".claude").exists());
 
-    // 5. Install Copilot instructions
-    let install_copilot = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args([
+    let cody = sandboxed(&f, &["install", "cody", "--workspace", ws, "--json"]);
+    assert_eq!(cody.status.code(), Some(2));
+    assert_eq!(stderr_json(&cody)["error"], "unsupported_target");
+
+    let amazonq = sandboxed(&f, &["install", "amazonq", "--global", "--json"]);
+    assert_eq!(amazonq.status.code(), Some(2));
+    assert_eq!(stderr_json(&amazonq)["error"], "unsupported_scope");
+
+    let bogus = sandboxed(
+        &f,
+        &["install", "not-an-agent", "--workspace", ws, "--json"],
+    );
+    assert_eq!(bogus.status.code(), Some(2));
+    assert_eq!(stderr_json(&bogus)["error"], "invalid_target");
+
+    // Aider loads every `read:` file into every chat, so --skill is required.
+    let aider = sandboxed(&f, &["install", "aider", "--workspace", ws, "--json"]);
+    assert_eq!(aider.status.code(), Some(2));
+    assert_eq!(stderr_json(&aider)["error"], "skill_selection_required");
+    assert!(!f.workspace.join(".aider.conf.yml").exists());
+
+    for words in [
+        &["install", "claude", "--mcp", "--skill", "golang-security"][..],
+        &["install", "mcp", "claude", "--skill", "golang-security"],
+    ] {
+        let mut arguments = words.to_vec();
+        arguments.extend(["--workspace", ws, "--json"]);
+        let mixed = sandboxed(&f, &arguments);
+        assert_eq!(mixed.status.code(), Some(2));
+        let body = stderr_json(&mixed);
+        assert_eq!(body["error"], "invalid_arguments");
+        assert!(body["message"].as_str().unwrap().contains("--skill"));
+    }
+    let text = sandboxed(&f, &["install", "claude", "--mcp", "--skill", "x"]);
+    assert!(String::from_utf8_lossy(&text.stderr).contains("--skill cannot be combined"));
+
+    let missing_ws = f.root.join("missing");
+    let missing = sandboxed(
+        &f,
+        &[
             "install",
-            "copilot",
+            "claude",
             "--workspace",
-            tmp_path,
-            "--skill",
-            "ci-cd-security",
-        ])
-        .output()
-        .unwrap();
-    assert!(install_copilot.status.success());
-    let copilot_instr = f
-        .workspace
-        .join(".github")
-        .join("instructions")
-        .join("ci-cd-security.instructions.md");
-    assert!(copilot_instr.exists());
-    let copilot_root = f.workspace.join(".github").join("copilot-instructions.md");
-    assert!(copilot_root.exists());
-    let copilot_content = fs::read_to_string(&copilot_root).unwrap();
-    assert!(copilot_content.contains("ci-cd-security"));
+            missing_ws.to_str().unwrap(),
+            "--json",
+        ],
+    );
+    assert_eq!(missing.status.code(), Some(2));
+    assert_eq!(stderr_json(&missing)["error"], "workspace_not_found");
+    assert!(!missing_ws.exists());
 
-    // 6. Install Aider conventions
-    let install_aider = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args([
+    // Aider config that cannot be edited losslessly: skills installed, snippet printed.
+    fs::write(
+        f.workspace.join(".aider.conf.yml"),
+        "read: &anchor CONVENTIONS.md\n",
+    )
+    .unwrap();
+    let aider = sandboxed(
+        &f,
+        &[
             "install",
             "aider",
             "--workspace",
-            tmp_path,
+            ws,
             "--skill",
-            "api-security-testing",
-        ])
-        .output()
-        .unwrap();
-    assert!(install_aider.status.success());
-    let aider_conventions = f.workspace.join("CONVENTIONS.md");
-    assert!(aider_conventions.exists());
-    let aider_content = fs::read_to_string(&aider_conventions).unwrap();
-    assert!(aider_content.contains("api-security-testing"));
-
-    // 6. Install Roo Code rules
-    let install_roo = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args([
-            "install",
-            "roo",
-            "--workspace",
-            tmp_path,
-            "--skill",
-            "solidity-security",
-        ])
-        .output()
-        .unwrap();
-    assert!(install_roo.status.success());
-    let roo_rule = f
-        .workspace
-        .join(".roo")
-        .join("rules")
-        .join("solidity-security.md");
-    assert!(roo_rule.exists());
-
-    // 7. Install Continue.dev rules
-    let install_continue = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args([
-            "install",
-            "continue",
-            "--workspace",
-            tmp_path,
-            "--skill",
-            "springboot-security",
-        ])
-        .output()
-        .unwrap();
-    assert!(install_continue.status.success());
-    let continue_rule = f
-        .workspace
-        .join(".continue")
-        .join("rules")
-        .join("springboot-security.md");
-    assert!(continue_rule.exists());
+            "golang-security",
+        ],
+    );
+    assert_eq!(aider.status.code(), Some(6));
+    assert!(String::from_utf8_lossy(&aider.stderr).contains("manual_config_edit_required"));
+    assert!(String::from_utf8_lossy(&aider.stdout).contains("manual config edit required"));
+    assert_eq!(
+        fs::read_to_string(f.workspace.join(".aider.conf.yml")).unwrap(),
+        "read: &anchor CONVENTIONS.md\n"
+    );
 }
 
 #[test]
 fn binary_prompt_generation() {
     // 1. Threat model prompt
-    let tm_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args(["prompt", "threat-model", "--scope", "src/auth"])
-        .output()
-        .unwrap();
+    let tm_out = sentra(&["prompt", "threat-model", "--scope", "src/auth"]);
     assert!(tm_out.status.success());
     let tm_str = String::from_utf8(tm_out.stdout).unwrap();
     assert!(tm_str.contains("Mermaid"));
     assert!(tm_str.contains("STRIDE"));
 
     // 2. API BOLA prompt
-    let bola_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args([
-            "prompt",
-            "api-bola",
-            "--scope",
-            "/api/v1/orders/:id",
-            "--json",
-        ])
-        .output()
-        .unwrap();
-    assert!(bola_out.status.success());
-    let bola_str = String::from_utf8(bola_out.stdout).unwrap();
-    assert!(
-        bola_str.contains("\"workflow\": \"api-bola\"")
-            || bola_str.contains("\"workflow\":\"api-bola\"")
-    );
-    assert!(bola_str.contains("BOLA/IDOR"));
+    let bola = stdout_json(&sentra(&[
+        "prompt",
+        "api-bola",
+        "--scope",
+        "/api/v1/orders/:id",
+        "--json",
+    ]));
+    assert_eq!(bola["workflow"], "api-bola");
+    assert!(bola["user_prompt"].as_str().unwrap().contains("BOLA/IDOR"));
 
     // 3. Patch synthesis prompt
-    let patch_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args(["prompt", "patch-remediation", "--scope", "src/db.rs"])
-        .output()
-        .unwrap();
+    let patch_out = sentra(&["prompt", "patch-remediation", "--scope", "src/db.rs"]);
     assert!(patch_out.status.success());
     let patch_str = String::from_utf8(patch_out.stdout).unwrap();
     assert!(patch_str.contains("ADR-0004"));
     assert!(patch_str.contains("Tier 1"));
 
     // 4. Scout prompt with JSON output
-    let scout_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args(["prompt", "scout", "--scope", "crates/sentra-core", "--json"])
-        .output()
-        .unwrap();
-    assert!(scout_out.status.success());
-    let scout_str = String::from_utf8(scout_out.stdout).unwrap();
-    assert!(scout_str.contains("\"workflow\": \"scout\""));
-    assert!(scout_str.contains("\"role\": \"scout\""));
-    assert!(scout_str.contains("Senior Application Security Scout"));
+    let scout = stdout_json(&sentra(&[
+        "prompt",
+        "scout",
+        "--scope",
+        "crates/sentra-core",
+        "--json",
+    ]));
+    assert_eq!(scout["workflow"], "scout");
+    assert_eq!(scout["role"], "scout");
+    assert!(
+        scout["system_prompt"]
+            .as_str()
+            .unwrap()
+            .contains("Senior Application Security Scout")
+    );
 
     // 5. Dual-state verification prompt
-    let verify_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args(["prompt", "verify", "--scope", "src/auth.rs"])
-        .output()
-        .unwrap();
+    let verify_out = sentra(&["prompt", "verify", "--scope", "src/auth.rs"]);
     assert!(verify_out.status.success());
     let verify_str = String::from_utf8(verify_out.stdout).unwrap();
     assert!(verify_str.contains("Independent Dual-State Verification"));
     assert!(verify_str.contains("Independent AppSec Verification Oracle"));
 
-    // 6. Dynamic skill injection via --skills
-    let skill_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args([
-            "prompt",
-            "patch-remediation",
-            "--scope",
-            "src/service.go",
-            "--skills",
-            "golang-security",
-            "--json",
-        ])
-        .output()
-        .unwrap();
-    assert!(skill_out.status.success());
-    let skill_str = String::from_utf8(skill_out.stdout).unwrap();
-    assert!(skill_str.contains("golang-security"));
-    assert!(skill_str.contains("Golang Security Best Practices"));
-    assert!(skill_str.contains("Activated Domain Security Guidelines"));
+    // 6. Skill injection keeps the workflow prompt, its schema and its rules.
+    let skill = stdout_json(&sentra(&[
+        "prompt",
+        "patch-remediation",
+        "--scope",
+        "src/service.go",
+        "--skills",
+        "golang-security,golang-security",
+        "--json",
+    ]));
+    assert_eq!(skill["skills"], serde_json::json!(["golang-security"]));
+    let system = skill["system_prompt"].as_str().unwrap();
+    assert!(system.contains("Golang Security Best Practices"));
+    assert!(system.contains("Activated Domain Security Guidelines"));
+    assert!(skill["expected_schema"].is_string());
+    assert!(skill["user_prompt"].as_str().unwrap().contains("Tier 1"));
+
+    let threat = stdout_json(&sentra(&[
+        "prompt",
+        "threat-model",
+        "--skills",
+        "stride-analysis-patterns",
+        "--json",
+    ]));
+    assert!(threat["expected_schema"].is_string());
+    assert!(
+        threat["system_prompt"]
+            .as_str()
+            .unwrap()
+            .contains("Evidence & Grounding Rules")
+    );
+
+    // 7. Unknown skill ids and workflows fail instead of being dropped.
+    let bogus = sentra(&["prompt", "verify", "--skills", "bogus", "--json"]);
+    assert_eq!(bogus.status.code(), Some(7));
+    let body = stderr_json(&bogus);
+    assert_eq!(body["error"], "skill_not_found");
+    assert_eq!(body["unknown_skills"], serde_json::json!(["bogus"]));
+    let human = sentra(&["prompt", "verify", "--skills", "bogus"]);
+    assert_eq!(human.status.code(), Some(7));
+    assert!(String::from_utf8_lossy(&human.stderr).starts_with("error: skill_not_found"));
+    let workflow = sentra(&["prompt", "nope", "--json"]);
+    assert_eq!(workflow.status.code(), Some(2));
+    assert_eq!(stderr_json(&workflow)["error"], "unknown_workflow");
+}
+
+fn mcp_entry_command(config: &Path, pointer: &str) -> serde_json::Value {
+    let text = fs::read_to_string(config).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+    value.pointer(pointer).cloned().unwrap_or_default()
 }
 
 #[test]
 fn binary_install_mcp_config() {
     let f = Fixture::new();
-    let tmp_path = f.workspace.to_str().unwrap();
+    let ws = f.workspace.to_str().unwrap();
 
-    // 1. Install MCP via `sentra install mcp claude`
-    let mcp_claude = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args(["install", "mcp", "claude", "--workspace", tmp_path])
-        .output()
-        .unwrap();
-    assert!(mcp_claude.status.success());
-    let claude_cfg = f.workspace.join(".claude").join("mcp.json");
-    assert!(claude_cfg.exists());
-    let claude_content = fs::read_to_string(&claude_cfg).unwrap();
-    assert!(claude_content.contains("\"mcpServers\""));
-    assert!(claude_content.contains("\"sentra\""));
-    assert!(claude_content.contains("\"command\": \"sentra\""));
+    // 1. `install mcp claude` writes the project-scope `.mcp.json`.
+    let mcp_claude = sandboxed(&f, &["install", "mcp", "claude", "--workspace", ws]);
+    assert!(
+        mcp_claude.status.success(),
+        "{}",
+        String::from_utf8_lossy(&mcp_claude.stderr)
+    );
+    let human = String::from_utf8_lossy(&mcp_claude.stdout);
+    assert!(human.contains("Sentra MCP server registration: created"));
+    let claude_cfg = f.workspace.join(".mcp.json");
+    let entry = mcp_entry_command(&claude_cfg, "/mcpServers/sentra");
+    assert_eq!(entry["args"], serde_json::json!(["mcp"]));
+    let command = entry["command"].as_str().unwrap();
+    assert!(Path::new(command).is_absolute(), "{command}");
+    assert_eq!(
+        fs::canonicalize(command).unwrap(),
+        fs::canonicalize(env!("CARGO_BIN_EXE_sentra")).unwrap()
+    );
+    assert!(!f.workspace.join(".claude/mcp.json").exists());
 
-    // 2. Install MCP via `sentra install cursor --mcp`
-    let mcp_cursor = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args(["install", "cursor", "--mcp", "--workspace", tmp_path])
-        .output()
-        .unwrap();
+    // 2. `install cursor --mcp`
+    let mcp_cursor = sandboxed(&f, &["install", "cursor", "--mcp", "--workspace", ws]);
     assert!(mcp_cursor.status.success());
-    let cursor_cfg = f.workspace.join(".cursor").join("mcp.json");
-    assert!(cursor_cfg.exists());
+    assert!(f.workspace.join(".cursor/mcp.json").exists());
 
-    // 3. Install MCP via `sentra mcp install zed`
-    let mcp_zed = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args(["mcp", "install", "zed", "--workspace", tmp_path])
-        .output()
-        .unwrap();
+    // 3. `mcp install zed` uses the flat command form under context_servers.
+    let mcp_zed = sandboxed(&f, &["mcp", "install", "zed", "--workspace", ws]);
     assert!(mcp_zed.status.success());
-    let zed_cfg = f.workspace.join(".zed").join("settings.json");
-    assert!(zed_cfg.exists());
-    let zed_content = fs::read_to_string(&zed_cfg).unwrap();
-    assert!(zed_content.contains("\"context_servers\""));
-    assert!(zed_content.contains("\"sentra\""));
+    let zed = mcp_entry_command(
+        &f.workspace.join(".zed/settings.json"),
+        "/context_servers/sentra",
+    );
+    assert!(zed["command"].is_string());
 
-    // 4. Install MCP via `sentra mcp install continue`
-    let mcp_continue = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args(["mcp", "install", "continue", "--workspace", tmp_path])
-        .output()
-        .unwrap();
+    // 4. Continue reads `.continue/mcpServers/*.yaml` block files.
+    let mcp_continue = sandboxed(&f, &["mcp", "install", "continue", "--workspace", ws]);
     assert!(mcp_continue.status.success());
-    let continue_cfg = f.workspace.join(".continue").join("config.json");
-    assert!(continue_cfg.exists());
-    let continue_content = fs::read_to_string(&continue_cfg).unwrap();
-    assert!(continue_content.contains("modelContextProtocolServers"));
+    let continue_text =
+        fs::read_to_string(f.workspace.join(".continue/mcpServers/sentra.yaml")).unwrap();
+    assert!(continue_text.contains("mcpServers:"));
+    assert!(continue_text.contains("- name: sentra"));
+    assert!(!f.workspace.join(".continue/config.json").exists());
 
-    // 5. Test non-destructive merge: add an existing server to claude config
-    let initial_custom = r#"{
-  "mcpServers": {
-    "my-custom-tool": {
-      "command": "custom-binary",
-      "args": ["--port", "8080"]
-    }
-  }
-}"#;
+    // 5. Non-destructive merge with a backup of the original text.
+    let initial_custom = "{\n  // user comment\n  \"mcpServers\": {\n    \"my-custom-tool\": {\n      \"command\": \"custom-binary\",\n      \"args\": [\"--port\", \"8080\"],\n    },\n  },\n}\n";
     fs::write(&claude_cfg, initial_custom).unwrap();
-    let merge_out = Command::new(env!("CARGO_BIN_EXE_sentra"))
-        .args([
+    let merge_out = sandboxed(
+        &f,
+        &["install", "mcp", "claude", "--workspace", ws, "--json"],
+    );
+    let merged = stdout_json(&merge_out);
+    assert_eq!(merged["schema_version"], 1);
+    assert_eq!(merged["action"], "updated");
+    let backup = merged["backup_file"].as_str().unwrap();
+    assert_eq!(fs::read_to_string(backup).unwrap(), initial_custom);
+    let merged_content = fs::read_to_string(&claude_cfg).unwrap();
+    assert!(merged_content.contains("// user comment"));
+    assert!(merged_content.contains("custom-binary"));
+    assert!(merged_content.contains("\"sentra\""));
+
+    // 6. A rerun changes nothing.
+    let rerun = stdout_json(&sandboxed(
+        &f,
+        &["install", "mcp", "claude", "--workspace", ws, "--json"],
+    ));
+    assert_eq!(rerun["action"], "unchanged");
+    assert_eq!(fs::read_to_string(&claude_cfg).unwrap(), merged_content);
+
+    // 7. Amp is its own target.
+    let amp = sandboxed(&f, &["install", "mcp", "amp", "--workspace", ws]);
+    assert!(amp.status.success());
+    assert!(
+        fs::read_to_string(f.workspace.join(".amp/settings.json"))
+            .unwrap()
+            .contains("amp.mcpServers")
+    );
+
+    // 8. `--command` overrides the registered executable.
+    let custom = sandboxed(
+        &f,
+        &[
+            "install",
+            "mcp",
+            "kiro",
+            "--workspace",
+            ws,
+            "--command",
+            "sentra-custom",
+            "--json",
+        ],
+    );
+    assert_eq!(stdout_json(&custom)["server_command"], "sentra-custom");
+}
+
+#[test]
+fn binary_install_mcp_errors_never_rewrite_user_files() {
+    let f = Fixture::new();
+    let ws = f.workspace.to_str().unwrap();
+
+    // Unparseable config: exit 4, untouched, snippet to add by hand.
+    let claude_cfg = f.workspace.join(".mcp.json");
+    fs::write(&claude_cfg, "{ broken").unwrap();
+    let broken = sandboxed(
+        &f,
+        &["install", "mcp", "claude", "--workspace", ws, "--json"],
+    );
+    assert_eq!(broken.status.code(), Some(4));
+    let body = stderr_json(&broken);
+    assert_eq!(body["error"], "mcp_config_unparseable");
+    assert_eq!(body["target"], "claude");
+    assert!(
+        body["manual_step"]["snippet"]
+            .as_str()
+            .unwrap()
+            .contains("\"sentra\"")
+    );
+    assert_eq!(fs::read_to_string(&claude_cfg).unwrap(), "{ broken");
+    assert!(!f.workspace.join(".mcp.json.bak").exists());
+    let human = sandboxed(&f, &["install", "mcp", "claude", "--workspace", ws]);
+    assert_eq!(human.status.code(), Some(4));
+    let stderr = String::from_utf8_lossy(&human.stderr);
+    assert!(stderr.starts_with("error: mcp_config_unparseable"));
+    assert!(stderr.contains("Manual step:") && stderr.contains("----- snippet -----"));
+
+    for (target, global, code) in [
+        ("aider", false, "mcp_unsupported_target"),
+        ("cody", false, "mcp_unsupported_target"),
+        ("cline", false, "unsupported_scope"),
+        ("roo", true, "unsupported_scope"),
+        ("nope", false, "invalid_target"),
+    ] {
+        let mut arguments = vec!["install", "mcp", target, "--workspace", ws, "--json"];
+        if global {
+            arguments.push("--global");
+        }
+        let output = sandboxed(&f, &arguments);
+        assert_eq!(output.status.code(), Some(2), "{target}");
+        assert_eq!(stderr_json(&output)["error"], code, "{target}");
+    }
+    assert!(!f.workspace.join(".agents/mcp.json").exists());
+
+    let missing = sandboxed(
+        &f,
+        &[
             "install",
             "mcp",
             "claude",
             "--workspace",
-            tmp_path,
+            f.root.join("missing").to_str().unwrap(),
             "--json",
-        ])
-        .output()
-        .unwrap();
-    assert!(merge_out.status.success());
-    let merged_content = fs::read_to_string(&claude_cfg).unwrap();
-    assert!(merged_content.contains("my-custom-tool"));
-    assert!(merged_content.contains("sentra"));
-    assert!(merged_content.contains("custom-binary"));
+        ],
+    );
+    assert_eq!(missing.status.code(), Some(2));
+    assert_eq!(stderr_json(&missing)["error"], "workspace_not_found");
+    assert!(!f.root.join("missing").exists());
+
+    let bad_command = sandboxed(
+        &f,
+        &[
+            "install",
+            "mcp",
+            "cursor",
+            "--workspace",
+            ws,
+            "--command",
+            "./no/such/sentra",
+            "--json",
+        ],
+    );
+    assert_eq!(bad_command.status.code(), Some(2));
+    assert_eq!(stderr_json(&bad_command)["error"], "mcp_command_not_found");
+
+    // `all` reports skipped targets and stops with the broken file's exit code.
+    let all = sandboxed(&f, &["install", "mcp", "all", "--workspace", ws, "--json"]);
+    assert_eq!(all.status.code(), Some(4));
+    let batch: serde_json::Value = serde_json::from_slice(&all.stdout).unwrap();
+    assert_eq!(batch["target"], "all");
+    assert_eq!(batch["success"], false);
+    let skipped: Vec<&str> = batch["skipped"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["target"].as_str().unwrap())
+        .collect();
+    assert!(skipped.contains(&"aider") && skipped.contains(&"cline"));
+    assert_eq!(batch["failed"][0]["target"], "claude");
+    assert_eq!(fs::read_to_string(&claude_cfg).unwrap(), "{ broken");
+
+    // With the broken file fixed, `all --global` succeeds inside the sandbox home.
+    fs::remove_file(&claude_cfg).unwrap();
+    let global = sandboxed(&f, &["install", "mcp", "all", "--global", "--json"]);
+    let batch = stdout_json(&global);
+    assert_eq!(batch["success"], true);
+    assert!(sandbox_home(&f).join(".claude.json").exists());
+    assert!(!sandbox_home(&f).join(".agents/mcp.json").exists());
+}
+
+fn mcp_session(arguments: &[&str], requests: &[&[u8]]) -> Vec<serde_json::Value> {
+    let mut input = Vec::new();
+    for request in requests {
+        input.extend_from_slice(request);
+        input.push(b'\n');
+    }
+    let mut cursor = Cursor::new(input);
+    let resp = run_with_input(&args(arguments), Path::new(""), &mut cursor);
+    assert_eq!(resp.exit_code, 0, "{}", resp.stderr);
+    resp.stdout
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect()
+}
+
+const MCP_INIT: &[u8] = b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"t\",\"version\":\"1\"}}}";
+const MCP_INITIALIZED: &[u8] = b"{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}";
+
+#[test]
+fn mcp_stdio_survives_bad_input_and_confines_tools() {
+    let f = Fixture::new();
+    let session = f.init();
+    let ws = f.workspace.to_str().unwrap();
+    let db = f.db.to_str().unwrap();
+
+    // Invalid UTF-8 is a parse error, not the end of the session.
+    let lines = mcp_session(
+        &["mcp"],
+        &[
+            MCP_INIT,
+            &[0x7B, 0xFF, 0xFE, 0x7D],
+            b"{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\"}",
+        ],
+    );
+    assert_eq!(lines.len(), 3);
+    assert_eq!(lines[0]["result"]["protocolVersion"], "2025-06-18");
+    assert_eq!(lines[1]["error"]["code"], -32700);
+    assert!(lines[1]["id"].is_null());
+    assert_eq!(lines[2]["id"], 2);
+
+    let lines = mcp_session(
+        &["mcp", "--workspace", ws, "--database", db],
+        &[
+            MCP_INIT,
+            MCP_INITIALIZED,
+            b"{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"sentra_install_skills\",\"arguments\":{}}}",
+            b"{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"sentra_scan_code\",\"arguments\":{\"path\":\"..\"}}}",
+            b"{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"sentra_get_session_status\",\"arguments\":{}}}",
+        ],
+    );
+    assert_eq!(lines.len(), 4);
+    assert_eq!(lines[1]["error"]["code"], -32602);
+    assert_eq!(lines[2]["result"]["isError"], true);
+    assert_eq!(
+        lines[2]["result"]["structuredContent"]["error"],
+        "path_outside_launch_root"
+    );
+    assert_eq!(lines[3]["result"]["isError"], false);
+    assert_eq!(
+        lines[3]["result"]["structuredContent"]["session_id"],
+        session
+    );
+
+    let missing = run_with_input(
+        &args(&[
+            "mcp",
+            "--workspace",
+            f.root.join("missing").to_str().unwrap(),
+        ]),
+        Path::new(""),
+        &mut Cursor::new(Vec::new()),
+    );
+    assert_eq!(missing.exit_code, 4);
+    assert!(missing.stdout.is_empty());
 }

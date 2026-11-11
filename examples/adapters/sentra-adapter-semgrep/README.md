@@ -13,7 +13,7 @@ A reference subprocess adapter connecting [Semgrep](https://semgrep.dev/) with t
 
 ## File Structure
 
-- `manifest.json`: Official plugin manifest declaring quotas, ID, and zero-network egress (`strictly_denied`).
+- `manifest.json`: Official plugin manifest declaring quotas, ID, and the `strictly_denied` egress policy. The policy is declared, not enforced: `semgrep --config p/security-audit` downloads its rules from the Semgrep registry.
 - `adapter.py`: Standalone Python script implementing the newline-delimited JSON IPC state machine.
 
 ---

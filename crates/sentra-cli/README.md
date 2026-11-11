@@ -59,8 +59,15 @@ sentra patch rollback --backup ./backups/db.ts_<millis>.bak --workspace ./my-pro
 # Compare two directory snapshots with pure-Rust diff engine
 sentra diff --base ./repo-v1 --head ./repo-v2
 
-# Launch the Model Context Protocol (MCP) JSON-RPC 2.0 stdio server
-sentra mcp
+# Launch the local MCP stdio server (legacy revisions 2025-11-25 ... 2024-11-05), confined to a workspace
+sentra mcp --workspace ./my-project [--database ./sentra.db]
+
+# Install bundled skills or register the MCP server for an agent (targets: docs/EXTENSIONS.md)
+sentra install claude --skill golang-security --workspace ./my-project --json
+sentra install mcp cursor --workspace ./my-project
+
+# Plugins load only from --dir or SENTRA_PLUGIN_DIR
+sentra plugin list --dir ./examples/adapters
 ```
 
 ## Command Contracts

@@ -20,7 +20,7 @@ Choose option 3. Define family-specific capabilities, supported-target tuples, s
 
 Avoid a stable Rust dynamic-library ABI and unrestricted shell fallback. WASI may be useful for future restricted data-processing extensions, but is not the universal runtime for native security tools.
 
-MCP, API, skills, and dashboard clients call the same core application services. Sentra provides MCP over local stdio transport, adhering to schema and permission conformance. The inspected candidate protocol revision is 2026-07-28. HTTP remains disabled until its separate authentication, authorization, SSRF, and parity gates pass.
+MCP, API, skills, and dashboard clients call the same core application services. Sentra provides MCP over local stdio transport, adhering to schema and permission conformance. The implemented server negotiates the legacy initialize-handshake revisions 2025-11-25, 2025-06-18, 2025-03-26 and 2024-11-05; the handshake-less 2026-07-28 revision is not implemented (see docs/EXTENSIONS.md). HTTP remains disabled until its separate authentication, authorization, SSRF, and parity gates pass.
 
 ## Consequences
 

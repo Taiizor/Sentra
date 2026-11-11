@@ -820,6 +820,7 @@ impl CodeQlAdapter {
                 lease_id: _,
                 capability: _,
                 arguments,
+                ..
             } => {
                 let sarif_payload = arguments.get("sarif_payload").and_then(|v| v.as_str());
 

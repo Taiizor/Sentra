@@ -1,142 +1,137 @@
 # Sentra Plugin & Adapter User Guide
 
-This guide explains how to discover, probe, run, and author external security adapters for the **Sentra Security Platform** using Sentra's **Subprocess Plugin Architecture** (`REQ-F16`, [`docs/EXTENSIONS.md`](./EXTENSIONS.md)).
+This guide explains how to install, discover, probe, run, and author external security adapters for the **Sentra Security Platform** using Sentra's **Subprocess Plugin Architecture** (`REQ-F16`, [`docs/EXTENSIONS.md`](./EXTENSIONS.md)).
+
+Status (2026-11-11): the protocol, discovery and host supervision described here are implemented in `sentra-core` (`crates/sentra-core/src/plugin/`). There is no signed package format, no marketplace and no trust record; an adapter is a directory you copy. Adapters are **not sandboxed** — see [§7](#7-security-model-and-residual-risks).
 
 ---
 
-## 1. Architectural Philosophy
+## 1. Architecture
 
-Sentra enforces unconditional memory safety and process isolation across all supported platforms:
-
-1. **Process Isolation (`#![forbid(unsafe_code)]`):**
-   External tools and plugins do **NOT** run inside Sentra's memory space via dynamic linking (`.dll`, `.so`, or unstable Rust ABIs). Instead, every adapter executes as an isolated, supervised subprocess.
-2. **Polyglot Extensibility:**
-   Adapters can be written in any language: **TypeScript (Bun)**, **Python 3**, **Go**, **Rust**, or **C++**.
-3. **Framed Structured IPC (NDJSON over stdio):**
-   Communication occurs via single-line newline-delimited JSON frames over `stdin` (host to adapter) and `stdout` (adapter to host). Diagnostics, progress indicators, and logs are directed to `stderr` without corrupting protocol streams.
-4. **Capability Fencing & Default-Deny:**
-   An adapter must declare its capabilities in its manifest. If a plugin attempts to exercise or acknowledge an undeclared capability, Sentra halts the process immediately and marks it **Quarantined**.
+1. **Out-of-process adapters:**
+   Adapters never run inside Sentra's memory space (no `.dll`/`.so` loading, no Rust ABI). Each `probe` or `run` starts one adapter process, talks to it, and terminates it.
+2. **Polyglot:**
+   Adapters can be written in any language that reads `stdin` and writes `stdout`: **TypeScript (Bun)**, **Python 3**, **Go**, **Rust**, **C++**.
+3. **Framed IPC (NDJSON over stdio):**
+   The host writes one single-line JSON request per line to the adapter's `stdin`; the adapter answers with one single-line JSON response per line on `stdout`. Logs go to `stderr`; the host drains and counts them (they are not part of the protocol).
+4. **Capability fencing:**
+   An adapter declares its capabilities in its manifest. A `run` for an undeclared capability is refused **before the adapter is started**. An adapter that acknowledges an undeclared capability during the handshake is quarantined and killed.
 
 ---
 
-## 2. CLI Usage for End-Users
+## 2. Installing an Adapter
 
-Sentra provides native CLI commands to manage and execute adapters directly from your terminal.
+There is no `sentra plugin install` command. Installing an adapter means **copying its directory** (the folder that holds `manifest.json` and the adapter's files) into a plugin directory you control:
 
-### 2.1 Discovering Available Plugins (`sentra plugin list`)
-
-Scans `.sentra/plugins/`, `examples/adapters/`, or a custom directory for valid `manifest.json` definitions:
+| Platform | Default plugin directory |
+| :--- | :--- |
+| Any | `$SENTRA_PLUGIN_DIR`, when set to an absolute path |
+| Windows | `%APPDATA%\sentra\plugins` |
+| macOS | `~/Library/Application Support/sentra/plugins` |
+| Linux / other Unix | `$XDG_CONFIG_HOME/sentra/plugins` (absolute only), else `~/.config/sentra/plugins` |
 
 ```bash
-# Human-readable list
-sentra plugin list
+# Example (Linux): install the Snyk example adapter
+mkdir -p ~/.config/sentra/plugins
+cp -r examples/adapters/sentra-adapter-snyk ~/.config/sentra/plugins/
+```
 
-# Specifying a custom adapter directory
-sentra plugin list --dir /path/to/my-plugins
+- **Trust decision:** installing an adapter means you will run its code with your user's privileges when you `probe` or `run` it. Review the manifest and the adapter code first. Sentra does not verify a publisher, signature or digest.
+- **Removal:** delete the adapter's directory.
+- **Updates:** replace the directory. Nothing is pinned or cached.
+- `--dir <directory>` replaces the default directory for a single command. Sentra never searches the current directory, its parents, or a repository's `examples/adapters` or `.sentra/plugins` on its own, so a repository you scan cannot inject an adapter.
+- A plugin directory is either one adapter directory (it holds `manifest.json`) or a container whose **immediate** child directories hold one manifest each. If a directory holds its own manifest, manifests in its children are ignored and reported (`nested_manifest_ignored`).
+- Plugin ids must be unique across the searched directories. When two manifests declare the same id, **neither** is loaded and the id is reported as `duplicate_plugin_id`; `probe`/`run` for that id fail with `plugin_duplicate_id`.
 
-# Machine-readable JSON output
+---
+
+## 3. CLI Usage
+
+### 3.1 Listing Plugins (`sentra plugin list`)
+
+```bash
+sentra plugin list                        # default plugin directory
+sentra plugin list --dir ./my-adapters    # an explicit directory
 sentra plugin list --json
 ```
 
-**Example output:**
-```text
-Sentra discovered plugins (count: 3):
-  • org.sentra.adapter.ollama v1.0.0 (ai_provider)
-    Manifest: examples/adapters/sentra-adapter-ollama/manifest.json
-    Capabilities: patch_generation
-    Egress: WhitelistedLocalOnly
+Skipped manifests are reported as diagnostics with a path, a severity and a code:
 
-  • org.sentra.adapter.semgrep v1.0.0 (analysis_tool)
-    Manifest: examples/adapters/sentra-adapter-semgrep/manifest.json
-    Capabilities: source_discovery, static_analysis
-    Egress: StrictlyDenied
+| Code | Severity | Meaning |
+| :--- | :--- | :--- |
+| `plugin_dir_not_found` | error | The directory does not exist. |
+| `plugin_dir_unreadable` | error | The directory cannot be listed. |
+| `manifest_unreadable` / `manifest_too_large` | error | The manifest cannot be read or exceeds 256 KiB. |
+| `manifest_invalid_json` | error | The manifest is not UTF-8 JSON (a UTF-8 BOM is accepted). |
+| `manifest_invalid` | error | Schema or validation failure (see [§4](#4-adapter-manifest-specification-manifestjson)). |
+| `duplicate_plugin_id` | error | Two or more manifests declare the same id; none is loaded. |
+| `manifest_unknown_field` | warning | Unknown keys were ignored; the plugin is loaded. |
+| `nested_manifest_ignored` | warning | A child manifest inside an adapter directory was not loaded. |
 
-  • org.sentra.adapter.snyk v1.0.0 (analysis_tool)
-    Manifest: examples/adapters/sentra-adapter-snyk/manifest.json
-    Capabilities: dependency_audit
-    Egress: StrictlyDenied
-```
+### 3.2 Probing an Adapter (`sentra plugin probe`)
 
----
-
-### 2.2 Probing Plugin Applicability (`sentra plugin probe`)
-
-Tests whether an adapter is installed, prerequisites are met, and whether the target repository is applicable—**without executing target code or modifying filesystem state**:
+`probe` **starts the adapter process** (adapter code runs with your privileges), performs the handshake and asks whether the adapter applies to a workspace. It does not run Sentra's own analysis.
 
 ```bash
-# Probe by plugin ID
-sentra plugin probe --id org.sentra.adapter.snyk
-
-# Probe target workspace
 sentra plugin probe --id org.sentra.adapter.snyk --workspace ./my-project
-
-# Probe using a direct manifest file
-sentra plugin probe --manifest ./custom-adapter/manifest.json
-
-# JSON output
-sentra plugin probe --id org.sentra.adapter.snyk --json
+sentra plugin probe --manifest ./custom-adapter/manifest.json --workspace ./my-project --json
 ```
 
-**Example output:**
-```text
-Sentra plugin probe: completed
-Plugin: org.sentra.adapter.snyk (Snyk Dependency Audit Adapter)
-Applicable: true
-Details: Discovered supported package manifest(s): Cargo.lock, package-lock.json
-Capabilities: dependency_audit
-```
+The workspace is validated with Sentra's workspace boundary (it must be an existing local directory; links and junctions in its path are rejected) and sent to the adapter as a canonical absolute path.
 
----
-
-### 2.3 Running an Adapter Job (`sentra plugin run`)
-
-Executes an authorized task using an explicitly declared capability:
+### 3.3 Running an Adapter Job (`sentra plugin run`)
 
 ```bash
-# Run Snyk dependency audit
-sentra plugin run --id org.sentra.adapter.snyk --capability dependency_audit
-
-# Run Semgrep static analysis with JSON arguments
-sentra plugin run \
-  --id org.sentra.adapter.semgrep \
-  --capability static_analysis \
-  --args '{"rule_suite": "owasp-top-10"}'
-
-# Run with machine-readable JSON output
-sentra plugin run --id org.sentra.adapter.snyk --capability dependency_audit --json
+sentra plugin run --id org.sentra.adapter.snyk --capability dependency_audit --workspace ./my-project
+sentra plugin run --id org.sentra.adapter.semgrep --capability static_analysis \
+  --workspace ./my-project --args '{"rule_suite": "owasp-top-10"}' --json
 ```
 
-**Example output:**
-```text
-Sentra plugin execution: completed
-Plugin: org.sentra.adapter.snyk
-Task ID: task-53454ff5-909a-4a0d-8000-000000000001
-Capability: dependency_audit
-Exit Code: 0
-Summary: Snyk audit detected 2 vulnerable package(s).
-Evidence Refs: sha256:snyk-audit-task-53454ff5-909a-4a0d-8000-000000000001
-```
+The validated workspace is sent in the `execute` frame as `workspace_root`. Everything in the result — `exit_code`, `summary` and `evidence_refs` — is **adapter-reported**. Evidence references are opaque labels; Sentra does not resolve them or admit them as evidence. The real process exit status is recorded separately by the host.
+
+The reference adapters return synthetic data: for example, the Snyk example always reports `Snyk audit detected 2 vulnerable package(s).` whatever the workspace contains.
+
+### 3.4 Error Codes
+
+Every failure exits non-zero. With `--json`, stderr carries one object: `{"schema_version":1,"error":<code>,"message":...,"reason":...}`, plus `process_exit_code`, `timed_out` and `killed_by_host` when an adapter process was started. Exit codes: 2 for `plugin_dir_unavailable` (no `--dir` and no default directory) and `plugin_invalid_workspace`; 4 for `invalid_manifest`, `plugin_duplicate_id` and `plugin_executable_rejected`; 7 for `plugin_not_found`; 5 for every other code.
+
+| Code | Meaning |
+| :--- | :--- |
+| `plugin_dir_unavailable` | No `--dir` was given and no default plugin directory could be resolved. |
+| `plugin_not_found` | No manifest in the plugin directory declares the id. |
+| `plugin_duplicate_id` | The id is declared by more than one manifest. |
+| `invalid_manifest` | The manifest failed to parse or validate. |
+| `plugin_identity_mismatch` | The adapter answered `initialize` with a different `plugin_id` than its (valid) manifest declares. |
+| `plugin_executable_rejected` | The executable was not found, or resolves outside the adapter directory. |
+| `plugin_spawn_failed` | The operating system refused to start the adapter. |
+| `plugin_invalid_workspace` | The workspace is not an acceptable local directory. |
+| `plugin_undeclared_capability` | The capability is not declared (checked before spawning) or not acknowledged. |
+| `plugin_replay_rejected` | The task id was already dispatched by this host instance. |
+| `plugin_incompatible_interface` | The adapter acknowledged another interface version. |
+| `plugin_timeout` | The adapter did not answer before its deadline; its process tree was killed. |
+| `plugin_output_quota_exceeded` | stdout + stderr together exceeded `max_total_output_bytes`. |
+| `plugin_frame_too_large` | A single stdout line (frame) exceeded `max_frame_bytes`. |
+| `plugin_protocol_violation` | A frame was not valid UTF-8 JSON of the expected shape. |
+| `plugin_process_exited` | The adapter exited or closed `stdout` before answering. |
+| `plugin_adapter_error` | The adapter answered with an `error` frame. |
+| `plugin_result_mismatch` | `execute_result` carried another `task_id` or a malformed evidence label. |
 
 ---
 
-## 3. Adapter Manifest Specification (`manifest.json`)
-
-Every plugin must be stored in a directory containing a `manifest.json` conforming to `sentra_core::plugin::PluginManifest`:
+## 4. Adapter Manifest Specification (`manifest.json`)
 
 ```json
 {
-  "id": "org.sentra.adapter.snyk",
-  "name": "Snyk Dependency Audit Adapter",
+  "id": "com.example.adapter.mytool",
+  "name": "My Custom Security Tool Adapter",
   "version": "1.0.0",
   "interface_version": 1,
   "family": "analysis_tool",
-  "executable_path": "bun adapter.ts",
-  "declared_capabilities": [
-    "dependency_audit"
-  ],
+  "executable_path": "bun run adapter.ts",
+  "declared_capabilities": ["static_analysis", "my_custom_scan"],
   "quotas": {
-    "max_memory_mib": 1024,
-    "max_execution_time_secs": 60,
+    "max_memory_mib": 512,
+    "max_execution_time_secs": 30,
     "max_frame_bytes": 1048576,
     "max_total_output_bytes": 10485760
   },
@@ -144,57 +139,68 @@ Every plugin must be stored in a directory containing a `manifest.json` conformi
 }
 ```
 
-### Field Definitions
-
-| Field | Type | Description |
+| Field | Type | Rules |
 | :--- | :--- | :--- |
-| `id` | `string` | Globally unique reverse-DNS identifier (e.g. `com.company.adapter.linter`). |
-| `name` | `string` | Human-readable name. |
-| `version` | `string` | Semver string (e.g. `"1.0.0"`). |
-| `interface_version` | `u32` | Major protocol version (currently `1`). Incompatible versions are fail-closed. |
-| `family` | `string` | Classification: `analysis_tool`, `ai_provider`, `language_framework`, `execution_backend`, `research_system`, `export_import`. |
-| `executable_path` | `string` | Command or path invoked by Sentra (e.g. `"python adapter.py"`, `"bun adapter.ts"`, `"./bin/adapter"`). |
-| `declared_capabilities`| `array` | Subset of: `source_discovery`, `dependency_audit`, `static_analysis`, `fuzz_execution`, `patch_generation`, or custom strings. |
-| `quotas.max_memory_mib`| `u32` | Resident memory budget in MiB. |
-| `quotas.max_execution_time_secs` | `u32` | Maximum run duration before forced SIGKILL. |
-| `quotas.max_frame_bytes` | `u32` | Maximum byte length allowed for a single newline JSON frame (default: 1 MiB). |
-| `quotas.max_total_output_bytes` | `u32` | Cumulative stdout/stderr ceiling (default: 10 MiB). |
-| `egress_policy` | `string` | `"strictly_denied"` (air-gapped) or `"whitelisted_local_only"` (loopback daemon access). |
+| `id` | `string` | 1–128 characters of `[A-Za-z0-9._-]`, starting with a letter or digit. Unique across plugin directories. |
+| `name` | `string` | Display name. |
+| `version` | `string` | Adapter semver (`MAJOR.MINOR.PATCH`). |
+| `interface_version` | `u32` | Must be `1` (this host's protocol version). |
+| `family` | `string` | `language_framework`, `analysis_tool`, `ai_provider`, `execution_backend`, `research_system` or `export_import`. |
+| `executable_path` | `string` | Command line, run **without a shell**. Split on whitespace; `"..."` or `'...'` group an argument that contains spaces (no escapes or expansion). A program containing `/` or `\` (e.g. `./bin/adapter`, `bin/adapter.exe`) is resolved inside the adapter directory and must stay inside it. A bare name (`bun`, `python`) is looked up on `PATH` (with `PATHEXT` on Windows); the adapter directory and the current directory are never searched for bare names. `python` and `python3` fall back to each other. Absolute paths are used as given. |
+| `declared_capabilities` | `string[]` | `source_discovery`, `dependency_audit`, `static_analysis`, `fuzz_execution`, `patch_generation`, or a custom name of 1–64 characters of `[a-z0-9_.-]`. The legacy `{"custom": "name"}` form is still read. |
+| `quotas.max_execution_time_secs` | `u32` | **Enforced.** Session deadline (> 0, clamped to 3600 s). The handshake must also finish within 30 s. On expiry the process tree is killed. Default 60. |
+| `quotas.max_frame_bytes` | `usize` | **Enforced.** Longest single `stdout` line; reads are bounded, so a longer line is never buffered. Default 1 MiB. |
+| `quotas.max_total_output_bytes` | `usize` | **Enforced.** Cumulative `stdout` frames plus `stderr` bytes per session (≥ `max_frame_bytes`). Default 10 MiB. |
+| `quotas.max_memory_mib` | `u32` | **Declared, not enforced** (> 0). Default 1024. |
+| `egress_policy` | `string` | **Declared, not enforced.** `strictly_denied` (the adapter states it needs no network) or `whitelisted_local_only` (loopback only). Nothing restricts the adapter's network access. |
+
+`quotas` and each quota field are optional and default to the values above. Unknown keys are ignored with a warning.
 
 ---
 
-## 4. The Subprocess Protocol Lifecycle
+## 5. The Subprocess Protocol Lifecycle
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant Host as Sentra Core (Host)
-    participant Adapter as Subprocess Adapter (Client)
+    participant Adapter as Subprocess Adapter
 
-    Note over Host,Adapter: 1. Process Spawning & Handshake
+    Note over Host,Adapter: 1. Spawn (cleared environment, cwd = adapter directory) and handshake
     Host->>Adapter: {"operation":"initialize","host_version":1}
     Adapter-->>Host: {"status":"initialize_ack","plugin_id":"...","interface_version":1,"capabilities":[...]}
 
-    Note over Host,Adapter: 2. Capability Probing
-    Host->>Adapter: {"operation":"probe","workspace_root":"/path/to/project"}
-    Adapter-->>Host: {"status":"probe_result","applicable":true,"details":"..."}
+    Note over Host,Adapter: 2a. Probe
+    Host->>Adapter: {"operation":"probe","workspace_root":"/abs/canonical/project"}
+    Adapter-->>Host: {"status":"probe_result","applicable":true,"details":"...","unsupported_reason":null}
 
-    Note over Host,Adapter: 3. Authorized Task Execution
-    Host->>Adapter: {"operation":"execute","task_id":"task-123","lease_id":"lease-123","capability":"static_analysis","arguments":{...}}
-    Adapter-->>Host: {"status":"execute_result","task_id":"task-123","exit_code":0,"summary":"...","evidence_refs":[...]}
+    Note over Host,Adapter: 2b. Or execute an authorized task
+    Host->>Adapter: {"operation":"execute","task_id":"task-123","lease_id":"lease-task-123","capability":"static_analysis","workspace_root":"/abs/canonical/project","arguments":{...}}
+    Adapter-->>Host: {"status":"execute_result","task_id":"task-123","exit_code":0,"summary":"...","evidence_refs":["mytool:report-1"]}
 
-    Note over Host,Adapter: 4. Graceful Teardown
+    Note over Host,Adapter: 3. Teardown (2 s grace), then the process tree is killed
     Host->>Adapter: {"operation":"shutdown"}
     Adapter-->>Host: {"status":"shutdown_ack"}
 ```
 
+Rules for adapters:
+
+- Answer every request with exactly one line on `stdout`; never print anything else there. An `error` frame (`{"status":"error","code":1,"message":"..."}`) fails the operation with `plugin_adapter_error`.
+- `initialize_ack.plugin_id` must equal the manifest id, and every acknowledged capability must be declared.
+- `execute_result.task_id` must echo the request's `task_id`.
+- `evidence_refs` entries are labels of the form `<scheme>:<value>`: the scheme is 1–32 characters of `[a-z0-9+.-]` starting with a letter, the value 1–256 characters of `[A-Za-z0-9._:+=@-]` without `..`. Paths and URLs are rejected. At most 1024 labels.
+- `workspace_root` is absent from `execute` only when the caller supplied no workspace.
+- The adapter's working directory is its own directory; only `PATH`, `PATHEXT`, `SYSTEMROOT`, `SYSTEMDRIVE`, `WINDIR`, `COMSPEC`, `TEMP`, `TMP`, `TMPDIR`, `HOME`, `USERPROFILE`, `LOCALAPPDATA`, `APPDATA`, `PROGRAMDATA`, `LANG` and `LC_ALL` are passed through. API keys and tokens in the operator's environment are not forwarded.
+- Do not leave background processes behind; reap your children before acknowledging `shutdown`.
+- `plan` and `cancel` are defined in the schema but not sent by the host today.
+
 ---
 
-## 5. Authoring an Adapter (Step-by-Step)
+## 6. Authoring an Adapter
 
-### Option A: Authoring in TypeScript ([Bun](https://bun.sh))
+### Option A: TypeScript ([Bun](https://bun.sh))
 
-Create `adapter.ts`:
+`manifest.json` uses `"executable_path": "bun run adapter.ts"`. Create `adapter.ts`:
 
 ```typescript
 #!/usr/bin/env bun
@@ -210,11 +216,7 @@ function log(msg: string) {
   process.stderr.write(`[${PLUGIN_ID}] ${msg}\n`);
 }
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-  terminal: false,
-});
+const rl = readline.createInterface({ input: process.stdin, terminal: false });
 
 for await (const line of rl) {
   const trimmed = line.trim();
@@ -235,13 +237,13 @@ for await (const line of rl) {
       emit({
         status: "probe_result",
         applicable: true,
-        details: "MyTool Scanner v1.2 ready",
+        details: `MyTool ready for ${req.workspace_root}`,
         unsupported_reason: null,
       });
       break;
 
     case "execute":
-      log(`Executing task ${req.task_id}...`);
+      log(`Executing task ${req.task_id} in ${req.workspace_root}`);
       emit({
         status: "execute_result",
         task_id: req.task_id,
@@ -254,13 +256,16 @@ for await (const line of rl) {
     case "shutdown":
       emit({ status: "shutdown_ack" });
       process.exit(0);
+
+    default:
+      emit({ status: "error", code: 1, message: `unsupported operation ${req.operation}` });
   }
 }
 ```
 
-### Option B: Authoring in Python 3
+### Option B: Python 3
 
-Create `adapter.py`:
+`manifest.json` uses `"executable_path": "python adapter.py"`. Create `adapter.py`:
 
 ```python
 #!/usr/bin/env python3
@@ -295,10 +300,11 @@ for line in sys.stdin:
         emit({
             "status": "probe_result",
             "applicable": True,
-            "details": "Python Tool v3.0 ready",
+            "details": f"Python Tool ready for {req.get('workspace_root')}",
             "unsupported_reason": None
         })
     elif op == "execute":
+        log(f"Executing task {req.get('task_id')} in {req.get('workspace_root')}")
         emit({
             "status": "execute_result",
             "task_id": req.get("task_id"),
@@ -309,32 +315,31 @@ for line in sys.stdin:
     elif op == "shutdown":
         emit({"status": "shutdown_ack"})
         sys.exit(0)
+    else:
+        emit({"status": "error", "code": 1, "message": f"unsupported operation {op}"})
 ```
 
 ---
 
-## 6. Official Reference Implementations
+## 7. Security Model and Residual Risks
 
-The Sentra repository includes three reference adapters under [`examples/adapters/`](file:///E:/MyProject/Mix/GitHub/Sentra/examples/adapters/):
+Enforced by the host (`crates/sentra-core/src/plugin/driver.rs`, `process.rs`):
 
-1. [**`sentra-adapter-semgrep`**](file:///E:/MyProject/Mix/GitHub/Sentra/examples/adapters/sentra-adapter-semgrep/):
-   - **Language:** Python 3
-   - **Capabilities:** `source_discovery`, `static_analysis`
-   - **Integration:** Wraps Semgrep CLI for fast AST pattern and taint matching.
-2. [**`sentra-adapter-snyk`**](file:///E:/MyProject/Mix/GitHub/Sentra/examples/adapters/sentra-adapter-snyk/):
-   - **Language:** TypeScript / Bun
-   - **Capabilities:** `dependency_audit`
-   - **Integration:** Software Composition Analysis (SCA) across multi-ecosystem lockfiles.
-3. [**`sentra-adapter-ollama`**](file:///E:/MyProject/Mix/GitHub/Sentra/examples/adapters/sentra-adapter-ollama/):
-   - **Language:** Python 3
-   - **Capabilities:** `patch_generation`
-   - **Integration:** Air-gapped local LLM inference (Llama 3, DeepSeek-R1) with strict loopback isolation (`whitelisted_local_only`).
+- **Explicit discovery:** only `--dir` or the default plugin directory are read; duplicate ids fail closed.
+- **No shell:** the command line is split by Sentra and passed as an argument vector; host data (workspace, task id, arguments) travels only as JSON on `stdin`.
+- **Executable resolution:** relative programs resolve inside the adapter directory, never against Sentra's working directory.
+- **Cleared environment** with the allowlist in [§5](#5-the-subprocess-protocol-lifecycle).
+- **Capability fence before spawn**, then again against the acknowledged set after the handshake.
+- **Deadlines:** handshake ≤ 30 s, session ≤ `max_execution_time_secs` (≤ 3600 s), shutdown grace 2 s.
+- **Bounded output:** `stdout` lines are read with a bound of `max_frame_bytes`; `stderr` is always drained (the last 16 KiB are kept for diagnostics) and counted with `stdout` against `max_total_output_bytes`.
+- **Termination on every path** (success, error, quarantine, timeout, panic): the tree is killed before the adapter's stdin is closed. Windows assigns the adapter to a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` right after it starts (dependency `win32job`), so closing the job at session end, or the host exiting, terminates every descendant, including detached ones and children of an adapter that already exited; if the job cannot be created or assigned, the host falls back to `taskkill /T /F` while the adapter is alive. Unix starts the adapter in its own process group and sends `SIGKILL` to the group.
+- **Result correlation:** `task_id` must match; evidence labels must follow the grammar above.
+- **Replay protection:** a task id is single-use **within one driver/host instance**. Nothing is persisted; separate CLI invocations do not share the replay set.
 
----
+Not enforced (residual risks):
 
-## 7. Security & Containment Invariants
-
-- **Fail-Closed Capability Enforcement:** If an adapter advertises `source_discovery` but tries to execute `patch_generation`, Sentra will reject the task before sending it to the child, and will isolate the session.
-- **Replay Protection:** Task IDs are unique and strictly single-use. Replay requests are rejected fail-closed (`REQ-S02`).
-- **Quota Enforcer:** If any line on `stdout` exceeds `max_frame_bytes` (default 1 MiB) or cumulative output exceeds `max_total_output_bytes` (default 10 MiB), Sentra terminates the subprocess immediately and flags it as `Quarantined`.
-- **Human-in-the-Loop Governance:** Finding admissions and automated Git proposals generated through adapters are treated as candidate evidence. Sentra's core policy engine requires human authorization before applying modifications or dispatching remote PRs.
+- **No sandbox.** Adapters run with the operator's privileges and file-system access. `max_memory_mib` and `egress_policy` are declared only. The approved isolation profile required by `AGENTS.md` for target-facing execution is not applied to adapters.
+- **Windows process trees:** a descendant created in the moment between process creation and Job Object assignment is not contained. When the job cannot be created or assigned (for example under a parent job that forbids it), the `taskkill /T` fallback only reaches children while the adapter is still running, so children of an adapter that exits on its own can outlive the session.
+- **Unix process groups:** a descendant that calls `setsid` or `setpgid` leaves the group and is not killed.
+- **Handle inheritance (Windows):** inheritable handles of the Sentra process, including its own stdout, can be inherited by the adapter tree. They are released only when every process holding them has exited; a caller that pipes Sentra's stdout can otherwise wait for end of file after Sentra exits. With the Job Object every holder is terminated at session end; on the fallback path, callers should stop waiting for stdout shortly after the Sentra process exits.
+- **Manifest trust:** manifests are unsigned and no digest is pinned; a modified adapter directory is run as found.

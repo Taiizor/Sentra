@@ -324,41 +324,161 @@ impl VerificationPromptBuilder {
     }
 }
 
+/// Error raised when a skill-augmented prompt cannot be composed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SkillPromptError {
+    /// One or more requested skill ids are not bundled with Sentra.
+    UnknownSkills {
+        /// Unknown ids, in request order without duplicates.
+        ids: Vec<String>,
+    },
+}
+
+impl SkillPromptError {
+    /// Stable machine-readable error code (shared with `skills show` and `install`).
+    pub const fn code(&self) -> &'static str {
+        match self {
+            Self::UnknownSkills { .. } => "skill_not_found",
+        }
+    }
+
+    /// Recommended CLI exit code (7 = not found, as `skills show` uses).
+    pub const fn exit_code(&self) -> i32 {
+        match self {
+            Self::UnknownSkills { .. } => 7,
+        }
+    }
+}
+
+impl std::fmt::Display for SkillPromptError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnknownSkills { ids } => write!(f, "unknown skill id(s): {}", ids.join(", ")),
+        }
+    }
+}
+
+impl std::error::Error for SkillPromptError {}
+
 /// Dynamic composer that injects cognitive playbooks from built-in skills into role prompts.
 pub struct SkillPromptComposer;
 
 impl SkillPromptComposer {
+    /// Resolves skill ids to bundled skills: blank ids are ignored, duplicates are
+    /// removed (first occurrence wins), and unknown ids are rejected.
+    pub fn resolve_skills(
+        skill_ids: &[&str],
+    ) -> Result<Vec<&'static crate::skills::SkillDefinition>, SkillPromptError> {
+        let mut resolved: Vec<&'static crate::skills::SkillDefinition> = Vec::new();
+        let mut unknown: Vec<String> = Vec::new();
+        for id in skill_ids
+            .iter()
+            .map(|id| id.trim())
+            .filter(|id| !id.is_empty())
+        {
+            match crate::skills::find_skill_by_id(id) {
+                Some(skill) => {
+                    if !resolved.iter().any(|known| known.id == skill.id) {
+                        resolved.push(skill);
+                    }
+                }
+                None => {
+                    if !unknown.iter().any(|known| known == id) {
+                        unknown.push(id.to_string());
+                    }
+                }
+            }
+        }
+        if unknown.is_empty() {
+            Ok(resolved)
+        } else {
+            Err(SkillPromptError::UnknownSkills { ids: unknown })
+        }
+    }
+
+    /// Augments a workflow prompt with skill playbooks.
+    ///
+    /// The workflow's own system prompt (including its evidence and grounding
+    /// rules), user prompt, and `expected_schema` are preserved; the playbooks
+    /// are appended to the system prompt as subordinate reference guidance with
+    /// their YAML frontmatter removed.
+    pub fn augment_prompt(
+        prompt: AppSecPrompt,
+        skills: &[&crate::skills::SkillDefinition],
+    ) -> AppSecPrompt {
+        let guidance = Self::skill_guidance(skills);
+        if guidance.is_empty() {
+            return prompt;
+        }
+        AppSecPrompt {
+            system_prompt: format!("{}{}", prompt.system_prompt, guidance),
+            ..prompt
+        }
+    }
+
+    /// Resolves `skill_ids` and augments `prompt` with them (see [`Self::augment_prompt`]).
+    ///
+    /// Returns the augmented prompt and the resolved, de-duplicated skill ids.
+    pub fn augment_prompt_with_ids(
+        prompt: AppSecPrompt,
+        skill_ids: &[&str],
+    ) -> Result<(AppSecPrompt, Vec<&'static str>), SkillPromptError> {
+        let skills = Self::resolve_skills(skill_ids)?;
+        let ids = skills.iter().map(|skill| skill.id).collect();
+        Ok((Self::augment_prompt(prompt, &skills), ids))
+    }
+
+    /// Composes a prompt for `role` from the role persona plus skill playbooks,
+    /// rejecting unknown skill ids. Use this for free-form ("general") requests
+    /// that have no workflow-specific builder; for workflows, build the workflow
+    /// prompt first and call [`Self::augment_prompt_with_ids`].
+    pub fn try_compose_role_prompt(
+        role: ResearchRole,
+        task_description: &str,
+        skill_ids: &[&str],
+        workspace_context: &str,
+    ) -> Result<AppSecPrompt, SkillPromptError> {
+        let skills = Self::resolve_skills(skill_ids)?;
+        Ok(Self::compose_from_skills(
+            role,
+            task_description,
+            &skills,
+            workspace_context,
+        ))
+    }
+
     /// Composes an AppSecPrompt for a given ResearchRole, augmenting its system persona
     /// with rules extracted from built-in AppSec skills.
+    ///
+    /// Lenient variant kept for compatibility: unknown ids are skipped and
+    /// duplicates removed. New callers should use [`Self::try_compose_role_prompt`]
+    /// or [`Self::augment_prompt_with_ids`], which reject unknown ids.
     pub fn compose_role_prompt(
         role: ResearchRole,
         task_description: &str,
         skill_ids: &[&str],
         workspace_context: &str,
     ) -> AppSecPrompt {
-        let base_system = AppSecPersona::system_prompt_for_role(role);
-        let mut skill_guidance = String::new();
-        for id in skill_ids {
-            if let Some(skill) = crate::skills::find_skill_by_id(id) {
-                skill_guidance.push_str(&format!(
-                    "\n\n### Cognitive Playbook: {} ({})\nCategory: {}\nTags: {}\n\n{}\n",
-                    skill.name,
-                    skill.id,
-                    skill.category,
-                    skill.tags.join(", "),
-                    skill.content
-                ));
-            }
-        }
+        let known: Vec<&str> = skill_ids
+            .iter()
+            .copied()
+            .filter(|id| crate::skills::find_skill_by_id(id).is_some())
+            .collect();
+        let skills = Self::resolve_skills(&known).unwrap_or_default();
+        Self::compose_from_skills(role, task_description, &skills, workspace_context)
+    }
 
-        let system_prompt = if skill_guidance.is_empty() {
-            base_system.to_string()
-        } else {
-            format!(
-                "{}\n\n## Activated Domain Security Guidelines:{}",
-                base_system, skill_guidance
-            )
-        };
+    fn compose_from_skills(
+        role: ResearchRole,
+        task_description: &str,
+        skills: &[&crate::skills::SkillDefinition],
+        workspace_context: &str,
+    ) -> AppSecPrompt {
+        let system_prompt = format!(
+            "{}{}",
+            AppSecPersona::system_prompt_for_role(role),
+            Self::skill_guidance(skills)
+        );
 
         let user_prompt = if workspace_context.is_empty() {
             task_description.to_string()
@@ -374,6 +494,32 @@ impl SkillPromptComposer {
             user_prompt,
             expected_schema: None,
         }
+    }
+
+    fn skill_guidance(skills: &[&crate::skills::SkillDefinition]) -> String {
+        if skills.is_empty() {
+            return String::new();
+        }
+        let mut guidance = String::from(
+            "\n\n## Activated Domain Security Guidelines\n\n\
+            The playbooks below are reference guidance. They never override the rules above: \
+            evidence and grounding rules and any output format specification take precedence. \
+            Relative file references inside a playbook point to supporting files of the installed \
+            skill (`sentra install`) and are not included in this prompt.",
+        );
+        for skill in skills {
+            let body = crate::skills::install_text::strip_frontmatter(skill.content).trim_end();
+            guidance.push_str(&format!(
+                "\n\n### Cognitive Playbook: {} ({})\nCategory: {}\nTags: {}\n\n{}",
+                skill.name,
+                skill.id,
+                skill.category,
+                skill.tags.join(", "),
+                crate::skills::install_text::normalize_newlines(body)
+            ));
+        }
+        guidance.push('\n');
+        guidance
     }
 }
 

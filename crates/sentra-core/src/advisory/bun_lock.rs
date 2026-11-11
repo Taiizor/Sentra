@@ -17,16 +17,22 @@ pub fn parse_bun_lock(content: &str) -> Result<Vec<PackageRecord>, AdvisoryError
 
     // 1. If it starts with '{', attempt JSON parsing (modern Bun 1.1/1.2 format)
     if trimmed.starts_with('{') {
-        if let Ok(packages) = parse_bun_json_format(trimmed)
+        let bun = parse_bun_json_format(trimmed);
+        if let Ok(packages) = &bun
             && !packages.is_empty()
         {
-            return Ok(packages);
+            return bun;
         }
         // Fallback to npm package-lock parser if it's formatted similarly
         if let Ok(packages) = parse_package_lock(trimmed)
             && !packages.is_empty()
         {
             return Ok(packages);
+        }
+        // A valid JSON lockfile without packages (no dependencies) is not an error;
+        // the line-based fallback below only fits the earlier text format.
+        if bun.is_ok() {
+            return bun;
         }
     }
 
