@@ -156,7 +156,7 @@ dependencies = [
 
 [[package]]
 name = "sentra"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "sentra-cli",
  "sentra-core",
@@ -164,7 +164,7 @@ dependencies = [
 
 [[package]]
 name = "sentra-cli"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "sentra-core",
  "serde",
@@ -173,7 +173,7 @@ dependencies = [
 
 [[package]]
 name = "sentra-core"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "rusqlite",
  "serde",

@@ -1,7 +1,7 @@
 # Sentra Installation & Getting Started Guide
 
 **Target Audience:** Operators, Security Researchers, Enterprise Administrators  
-**Platform Version:** 0.1.0  
+**Platform Version:** 0.3.0  
 **Supported Host Platforms:** Windows 11 x64 (PowerShell 7), Linux x86_64 (Docker container test runner)  
 
 ---
@@ -57,7 +57,7 @@ The compiled binaries will be placed in `target/debug/sentra.exe` (or `target/re
 Sentra includes extensive integration test suites ensuring 100% fail-closed containment, memory safety, and cross-platform determinism.
 
 ### 3.1 Host Test Execution (Windows 11 MSVC)
-Run the complete workspace test suite (on Windows 11 x64 on 2026-11-11: 780 tests and 7 compile-fail doctests passed, 5 tests ignored):
+Run the complete workspace test suite (on Windows 11 x64 on 2026-11-11: 857 tests and 7 compile-fail doctests passed, 5 tests ignored):
 
 ```powershell
 # Run all workspace unit and integration tests

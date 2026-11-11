@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-11
+
 ### Added
 - GitHub Actions CI workflow covering Linux, Windows, and macOS multi-OS test matrix.
 - GitHub CodeQL static analysis workflow for JavaScript/TypeScript, GitHub Actions, and Rust.

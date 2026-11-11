@@ -13,5 +13,5 @@ keywords = ["security", "sast", "taint-analysis", "audit", "mcp"]
 categories = ["development-tools"]
 
 [dependencies]
-sentra-core = { path = "../sentra-core", version = "0.1.0" }
-sentra-cli = { path = "../sentra-cli", version = "0.1.0" }
+sentra-core = { path = "../sentra-core", version = "0.3.0" }
+sentra-cli = { path = "../sentra-cli", version = "0.3.0" }

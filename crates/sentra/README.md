@@ -22,7 +22,7 @@ Or manually in `Cargo.toml`:
 
 ```toml
 [dependencies]
-sentra = "0.1.0"
+sentra = "0.3.0"
 ```
 
 ### As a CLI Tool

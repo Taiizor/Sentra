@@ -29,7 +29,7 @@ Add `sentra-core` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-sentra-core = "0.1.0"
+sentra-core = "0.3.0"
 ```
 
 ### Static Analysis & Taint Flow Tracking
