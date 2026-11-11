@@ -23,7 +23,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { ApiError, api, errorMessage } from '@/lib/api'
 import { useConsole } from '@/lib/console-context'
 import { cn } from '@/lib/utils'
-import type { ScanKind, ScanRunView, ScanStreamEvent } from '@/types/api'
+import type { CodeqlProgressView, ScanKind, ScanRunView, ScanStreamEvent } from '@/types/api'
+import { codeqlStageHint, isPackDownload, STOP_SCAN_PARAGRAPHS } from './codeql-text'
 import { formatDuration, formatTime, minimumRoleFor } from './console-format'
 import { ConfirmDialog, CopyButton, GatedButton, NoTenantState } from './console-kit'
 import { ScanRunSummaryView } from './stream-summary'
@@ -36,10 +37,13 @@ interface StageState {
   name: StageName
   status: StageStatus
   message: string | null
+  /** Latest CodeQL progress line while the stage runs (contract 6). */
+  activity: string | null
 }
 
 type LogEntry =
   | { id: number; kind: 'log'; stream: 'stdout' | 'stderr' | 'bridge'; text: string; ts: string }
+  | { id: number; kind: 'progress'; progress: CodeqlProgressView; ts: string }
   | { id: number; kind: 'stage'; stage: StageName; status: StageStatus; message: string }
   | { id: number; kind: 'error'; code: string; message: string }
 
@@ -89,7 +93,7 @@ const KIND_OPTIONS: { kind: ScanKind; label: string; icon: typeof Layers; descri
     label: 'CodeQL',
     icon: Code2,
     description:
-      'Counts files per CodeQL language (`sentra codeql`). When an admin enabled CodeQL host analysis (Settings > CodeQL), also runs `sentra codeql analyze` on the bridge host with build mode none; otherwise CodeQL is not run and the stage says why.',
+      'Counts files per CodeQL language (`sentra codeql`). When an admin enabled CodeQL host analysis (Settings > CodeQL), also runs `sentra codeql analyze` on the bridge host with build mode none; otherwise CodeQL is not run and the stage says why. The first analysis may first download query packs (several minutes on a slow connection) unless they were downloaded in Settings > CodeQL > Query packs.',
   },
   {
     kind: 'all',
@@ -105,7 +109,7 @@ function currentTimeMs(): number {
 }
 
 function initialStages(kind: ScanKind): StageState[] {
-  return KIND_STAGES[kind].map((name) => ({ name, status: 'pending', message: null }))
+  return KIND_STAGES[kind].map((name) => ({ name, status: 'pending', message: null, activity: null }))
 }
 
 /**
@@ -134,6 +138,8 @@ export function LiveStreamModal({
   const [now, setNow] = useState(() => Date.now())
   const [confirm, setConfirm] = useState<'close' | 'stop' | null>(null)
   const [autoScroll, setAutoScroll] = useState(true)
+  /** True once the core reported a query pack download in this run. */
+  const [packDownloadSeen, setPackDownloadSeen] = useState(false)
 
   const controllerRef = useRef<AbortController | null>(null)
   const nextIdRef = useRef(0)
@@ -150,6 +156,7 @@ export function LiveStreamModal({
     setFailure(null)
     setStartedAt(null)
     setEndedAt(null)
+    setPackDownloadSeen(false)
   }, [])
 
   // Each time the dialog opens (and no scan is running) start from the requested kind.
@@ -193,12 +200,21 @@ export function LiveStreamModal({
         case 'stage':
           setStages((current) => {
             const exists = current.some((stage) => stage.name === event.stage)
+            // A finished stage no longer shows its last progress line.
+            const activity = (stage: StageState) => (event.status === 'started' ? stage.activity : null)
             const updated = current.map((stage) =>
-              stage.name === event.stage ? { ...stage, status: event.status, message: event.message } : stage,
+              stage.name === event.stage ? { ...stage, status: event.status, message: event.message, activity: activity(stage) } : stage,
             )
-            return exists ? updated : [...updated, { name: event.stage, status: event.status, message: event.message }]
+            return exists ? updated : [...updated, { name: event.stage, status: event.status, message: event.message, activity: null }]
           })
           appendEntry({ kind: 'stage', stage: event.stage, status: event.status, message: event.message })
+          break
+        case 'progress':
+          setStages((current) =>
+            current.map((stage) => (stage.name === event.stage ? { ...stage, activity: event.progress.text } : stage)),
+          )
+          if (isPackDownload(event.progress)) setPackDownloadSeen(true)
+          appendEntry({ kind: 'progress', progress: event.progress, ts: event.ts })
           break
         case 'log':
           appendEntry({ kind: 'log', stream: event.stream, text: event.text, ts: event.ts })
@@ -220,6 +236,7 @@ export function LiveStreamModal({
     setRun(null)
     runIdRef.current = null
     setFailure(null)
+    setPackDownloadSeen(false)
     const started = currentTimeMs()
     setStartedAt(started)
     setNow(started)
@@ -314,7 +331,7 @@ export function LiveStreamModal({
             <KindSelector selected={selectedKind} onSelect={setSelectedKind} workspaceExists={tenant.workspaceExists} />
           ) : (
             <>
-              <StageList stages={stages} phase={phase} />
+              <StageList stages={stages} phase={phase} packDownloadSeen={packDownloadSeen} />
 
               {failure !== null && (
                 <div className="flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/5 p-3 text-xs text-rose-200">
@@ -329,8 +346,9 @@ export function LiveStreamModal({
               )}
               {phase === 'aborted' && (
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-200">
-                  The stream was closed by you. The bridge stops the core process when the stream is cancelled; partial
-                  results are only shown if the bridge persisted them.
+                  The stream was closed by you. The bridge stops the core process (and CodeQL with it) when the stream is
+                  cancelled; partial results are only shown if the bridge persisted them. Query packs that finished
+                  downloading stay in the pack cache.
                 </div>
               )}
 
@@ -432,11 +450,9 @@ export function LiveStreamModal({
         title={confirm === 'close' ? 'Close and stop the running scan?' : 'Stop the running scan?'}
         description={
           <>
-            <p>
-              This cancels the event stream. The bridge then terminates the running <code>sentra</code> process for this
-              workspace.
-            </p>
-            <p>Stages that already finished may have been persisted; unfinished stages produce no results.</p>
+            {STOP_SCAN_PARAGRAPHS.map((paragraph) => (
+              <p key={paragraph}>{paragraph}</p>
+            ))}
           </>
         }
         confirmLabel="Stop scan"
@@ -520,18 +536,20 @@ function KindSelector({
   )
 }
 
-function StageList({ stages, phase }: { stages: StageState[]; phase: Phase }) {
+function StageList({ stages, phase, packDownloadSeen }: { stages: StageState[]; phase: Phase; packDownloadSeen: boolean }) {
   return (
     <ol className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
       {stages.map((stage) => {
         const pendingLabel = phase === 'running' ? 'waiting' : 'not reported by the bridge'
+        const stageRunning = phase === 'running' && stage.status === 'started'
+        const hint = stage.name === 'codeql' ? codeqlStageHint({ stageRunning, packDownloadSeen }) : null
         return (
           <li
             key={stage.name}
             className="flex items-start gap-2 rounded-lg border border-border/60 bg-card/40 px-2.5 py-2 text-xs"
           >
             <StageIcon status={stage.status} running={phase === 'running'} />
-            <div className="flex min-w-0 flex-col">
+            <div className="flex min-w-0 flex-col gap-0.5">
               <span className="font-medium text-zinc-100">
                 {STAGE_LABEL[stage.name]}{' '}
                 <span className="font-mono text-[10px] text-zinc-500">
@@ -539,6 +557,13 @@ function StageList({ stages, phase }: { stages: StageState[]; phase: Phase }) {
                 </span>
               </span>
               {stage.message && <span className="break-words text-[11px] text-zinc-400">{stage.message}</span>}
+              {stageRunning && stage.activity && (
+                <span className="flex items-start gap-1 break-words text-[11px] text-sky-300" aria-live="polite">
+                  <Loader2 className="mt-0.5 size-3 shrink-0 animate-spin" />
+                  {stage.activity}
+                </span>
+              )}
+              {hint && <span className="break-words text-[10px] text-zinc-500">{hint}</span>}
             </div>
           </li>
         )
@@ -585,6 +610,18 @@ function LogLine({ entry }: { entry: LogEntry }) {
       </div>
     )
   }
+  if (entry.kind === 'progress') {
+    const failed = entry.progress.event === 'step_failed'
+    return (
+      <div className="flex gap-2">
+        <span className="shrink-0 select-none text-zinc-600">{formatTime(entry.ts)}</span>
+        <span className="w-12 shrink-0 select-none text-zinc-600">codeql</span>
+        <span className={cn('min-w-0 whitespace-pre-wrap break-words', failed ? 'text-rose-300' : entry.progress.event === 'heartbeat' ? 'text-zinc-400' : 'text-emerald-300')}>
+          {entry.progress.text}
+        </span>
+      </div>
+    )
+  }
   return (
     <div className="flex gap-2">
       <span className="shrink-0 select-none text-zinc-600">{formatTime(entry.ts)}</span>
@@ -597,5 +634,6 @@ function LogLine({ entry }: { entry: LogEntry }) {
 function entryToText(entry: LogEntry): string {
   if (entry.kind === 'stage') return `-- stage ${entry.stage}: ${entry.status}${entry.message ? ` - ${entry.message}` : ''}`
   if (entry.kind === 'error') return `error [${entry.code}]: ${entry.message}`
+  if (entry.kind === 'progress') return `${entry.ts} codeql ${entry.progress.text}`
   return `${entry.ts} ${entry.stream} ${entry.text}`
 }

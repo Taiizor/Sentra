@@ -6,11 +6,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { api, errorMessage } from '@/lib/api'
 import { useConsole } from '@/lib/console-context'
 import { useResource } from '@/lib/use-resource'
 import type { CodeqlSettingsView, CodeqlSuite, UpdateCodeqlSettingsRequest } from '@/types/api'
+import { parseExcludeText, runningText } from './codeql-text'
+import { CodeqlPacksPanel } from './settings-codeql-packs'
 import { permissionHint } from './settings-format'
 import { ConfirmDialog, ErrorState, LoadingRows, TimeAgo } from './settings-kit'
 
@@ -114,9 +117,7 @@ export function SettingsCodeql() {
         )}
         {view.running && (
           <p className="text-[11px] text-sky-300">
-            An analysis is running for workspace <span className="font-mono">{view.running.tenantId}</span> (started{' '}
-            <TimeAgo iso={view.running.startedAt} />
-            ).
+            {runningText(view.running)} Started <TimeAgo iso={view.running.startedAt} />.
           </p>
         )}
         {settings.termsAcceptedAt && (
@@ -149,6 +150,14 @@ export function SettingsCodeql() {
           <Row label="Pack cache">
             <span className="font-mono break-all">{view.packCache}</span>
           </Row>
+          <Row label="TypeScript runtime">
+            {view.typescriptRuntime ? (
+              <span className="font-mono break-all">{view.typescriptRuntime}</span>
+            ) : (
+              <span className="text-amber-300">not passed</span>
+            )}
+          </Row>
+          {view.typescriptRuntimeNote && <p className="text-[11px] text-muted-foreground">{view.typescriptRuntimeNote}</p>}
           <p className="text-[11px] text-muted-foreground pt-1">
             The launcher is SENTRA_CODEQL_BIN when the host operator sets it, otherwise codeql on the bridge&apos;s process PATH or the
             persisted PATH (on Windows only codeql.exe). It cannot be set in the console.
@@ -157,6 +166,8 @@ export function SettingsCodeql() {
 
         <CodeqlOptions key={view.updatedAt ?? 'defaults'} view={view} canWrite={canWrite} saving={saving} onSave={save} />
       </div>
+
+      <CodeqlPacksPanel settings={view} onChanged={resource.reload} />
 
       <div className="p-3 rounded-lg border border-border/60 bg-card/40 flex flex-col gap-1.5">
         <span className="text-[10px] uppercase font-semibold text-muted-foreground flex items-center gap-1.5">
@@ -238,18 +249,24 @@ function CodeqlOptions({
   const [suite, setSuite] = useState<CodeqlSuite>(settings.suite)
   const [allowPackDownload, setAllowPackDownload] = useState(settings.allowPackDownload)
   const [timeout, setTimeoutValue] = useState(String(settings.timeoutMinutes))
+  const [downloadTimeout, setDownloadTimeout] = useState(String(settings.downloadTimeoutMinutes))
   const [threads, setThreads] = useState(String(settings.threads))
   const [ram, setRam] = useState(settings.ramMb === null ? '' : String(settings.ramMb))
+  const [exclude, setExclude] = useState((settings.excludePaths ?? []).join('\n'))
 
   const intIn = (text: string, min: number, max: number) => {
     const value = Number(text)
     return Number.isInteger(value) && value >= min && value <= max ? value : null
   }
   const timeoutValue = intIn(timeout, bounds.timeoutMinutes.min, bounds.timeoutMinutes.max)
+  const downloadBounds = bounds.downloadTimeoutMinutes ?? { min: 5, max: 180 }
+  const downloadTimeoutValue = intIn(downloadTimeout, downloadBounds.min, downloadBounds.max)
   const threadsValue = intIn(threads, bounds.threads.min, bounds.threads.max)
   const ramValue = ram.trim() === '' ? null : intIn(ram.trim(), bounds.ramMb.min, bounds.ramMb.max)
   const ramValid = ram.trim() === '' || ramValue !== null
-  const valid = timeoutValue !== null && threadsValue !== null && ramValid
+  const excludeBounds = bounds.excludePaths ?? { maxEntries: 50, maxChars: 200 }
+  const excludeParsed = parseExcludeText(exclude, excludeBounds)
+  const valid = timeoutValue !== null && downloadTimeoutValue !== null && threadsValue !== null && ramValid && excludeParsed.problem === null
   const disabled = !canWrite || saving
 
   return (
@@ -260,8 +277,9 @@ function CodeqlOptions({
         <Switch checked={allowPackDownload} disabled={disabled} onCheckedChange={setAllowPackDownload} aria-label="Allow query pack download" />
       </div>
       <p className="text-[11px] text-muted-foreground">
-        The CodeQL CLI distribution ships no query packs. With download allowed, missing packs for the suite are downloaded from
-        GitHub&apos;s container registry (ghcr.io) into the pack cache; otherwise install the CodeQL bundle or analysis is skipped.
+        The CodeQL CLI distribution ships no query packs. With download allowed, a scan downloads the missing packs for the suite
+        from GitHub&apos;s container registry (ghcr.io) into the pack cache before analyzing (first run only; several minutes on a slow
+        connection). Download them ahead under Query packs below, or install the CodeQL bundle; otherwise analysis is skipped.
       </p>
       <label className="flex flex-col gap-1 text-[11px] text-foreground">
         Query suite
@@ -280,12 +298,26 @@ function CodeqlOptions({
           </SelectContent>
         </Select>
       </label>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <label className="flex flex-col gap-1 text-[11px] text-foreground">
-          Timeout (minutes)
+          Analysis timeout (minutes)
           <Input value={timeout} onChange={(event) => setTimeoutValue(event.target.value)} disabled={disabled} inputMode="numeric" aria-invalid={timeoutValue === null} className="h-7.5 text-xs" />
           <span className="text-[10px] text-muted-foreground">
-            {bounds.timeoutMinutes.min}–{bounds.timeoutMinutes.max}
+            {bounds.timeoutMinutes.min}–{bounds.timeoutMinutes.max}. Version check, database creation and analysis together.
+          </span>
+        </label>
+        <label className="flex flex-col gap-1 text-[11px] text-foreground">
+          Pack download timeout (minutes)
+          <Input
+            value={downloadTimeout}
+            onChange={(event) => setDownloadTimeout(event.target.value)}
+            disabled={disabled}
+            inputMode="numeric"
+            aria-invalid={downloadTimeoutValue === null}
+            className="h-7.5 text-xs"
+          />
+          <span className="text-[10px] text-muted-foreground">
+            {downloadBounds.min}–{downloadBounds.max}. Query pack downloads have their own budget and do not use up the analysis timeout.
           </span>
         </label>
         <label className="flex flex-col gap-1 text-[11px] text-foreground">
@@ -297,12 +329,37 @@ function CodeqlOptions({
         </label>
         <label className="flex flex-col gap-1 text-[11px] text-foreground">
           RAM (MiB, optional)
-          <Input value={ram} onChange={(event) => setRam(event.target.value)} disabled={disabled} inputMode="numeric" placeholder="CodeQL default" aria-invalid={!ramValid} className="h-7.5 text-xs" />
+          <Input
+            value={ram}
+            onChange={(event) => setRam(event.target.value)}
+            disabled={disabled}
+            inputMode="numeric"
+            placeholder={view.ramAuto ? `automatic (${view.ramAuto.mb} MiB now)` : 'automatic'}
+            aria-invalid={!ramValid}
+            className="h-7.5 text-xs"
+          />
           <span className="text-[10px] text-muted-foreground">
-            {bounds.ramMb.min}–{bounds.ramMb.max}. Set a limit on a busy host: CodeQL's own default can ask for more memory than is free.
+            {bounds.ramMb.min}–{bounds.ramMb.max}. {view.ramAuto?.rule ?? 'Without a value the bridge chooses the limit from the memory available on the host.'}
           </span>
         </label>
       </div>
+      <label className="flex flex-col gap-1 text-[11px] text-foreground">
+        Exclude from extraction (one glob per line)
+        <Textarea
+          value={exclude}
+          onChange={(event) => setExclude(event.target.value)}
+          disabled={disabled}
+          rows={4}
+          spellCheck={false}
+          aria-invalid={excludeParsed.problem !== null}
+          className="font-mono text-xs"
+        />
+        <span className={`text-[10px] ${excludeParsed.problem ? 'text-rose-300' : 'text-muted-foreground'}`}>
+          {excludeParsed.problem
+            ? `Not saved: ${excludeParsed.problem}.`
+            : `Relative to the workspace, / as separator, no .. and no ':'; at most ${excludeBounds.maxEntries} globs of ${excludeBounds.maxChars} characters. Passed as --exclude (CodeQL's LGTM_INDEX_FILTERS), which the javascript, python, ruby and actions extractors honour, so build and dependency output is not analysed.`}
+        </span>
+      </label>
       <div className="flex items-center gap-2">
         <Button
           type="button"
@@ -311,7 +368,15 @@ function CodeqlOptions({
           disabled={disabled || !valid}
           onClick={() =>
             void onSave(
-              { suite, allowPackDownload, timeoutMinutes: timeoutValue ?? undefined, threads: threadsValue ?? undefined, ramMb: ramValue },
+              {
+                suite,
+                allowPackDownload,
+                timeoutMinutes: timeoutValue ?? undefined,
+                downloadTimeoutMinutes: downloadTimeoutValue ?? undefined,
+                threads: threadsValue ?? undefined,
+                ramMb: ramValue,
+                excludePaths: excludeParsed.globs,
+              },
               'CodeQL analysis options saved',
             ).catch(() => undefined)
           }

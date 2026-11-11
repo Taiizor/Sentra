@@ -24,11 +24,14 @@ use sentra_core::{
     mcp::{LATEST_PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS, run_stdio},
     plugin::{
         CodeQlAnalyzeRequest, CodeQlHostError, CodeQlHostErrorKind, CodeQlHostLanguage,
-        CodeQlLanguageStatus, CodeQlResultReport, CodeQlSarifError, CodeQlSuite,
-        DEFAULT_CODEQL_MAX_RESULTS, DEFAULT_CODEQL_TIMEOUT_SECS, DiagnosticSeverity,
-        DiscoveryDiagnostic, MAX_CODEQL_MAX_RESULTS, MAX_CODEQL_TIMEOUT_SECS, PluginSessionReport,
-        analyze_workspace_with_codeql, default_plugin_dir, import_codeql_sarif,
-        plugin_dir_env_diagnostic, resolve_plugin, scan_plugin_dirs,
+        CodeQlLanguageStatus, CodeQlPackSource, CodeQlPackState, CodeQlPacksError,
+        CodeQlPacksReport, CodeQlPacksRequest, CodeQlProgressEvent, CodeQlResultReport,
+        CodeQlSarifError, CodeQlSuite, DEFAULT_CODEQL_DOWNLOAD_TIMEOUT_SECS,
+        DEFAULT_CODEQL_HEARTBEAT_SECS, DEFAULT_CODEQL_MAX_RESULTS, DEFAULT_CODEQL_TIMEOUT_SECS,
+        DiagnosticSeverity, DiscoveryDiagnostic, MAX_CODEQL_HEARTBEAT_SECS, MAX_CODEQL_MAX_RESULTS,
+        MAX_CODEQL_TIMEOUT_SECS, PluginSessionReport, analyze_workspace_with_codeql_progress,
+        codeql_query_packs, default_plugin_dir, import_codeql_sarif, plugin_dir_env_diagnostic,
+        resolve_plugin, scan_plugin_dirs,
     },
     research::SkillPromptError,
     service::{
@@ -42,7 +45,7 @@ use sentra_core::{
     },
 };
 
-pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra recover --database <file> [--workspace <directory>] [--json]\n  sentra audit --database <file> [--workspace <directory>] [--json]\n  sentra inventory [--workspace <directory>] [--max-depth <n>] [--json]\n  sentra scan [--workspace <directory>] [--snippet <string>] [-] [--file-name <name>] [--database <file>] [--sarif <file>] [--json]\n  sentra patch apply --patch <file> --workspace <directory> [--target <file>] [--backup-dir <directory>] [--database <file>] [--dry-run] [--json]\n  sentra patch rollback --backup <file> --workspace <directory> --target <file> [--database <file>] [--json]\n  sentra install <target> [--global] [--skill <id>[,<id>...]] [--workspace <directory>] [--json]\n  sentra install <target> --mcp [--global] [--workspace <directory>] [--command <path>] [--json]\n  sentra install mcp <target> [--global] [--workspace <directory>] [--command <path>] [--json]\n  sentra mcp install <target> [--global] [--workspace <directory>] [--command <path>] [--json]\n  sentra skills list [--json]\n  sentra skills show <id> [--json]\n  sentra prompt <workflow> [--scope <path>] [--skills <id>[,<id>...]] [--json]\n  sentra tenant list --database <file> [--json]\n  sentra tenant add --id <id> --name <name> [--workspace <directory>] [--isolation <level>] --database <file> [--json]\n  sentra config show [--key <key>] [--database <file>] [--json]\n  sentra config set --key <key> --value <value> [--database <file>] [--json]\n  sentra config test --provider <name> [--api-key <key>] [--model <model>] [--json]\n  sentra fleet list [--json]\n  sentra fleet status [--json]\n  sentra plugin list [--dir <directory>] [--json]\n  sentra plugin probe (--id <id> | --manifest <file>) [--dir <directory>] [--workspace <directory>] [--json]\n  sentra plugin run (--id <id> | --manifest <file>) --capability <capability> [--args <json>] [--dir <directory>] [--workspace <directory>] [--json]\n  sentra sync-advisories --source <directory-or-file> [--json]\n  sentra propose-pr --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra codeql [--workspace <directory>] [--sarif <file>] [--database <file>] [--json]\n  sentra codeql analyze --workspace <directory> --codeql <launcher> --work-dir <directory> --pack-cache <directory> --accept-codeql-terms [--language <id>]... [--suite code-scanning|security-extended] [--threads <n>] [--ram <mb>] [--timeout-secs <n>] [--allow-pack-download] [--max-results <n>] [--cancel-on-stdin-eof] [--json]\n  sentra codeql import --sarif <file> --workspace <directory> [--max-results <n>] [--json]\n  sentra diff --base <directory> --head <directory> [--json]\n  sentra verify-audit [--json]\n  sentra export sarif --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra mcp [--workspace <directory>] [--database <file>]\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session/audit default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\nAudit analyzes the lockfiles at the workspace root (Cargo, npm, yarn, pnpm, bun, deno, pip, poetry, go, composer, nuget, rubygems) against a small bundled pinned advisory sample, not a synchronized OSV or RustSec feed; is_stale reflects the sample's curation date. Advisories match by package name and version only (the ecosystem is not compared). Lockfiles that cannot be parsed are listed as not audited.\nInventory lists lockfiles found recursively (depth 6 by default; dependency, build and VCS directories skipped; links not followed) and their parsed packages with OSV ecosystem names. Read-only; nothing is executed.\nScan runs heuristic line-based pattern rules for secrets and code antipatterns on workspaces or snippets; --file-name labels a snippet and selects its language rules. Results are unverified candidates.\nPatch applies a single-file unified diff positionally with exact context; all hunks apply or nothing is written. --dry-run validates without writing. --database records PatchApplied/PatchRolledBack events in the local store.\nInstall copies the bundled third-party AppSec skills as on-demand <skills dir>/<id>/SKILL.md trees (with every supporting file) into the location each agent documents. Skill targets: claude, antigravity, copilot, cursor, windsurf, cline, roo, continue, aider, openhands, goose, tabnine, junie, warp, droid, kiro, codex, zed, amazonq, devin, opencode, trae, kimi, qwen, hermes, replit, augment, amp, or all. Cody has no documented skills location (unsupported_target); Amazon Q, Continue and Replit are workspace-only (unsupported_scope); Aider gets read: entries in .aider.conf.yml and requires --skill because it loads every listed file into every chat (skill_selection_required, exit 2; exit 6 with the snippet to add by hand when the file cannot be edited losslessly), and all skips Aider. Unknown --skill ids fail with skill_not_found (exit 7) before anything is written; changed files are backed up first (skill files to <skills dir>/.sentra-backups/<id>/, other files to <file>.bak).\nInstall --mcp registers the stdio MCP server (this executable's absolute path, or --command, with the argument mcp) in the config file each agent documents. MCP targets are the skill targets; aider, openhands, replit and cody have no file-based stdio MCP configuration (mcp_unsupported_target); cline, goose and hermes are global-only and roo, trae and continue are workspace-only (unsupported_scope). Existing files are edited in place (comments, key order and formatting kept) after a <file>.bak backup; a file that cannot be edited losslessly is left untouched and the command exits 4 with the snippet to add by hand. --skill cannot be combined with --mcp.\nSkills lists or inspects the bundled third-party skill playbooks (SKILL.md plus supporting files, licenses in NOTICE).\nPrompt renders AppSec prompt templates (threat-model, api-bola, patch-remediation, skill-audit, scout, verify); --skills appends the named playbooks to the workflow prompt, keeping its rules and expected schema, and unknown ids fail with skill_not_found (exit 7).\nTenant lists or adds operator-declared tenant rows (labels only; no isolation is provisioned). List is read-only and never seeds rows.\nConfig show and set read and write plain-text key/value rows in a system_settings table of --database (default data/sentra.db, relative to the current directory). The file and table are created if missing, but only inside an existing directory: when the parent directory does not exist, both fail with storage_or_service_failure (exit 5) and create nothing. No Sentra command reads these settings, and values, API keys included, are stored unencrypted. Config test is not implemented (the core CLI has no model-provider client): it exits 5 with not_implemented.\nFleet reports the in-process worker registry, which is empty because no worker registry source exists; containment readiness is never reported as ready without worker attestation.\nPlugin discovers adapters only in --dir or the default plugin directory (SENTRA_PLUGIN_DIR, else %APPDATA%/sentra/plugins on Windows, ~/Library/Application Support/sentra/plugins on macOS, $XDG_CONFIG_HOME/sentra/plugins or ~/.config/sentra/plugins elsewhere); the current directory and its parents are never searched and duplicate plugin ids are rejected. Probe and run start adapter code as a subprocess with the operator's privileges and an allowlisted environment; the time limit and frame/output quotas are enforced and the process tree is killed when the session ends, while declared memory and egress limits are not enforced. Run passes --workspace (default: current directory) to the adapter; its exit code, summary and evidence refs are adapter-reported.\nSync-advisories parses local OSV JSON (one file, or the top-level .json files of a directory) in memory and reports the advisory entries found. In a directory, unreadable or invalid files are counted as skipped; a single file that is not valid OSV JSON fails with invalid_advisory_feed (exit 4), and one that cannot be read with io_error (exit 5). Nothing is downloaded or persisted: audit, propose-pr and export sarif always use the bundled sample, and --database fails with not_implemented (exit 5).\nPropose-pr runs the dependency audit (bundled advisory sample, recorded as an audit task like audit) and prints one local draft pull request preview per match: title, a body that states which checks were not done, the lockfile the package came from, an illustrative version-bump diff that does not apply as-is, and a suggested gh command that is not run (it reads the body from <proposal id>.md; shell metacharacters in its title and branch are replaced with _). No branch, commit or pull request is created; --output writes the previews to a file.\nCodeql probes the workspace for languages and prints suggested CodeQL CLI commands (CodeQL is not run), or with --sarif parses a CodeQL SARIF file and reports its results. Nothing is uploaded and the parsed findings are not stored (with --workspace and --database, a completed task is recorded).\nCodeql analyze runs an operator-installed CodeQL CLI on this host (opt-in, ADR-0011) and refuses to start without --accept-codeql-terms: CodeQL is licensed under the GitHub CodeQL Terms and Conditions (LICENSE.md in its distribution), and Sentra does not check that your use is permitted. --codeql must be the codeql.exe of a CodeQL distribution on Windows (codeql.cmd and .bat files are refused) or its codeql launcher elsewhere. Only database create --build-mode=none is used: no build command, autobuild or build tracing, and the project is never built. actions, cpp, javascript, python and ruby are analyzed; go and swift (no build-mode none) and rust, csharp and java (their build-mode none extractors run project-controlled code: Cargo build scripts and procedural macros, dotnet restore, the project's Gradle wrapper or Maven) are reported as skipped. CodeQL's extractors still read and parse the untrusted code on this host, and the C/C++ and Python extractors start host compilers and the host Python. Each run gets a new run directory inside --work-dir, which every CodeQL step uses as its working directory, with an allowlisted environment (no tokens or keys), temporary and home directories inside the run directory, and the total --timeout-secs budget (default 1800; codeql version is also capped at 120 seconds); when the budget runs out the whole CodeQL process tree is killed (codeql_timeout, exit 5). --work-dir and --pack-cache are refused inside the workspace; on Unix they must belong to you and not be writable by group or others, and the run directory is created with mode 0700 (unsafe_directory, exit 4). On Windows a workspace, --work-dir or --pack-cache path containing & ^ ! or % is refused (invalid_workspace or unsafe_directory, exit 4), because CodeQL's extractor batch scripts expand those paths unquoted and cmd.exe would run part of the path as a command. With --cancel-on-stdin-eof the analysis is cancelled when standard input reaches end of file (for a parent process that keeps it open while it waits): the CodeQL process tree is killed and codeql_cancelled (exit 5) is returned. The run directory, databases included, is deleted afterwards. Query packs are read from the distribution or --pack-cache; only with --allow-pack-download does codeql pack download fetch a missing pack into --pack-cache (from the registry CodeQL is configured for, by default ghcr.io). Without it a language whose pack is missing is skipped, and codeql_query_pack_missing (exit 6) is returned when no language could run. Findings are candidate claims and are not stored.\nCodeql import normalizes a CodeQL SARIF file produced elsewhere (a local run, GitHub Actions; at most 64 MiB) into the same JSON as analyze. SARIF from other tools is rejected (sarif_not_codeql), and results whose path is absolute or outside the workspace are dropped and counted. Nothing is run, uploaded or stored.\nDiff compares base and head directory snapshots with pure-Rust hashing.\nVerify-audit is not implemented: no worker registry, secret-inheritance check or tamper-evident audit trail exists to assess, so it exits 5 with not_implemented instead of reporting gates.\nExport sarif runs the dependency audit (bundled advisory sample, recorded as an audit task like audit) and writes its results only as an OASIS SARIF v2.1.0 document to --output or stdout; SAST results are exported with scan --sarif. Nothing is uploaded.\nMcp runs the local stdio MCP server (legacy initialize-handshake revisions 2025-11-25, 2025-06-18, 2025-03-26 and 2024-11-05; the 2026-07-28 revision is not implemented). Tools are read-only and confined to --workspace (default: current directory); --database enables persisted session status. Skill installation is not exposed over MCP; use sentra install. Mcp install is an alias of install mcp.\n";
+pub const HELP: &str = "Sentra local foundation\n\nUsage:\n  sentra init --workspace <directory> --database <file> [--json]\n  sentra status --database <file> [--workspace <directory>] [--json]\n  sentra session show <session-id> --database <file> [--workspace <directory>] [--json]\n  sentra recover --database <file> [--workspace <directory>] [--json]\n  sentra audit --database <file> [--workspace <directory>] [--json]\n  sentra inventory [--workspace <directory>] [--max-depth <n>] [--json]\n  sentra scan [--workspace <directory>] [--snippet <string>] [-] [--file-name <name>] [--database <file>] [--sarif <file>] [--json]\n  sentra patch apply --patch <file> --workspace <directory> [--target <file>] [--backup-dir <directory>] [--database <file>] [--dry-run] [--json]\n  sentra patch rollback --backup <file> --workspace <directory> --target <file> [--database <file>] [--json]\n  sentra install <target> [--global] [--skill <id>[,<id>...]] [--workspace <directory>] [--json]\n  sentra install <target> --mcp [--global] [--workspace <directory>] [--command <path>] [--json]\n  sentra install mcp <target> [--global] [--workspace <directory>] [--command <path>] [--json]\n  sentra mcp install <target> [--global] [--workspace <directory>] [--command <path>] [--json]\n  sentra skills list [--json]\n  sentra skills show <id> [--json]\n  sentra prompt <workflow> [--scope <path>] [--skills <id>[,<id>...]] [--json]\n  sentra tenant list --database <file> [--json]\n  sentra tenant add --id <id> --name <name> [--workspace <directory>] [--isolation <level>] --database <file> [--json]\n  sentra config show [--key <key>] [--database <file>] [--json]\n  sentra config set --key <key> --value <value> [--database <file>] [--json]\n  sentra config test --provider <name> [--api-key <key>] [--model <model>] [--json]\n  sentra fleet list [--json]\n  sentra fleet status [--json]\n  sentra plugin list [--dir <directory>] [--json]\n  sentra plugin probe (--id <id> | --manifest <file>) [--dir <directory>] [--workspace <directory>] [--json]\n  sentra plugin run (--id <id> | --manifest <file>) --capability <capability> [--args <json>] [--dir <directory>] [--workspace <directory>] [--json]\n  sentra sync-advisories --source <directory-or-file> [--json]\n  sentra propose-pr --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra codeql [--workspace <directory>] [--sarif <file>] [--database <file>] [--json]\n  sentra codeql analyze --workspace <directory> --codeql <launcher> --work-dir <directory> --pack-cache <directory> --accept-codeql-terms [--language <id>]... [--suite code-scanning|security-extended] [--threads <n>] [--ram <mb>] [--timeout-secs <n>] [--allow-pack-download] [--download-timeout-secs <n>] [--typescript-runtime <path>] [--exclude <glob>]... [--max-results <n>] [--cancel-on-stdin-eof] [--progress] [--heartbeat-secs <n>] [--json]\n  sentra codeql import --sarif <file> --workspace <directory> [--max-results <n>] [--json]\n  sentra codeql packs --codeql <launcher> --pack-cache <directory> [--language <id>]... [--suite code-scanning|security-extended] [--download] [--timeout-secs <n>] [--cancel-on-stdin-eof] [--progress] [--heartbeat-secs <n>] [--json]\n  sentra diff --base <directory> --head <directory> [--json]\n  sentra verify-audit [--json]\n  sentra export sarif --database <file> [--workspace <directory>] [--output <file>] [--json]\n  sentra mcp [--workspace <directory>] [--database <file>]\n  sentra --help\n  sentra --version\n\nStorage must have an existing local parent outside the workspace.\nStatus/session/audit default to the current workspace directory; no upward search.\nInitialization records metadata only. No scanning, AI or target execution.\nAudit analyzes the lockfiles at the workspace root (Cargo, npm, yarn, pnpm, bun, deno, pip, poetry, go, composer, nuget, rubygems) against a small bundled pinned advisory sample, not a synchronized OSV or RustSec feed; is_stale reflects the sample's curation date. Advisories match by package name and version only (the ecosystem is not compared). Lockfiles that cannot be parsed are listed as not audited.\nInventory lists lockfiles found recursively (depth 6 by default; dependency, build and VCS directories skipped; links not followed) and their parsed packages with OSV ecosystem names. Read-only; nothing is executed.\nScan runs heuristic line-based pattern rules for secrets and code antipatterns on workspaces or snippets; --file-name labels a snippet and selects its language rules. Results are unverified candidates.\nPatch applies a single-file unified diff positionally with exact context; all hunks apply or nothing is written. --dry-run validates without writing. --database records PatchApplied/PatchRolledBack events in the local store.\nInstall copies the bundled third-party AppSec skills as on-demand <skills dir>/<id>/SKILL.md trees (with every supporting file) into the location each agent documents. Skill targets: claude, antigravity, copilot, cursor, windsurf, cline, roo, continue, aider, openhands, goose, tabnine, junie, warp, droid, kiro, codex, zed, amazonq, devin, opencode, trae, kimi, qwen, hermes, replit, augment, amp, or all. Cody has no documented skills location (unsupported_target); Amazon Q, Continue and Replit are workspace-only (unsupported_scope); Aider gets read: entries in .aider.conf.yml and requires --skill because it loads every listed file into every chat (skill_selection_required, exit 2; exit 6 with the snippet to add by hand when the file cannot be edited losslessly), and all skips Aider. Unknown --skill ids fail with skill_not_found (exit 7) before anything is written; changed files are backed up first (skill files to <skills dir>/.sentra-backups/<id>/, other files to <file>.bak).\nInstall --mcp registers the stdio MCP server (this executable's absolute path, or --command, with the argument mcp) in the config file each agent documents. MCP targets are the skill targets; aider, openhands, replit and cody have no file-based stdio MCP configuration (mcp_unsupported_target); cline, goose and hermes are global-only and roo, trae and continue are workspace-only (unsupported_scope). Existing files are edited in place (comments, key order and formatting kept) after a <file>.bak backup; a file that cannot be edited losslessly is left untouched and the command exits 4 with the snippet to add by hand. --skill cannot be combined with --mcp.\nSkills lists or inspects the bundled third-party skill playbooks (SKILL.md plus supporting files, licenses in NOTICE).\nPrompt renders AppSec prompt templates (threat-model, api-bola, patch-remediation, skill-audit, scout, verify); --skills appends the named playbooks to the workflow prompt, keeping its rules and expected schema, and unknown ids fail with skill_not_found (exit 7).\nTenant lists or adds operator-declared tenant rows (labels only; no isolation is provisioned). List is read-only and never seeds rows.\nConfig show and set read and write plain-text key/value rows in a system_settings table of --database (default data/sentra.db, relative to the current directory). The file and table are created if missing, but only inside an existing directory: when the parent directory does not exist, both fail with storage_or_service_failure (exit 5) and create nothing. No Sentra command reads these settings, and values, API keys included, are stored unencrypted. Config test is not implemented (the core CLI has no model-provider client): it exits 5 with not_implemented.\nFleet reports the in-process worker registry, which is empty because no worker registry source exists; containment readiness is never reported as ready without worker attestation.\nPlugin discovers adapters only in --dir or the default plugin directory (SENTRA_PLUGIN_DIR, else %APPDATA%/sentra/plugins on Windows, ~/Library/Application Support/sentra/plugins on macOS, $XDG_CONFIG_HOME/sentra/plugins or ~/.config/sentra/plugins elsewhere); the current directory and its parents are never searched and duplicate plugin ids are rejected. Probe and run start adapter code as a subprocess with the operator's privileges and an allowlisted environment; the time limit and frame/output quotas are enforced and the process tree is killed when the session ends, while declared memory and egress limits are not enforced. Run passes --workspace (default: current directory) to the adapter; its exit code, summary and evidence refs are adapter-reported.\nSync-advisories parses local OSV JSON (one file, or the top-level .json files of a directory) in memory and reports the advisory entries found. In a directory, unreadable or invalid files are counted as skipped; a single file that is not valid OSV JSON fails with invalid_advisory_feed (exit 4), and one that cannot be read with io_error (exit 5). Nothing is downloaded or persisted: audit, propose-pr and export sarif always use the bundled sample, and --database fails with not_implemented (exit 5).\nPropose-pr runs the dependency audit (bundled advisory sample, recorded as an audit task like audit) and prints one local draft pull request preview per match: title, a body that states which checks were not done, the lockfile the package came from, an illustrative version-bump diff that does not apply as-is, and a suggested gh command that is not run (it reads the body from <proposal id>.md; shell metacharacters in its title and branch are replaced with _). No branch, commit or pull request is created; --output writes the previews to a file.\nCodeql probes the workspace for languages and prints suggested CodeQL CLI commands (CodeQL is not run), or with --sarif parses a CodeQL SARIF file and reports its results. Nothing is uploaded and the parsed findings are not stored (with --workspace and --database, a completed task is recorded).\nCodeql analyze runs an operator-installed CodeQL CLI on this host (opt-in, ADR-0011) and refuses to start without --accept-codeql-terms: CodeQL is licensed under the GitHub CodeQL Terms and Conditions (LICENSE.md in its distribution), and Sentra does not check that your use is permitted. --codeql must be the codeql.exe of a CodeQL distribution on Windows (codeql.cmd and .bat files are refused) or its codeql launcher elsewhere. Only database create --build-mode=none is used: no build command, autobuild or build tracing, and the project is never built. actions, cpp, javascript, python and ruby are analyzed; go and swift (no build-mode none) and rust, csharp and java (their build-mode none extractors run project-controlled code: Cargo build scripts and procedural macros, dotnet restore, the project's Gradle wrapper or Maven) are reported as skipped. CodeQL's extractors still read and parse the untrusted code on this host, and the C/C++ and Python extractors start host compilers and the host Python. CodeQL's JavaScript extractor parses TypeScript with a separate JavaScript runtime: --typescript-runtime names it (an absolute local path of a native executable outside the workspace, on Windows a .exe with a PE header and no & ^ ! %; otherwise invalid_typescript_runtime, exit 4), else the first bun on PATH is used, and without either CodeQL needs node on PATH (a warning says so). Sentra sets SEMMLE_TYPESCRIPT_NODE_RUNTIME from it and never passes other SEMMLE_* or LGTM_* variables of its own environment to CodeQL. --exclude <glob> (repeatable, at most 50; relative to the workspace, / as separator, no .. segment, no :, at most 200 characters; otherwise invalid_exclude, exit 4) leaves matching paths out of extraction through LGTM_INDEX_FILTERS, which the javascript, python, ruby and actions extractors read, for example --exclude **/node_modules --exclude **/target. Each run gets a new run directory inside --work-dir, which every CodeQL step uses as its working directory, with an allowlisted environment (no tokens or keys), temporary and home directories inside the run directory, and the --timeout-secs budget (default 1800) for codeql version, database create and database analyze (codeql version is also capped at 120 seconds); when it runs out the whole CodeQL process tree is killed (codeql_timeout, exit 5). Pack downloads do not use --timeout-secs: together they have their own --download-timeout-secs budget (default 1800), and a language whose download does not finish within it fails with that reason (one whose download could not start because the budget was used up says so) while the others are still analyzed. --work-dir and --pack-cache are refused inside the workspace; on Unix they must belong to you and not be writable by group or others, and the run directory is created with mode 0700 (unsafe_directory, exit 4). On Windows a workspace, --work-dir or --pack-cache path containing & ^ ! or % is refused (invalid_workspace or unsafe_directory, exit 4), because CodeQL's extractor batch scripts expand those paths unquoted and cmd.exe would run part of the path as a command. With --cancel-on-stdin-eof the analysis is cancelled when standard input reaches end of file (for a parent process that keeps it open while it waits): the CodeQL process tree is killed and codeql_cancelled (exit 5) is returned. The run directory, databases included, is deleted afterwards. Query packs are read from the distribution or --pack-cache; only with --allow-pack-download does codeql pack download fetch a missing pack into --pack-cache (from the registry CodeQL is configured for, by default ghcr.io; one pack at a time, retried once after a failure; codeql packs --download fetches them ahead of an analysis). Each download writes into a new staging directory inside --pack-cache (.sentra-staging-*), and only a complete pack is moved into --pack-cache after codeql pack download succeeded, so a download that is cancelled, runs out of time or fails leaves no partial pack. Without it a language whose pack is missing is skipped, and codeql_query_pack_missing (exit 6) is returned when no language could run. With --progress, progress events are printed on stderr while the analysis runs, one JSON object per line: {\"progress\":true,\"event\":\"step_started|step_finished|step_failed|heartbeat|language_skipped\",\"step\":\"version|pack_download|database_create|database_analyze\" (null for language_skipped),\"language\",\"pack\",\"elapsed_ms\",\"duration_ms\",\"message\"}, with a heartbeat every --heartbeat-secs (default 15) while a step runs; the caller must read stderr while the command runs. The result on stdout and the error object, which stays the last line on stderr and has no progress key, are the same as without --progress. Findings are candidate claims and are not stored.\nCodeql packs reports, for each language (or each --language), whether the query pack codeql/<language>-queries and its --suite file (default code-scanning) are in the CodeQL distribution (qlpacks/) or --pack-cache, with version, location and size; go, swift, rust, csharp and java, and languages the distribution cannot extract in build mode none, are listed as not analysable with the reason. Listing runs no program. With --download the missing packs of analysable languages are fetched into --pack-cache with codeql pack download, one pack at a time (packs downloaded before a failure stay), each retried once after a failure, within --timeout-secs for all of them together (default 1800), with the launcher rules, allowlisted environment, Windows path refusal, process-tree kill and --cancel-on-stdin-eof of analyze, from a run directory inside --pack-cache that is deleted afterwards; --progress reports the downloads as analyze does. A failed download returns codeql_pack_download_failed (exit 5) with CodeQL's message and the state of every language (codeql_timeout or codeql_cancelled, exit 5, when the budget ran out or the command was cancelled). --download needs no --accept-codeql-terms: the query packs are MIT-licensed (github/codeql); the CodeQL CLI that downloads them is licensed under the GitHub CodeQL Terms and Conditions.\nCodeql import normalizes a CodeQL SARIF file produced elsewhere (a local run, GitHub Actions; at most 64 MiB) into the same JSON as analyze. SARIF from other tools is rejected (sarif_not_codeql), and results whose path is absolute or outside the workspace are dropped and counted. Nothing is run, uploaded or stored.\nDiff compares base and head directory snapshots with pure-Rust hashing.\nVerify-audit is not implemented: no worker registry, secret-inheritance check or tamper-evident audit trail exists to assess, so it exits 5 with not_implemented instead of reporting gates.\nExport sarif runs the dependency audit (bundled advisory sample, recorded as an audit task like audit) and writes its results only as an OASIS SARIF v2.1.0 document to --output or stdout; SAST results are exported with scan --sarif. Nothing is uploaded.\nMcp runs the local stdio MCP server (legacy initialize-handshake revisions 2025-11-25, 2025-06-18, 2025-03-26 and 2024-11-05; the 2026-07-28 revision is not implemented). Tools are read-only and confined to --workspace (default: current directory); --database enables persisted session status. Skill installation is not exposed over MCP; use sentra install. Mcp install is an alias of install mcp.\n";
 
 /// Actions supported by the `sentra skills` command.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -184,6 +187,8 @@ pub enum Command {
     },
     /// Opt-in host analysis with an operator-installed CodeQL CLI (ADR-0011).
     CodeqlAnalyze(Box<CodeqlAnalyzeArgs>),
+    /// Query pack status and prefetch for host analysis.
+    CodeqlPacks(Box<CodeqlPacksArgs>),
     /// Normalizes a CodeQL SARIF file produced elsewhere.
     CodeqlImport {
         sarif: PathBuf,
@@ -257,10 +262,37 @@ pub struct CodeqlAnalyzeArgs {
     pub threads: Option<u32>,
     pub ram_mb: Option<u32>,
     pub timeout_secs: u64,
+    /// `--download-timeout-secs`: budget of the pack downloads, apart from `timeout_secs`.
+    pub download_timeout_secs: u64,
     pub allow_pack_download: bool,
+    /// `--typescript-runtime`: JavaScript runtime for TypeScript extraction (absolute path,
+    /// validated by Core; not made absolute here).
+    pub typescript_runtime: Option<PathBuf>,
+    /// `--exclude` (repeatable): relative globs excluded from extraction.
+    pub exclude: Vec<String>,
     pub max_results: usize,
     /// `--cancel-on-stdin-eof`: cancel the analysis when stdin reaches end of file.
     pub cancel_on_stdin_eof: bool,
+    /// `--progress`: progress events as JSON lines on stderr while the analysis runs.
+    pub progress: bool,
+    /// `--heartbeat-secs`: interval of heartbeat events.
+    pub heartbeat_secs: u64,
+}
+
+/// Arguments of `sentra codeql packs`. Paths are untrusted until validated by Core.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CodeqlPacksArgs {
+    pub codeql: PathBuf,
+    pub pack_cache: PathBuf,
+    pub languages: Vec<CodeQlHostLanguage>,
+    pub suite: CodeQlSuite,
+    /// `--download`: fetch the missing packs of analysable languages.
+    pub download: bool,
+    /// `--timeout-secs`: budget of all downloads together.
+    pub timeout_secs: u64,
+    pub cancel_on_stdin_eof: bool,
+    pub progress: bool,
+    pub heartbeat_secs: u64,
 }
 
 pub struct Invocation {
@@ -319,12 +351,17 @@ fn parse_codeql_subcommand(sub: &str, words: Vec<&str>) -> Result<Command, Parse
     let mut accept_terms = false;
     let mut allow_pack_download = false;
     let mut cancel_on_stdin_eof = false;
+    let mut progress = false;
     let mut languages = Vec::new();
     let mut suite = None;
     let mut threads = None;
     let mut ram_mb = None;
     let mut timeout_secs = None;
+    let mut download_timeout_secs = None;
+    let mut heartbeat_secs = None;
     let mut max_results = None;
+    let mut typescript_runtime = None;
+    let mut exclude: Vec<String> = Vec::new();
     let analyze = sub == "analyze";
     let mut rest = words.into_iter();
     while let Some(flag) = rest.next() {
@@ -339,6 +376,10 @@ fn parse_codeql_subcommand(sub: &str, words: Vec<&str>) -> Result<Command, Parse
             }
             "--cancel-on-stdin-eof" if analyze && !cancel_on_stdin_eof => {
                 cancel_on_stdin_eof = true;
+                continue;
+            }
+            "--progress" if analyze && !progress => {
+                progress = true;
                 continue;
             }
             _ => {}
@@ -377,6 +418,23 @@ fn parse_codeql_subcommand(sub: &str, words: Vec<&str>) -> Result<Command, Parse
                 let n = parse_bounded(value, 1, MAX_CODEQL_TIMEOUT_SECS).ok_or_else(invalid)?;
                 timeout_secs.replace(n).is_none()
             }
+            "--download-timeout-secs" if analyze => {
+                let n = parse_bounded(value, 1, MAX_CODEQL_TIMEOUT_SECS).ok_or_else(invalid)?;
+                download_timeout_secs.replace(n).is_none()
+            }
+            "--heartbeat-secs" if analyze => {
+                let n = parse_bounded(value, 1, MAX_CODEQL_HEARTBEAT_SECS).ok_or_else(invalid)?;
+                heartbeat_secs.replace(n).is_none()
+            }
+            "--typescript-runtime" if analyze => {
+                typescript_runtime.replace(PathBuf::from(value)).is_none()
+            }
+            // The globs and their number (at most MAX_EXCLUDE_GLOBS) are checked by Core,
+            // which explains a refusal (invalid_exclude); MAX_ARGUMENTS bounds the list here.
+            "--exclude" if analyze => {
+                exclude.push(value.to_string());
+                true
+            }
             _ => return Err(invalid()),
         };
         if !first {
@@ -403,9 +461,86 @@ fn parse_codeql_subcommand(sub: &str, words: Vec<&str>) -> Result<Command, Parse
         threads,
         ram_mb,
         timeout_secs: timeout_secs.unwrap_or(DEFAULT_CODEQL_TIMEOUT_SECS),
+        download_timeout_secs: download_timeout_secs
+            .unwrap_or(DEFAULT_CODEQL_DOWNLOAD_TIMEOUT_SECS),
         allow_pack_download,
+        typescript_runtime,
+        exclude,
         max_results,
         cancel_on_stdin_eof,
+        progress,
+        heartbeat_secs: heartbeat_secs.unwrap_or(DEFAULT_CODEQL_HEARTBEAT_SECS),
+    })))
+}
+
+/// Grammar of `codeql packs`. Every value flag may appear once (`--language` may
+/// repeat); boolean flags take no value.
+fn parse_codeql_packs(words: Vec<&str>) -> Result<Command, ParseError> {
+    let invalid = || ParseError::InvalidArguments;
+    let mut codeql = None;
+    let mut pack_cache = None;
+    let mut languages = Vec::new();
+    let mut suite = None;
+    let mut download = false;
+    let mut timeout_secs = None;
+    let mut cancel_on_stdin_eof = false;
+    let mut progress = false;
+    let mut heartbeat_secs = None;
+    let mut rest = words.into_iter();
+    while let Some(flag) = rest.next() {
+        match flag {
+            "--download" if !download => {
+                download = true;
+                continue;
+            }
+            "--cancel-on-stdin-eof" if !cancel_on_stdin_eof => {
+                cancel_on_stdin_eof = true;
+                continue;
+            }
+            "--progress" if !progress => {
+                progress = true;
+                continue;
+            }
+            _ => {}
+        }
+        let value = rest.next().ok_or_else(invalid)?;
+        if value.is_empty() || value.starts_with('-') {
+            return Err(invalid());
+        }
+        let first = match flag {
+            "--codeql" => codeql.replace(PathBuf::from(value)).is_none(),
+            "--pack-cache" => pack_cache.replace(PathBuf::from(value)).is_none(),
+            "--language" if languages.len() < MAX_CODEQL_LANGUAGE_FLAGS => {
+                languages.push(CodeQlHostLanguage::parse(value).ok_or_else(invalid)?);
+                true
+            }
+            "--suite" => suite
+                .replace(CodeQlSuite::parse(value).ok_or_else(invalid)?)
+                .is_none(),
+            "--timeout-secs" => {
+                let n = parse_bounded(value, 1, MAX_CODEQL_TIMEOUT_SECS).ok_or_else(invalid)?;
+                timeout_secs.replace(n).is_none()
+            }
+            "--heartbeat-secs" => {
+                let n = parse_bounded(value, 1, MAX_CODEQL_HEARTBEAT_SECS).ok_or_else(invalid)?;
+                heartbeat_secs.replace(n).is_none()
+            }
+            _ => return Err(invalid()),
+        };
+        if !first {
+            return Err(invalid());
+        }
+    }
+    Ok(Command::CodeqlPacks(Box::new(CodeqlPacksArgs {
+        codeql: codeql.ok_or_else(invalid)?,
+        pack_cache: pack_cache.ok_or_else(invalid)?,
+        languages,
+        suite: suite.unwrap_or_default(),
+        download,
+        timeout_secs: timeout_secs.unwrap_or(DEFAULT_CODEQL_DOWNLOAD_TIMEOUT_SECS),
+        cancel_on_stdin_eof,
+        progress,
+        heartbeat_secs: heartbeat_secs.unwrap_or(DEFAULT_CODEQL_HEARTBEAT_SECS),
     })))
 }
 
@@ -457,11 +592,16 @@ fn parse_install(words: Vec<&str>, mut mcp: bool) -> Result<Command, ParseError>
     })
 }
 
+/// Most command-line arguments accepted: room for `codeql analyze` with its 50
+/// `--exclude <glob>` pairs and every other flag.
+pub const MAX_ARGUMENTS: usize = 160;
+
 /// Small fixed command grammar; no shell evaluation, plugins or environment
-/// configuration. UTF-8 arguments only, maximum 64 arguments, duplicates deny.
+/// configuration. UTF-8 arguments only, at most [`MAX_ARGUMENTS`] arguments,
+/// duplicates deny.
 pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
     let invalid = || ParseError::InvalidArguments;
-    if arguments.len() > 64 {
+    if arguments.len() > MAX_ARGUMENTS {
         return Err(invalid());
     }
     let mut words = arguments
@@ -886,7 +1026,7 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
         });
     }
     if name == "codeql" {
-        if let Some(sub @ ("analyze" | "import")) = words.first().copied() {
+        if let Some(sub @ ("analyze" | "import" | "packs")) = words.first().copied() {
             words.remove(0);
             if words == ["--help"] {
                 return Ok(Invocation {
@@ -894,10 +1034,12 @@ pub fn parse(arguments: &[OsString]) -> Result<Invocation, ParseError> {
                     json,
                 });
             }
-            return Ok(Invocation {
-                command: parse_codeql_subcommand(sub, words)?,
-                json,
-            });
+            let command = if sub == "packs" {
+                parse_codeql_packs(words)?
+            } else {
+                parse_codeql_subcommand(sub, words)?
+            };
+            return Ok(Invocation { command, json });
         }
         let mut workspace = None;
         let mut sarif = None;
@@ -1539,7 +1681,12 @@ where
         return response.exit_code;
     }
 
-    let response = execute_invocation(invocation, cwd);
+    // `codeql analyze --progress` and `codeql packs --progress` print progress lines on
+    // stderr while they run; a failed write is ignored (the result is still printed).
+    let response = execute_invocation(invocation, cwd, &mut |line: &str| {
+        let _ = err_output.write_all(line.as_bytes());
+        let _ = err_output.flush();
+    });
     if !response.stdout.is_empty()
         && (output.write_all(response.stdout.as_bytes()).is_err() || output.flush().is_err())
     {
@@ -1554,7 +1701,11 @@ where
     response.exit_code
 }
 
-fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
+fn execute_invocation(
+    invocation: Invocation,
+    cwd: &Path,
+    progress_line: &mut dyn FnMut(&str),
+) -> Response {
     let json = invocation.json;
     match invocation.command {
         Command::Help => Response {
@@ -1565,7 +1716,7 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
                         "init", "status", "session show", "recover", "audit", "inventory",
                         "scan", "patch", "install", "skills", "prompt", "tenant", "config",
                         "fleet", "plugin", "sync-advisories", "propose-pr", "codeql",
-                        "codeql analyze", "codeql import", "diff",
+                        "codeql analyze", "codeql import", "codeql packs", "diff",
                         "verify-audit", "export sarif", "mcp",
                     ],
                     "mcp_protocol_versions": SUPPORTED_PROTOCOL_VERSIONS,
@@ -1862,13 +2013,45 @@ fn execute_invocation(invocation: Invocation, cwd: &Path) -> Response {
                 threads: args.threads,
                 ram_mb: args.ram_mb,
                 timeout: Duration::from_secs(args.timeout_secs),
+                download_timeout: Duration::from_secs(args.download_timeout_secs),
+                heartbeat: Duration::from_secs(args.heartbeat_secs),
                 allow_pack_download: args.allow_pack_download,
+                typescript_runtime: args.typescript_runtime,
+                exclude: args.exclude,
                 max_results: args.max_results,
                 cancel: args.cancel_on_stdin_eof.then(cancel_when_stdin_closes),
             };
-            match analyze_workspace_with_codeql(&request) {
+            let emit = args.progress;
+            let mut sink = |event: &CodeQlProgressEvent| {
+                if emit {
+                    progress_line(&json_text(event));
+                }
+            };
+            match analyze_workspace_with_codeql_progress(&request, &mut sink) {
                 Ok(report) => render_codeql_report(&report, json),
                 Err(err) => codeql_host_error(&err, json),
+            }
+        }
+        Command::CodeqlPacks(args) => {
+            let request = CodeQlPacksRequest {
+                codeql: absolute(&args.codeql, cwd),
+                pack_cache: absolute(&args.pack_cache, cwd),
+                languages: args.languages,
+                suite: args.suite,
+                download: args.download,
+                timeout: Duration::from_secs(args.timeout_secs),
+                heartbeat: Duration::from_secs(args.heartbeat_secs),
+                cancel: args.cancel_on_stdin_eof.then(cancel_when_stdin_closes),
+            };
+            let emit = args.progress;
+            let mut sink = |event: &CodeQlProgressEvent| {
+                if emit {
+                    progress_line(&json_text(event));
+                }
+            };
+            match codeql_query_packs(&request, &mut sink) {
+                Ok(report) => render_codeql_packs(&report, json),
+                Err(err) => codeql_packs_error(&err, json),
             }
         }
         Command::CodeqlImport {
@@ -3282,6 +3465,8 @@ fn codeql_host_error(err: &CodeQlHostError, json: bool) -> Response {
     let exit = match err.kind {
         CodeQlHostErrorKind::TermsNotAccepted
         | CodeQlHostErrorKind::InvalidWorkspace
+        | CodeQlHostErrorKind::InvalidTypescriptRuntime
+        | CodeQlHostErrorKind::InvalidExclude
         | CodeQlHostErrorKind::WorkDirInsideWorkspace
         | CodeQlHostErrorKind::PackCacheInsideWorkspace
         | CodeQlHostErrorKind::UnsafeDirectory => 4,
@@ -3290,7 +3475,8 @@ fn codeql_host_error(err: &CodeQlHostError, json: bool) -> Response {
         CodeQlHostErrorKind::Timeout
         | CodeQlHostErrorKind::Failed
         | CodeQlHostErrorKind::Cancelled
-        | CodeQlHostErrorKind::Io => 5,
+        | CodeQlHostErrorKind::Io
+        | CodeQlHostErrorKind::PackDownloadFailed => 5,
     };
     let details = match &err.report {
         Some(report) => serde_json::json!({
@@ -3310,6 +3496,120 @@ fn codeql_host_error(err: &CodeQlHostError, json: bool) -> Response {
         response.stderr.push_str(&codeql_language_lines(report));
     }
     response
+}
+
+/// Maps a `codeql packs` failure to its error code, exit status and the per-language
+/// state gathered before it.
+fn codeql_packs_error(err: &CodeQlPacksError, json: bool) -> Response {
+    let exit = match err.kind {
+        CodeQlHostErrorKind::TermsNotAccepted
+        | CodeQlHostErrorKind::InvalidWorkspace
+        | CodeQlHostErrorKind::InvalidTypescriptRuntime
+        | CodeQlHostErrorKind::InvalidExclude
+        | CodeQlHostErrorKind::WorkDirInsideWorkspace
+        | CodeQlHostErrorKind::PackCacheInsideWorkspace
+        | CodeQlHostErrorKind::UnsafeDirectory => 4,
+        CodeQlHostErrorKind::NotFound => 7,
+        CodeQlHostErrorKind::QueryPackMissing => 6,
+        CodeQlHostErrorKind::Timeout
+        | CodeQlHostErrorKind::Failed
+        | CodeQlHostErrorKind::Cancelled
+        | CodeQlHostErrorKind::Io
+        | CodeQlHostErrorKind::PackDownloadFailed => 5,
+    };
+    let details = match &err.report {
+        Some(report) => serde_json::json!({
+            "command": "codeql packs",
+            "pack_cache": report.pack_cache,
+            "suite": report.suite,
+            "languages": report.languages,
+            "present": report.present,
+            "missing": report.missing,
+            "downloaded": report.downloaded,
+            "failed": report.failed,
+            "warnings": report.warnings,
+        }),
+        None => serde_json::json!({ "command": "codeql packs" }),
+    };
+    let mut response = detailed_error(err.kind.code(), exit, json, &err.message, details);
+    if !json && let Some(report) = &err.report {
+        response.stderr.push_str(&codeql_pack_lines(report));
+    }
+    response
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const MIB: f64 = 1024.0 * 1024.0;
+    if bytes as f64 >= MIB {
+        format!("{:.1} MiB", bytes as f64 / MIB)
+    } else {
+        format!("{:.1} KiB", bytes as f64 / 1024.0)
+    }
+}
+
+fn codeql_pack_lines(report: &CodeQlPacksReport) -> String {
+    let mut text = String::from("Languages:\n");
+    for status in &report.languages {
+        let state = match status.status {
+            CodeQlPackState::Present => "present",
+            CodeQlPackState::Missing => "missing",
+            CodeQlPackState::Downloaded => "downloaded",
+            CodeQlPackState::Failed => "download failed",
+            CodeQlPackState::NotAnalysable => "not analysable",
+        };
+        let mut line = format!("  - {:<11} {state}", status.language);
+        if let Some(version) = &status.version {
+            let source = match status.source {
+                Some(CodeQlPackSource::Distribution) => "distribution",
+                Some(CodeQlPackSource::PackCache) => "pack cache",
+                None => "-",
+            };
+            line.push_str(&format!(" {} {version} ({source}", status.pack));
+            if let Some(size) = status.size_bytes {
+                line.push_str(&format!(", {}", format_bytes(size)));
+            }
+            line.push(')');
+            if let Some(location) = &status.location {
+                line.push_str(&format!(" {location}"));
+            }
+        }
+        if let Some(reason) = &status.reason {
+            line.push_str(&format!(": {reason}"));
+        }
+        line.push('\n');
+        text.push_str(&line);
+    }
+    text
+}
+
+fn render_codeql_packs(report: &CodeQlPacksReport, json: bool) -> Response {
+    if json {
+        return json_line(report);
+    }
+    let mut text = format!(
+        "Sentra CodeQL query packs (suite {})\nDistribution: {}\nPack cache: {}\n",
+        report.suite, report.distribution, report.pack_cache
+    );
+    text.push_str(&codeql_pack_lines(report));
+    text.push_str(&format!(
+        "Analysable languages with packs: {} present, {} missing",
+        report.present, report.missing
+    ));
+    if report.download_requested {
+        text.push_str(&format!(", {} downloaded now", report.downloaded));
+    }
+    text.push('\n');
+    if report.missing > 0 && !report.download_requested {
+        text.push_str("Run with --download to fetch the missing packs into the pack cache (anonymous download from the registry CodeQL is configured for, by default ghcr.io).\n");
+    }
+    for warning in &report.warnings {
+        text.push_str(&format!("Warning: {warning}\n"));
+    }
+    Response {
+        stdout: text,
+        stderr: String::new(),
+        exit_code: 0,
+    }
 }
 
 /// Maps a rejected SARIF document to its error code and exit status.

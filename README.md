@@ -125,8 +125,14 @@ sentra codeql import --sarif ./codeql-results.sarif --workspace ./my-project --j
 # Opt-in: run your installed CodeQL CLI on this host in build mode none (see ADR-0011 and the CodeQL terms first).
 # On Windows --codeql must be codeql.exe; query packs come from the CodeQL bundle or, with --allow-pack-download, ghcr.io.
 # Keep --work-dir and --pack-cache private: on Linux and macOS they must not be writable by other users.
+# Install CodeQL in a subfolder, not directly below a drive or file-system root. TypeScript is parsed with
+# --typescript-runtime (default: bun on PATH); --exclude leaves build and dependency output out of extraction.
 sentra codeql analyze --workspace ./my-project --codeql /opt/codeql/codeql --work-dir ~/.cache/sentra-codeql/work \
-  --pack-cache ~/.cache/sentra-codeql/packs --accept-codeql-terms --allow-pack-download --json
+  --pack-cache ~/.cache/sentra-codeql/packs --accept-codeql-terms --allow-pack-download \
+  --typescript-runtime "$(command -v bun)" --exclude '**/node_modules' --exclude '**/target' --json
+
+# Show which query packs are present, and fetch the missing ones ahead of an analysis (minutes per pack on a slow connection)
+sentra codeql packs --codeql /opt/codeql/codeql --pack-cache ~/.cache/sentra-codeql/packs --download --progress
 
 # Discover, probe, and run subprocess adapters from an explicit directory (default: SENTRA_PLUGIN_DIR, else the platform plugin directory).
 # Adapters run on this host with your privileges; the Snyk and Ollama examples return synthetic output.

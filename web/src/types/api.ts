@@ -130,8 +130,16 @@ export interface SessionInfo {
  *   variable; GET/PUT /api/settings/codeql, POST /api/tenants/:id/codeql/import and
  *   POST /api/tenants/:id/codeql/github-sync are new; CodeqlAnalysisView.outcome and
  *   OverviewView.openFindings.codeqlByOrigin report a failed analysis and the per-origin counts.
+ * - 6: CodeQL progress and query packs. ScanStreamEvent adds 'progress' (the steps of
+ *   `sentra codeql analyze --progress`: pack download, database creation, analysis, heartbeats);
+ *   CodeqlSettings adds downloadTimeoutMinutes and CodeqlSettingsView.bounds adds it;
+ *   CodeqlSettingsView adds ramAuto; CodeqlSettingsView.running becomes CodeqlRunningView (adds
+ *   operation and actor, tenantId is null for a pack download); GET /api/settings/codeql/packs and
+ *   POST /api/settings/codeql/packs/download (JSON or Server-Sent Events) are new. CodeqlSettings
+ *   adds excludePaths (globs left out of extraction, --exclude) and CodeqlSettingsView adds
+ *   bounds.excludePaths and typescriptRuntime (the Bun executable passed as --typescript-runtime).
  */
-export const API_CONTRACT_VERSION = 5
+export const API_CONTRACT_VERSION = 6
 
 export interface HealthResponse {
   status: 'ok'
@@ -590,9 +598,39 @@ export interface CodeqlSettings {
   termsAcceptedAt: string | null
   allowPackDownload: boolean
   suite: CodeqlSuite
+  /** Budget of the CodeQL steps (version, database creation, analysis): --timeout-secs. */
   timeoutMinutes: number
+  /** Budget of query pack downloads (--download-timeout-secs); does not count against timeoutMinutes. */
+  downloadTimeoutMinutes: number
   threads: number
+  /** Null: the bridge chooses --ram itself (see CodeqlSettingsView.ramAuto). */
   ramMb: number | null
+  /**
+   * Relative globs left out of extraction (`--exclude`, CodeQL's LGTM_INDEX_FILTERS), such as
+   * build and dependency output. Default: the node_modules, target, dist and .git directories at
+   * any depth.
+   */
+  excludePaths: string[]
+}
+
+/** The CodeQL operation holding the bridge-wide lock (at most one runs at a time). */
+export interface CodeqlRunningView {
+  operation: 'analysis' | 'pack_download'
+  /** Workspace of an analysis; null for a pack download. */
+  tenantId: string | null
+  startedAt: string
+  /** Who started a pack download; null for an analysis (the scan's run records its actor). */
+  actor: string | null
+}
+
+/** The --ram value the bridge passes when ramMb is unset. */
+export interface CodeqlRamAutoView {
+  /** --ram the next analysis would get, in MiB. */
+  mb: number
+  /** Memory available on the host when this view was built (the Host page's reading), in MiB; null when unknown. */
+  availableMb: number | null
+  /** How mb was chosen, in words. */
+  rule: string
 }
 
 export interface CodeqlLauncherView {
@@ -614,17 +652,29 @@ export interface CodeqlSettingsView {
   updatedBy: string | null
   bounds: {
     timeoutMinutes: { min: number; max: number }
+    downloadTimeoutMinutes: { min: number; max: number }
     threads: { min: number; max: number }
     ramMb: { min: number; max: number }
+    /** Most entries and characters per entry of excludePaths. */
+    excludePaths: { maxEntries: number; maxChars: number }
   }
+  /** The --ram value used while ramMb is unset. */
+  ramAuto: CodeqlRamAutoView
+  /**
+   * The JavaScript runtime CodeQL's JavaScript extractor parses TypeScript with: the Bun executable
+   * the bridge runs on, passed as --typescript-runtime. Null when it cannot be passed (the reason is
+   * in typescriptRuntimeNote); the core then looks for bun on its own PATH.
+   */
+  typescriptRuntime: string | null
+  typescriptRuntimeNote: string | null
   launcher: CodeqlLauncherView
   /** Explicit pack cache passed as --pack-cache (inside the bridge data directory). */
   packCache: string
   /** Null when a scan's CodeQL stage would start host analysis now; otherwise why not. */
   skipReason: CodeqlSkipReason | null
   skipMessage: string | null
-  /** The analysis running on this bridge (at most one at a time), if any. */
-  running: { tenantId: string; startedAt: string } | null
+  /** The CodeQL operation (analysis or pack download) running on this bridge, if any. */
+  running: CodeqlRunningView | null
   terms: { summary: string[]; location: string; referenceUrl: string }
   isolationNote: string
 }
@@ -636,9 +686,102 @@ export interface UpdateCodeqlSettingsRequest {
   allowPackDownload?: boolean
   suite?: CodeqlSuite
   timeoutMinutes?: number
+  downloadTimeoutMinutes?: number
   threads?: number
   ramMb?: number | null
+  excludePaths?: string[]
 }
+
+/** A step that `sentra codeql analyze|packs --progress` reports. */
+export type CodeqlProgressStep = 'version' | 'pack_download' | 'database_create' | 'database_analyze'
+export type CodeqlProgressEventKind = 'step_started' | 'step_finished' | 'step_failed' | 'heartbeat' | 'language_skipped'
+
+/** One progress event of the core, with the text the bridge wrote for it. */
+export interface CodeqlProgressView {
+  event: CodeqlProgressEventKind
+  /** Null for an event that names no step (a language skipped before any step). */
+  step: CodeqlProgressStep | null
+  language: string | null
+  /** Query pack of a pack_download step, such as codeql/javascript-queries. */
+  pack: string | null
+  /** Time since the step started (heartbeat). */
+  elapsedMs: number | null
+  /** Duration of a finished or failed step. */
+  durationMs: number | null
+  /** The core's own text (a failure or skip reason), sanitised and bounded. */
+  message: string | null
+  /** Readable line for the console, such as "Still downloading codeql/javascript-queries (2 min 15 s)". */
+  text: string
+}
+
+/** Where a query pack was found: the CodeQL distribution (a bundle ships the packs) or the bridge's pack cache. */
+export type CodeqlPackSource = 'distribution' | 'pack_cache'
+
+/**
+ * State of one language's query pack: present (pack and suite file found), missing, downloaded
+ * (by this request), failed (its download failed) or not_analysable (Sentra never analyses this
+ * language on the host; reason says why).
+ */
+export type CodeqlPackStatus = 'present' | 'missing' | 'downloaded' | 'failed' | 'not_analysable'
+
+export interface CodeqlPackView {
+  language: string
+  /** codeql/<language>-queries. */
+  pack: string | null
+  analysable: boolean
+  status: CodeqlPackStatus
+  source: CodeqlPackSource | null
+  version: string | null
+  /** Directory of the pack version on the bridge host. */
+  location: string | null
+  sizeBytes: number | null
+  /** Why the language is not analysable, or why its download failed. */
+  reason: string | null
+}
+
+/** GET /api/settings/codeql/packs: the query packs for the configured suite. */
+export interface CodeqlPacksView {
+  /** False when no report could be produced; problem says why (no launcher, no core, a core error). */
+  available: boolean
+  problem: string | null
+  suite: CodeqlSuite
+  packCache: string
+  launcherPath: string | null
+  languages: CodeqlPackView[]
+  /** Analysable languages whose pack or suite file is missing. */
+  missing: string[]
+  checkedAt: string
+  running: CodeqlRunningView | null
+  /** Null when "Download missing packs" can start now; otherwise why not (the permission is checked separately). */
+  downloadBlockedReason: string | null
+}
+
+/** Body of POST /api/settings/codeql/packs/download. */
+export interface DownloadCodeqlPacksRequest {
+  /** Analysable language ids to download; omitted: every missing analysable language. */
+  languages?: string[]
+}
+
+/** Result of POST /api/settings/codeql/packs/download. */
+export interface CodeqlPacksDownloadView {
+  /** completed: every requested pack is present; partial: some failed; failed: none was downloaded; cancelled; nothing_to_do. */
+  outcome: 'completed' | 'partial' | 'failed' | 'cancelled' | 'nothing_to_do'
+  requested: string[]
+  downloaded: string[]
+  failed: { language: string; message: string }[]
+  durationMs: number
+  /** What happened, in words (also the error text of a failed core run). */
+  message: string
+  /** The pack listing after the download (available false when it could not be read). */
+  packs: CodeqlPacksView
+}
+
+/** Events of POST /api/settings/codeql/packs/download with `Accept: text/event-stream`. */
+export type CodeqlPacksStreamEvent =
+  | { type: 'progress'; progress: CodeqlProgressView; ts: string }
+  | { type: 'log'; stream: 'stderr' | 'bridge'; text: string; ts: string }
+  | { type: 'complete'; result: CodeqlPacksDownloadView }
+  | { type: 'error'; status: number; code: string; message: string }
 
 /** Response of POST /api/tenants/:id/codeql/import and /codeql/github-sync. */
 export interface CodeqlIngestView {
@@ -707,6 +850,8 @@ export type ScanStreamEvent =
   | { type: 'run'; run: ScanRunView }
   | { type: 'stage'; stage: 'sast' | 'dependency' | 'codeql' | 'persist'; status: 'started' | 'completed' | 'failed' | 'skipped'; message: string }
   | { type: 'log'; stream: 'stdout' | 'stderr' | 'bridge'; text: string; ts: string }
+  /** A step of CodeQL host analysis (contract 6); consoles of contract 5 ignore it. */
+  | { type: 'progress'; stage: 'codeql'; progress: CodeqlProgressView; ts: string }
   | { type: 'complete'; run: ScanRunView }
   /** `status` is the HTTP status the same failure would have had as a JSON response (500 when unexpected). */
   | { type: 'error'; status: number; code: string; message: string }

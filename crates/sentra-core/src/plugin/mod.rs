@@ -2,6 +2,7 @@
 
 pub mod codeql;
 pub mod codeql_host;
+pub mod codeql_packs;
 pub mod codeql_sarif;
 pub mod discovery;
 pub mod driver;
@@ -19,10 +20,19 @@ pub use codeql::{
 };
 pub use codeql_host::{
     CODEQL_ENV_PASSTHROUGH, CodeQlAnalyzeRequest, CodeQlHostError, CodeQlHostErrorKind,
-    CodeQlHostLanguage, CodeQlLauncher, CodeQlRunDirs, CodeQlSuite, DEFAULT_CODEQL_TIMEOUT_SECS,
-    LauncherFs, LauncherPlatform, MAX_CODEQL_TIMEOUT_SECS, NEEDS_BUILD_REASON, RealLauncherFs,
-    analyze_workspace_with, analyze_workspace_with_codeql, cmd_metacharacters_in,
-    codeql_host_environment, validate_codeql_launcher, validate_codeql_launcher_with,
+    CodeQlHostLanguage, CodeQlLauncher, CodeQlProgressEvent, CodeQlProgressKind, CodeQlRunDirs,
+    CodeQlStep, CodeQlSuite, DEFAULT_CODEQL_DOWNLOAD_TIMEOUT_SECS, DEFAULT_CODEQL_HEARTBEAT_SECS,
+    DEFAULT_CODEQL_TIMEOUT_SECS, INDEX_FILTERS_ENV, LauncherFs, LauncherPlatform,
+    MAX_CODEQL_HEARTBEAT_SECS, MAX_CODEQL_TIMEOUT_SECS, MAX_EXCLUDE_GLOB_CHARS, MAX_EXCLUDE_GLOBS,
+    NEEDS_BUILD_REASON, NO_TYPESCRIPT_RUNTIME_WARNING, RealLauncherFs, TYPESCRIPT_RUNTIME_ENV,
+    analyze_workspace_with, analyze_workspace_with_codeql, analyze_workspace_with_codeql_progress,
+    analyze_workspace_with_progress, cmd_metacharacters_in, codeql_host_environment,
+    find_bun_on_path, index_filters, validate_codeql_launcher, validate_codeql_launcher_with,
+    validate_exclude_glob, validate_typescript_runtime_with,
+};
+pub use codeql_packs::{
+    CodeQlPackSource, CodeQlPackState, CodeQlPackStatus, CodeQlPacksError, CodeQlPacksReport,
+    CodeQlPacksRequest, codeql_query_packs, codeql_query_packs_with,
 };
 pub use codeql_sarif::{
     CODEQL_SARIF_MAX_BYTES, CodeQlFinding, CodeQlLanguageOutcome, CodeQlLanguageStatus,
@@ -52,6 +62,7 @@ pub use manifest::{
 pub use process::{
     ADAPTER_ENV_ALLOWLIST, AdapterCommand, CONTAINMENT_ENV, ContainedRun, STDERR_TAIL_BYTES,
     adapter_environment, resolve_adapter_command, run_contained, run_contained_cancellable,
+    run_contained_observed,
 };
 pub use protocol::{PluginRequest, PluginResponse, decode_frame, encode_frame};
 pub use sample_adapter::{SampleAdapter, SampleAdapterMode};

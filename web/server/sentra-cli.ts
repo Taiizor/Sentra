@@ -26,6 +26,15 @@ export interface CliRunOptions {
   /** Called with each decoded stdout/stderr chunk while the process runs. */
   onOutput?: (stream: "stdout" | "stderr", text: string) => void;
   /**
+   * Called with each stderr line (without its line break) while the process runs, for long runs
+   * whose core reports progress on stderr (`sentra codeql analyze --progress`). A last line without
+   * a line break is delivered when the stream ends. Lines are cut at MAX_STREAM_LINE_CHARS and at
+   * most `maxStderrLines` (default MAX_STREAM_LINES) are delivered; the full stderr is still
+   * collected in the result (within maxOutputBytes).
+   */
+  onStderrLine?: (line: string) => void;
+  maxStderrLines?: number;
+  /**
    * For commands started with `--cancel-on-stdin-eof` (`sentra codeql analyze`): stdin stays open
    * while the core runs, and cancelling or timing out closes it instead of killing the core, so
    * the core can kill its own process tree (on Unix CodeQL runs in a separate process group that
@@ -46,6 +55,88 @@ export interface CliRunOptions {
 
 /** Time the core gets to stop its own process tree after its stdin was closed. */
 export const GRACEFUL_STOP_MS = 30_000;
+
+/** Longest stderr line passed to onStderrLine; the rest of a longer line is dropped. */
+export const MAX_STREAM_LINE_CHARS = 8192;
+/** Default number of stderr lines passed to onStderrLine per run. */
+export const MAX_STREAM_LINES = 10_000;
+
+/**
+ * Splits streamed text into lines (LF or CRLF) with bounded memory: a line longer than
+ * `maxLineChars` is cut there and the rest of it is dropped, and after `maxLines` delivered lines
+ * further lines are only counted. `end()` delivers a last line that had no line break.
+ */
+export class LineSplitter {
+  private buffer = "";
+  private overlong = false;
+  private deliveredLines = 0;
+  private droppedLines = 0;
+  private readonly onLine: (line: string) => void;
+  private readonly maxLineChars: number;
+  private readonly maxLines: number;
+
+  constructor(onLine: (line: string) => void, options: { maxLineChars?: number; maxLines?: number } = {}) {
+    this.onLine = onLine;
+    this.maxLineChars = options.maxLineChars ?? MAX_STREAM_LINE_CHARS;
+    this.maxLines = options.maxLines ?? MAX_STREAM_LINES;
+  }
+
+  /** Lines delivered so far. */
+  get delivered(): number {
+    return this.deliveredLines;
+  }
+
+  /** Lines not delivered because maxLines was reached. */
+  get dropped(): number {
+    return this.droppedLines;
+  }
+
+  push(text: string): void {
+    let start = 0;
+    for (;;) {
+      const newline = text.indexOf("\n", start);
+      if (newline < 0) {
+        this.append(text.slice(start));
+        return;
+      }
+      this.append(text.slice(start, newline));
+      this.flush();
+      start = newline + 1;
+    }
+  }
+
+  end(): void {
+    if (this.buffer.length > 0 || this.overlong) this.flush();
+  }
+
+  private append(part: string): void {
+    if (this.overlong || part.length === 0) return;
+    const room = this.maxLineChars - this.buffer.length;
+    if (part.length > room) {
+      this.buffer += part.slice(0, room);
+      this.overlong = true;
+    } else {
+      this.buffer += part;
+    }
+  }
+
+  private flush(): void {
+    let line = this.buffer.endsWith("\r") ? this.buffer.slice(0, -1) : this.buffer;
+    if (this.overlong) line += "…";
+    this.buffer = "";
+    this.overlong = false;
+    if (this.deliveredLines >= this.maxLines) {
+      this.droppedLines += 1;
+      return;
+    }
+    this.deliveredLines += 1;
+    try {
+      this.onLine(line);
+    } catch (error) {
+      log.debug("stderr line listener failed", { error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+}
 
 export function cancelledBeforeStart(): HttpError {
   return new HttpError(499, "aborted", "The request was cancelled before the core process started");
@@ -190,6 +281,12 @@ export function childEnv(overrides: Readonly<Record<string, string | undefined>>
   return env;
 }
 
+/**
+ * Most arguments of one core run, the same as the core's own MAX_ARGUMENTS: room for
+ * `codeql analyze` with 50 `--exclude <glob>` pairs and its other flags.
+ */
+export const MAX_CLI_ARGS = 160;
+
 /** Waiting runs allowed per concurrent slot before new callers are refused with 503. */
 const QUEUE_PER_SLOT = 16;
 const MIN_QUEUE = 32;
@@ -260,7 +357,7 @@ export class SentraCli {
     if (!this.available()) {
       throw new HttpError(503, "core_unavailable", "The sentra core binary was not found. Build it with `cargo build --release -p sentra-cli` or set SENTRA_BIN.");
     }
-    if (args.length > 64) {
+    if (args.length > MAX_CLI_ARGS) {
       throw new HttpError(400, "invalid_request", "Too many CLI arguments");
     }
     const release = await this.semaphore.acquire(options.signal);
@@ -312,9 +409,12 @@ export class SentraCli {
       const onAbort = () => stop();
       options.signal?.addEventListener("abort", onAbort, { once: true });
 
+      const stderrLines =
+        options.onStderrLine !== undefined ? new LineSplitter(options.onStderrLine, { maxLines: options.maxStderrLines ?? MAX_STREAM_LINES }) : null;
       const collect = async (stream: ReadableStream<Uint8Array>, name: "stdout" | "stderr"): Promise<string> => {
         const decoder = new TextDecoder();
         const reader = stream.getReader();
+        const lines = name === "stderr" ? stderrLines : null;
         let text = "";
         let bytes = 0;
         for (;;) {
@@ -330,8 +430,12 @@ export class SentraCli {
           const chunk = decoder.decode(value, { stream: true });
           text += chunk;
           options.onOutput?.(name, chunk);
+          lines?.push(chunk);
         }
-        return text + decoder.decode();
+        const rest = decoder.decode();
+        lines?.push(rest);
+        lines?.end();
+        return text + rest;
       };
 
       const [stdout, stderr] = await Promise.all([collect(child.stdout, "stdout"), collect(child.stderr, "stderr")]);
@@ -360,6 +464,7 @@ export class SentraCli {
           json = undefined;
         }
       }
+      if (stderrLines && stderrLines.dropped > 0) log.debug("stderr lines not streamed", { command: args[0], dropped: stderrLines.dropped });
       log.debug("sentra cli finished", { command: args[0], code, durationMs, timedOut });
       return { code, stdout, stderr, json, timedOut, durationMs };
     } finally {
@@ -402,23 +507,57 @@ export function sanitizeCoreMessage(value: unknown): string | null {
   return text.length > MAX_CORE_MESSAGE_CHARS ? `${text.slice(0, MAX_CORE_MESSAGE_CHARS)}…` : text;
 }
 
-/** The core's JSON error document (`{schema_version, error, message, ...}`) printed on stderr or stdout, if any. */
-export function coreErrorDocument(result: Pick<CliResult, "stdout" | "stderr">): { code: string; message: string | null; details: Record<string, unknown> } | null {
+type CoreErrorDocument = { code: string; message: string | null; details: Record<string, unknown> };
+
+function errorDocumentFrom(text: string): CoreErrorDocument | null {
+  if (!text.startsWith("{")) return null;
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const doc = parsed as Record<string, unknown>;
+    // A progress event (`--progress`) is never the error document.
+    if (doc.progress === true) return null;
+    const value = doc.error ?? doc.code;
+    if (typeof value !== "string") return null;
+    // `reason` carries the plugin adapter's own (sanitized) error text; `message` the core's explanation.
+    return { code: value, message: sanitizeCoreMessage(doc.message) ?? sanitizeCoreMessage(doc.reason), details: doc };
+  } catch {
+    return null;
+  }
+}
+
+/** Bytes at the end of stderr searched for the error document when stderr also carries progress lines. */
+const ERROR_DOCUMENT_TAIL_CHARS = 4 * 1024 * 1024;
+/** Lines at the end of stderr searched for the error document. */
+const ERROR_DOCUMENT_TAIL_LINES = 64;
+
+/**
+ * The core's JSON error document (`{schema_version, error, message, ...}`) printed on stderr or
+ * stdout, if any. With `--progress` stderr carries one progress object per line before it; the
+ * error document is then the last JSON object line without `"progress": true`.
+ */
+export function coreErrorDocument(result: Pick<CliResult, "stdout" | "stderr">): CoreErrorDocument | null {
   for (const candidate of [result.stderr, result.stdout]) {
     const trimmed = candidate.trim();
-    if (!trimmed.startsWith("{")) continue;
-    try {
-      const parsed = JSON.parse(trimmed) as Record<string, unknown>;
-      const value = parsed.error ?? parsed.code;
-      if (typeof value === "string") {
-        // `reason` carries the plugin adapter's own (sanitized) error text; `message` the core's explanation.
-        return { code: value, message: sanitizeCoreMessage(parsed.message) ?? sanitizeCoreMessage(parsed.reason), details: parsed };
-      }
-    } catch {
-      // not JSON
+    const whole = errorDocumentFrom(trimmed);
+    if (whole) return whole;
+    if (!trimmed.includes("\n")) continue;
+    const lines = trimmed.slice(-ERROR_DOCUMENT_TAIL_CHARS).split(/\r?\n/);
+    let checked = 0;
+    for (let index = lines.length - 1; index >= 0 && checked < ERROR_DOCUMENT_TAIL_LINES; index -= 1) {
+      const line = lines[index].trim();
+      if (!line) continue;
+      checked += 1;
+      const document = errorDocumentFrom(line);
+      if (document) return document;
     }
   }
   return null;
+}
+
+/** True for a stderr line that is a progress event of `--progress` (not shown as an error excerpt). */
+function isProgressLine(line: string): boolean {
+  return line.startsWith("{") && /"progress"\s*:\s*true/.test(line);
 }
 
 /**
@@ -428,7 +567,13 @@ export function coreErrorDocument(result: Pick<CliResult, "stdout" | "stderr">):
  */
 export function cliFailure(command: string, result: CliResult): HttpError {
   const core = coreErrorDocument(result);
-  const stderrLine = result.stderr.trim().split(/\r?\n/).slice(0, 3).join(" ").slice(0, 400);
+  const stderrLine = result.stderr
+    .trim()
+    .split(/\r?\n/, 200)
+    .filter((line) => !isProgressLine(line.trim()))
+    .slice(0, 3)
+    .join(" ")
+    .slice(0, 400);
   const message = core
     ? `sentra ${command} failed: ${core.code}${core.message ? `: ${core.message}` : ""}`
     : `sentra ${command} exited with code ${result.code}${stderrLine ? `: ${stderrLine}` : ""}`;

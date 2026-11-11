@@ -93,6 +93,13 @@ fn rejects_extra_positionals_unknown_flags_and_invalid_session_ids() {
         assert!(parse(&args(&words)).is_err());
     }
     assert!(parse(&vec![OsString::from("--json"); 65]).is_err());
+    // More than MAX_ARGUMENTS (160) arguments are refused before anything is parsed.
+    let mut many = args(&["codeql", "analyze", "--workspace", "ws"]);
+    while many.len() <= sentra_cli::MAX_ARGUMENTS {
+        many.push(OsString::from("--exclude"));
+        many.push(OsString::from("x"));
+    }
+    assert!(parse(&many).is_err());
 }
 
 #[test]
@@ -1494,8 +1501,13 @@ fn parses_codeql_analyze_and_import_grammar() {
     assert!(analyze.languages.is_empty());
     assert_eq!(analyze.suite.as_str(), "code-scanning");
     assert_eq!(analyze.timeout_secs, 1800);
+    assert_eq!(analyze.download_timeout_secs, 1800);
+    assert_eq!(analyze.heartbeat_secs, 15);
+    assert!(!analyze.progress);
     assert_eq!(analyze.max_results, 5000);
     assert_eq!((analyze.threads, analyze.ram_mb), (None, None));
+    assert_eq!(analyze.typescript_runtime, None);
+    assert!(analyze.exclude.is_empty());
 
     let mut full: Vec<&str> = base.to_vec();
     full.extend([
@@ -1515,6 +1527,17 @@ fn parses_codeql_analyze_and_import_grammar() {
         "--allow-pack-download",
         "--max-results",
         "10",
+        "--download-timeout-secs",
+        "900",
+        "--progress",
+        "--heartbeat-secs",
+        "5",
+        "--typescript-runtime",
+        "C:/Users/me/.bun/bin/bun.exe",
+        "--exclude",
+        "**/node_modules",
+        "--exclude",
+        "**/target",
         "--json",
     ]);
     let parsed = parse(&args(&full)).unwrap_or_else(|_| panic!("valid analyze"));
@@ -1523,11 +1546,40 @@ fn parses_codeql_analyze_and_import_grammar() {
         panic!("expected codeql analyze");
     };
     assert!(analyze.accept_terms && analyze.allow_pack_download);
+    assert!(analyze.progress);
+    assert_eq!(
+        (analyze.download_timeout_secs, analyze.heartbeat_secs),
+        (900, 5)
+    );
     let languages: Vec<&str> = analyze.languages.iter().map(|l| l.as_str()).collect();
     assert_eq!(languages, ["javascript", "python"]);
     assert_eq!(analyze.suite.as_str(), "security-extended");
     assert_eq!((analyze.threads, analyze.ram_mb), (Some(4), Some(8192)));
     assert_eq!((analyze.timeout_secs, analyze.max_results), (600, 10));
+    assert_eq!(
+        analyze.typescript_runtime.as_deref(),
+        Some(std::path::Path::new("C:/Users/me/.bun/bin/bun.exe"))
+    );
+    assert_eq!(analyze.exclude, ["**/node_modules", "**/target"]);
+
+    // The globs and their number (at most 50) are checked by Core, which refuses more
+    // with invalid_exclude (exit 4); the parser keeps them all, so a 51st is not an
+    // argument error (regression: it returned invalid_arguments, exit 2).
+    let mut fifty = base.to_vec();
+    for _ in 0..50 {
+        fifty.extend(["--exclude", "**/x"]);
+    }
+    assert!(
+        parse(&args(&fifty)).is_ok(),
+        "50 --exclude flags are accepted"
+    );
+    fifty.extend(["--exclude", "**/y"]);
+    let parsed =
+        parse(&args(&fifty)).unwrap_or_else(|_| panic!("a 51st --exclude must reach Core"));
+    let CliCommand::CodeqlAnalyze(many) = parsed.command else {
+        panic!("expected codeql analyze");
+    };
+    assert_eq!(many.exclude.len(), 51);
 
     for extra in [
         vec!["--language", "cobol"],
@@ -1545,6 +1597,19 @@ fn parses_codeql_analyze_and_import_grammar() {
         vec!["--build-mode", "autobuild"],
         vec!["--sarif", "x.sarif"],
         vec!["--threads"],
+        vec!["--download-timeout-secs", "0"],
+        vec!["--download-timeout-secs", "86401"],
+        vec!["--heartbeat-secs", "0"],
+        vec!["--heartbeat-secs", "3601"],
+        vec!["--progress", "--progress"],
+        vec!["--progress", "yes"],
+        vec!["--download"],
+        vec!["--typescript-runtime"],
+        vec!["--typescript-runtime", "-x"],
+        vec!["--typescript-runtime", "a", "--typescript-runtime", "b"],
+        vec!["--exclude"],
+        vec!["--exclude", ""],
+        vec!["--exclude", "--json"],
     ] {
         let mut words = base.to_vec();
         words.extend(extra.iter().copied());
@@ -1635,6 +1700,92 @@ fn parses_codeql_analyze_and_import_grammar() {
             .command,
         CliCommand::Help
     ));
+}
+
+#[test]
+fn parses_codeql_packs_grammar() {
+    let base = [
+        "codeql",
+        "packs",
+        "--codeql",
+        "D:/CodeQL/codeql.exe",
+        "--pack-cache",
+        "cache",
+    ];
+    let parsed = parse(&args(&base)).unwrap_or_else(|_| panic!("valid packs"));
+    let CliCommand::CodeqlPacks(packs) = parsed.command else {
+        panic!("expected codeql packs");
+    };
+    assert!(!packs.download && !packs.progress && !packs.cancel_on_stdin_eof);
+    assert!(packs.languages.is_empty());
+    assert_eq!(packs.suite.as_str(), "code-scanning");
+    assert_eq!((packs.timeout_secs, packs.heartbeat_secs), (1800, 15));
+    assert_eq!(packs.pack_cache, Path::new("cache"));
+
+    let mut full: Vec<&str> = base.to_vec();
+    full.extend([
+        "--language",
+        "js",
+        "--language",
+        "ruby",
+        "--suite",
+        "security-extended",
+        "--download",
+        "--timeout-secs",
+        "600",
+        "--cancel-on-stdin-eof",
+        "--progress",
+        "--heartbeat-secs",
+        "2",
+        "--json",
+    ]);
+    let parsed = parse(&args(&full)).unwrap_or_else(|_| panic!("valid packs"));
+    assert!(parsed.json);
+    let CliCommand::CodeqlPacks(packs) = parsed.command else {
+        panic!("expected codeql packs");
+    };
+    assert!(packs.download && packs.progress && packs.cancel_on_stdin_eof);
+    let languages: Vec<&str> = packs.languages.iter().map(|l| l.as_str()).collect();
+    assert_eq!(languages, ["javascript", "ruby"]);
+    assert_eq!(packs.suite.as_str(), "security-extended");
+    assert_eq!((packs.timeout_secs, packs.heartbeat_secs), (600, 2));
+
+    for extra in [
+        vec!["--workspace", "ws"],
+        vec!["--work-dir", "work"],
+        vec!["--accept-codeql-terms"],
+        vec!["--allow-pack-download"],
+        vec!["--download", "--download"],
+        vec!["--timeout-secs", "0"],
+        vec!["--timeout-secs", "86401"],
+        vec!["--heartbeat-secs", "0"],
+        vec!["--language", "cobol"],
+        vec!["--suite", "all"],
+        vec!["--codeql", "again"],
+        vec!["--ram", "2048"],
+        vec!["--pack-cache"],
+    ] {
+        let mut words = base.to_vec();
+        words.extend(extra.iter().copied());
+        assert!(parse(&args(&words)).is_err(), "must reject {extra:?}");
+    }
+    for missing in ["--codeql", "--pack-cache"] {
+        let index = base.iter().position(|w| *w == missing).unwrap();
+        let mut words = base.to_vec();
+        words.drain(index..index + 2);
+        assert!(parse(&args(&words)).is_err(), "must require {missing}");
+    }
+    assert!(matches!(
+        parse(&args(&["codeql", "packs", "--help"]))
+            .unwrap_or_else(|_| panic!())
+            .command,
+        CliCommand::Help
+    ));
+    let help = sentra_cli::HELP;
+    assert!(help.contains("sentra codeql packs --codeql <launcher> --pack-cache <directory>"));
+    assert!(help.contains("[--download-timeout-secs <n>]"));
+    assert!(help.contains("codeql_pack_download_failed (exit 5)"));
+    assert!(help.contains("the error object, which stays the last line on stderr"));
 }
 
 #[test]

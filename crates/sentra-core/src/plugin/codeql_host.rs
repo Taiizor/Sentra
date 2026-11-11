@@ -36,7 +36,32 @@
 //!   the query suite by path with `--search-path=<distribution>` and
 //!   `--common-caches=<pack cache>`, so CodeQL is not asked to look for a missing pack
 //!   in the directories next to the distribution. `codeql pack download` runs only
-//!   when downloads are allowed.
+//!   when downloads are allowed, one pack at a time, retried once after a failure.
+//!   CodeQL unpacks a pack straight into its final directory, so a download killed
+//!   while it unpacks would leave a partial pack there (which CodeQL then takes as
+//!   installed, or refuses to download over). Each download therefore writes into a new
+//!   private staging directory inside the pack cache (its `--common-caches`), and only
+//!   after `codeql pack download` exited with code 0 are the complete pack versions
+//!   renamed into `<pack cache>/packages/`; the staging directory is deleted in every
+//!   case.
+//! - Pack downloads have their own time budget (`download_timeout`); they do not use
+//!   the analysis budget (`timeout`), which covers `codeql version`, `database create`
+//!   and `database analyze` only.
+//! - A caller can observe the run through [`CodeQlProgressEvent`]s: one when a step
+//!   starts, finishes or fails, one when a language is skipped, and a heartbeat at a
+//!   fixed interval while a step runs. CodeQL itself prints nothing for minutes while it
+//!   downloads a pack; the events are how a console tells a slow step from a stuck one.
+//! - CodeQL's JavaScript extractor parses TypeScript with a separate JavaScript runtime
+//!   (Node.js by default). The only CodeQL-specific variable Sentra sets from the
+//!   caller's input is `SEMMLE_TYPESCRIPT_NODE_RUNTIME`, from the validated
+//!   `typescript_runtime` (a native executable outside the workspace) or else from the
+//!   first `bun` on the caller's `PATH`; `SEMMLE_*` and `LGTM_*` variables are never
+//!   inherited.
+//! - `exclude` globs (relative, validated) become `LGTM_INDEX_FILTERS` `exclude:` lines,
+//!   which the javascript, python, ruby and actions extractors (and the C/C++
+//!   build-mode-none driver) read, so build and dependency output is not extracted.
+//!   `--codescanning-config` is never passed: it makes CodeQL resolve query packs, which
+//!   can scan the directories next to the distribution.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -59,14 +84,40 @@ use crate::plugin::{
         CodeQlResultReport, CodeQlSarifOptions, display_path, normalize_codeql_sarif,
         read_sarif_file,
     },
-    process::{ContainedRun, run_contained_cancellable, strip_verbatim},
+    process::{ContainedRun, run_contained_observed, strip_verbatim},
 };
 
-/// Default total time budget of one host analysis (30 minutes).
+/// Default time budget of the analysis steps of one host analysis (30 minutes).
 pub const DEFAULT_CODEQL_TIMEOUT_SECS: u64 = 1_800;
 
-/// Largest accepted total time budget (24 hours).
+/// Largest accepted time budget, for analysis and for pack downloads (24 hours).
 pub const MAX_CODEQL_TIMEOUT_SECS: u64 = 86_400;
+
+/// Default time budget of all query pack downloads of one command (30 minutes).
+pub const DEFAULT_CODEQL_DOWNLOAD_TIMEOUT_SECS: u64 = 1_800;
+
+/// Default interval of `heartbeat` progress events while a step runs.
+pub const DEFAULT_CODEQL_HEARTBEAT_SECS: u64 = 15;
+
+/// Largest accepted heartbeat interval (1 hour).
+pub const MAX_CODEQL_HEARTBEAT_SECS: u64 = 3_600;
+
+/// Characters kept of a progress event's message.
+const PROGRESS_MESSAGE_MAX_CHARS: usize = 1_000;
+
+/// Variable through which CodeQL's JavaScript extractor (2.27.4) is told which JavaScript
+/// runtime parses TypeScript (default: `node` on `PATH`).
+pub const TYPESCRIPT_RUNTIME_ENV: &str = "SEMMLE_TYPESCRIPT_NODE_RUNTIME";
+
+/// Variable holding the path filters (`include:<glob>` / `exclude:<glob>` lines) that
+/// CodeQL's javascript, python, ruby and actions extractors read.
+pub const INDEX_FILTERS_ENV: &str = "LGTM_INDEX_FILTERS";
+
+/// Most `exclude` globs of one analysis.
+pub const MAX_EXCLUDE_GLOBS: usize = 50;
+
+/// Longest accepted `exclude` glob, in characters.
+pub const MAX_EXCLUDE_GLOB_CHARS: usize = 200;
 
 /// Time limit of the `codeql version` step (bounded by the total budget).
 pub const CODEQL_VERSION_TIMEOUT: Duration = Duration::from_secs(120);
@@ -255,6 +306,14 @@ pub enum CodeQlHostErrorKind {
     Cancelled,
     /// A local file-system operation failed.
     Io,
+    /// `sentra codeql packs --download`: at least one query pack could not be
+    /// downloaded (packs downloaded before it stay in the pack cache).
+    PackDownloadFailed,
+    /// `--typescript-runtime` is not an absolute local path of a native executable
+    /// outside the workspace, or (on Windows) contains a cmd.exe metacharacter.
+    InvalidTypescriptRuntime,
+    /// An `--exclude` glob is not a relative glob within the limits.
+    InvalidExclude,
 }
 
 impl CodeQlHostErrorKind {
@@ -272,6 +331,9 @@ impl CodeQlHostErrorKind {
             Self::Failed => "codeql_failed",
             Self::Cancelled => "codeql_cancelled",
             Self::Io => "io_error",
+            Self::PackDownloadFailed => "codeql_pack_download_failed",
+            Self::InvalidTypescriptRuntime => "invalid_typescript_runtime",
+            Self::InvalidExclude => "invalid_exclude",
         }
     }
 }
@@ -304,6 +366,469 @@ impl fmt::Display for CodeQlHostError {
 }
 
 impl std::error::Error for CodeQlHostError {}
+
+/// CodeQL step named in a progress event.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeQlStep {
+    /// `codeql version`.
+    Version,
+    /// `codeql pack download codeql/<language>-queries`.
+    PackDownload,
+    /// `codeql database create`.
+    DatabaseCreate,
+    /// `codeql database analyze`.
+    DatabaseAnalyze,
+}
+
+impl CodeQlStep {
+    /// Contract label.
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Version => "version",
+            Self::PackDownload => "pack_download",
+            Self::DatabaseCreate => "database_create",
+            Self::DatabaseAnalyze => "database_analyze",
+        }
+    }
+}
+
+/// Kind of a progress event.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeQlProgressKind {
+    /// A step started.
+    StepStarted,
+    /// A step ended successfully.
+    StepFinished,
+    /// A step ended unsuccessfully, or could not start (the message says why).
+    StepFailed,
+    /// A step is still running (sent at a fixed interval).
+    Heartbeat,
+    /// A language is not analysed; the message gives the reason.
+    LanguageSkipped,
+}
+
+/// One progress observation of `sentra codeql analyze --progress` or
+/// `sentra codeql packs --progress`, printed as one JSON line on stderr.
+///
+/// `progress` is always `true`, which tells these lines from the final error document.
+/// `step` is `null` only for `language_skipped`. `elapsed_ms` is the time since the step
+/// started (heartbeat, step_finished, step_failed); `duration_ms` is the step's duration
+/// (step_finished, step_failed). `message` is plain English for an operator, without
+/// control characters and at most 1000 characters long.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct CodeQlProgressEvent {
+    /// Always `true`.
+    pub progress: bool,
+    /// Event kind.
+    pub event: CodeQlProgressKind,
+    /// Step, or `None` for `language_skipped`.
+    pub step: Option<CodeQlStep>,
+    /// CodeQL language id, when the step or skip concerns one.
+    pub language: Option<String>,
+    /// Query pack (`codeql/<language>-queries`) for `pack_download`.
+    pub pack: Option<String>,
+    /// Milliseconds since the step started.
+    pub elapsed_ms: Option<u64>,
+    /// Duration of the ended step in milliseconds.
+    pub duration_ms: Option<u64>,
+    /// Explanation for an operator.
+    pub message: Option<String>,
+}
+
+fn duration_ms(duration: Duration) -> u64 {
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+}
+
+/// `text` without control characters, at most [`PROGRESS_MESSAGE_MAX_CHARS`] long.
+fn progress_text(text: &str) -> String {
+    let cleaned: String = text.chars().filter(|c| !c.is_control()).collect();
+    if cleaned.chars().count() > PROGRESS_MESSAGE_MAX_CHARS {
+        let mut cut: String = cleaned.chars().take(PROGRESS_MESSAGE_MAX_CHARS).collect();
+        cut.push_str("...");
+        cut
+    } else {
+        cleaned
+    }
+}
+
+/// The step a progress event refers to.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct StepRef<'s> {
+    pub(crate) step: CodeQlStep,
+    pub(crate) language: Option<CodeQlHostLanguage>,
+    pub(crate) pack: Option<&'s str>,
+}
+
+impl StepRef<'_> {
+    fn event(
+        &self,
+        event: CodeQlProgressKind,
+        elapsed: Option<Duration>,
+        ended: bool,
+        message: &str,
+    ) -> CodeQlProgressEvent {
+        CodeQlProgressEvent {
+            progress: true,
+            event,
+            step: Some(self.step),
+            language: self.language.map(|l| l.as_str().to_string()),
+            pack: self.pack.map(str::to_string),
+            elapsed_ms: elapsed.map(duration_ms),
+            duration_ms: elapsed.filter(|_| ended).map(duration_ms),
+            message: Some(progress_text(message)),
+        }
+    }
+
+    fn heartbeat_message(&self) -> String {
+        let language = self.language.map_or("", |l| l.as_str());
+        match self.step {
+            CodeQlStep::Version => "Still waiting for codeql version".to_string(),
+            CodeQlStep::PackDownload => {
+                format!(
+                    "Still downloading {}",
+                    self.pack.unwrap_or("the query pack")
+                )
+            }
+            CodeQlStep::DatabaseCreate => format!("Still creating the {language} database"),
+            CodeQlStep::DatabaseAnalyze => format!("Still analyzing {language}"),
+        }
+    }
+}
+
+fn skipped_event(language: CodeQlHostLanguage, reason: &str) -> CodeQlProgressEvent {
+    CodeQlProgressEvent {
+        progress: true,
+        event: CodeQlProgressKind::LanguageSkipped,
+        step: None,
+        language: Some(language.as_str().to_string()),
+        pack: None,
+        elapsed_ms: None,
+        duration_ms: None,
+        message: Some(progress_text(reason)),
+    }
+}
+
+/// How one contained CodeQL step ended.
+pub(crate) enum StepOutcome {
+    /// The program exited by itself (any exit code).
+    Done(ContainedRun),
+    /// The time limit ran out (or was zero); the tree was killed. A `step_failed` event
+    /// was sent.
+    TimedOut,
+    /// The caller cancelled; the tree was killed. A `step_failed` event was sent.
+    Cancelled,
+    /// The program could not be started. A `step_failed` event was sent.
+    SpawnFailed(String),
+}
+
+/// Runs CodeQL steps in one run directory and reports their progress.
+pub(crate) struct StepRunner<'a> {
+    pub(crate) program: &'a Path,
+    pub(crate) cwd: &'a Path,
+    pub(crate) env: &'a [(OsString, OsString)],
+    pub(crate) cancel: &'a AtomicBool,
+    pub(crate) progress: &'a mut dyn FnMut(&CodeQlProgressEvent),
+    pub(crate) heartbeat: Duration,
+}
+
+impl StepRunner<'_> {
+    pub(crate) fn emit(&mut self, event: &CodeQlProgressEvent) {
+        (self.progress)(event);
+    }
+
+    pub(crate) fn finished(&mut self, at: &StepRef<'_>, took: Duration, message: &str) {
+        let event = at.event(CodeQlProgressKind::StepFinished, Some(took), true, message);
+        self.emit(&event);
+    }
+
+    pub(crate) fn failed(&mut self, at: &StepRef<'_>, took: Duration, message: &str) {
+        let event = at.event(CodeQlProgressKind::StepFailed, Some(took), true, message);
+        self.emit(&event);
+    }
+
+    /// Sends `step_started`, runs `args` for at most `limit` with heartbeats, and sends
+    /// `step_failed` when the step timed out, was cancelled or could not start. The
+    /// caller reports how a step that exited ended.
+    pub(crate) fn run(
+        &mut self,
+        at: &StepRef<'_>,
+        start_message: &str,
+        args: &[OsString],
+        limit: Duration,
+        tail_bytes: usize,
+    ) -> (StepOutcome, Duration) {
+        if self.cancel.load(Ordering::SeqCst) {
+            self.failed(at, Duration::ZERO, "not started: the run was cancelled");
+            return (StepOutcome::Cancelled, Duration::ZERO);
+        }
+        if limit.is_zero() {
+            self.failed(
+                at,
+                Duration::ZERO,
+                "not started: no time is left in the time budget",
+            );
+            return (StepOutcome::TimedOut, Duration::ZERO);
+        }
+        let event = at.event(CodeQlProgressKind::StepStarted, None, false, start_message);
+        self.emit(&event);
+        let started = Instant::now();
+        let mut last_beat = started;
+        let heartbeat = self.heartbeat;
+        let progress = &mut *self.progress;
+        let mut on_poll = || {
+            if last_beat.elapsed() >= heartbeat {
+                last_beat = Instant::now();
+                let event = at.event(
+                    CodeQlProgressKind::Heartbeat,
+                    Some(started.elapsed()),
+                    false,
+                    &at.heartbeat_message(),
+                );
+                progress(&event);
+            }
+        };
+        let result = run_contained_observed(
+            self.program,
+            args,
+            self.cwd,
+            self.env,
+            limit,
+            tail_bytes,
+            self.cancel,
+            &mut on_poll,
+        );
+        let took = started.elapsed();
+        let outcome = match result {
+            Ok(run) if run.cancelled => {
+                self.failed(at, took, "cancelled; the CodeQL process tree was killed");
+                StepOutcome::Cancelled
+            }
+            Ok(run) if run.timed_out => {
+                self.failed(
+                    at,
+                    took,
+                    &format!(
+                        "timed out after {:.1} s; the CodeQL process tree was killed",
+                        limit.as_secs_f64()
+                    ),
+                );
+                StepOutcome::TimedOut
+            }
+            Ok(run) => StepOutcome::Done(run),
+            Err(e) => {
+                let reason = e.to_string();
+                self.failed(at, took, &format!("could not start: {reason}"));
+                StepOutcome::SpawnFailed(reason)
+            }
+        };
+        (outcome, took)
+    }
+}
+
+/// How the download of one query pack ended.
+pub(crate) enum DownloadOutcome {
+    /// `codeql pack download` exited with code 0 and the pack was moved into the pack
+    /// cache.
+    Downloaded,
+    /// It failed twice (or could not start, or its result could not be installed); the
+    /// reason names CodeQL's message.
+    Failed(String),
+    /// The download budget ran out while it ran; the tree was killed.
+    TimedOut,
+    /// No time was left in the download budget, so no download was started.
+    NotStarted,
+    /// The caller cancelled; the tree was killed.
+    Cancelled,
+}
+
+/// Name prefix of the staging directories that `codeql pack download` writes into
+/// (inside the pack cache, outside its `packages/`, so neither CodeQL nor Sentra reads
+/// a pack from them).
+pub const PACK_STAGING_PREFIX: &str = ".sentra-staging-";
+
+/// Attempts of a rename or delete that Windows can refuse for a moment after CodeQL
+/// exited (a scanner or indexer still holding a file it just wrote).
+const FS_RETRIES: u32 = 5;
+
+fn with_fs_retries<T>(mut action: impl FnMut() -> std::io::Result<T>) -> std::io::Result<T> {
+    let mut attempt = 1;
+    loop {
+        match action() {
+            Ok(value) => return Ok(value),
+            Err(e) if attempt >= FS_RETRIES || e.kind() == std::io::ErrorKind::NotFound => {
+                return Err(e);
+            }
+            Err(_) => {
+                std::thread::sleep(Duration::from_millis(200));
+                attempt += 1;
+            }
+        }
+    }
+}
+
+/// Subdirectories of `dir` (links are not followed), by name.
+fn subdirectories(dir: &Path) -> Result<Vec<(OsString, PathBuf)>, String> {
+    let entries = std::fs::read_dir(dir)
+        .map_err(|e| format!("'{}' cannot be read: {e}", display_path(dir)))?;
+    Ok(entries
+        .flatten()
+        .filter(|entry| entry.file_type().is_ok_and(|t| t.is_dir()))
+        .map(|entry| (entry.file_name(), entry.path()))
+        .collect())
+}
+
+/// Moves the pack versions that `codeql pack download` wrote into `staging` (its
+/// `--common-caches`) into `pack_cache`: every `packages/<scope>/<name>/<version>`
+/// directory with a `qlpack.yml`. A directory of the same version already in the pack
+/// cache is replaced: the pack was downloaded because it was not usable there. Each
+/// pack version is moved with one rename on the same volume, so it appears in the pack
+/// cache complete or not at all. Returns how many versions were moved.
+pub(crate) fn install_staged_packs(staging: &Path, pack_cache: &Path) -> Result<usize, String> {
+    let packages = staging.join("packages");
+    if !packages.is_dir() {
+        return Ok(0);
+    }
+    let mut moved = 0_usize;
+    for (scope, scope_dir) in subdirectories(&packages)? {
+        for (name, name_dir) in subdirectories(&scope_dir)? {
+            for (version, version_dir) in subdirectories(&name_dir)? {
+                if !version_dir.join("qlpack.yml").is_file() {
+                    continue;
+                }
+                let parent = pack_cache.join("packages").join(&scope).join(&name);
+                private_dir_builder(true).create(&parent).map_err(|e| {
+                    format!(
+                        "the pack cache directory '{}' cannot be created: {e}",
+                        display_path(&parent)
+                    )
+                })?;
+                let target = parent.join(&version);
+                if std::fs::symlink_metadata(&target).is_ok() {
+                    let aside = staging.join(format!("replaced-{moved}"));
+                    with_fs_retries(|| std::fs::rename(&target, &aside)).map_err(|e| {
+                        format!(
+                            "the unusable pack directory '{}' could not be replaced (delete it and download again): {e}",
+                            display_path(&target)
+                        )
+                    })?;
+                }
+                with_fs_retries(|| std::fs::rename(&version_dir, &target)).map_err(|e| {
+                    format!(
+                        "the downloaded pack could not be moved into the pack cache ('{}'): {e}",
+                        display_path(&target)
+                    )
+                })?;
+                moved += 1;
+            }
+        }
+    }
+    Ok(moved)
+}
+
+/// Downloads `codeql/<language>-queries` into `pack_cache`, retrying once after a
+/// failed attempt, within `budget` (reduced by the time spent). Every attempt writes
+/// into a new staging directory inside the pack cache, whose complete pack versions are
+/// moved into the pack cache only after `codeql pack download` exited with code 0; the
+/// staging directory is deleted afterwards, so a download that was killed, timed out or
+/// failed leaves no partial pack behind. Returns the outcome and the time spent.
+pub(crate) fn download_query_pack(
+    runner: &mut StepRunner<'_>,
+    language: CodeQlHostLanguage,
+    pack_cache: &Path,
+    budget: &mut Duration,
+) -> (DownloadOutcome, Duration) {
+    let pack = format!("codeql/{language}-queries");
+    let at = StepRef {
+        step: CodeQlStep::PackDownload,
+        language: Some(language),
+        pack: Some(&pack),
+    };
+    let mut spent = Duration::ZERO;
+    let mut last_failure = String::new();
+    for attempt in 1..=2 {
+        if budget.is_zero() && !runner.cancel.load(Ordering::SeqCst) {
+            if attempt == 1 {
+                runner.failed(
+                    &at,
+                    Duration::ZERO,
+                    "not started: the download budget ran out before this download",
+                );
+                return (DownloadOutcome::NotStarted, spent);
+            }
+            return (
+                DownloadOutcome::Failed(format!(
+                    "{last_failure} (not retried: the download budget ran out)"
+                )),
+                spent,
+            );
+        }
+        let message = if attempt == 1 {
+            format!(
+                "Downloading query pack {pack} into the pack cache (needed once; can take several minutes on a slow connection)"
+            )
+        } else {
+            format!("Retrying the download of {pack} (attempt 2 of 2)")
+        };
+        let staging = pack_cache.join(format!(
+            "{PACK_STAGING_PREFIX}{}-{}",
+            std::process::id(),
+            unique_nanos()
+        ));
+        if let Err(e) = private_dir_builder(false).create(&staging) {
+            let reason = format!(
+                "the staging directory '{}' for codeql pack download cannot be created: {e}",
+                display_path(&staging)
+            );
+            runner.failed(&at, Duration::ZERO, &reason);
+            return (DownloadOutcome::Failed(reason), spent);
+        }
+        let args = codeql_pack_download_args(&pack, &staging);
+        let (outcome, took) = runner.run(&at, &message, &args, *budget, CODEQL_OUTPUT_TAIL_BYTES);
+        *budget = budget.saturating_sub(took);
+        spent += took;
+        let installed = match &outcome {
+            StepOutcome::Done(run) if run.exit_code == Some(0) => {
+                Some(install_staged_packs(&staging, pack_cache))
+            }
+            _ => None,
+        };
+        // Whatever the outcome: a partial pack in it must never be read.
+        let _ = with_fs_retries(|| std::fs::remove_dir_all(&staging));
+        match (outcome, installed) {
+            (StepOutcome::Cancelled, _) => return (DownloadOutcome::Cancelled, spent),
+            (StepOutcome::TimedOut, _) => return (DownloadOutcome::TimedOut, spent),
+            (StepOutcome::SpawnFailed(e), _) => {
+                return (
+                    DownloadOutcome::Failed(format!("codeql pack download could not start: {e}")),
+                    spent,
+                );
+            }
+            (StepOutcome::Done(_), Some(Ok(_))) => {
+                runner.finished(&at, took, &format!("Query pack {pack} downloaded"));
+                return (DownloadOutcome::Downloaded, spent);
+            }
+            (StepOutcome::Done(_), Some(Err(reason))) => {
+                runner.failed(&at, took, &reason);
+                return (DownloadOutcome::Failed(reason), spent);
+            }
+            (StepOutcome::Done(run), None) => {
+                last_failure = step_failure("codeql pack download", &run);
+                let note = match (attempt, budget.is_zero()) {
+                    (1, false) => "; retrying once",
+                    (1, true) => "; not retried: the download budget ran out",
+                    _ => "",
+                };
+                runner.failed(&at, took, &format!("{last_failure}{note}"));
+            }
+        }
+    }
+    (
+        DownloadOutcome::Failed(format!("{last_failure} (failed twice)")),
+        spent,
+    )
+}
 
 /// Platform rules applied to the launcher.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -601,6 +1126,20 @@ pub fn codeql_host_environment<I>(
 where
     I: IntoIterator<Item = (OsString, OsString)>,
 {
+    step_environment(parent, dirs, Some(workspace), platform)
+}
+
+/// [`codeql_host_environment`] for steps that have no workspace (`sentra codeql packs`):
+/// `PATH` loses only relative and empty entries.
+pub(crate) fn step_environment<I>(
+    parent: I,
+    dirs: &CodeQlRunDirs,
+    workspace: Option<&Path>,
+    platform: LauncherPlatform,
+) -> Vec<(OsString, OsString)>
+where
+    I: IntoIterator<Item = (OsString, OsString)>,
+{
     let mut env: Vec<(OsString, OsString)> = Vec::new();
     for (name, value) in parent {
         let Some(text) = name.to_str() else {
@@ -611,7 +1150,9 @@ where
         }
         if text.eq_ignore_ascii_case("PATH") {
             let kept: Vec<PathBuf> = std::env::split_paths(&value)
-                .filter(|entry| entry.is_absolute() && !is_within(entry, workspace))
+                .filter(|entry| {
+                    entry.is_absolute() && !workspace.is_some_and(|w| is_within(entry, w))
+                })
                 .collect();
             if let Ok(joined) = std::env::join_paths(kept) {
                 env.push((name, joined));
@@ -878,10 +1419,23 @@ pub struct CodeQlAnalyzeRequest {
     pub threads: Option<u32>,
     /// `--ram` passed to CodeQL, in MB.
     pub ram_mb: Option<u32>,
-    /// Total time budget.
+    /// Time budget of the analysis steps (`codeql version`, `database create`,
+    /// `database analyze`) and the checks before them; pack downloads do not use it.
     pub timeout: Duration,
+    /// Time budget of all `codeql pack download` steps together.
+    pub download_timeout: Duration,
+    /// Interval of `heartbeat` progress events while a step runs.
+    pub heartbeat: Duration,
     /// Whether `codeql pack download` may run.
     pub allow_pack_download: bool,
+    /// JavaScript runtime that parses TypeScript (`SEMMLE_TYPESCRIPT_NODE_RUNTIME`): an
+    /// absolute path of a native executable outside the workspace. `None`: the first
+    /// `bun` on the caller's `PATH`, else CodeQL's default (`node` on `PATH`) with a
+    /// warning.
+    pub typescript_runtime: Option<PathBuf>,
+    /// Relative globs excluded from extraction (`LGTM_INDEX_FILTERS` `exclude:` lines);
+    /// see [`validate_exclude_glob`].
+    pub exclude: Vec<String>,
     /// Most findings returned.
     pub max_results: usize,
     /// When set and it becomes true, the running CodeQL step's process tree is killed and
@@ -890,6 +1444,202 @@ pub struct CodeQlAnalyzeRequest {
     pub cancel: Option<Arc<AtomicBool>>,
 }
 
+/// Checks one `exclude` glob: relative (no leading `/`, no drive, UNC or `:`), at most
+/// [`MAX_EXCLUDE_GLOB_CHARS`] characters, no control characters (a line break would add
+/// a filter line), no `\` (use `/`) and no `..` segment. Returns the reason when it is
+/// refused.
+pub fn validate_exclude_glob(glob: &str) -> Result<(), String> {
+    if glob.trim().is_empty() {
+        return Err("an exclude glob must not be empty".into());
+    }
+    if glob.chars().count() > MAX_EXCLUDE_GLOB_CHARS {
+        return Err(format!(
+            "an exclude glob must be at most {MAX_EXCLUDE_GLOB_CHARS} characters long"
+        ));
+    }
+    if glob.chars().any(char::is_control) {
+        return Err(
+            "an exclude glob must not contain control characters (line breaks included)".into(),
+        );
+    }
+    if glob.contains('\\') {
+        return Err("an exclude glob must use / as the path separator, not \\".into());
+    }
+    if glob.starts_with('/') || glob.contains(':') {
+        return Err(
+            "an exclude glob must be relative to the workspace (no leading /, drive, UNC path or ':')"
+                .into(),
+        );
+    }
+    if glob.split('/').any(|segment| segment == "..") {
+        return Err("an exclude glob must not contain a '..' segment".into());
+    }
+    Ok(())
+}
+
+/// `LGTM_INDEX_FILTERS` value for `exclude` (one `exclude:<glob>` line each), after
+/// checking every glob and their number.
+pub fn index_filters(exclude: &[String]) -> Result<Option<String>, CodeQlHostError> {
+    let refused =
+        |message: String| CodeQlHostError::new(CodeQlHostErrorKind::InvalidExclude, message);
+    if exclude.len() > MAX_EXCLUDE_GLOBS {
+        return Err(refused(format!(
+            "at most {MAX_EXCLUDE_GLOBS} exclude globs are accepted ({} given)",
+            exclude.len()
+        )));
+    }
+    for (index, glob) in exclude.iter().enumerate() {
+        validate_exclude_glob(glob)
+            .map_err(|why| refused(format!("exclude glob {} refused: {why}", index + 1)))?;
+    }
+    Ok((!exclude.is_empty()).then(|| {
+        exclude
+            .iter()
+            .map(|glob| format!("exclude:{glob}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }))
+}
+
+/// Magic numbers of native executables on Unix: ELF and Mach-O (32/64-bit, both byte
+/// orders, and universal binaries).
+const UNIX_EXECUTABLE_MAGIC: [[u8; 4]; 6] = [
+    [0x7f, b'E', b'L', b'F'],
+    [0xfe, 0xed, 0xfa, 0xce],
+    [0xfe, 0xed, 0xfa, 0xcf],
+    [0xce, 0xfa, 0xed, 0xfe],
+    [0xcf, 0xfa, 0xed, 0xfe],
+    [0xca, 0xfe, 0xba, 0xbe],
+];
+
+/// Validates the JavaScript runtime used for TypeScript extraction and returns its
+/// canonical path.
+///
+/// `path` must be absolute and local (on Windows no `\\server\share` or device path),
+/// name an existing native executable (Windows: a `.exe` file with a PE header; Unix: an
+/// ELF or Mach-O file with an execute bit; scripts are refused), lie outside the
+/// workspace, and on Windows contain none of `&`, `^`, `!`, `%`.
+pub fn validate_typescript_runtime_with(
+    path: &Path,
+    workspace: &Path,
+    platform: LauncherPlatform,
+    fs: &dyn LauncherFs,
+) -> Result<PathBuf, CodeQlHostError> {
+    let shown = display_path(path);
+    let refused = |why: &str| {
+        CodeQlHostError::new(
+            CodeQlHostErrorKind::InvalidTypescriptRuntime,
+            format!(
+                "'{shown}' cannot be used as the TypeScript runtime (--typescript-runtime): {why}"
+            ),
+        )
+    };
+    let text = path.to_string_lossy();
+    let network = |t: &str| t.starts_with("\\\\") || t.starts_with("//");
+    if platform == LauncherPlatform::Windows && network(&text) {
+        return Err(refused(
+            "a network (UNC) or device path is not accepted; use a local path",
+        ));
+    }
+    let absolute = match platform {
+        // `C:\...` or `C:/...`; a rooted path without a drive is relative to the current drive.
+        LauncherPlatform::Windows => {
+            let bytes = text.as_bytes();
+            bytes.len() > 3
+                && bytes[0].is_ascii_alphabetic()
+                && bytes[1] == b':'
+                && (bytes[2] == b'\\' || bytes[2] == b'/')
+        }
+        LauncherPlatform::Unix => text.starts_with('/'),
+    };
+    if !absolute {
+        return Err(refused("it must be an absolute path"));
+    }
+    if let Some(found) = cmd_metacharacters_in(path, platform) {
+        return Err(refused(&format!(
+            "it contains {found}, which cmd.exe would interpret in CodeQL's Windows scripts"
+        )));
+    }
+    let program = fs
+        .canonicalize(path)
+        .map_err(|_| refused("it does not exist or cannot be accessed"))?;
+    let canonical = program.to_string_lossy();
+    if platform == LauncherPlatform::Windows && network(&canonical) {
+        return Err(refused(
+            "it resolves to a network (UNC) path; use a local path",
+        ));
+    }
+    if let Some(found) = cmd_metacharacters_in(&program, platform) {
+        return Err(refused(&format!(
+            "it resolves to a path containing {found}, which cmd.exe would interpret in CodeQL's Windows scripts"
+        )));
+    }
+    if !fs.is_file(&program) {
+        return Err(refused("it is not a file"));
+    }
+    if is_within(&program, workspace) {
+        return Err(refused(
+            "it is inside the workspace, whose files are untrusted target code",
+        ));
+    }
+    match platform {
+        LauncherPlatform::Windows => {
+            let exe = program
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("exe"));
+            if !exe {
+                return Err(refused(
+                    "on Windows it must be a .exe program (.cmd, .bat and scripts are refused)",
+                ));
+            }
+            let head = fs
+                .read_head(&program, 2)
+                .map_err(|_| refused("it cannot be read"))?;
+            if head != b"MZ" {
+                return Err(refused("it is not a Windows executable (no PE header)"));
+            }
+        }
+        LauncherPlatform::Unix => {
+            if !fs.is_executable(&program) {
+                return Err(refused("it is not executable"));
+            }
+            let head = fs
+                .read_head(&program, 4)
+                .map_err(|_| refused("it cannot be read"))?;
+            if !UNIX_EXECUTABLE_MAGIC.iter().any(|magic| head == magic) {
+                return Err(refused(
+                    "it is not a native executable (ELF or Mach-O); scripts are refused",
+                ));
+            }
+        }
+    }
+    Ok(program)
+}
+
+/// The first `bun` (`bun.exe` on Windows) in the absolute entries of `path_value` outside
+/// the workspace that passes [`validate_typescript_runtime_with`].
+pub fn find_bun_on_path(
+    path_value: Option<&OsStr>,
+    workspace: &Path,
+    platform: LauncherPlatform,
+    fs: &dyn LauncherFs,
+) -> Option<PathBuf> {
+    let name = match platform {
+        LauncherPlatform::Windows => "bun.exe",
+        LauncherPlatform::Unix => "bun",
+    };
+    std::env::split_paths(path_value?)
+        .filter(|entry| entry.is_absolute() && !is_within(entry, workspace))
+        .map(|entry| entry.join(name))
+        .filter(|candidate| fs.is_file(candidate))
+        .find_map(|candidate| {
+            validate_typescript_runtime_with(&candidate, workspace, platform, fs).ok()
+        })
+}
+
+/// Warning added when javascript is analysed without a TypeScript runtime.
+pub const NO_TYPESCRIPT_RUNTIME_WARNING: &str = "no JavaScript runtime for TypeScript extraction was given (--typescript-runtime) or found (bun on PATH): CodeQL's JavaScript extractor then needs node on PATH, and without it database creation fails when the workspace has TypeScript files (.ts, .tsx)";
+
 /// Runs a host analysis with the real file system and the process environment.
 pub fn analyze_workspace_with_codeql(
     request: &CodeQlAnalyzeRequest,
@@ -897,11 +1647,20 @@ pub fn analyze_workspace_with_codeql(
     analyze_workspace_with(request, &RealLauncherFs, std::env::vars_os())
 }
 
+/// [`analyze_workspace_with_codeql`] that reports its progress to `progress` (on the
+/// calling thread, while the analysis runs).
+pub fn analyze_workspace_with_codeql_progress(
+    request: &CodeQlAnalyzeRequest,
+    progress: &mut dyn FnMut(&CodeQlProgressEvent),
+) -> Result<CodeQlResultReport, CodeQlHostError> {
+    analyze_workspace_with_progress(request, &RealLauncherFs, std::env::vars_os(), progress)
+}
+
 /// Resolves `path` (which may not exist yet) and refuses it when it is `workspace` or
 /// below it; creates it otherwise and returns its canonical form.
-fn prepare_outside_dir(
+pub(crate) fn prepare_outside_dir(
     path: &Path,
-    workspace: &Path,
+    workspace: Option<&Path>,
     inside_kind: CodeQlHostErrorKind,
     label: &str,
 ) -> Result<PathBuf, CodeQlHostError> {
@@ -932,7 +1691,7 @@ fn prepare_outside_dir(
     for name in rest.iter().rev() {
         resolved.push(name);
     }
-    if is_within(&resolved, workspace) {
+    if workspace.is_some_and(|w| is_within(&resolved, w)) {
         return Err(inside());
     }
     if let Some(found) = cmd_metacharacters_in(&resolved, LauncherPlatform::current()) {
@@ -964,7 +1723,7 @@ fn prepare_outside_dir(
                 ),
             )
         })?;
-    if is_within(&canonical, workspace) {
+    if workspace.is_some_and(|w| is_within(&canonical, w)) {
         return Err(inside());
     }
     Ok(canonical)
@@ -973,7 +1732,7 @@ fn prepare_outside_dir(
 /// A [`std::fs::DirBuilder`] that creates directories private to the current user on
 /// Unix (mode 0700); `recursive` false makes an existing directory an error.
 #[cfg(unix)]
-fn private_dir_builder(recursive: bool) -> std::fs::DirBuilder {
+pub(crate) fn private_dir_builder(recursive: bool) -> std::fs::DirBuilder {
     use std::os::unix::fs::DirBuilderExt;
     let mut builder = std::fs::DirBuilder::new();
     builder.recursive(recursive).mode(0o700);
@@ -982,7 +1741,7 @@ fn private_dir_builder(recursive: bool) -> std::fs::DirBuilder {
 
 /// A [`std::fs::DirBuilder`]; `recursive` false makes an existing directory an error.
 #[cfg(not(unix))]
-fn private_dir_builder(recursive: bool) -> std::fs::DirBuilder {
+pub(crate) fn private_dir_builder(recursive: bool) -> std::fs::DirBuilder {
     let mut builder = std::fs::DirBuilder::new();
     builder.recursive(recursive);
     builder
@@ -1008,7 +1767,7 @@ fn shared_directory_problem(owner: u32, mode: u32, uid: u32) -> Option<&'static 
 /// The current user's id is read from a file created in the first directory (through
 /// the open handle, so a concurrent rename cannot change the answer).
 #[cfg(unix)]
-fn check_private_dirs(dirs: &[(&Path, &str)]) -> Result<(), CodeQlHostError> {
+pub(crate) fn check_private_dirs(dirs: &[(&Path, &str)]) -> Result<(), CodeQlHostError> {
     use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
     let Some((first, first_label)) = dirs.first() else {
         return Ok(());
@@ -1054,12 +1813,12 @@ fn check_private_dirs(dirs: &[(&Path, &str)]) -> Result<(), CodeQlHostError> {
 
 /// Windows has no Unix owner or mode bits; the directories are used as given.
 #[cfg(not(unix))]
-fn check_private_dirs(_dirs: &[(&Path, &str)]) -> Result<(), CodeQlHostError> {
+pub(crate) fn check_private_dirs(_dirs: &[(&Path, &str)]) -> Result<(), CodeQlHostError> {
     Ok(())
 }
 
 /// Nanoseconds since the Unix epoch (0 when the clock is before it), for unique names.
-fn unique_nanos() -> u128 {
+pub(crate) fn unique_nanos() -> u128 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
@@ -1149,7 +1908,7 @@ fn output_excerpt(run: &ContainedRun) -> String {
     }
 }
 
-fn step_failure(step: &str, run: &ContainedRun) -> String {
+pub(crate) fn step_failure(step: &str, run: &ContainedRun) -> String {
     let excerpt = output_excerpt(run);
     let code = run
         .exit_code
@@ -1172,54 +1931,77 @@ fn step_failure(step: &str, run: &ContainedRun) -> String {
     }
 }
 
+/// Creates a new run directory `run` (it must not exist yet; on Unix mode 0700) with its
+/// temporary and home directories.
+pub(crate) fn create_run_dirs(run: PathBuf) -> Result<CodeQlRunDirs, CodeQlHostError> {
+    let dirs = CodeQlRunDirs::new(run);
+    // The run directory must be new (never reused) and, on Unix, private.
+    if let Err(e) = private_dir_builder(false).create(&dirs.run) {
+        return Err(CodeQlHostError::new(
+            CodeQlHostErrorKind::Io,
+            format!("the run directory cannot be created: {e}"),
+        ));
+    }
+    let mut created = vec![dirs.tmp.clone(), dirs.home.clone()];
+    if LauncherPlatform::current() == LauncherPlatform::Windows {
+        created.push(dirs.home.join("AppData"));
+        created.push(dirs.home.join("AppData").join("Roaming"));
+        created.push(dirs.home.join("AppData").join("Local"));
+    }
+    for dir in &created {
+        if let Err(e) = private_dir_builder(false).create(dir) {
+            let _ = std::fs::remove_dir_all(&dirs.run);
+            return Err(CodeQlHostError::new(
+                CodeQlHostErrorKind::Io,
+                format!("the run directory cannot be created: {e}"),
+            ));
+        }
+    }
+    Ok(dirs)
+}
+
 /// Mutable state of one analysis.
 struct Session<'a> {
-    launcher: &'a CodeQlLauncher,
-    dirs: &'a CodeQlRunDirs,
-    env: &'a [(OsString, OsString)],
+    runner: StepRunner<'a>,
+    /// End of the analysis budget; moved later by the time pack downloads take.
     deadline: Instant,
-    cancel: &'a AtomicBool,
+    /// What is left of the download budget.
+    download_remaining: Duration,
     report: CodeQlResultReport,
 }
 
-/// Result of one CodeQL step.
+/// Result of one analysis step.
 enum StepResult {
     Done(ContainedRun),
+    /// The step's own cap (shorter than the remaining budget) ran out.
+    CapReached,
     TimedOut,
     Cancelled,
     SpawnFailed(String),
 }
 
 impl Session<'_> {
-    fn run(&self, args: &[OsString], cap: Option<Duration>, tail_bytes: usize) -> StepResult {
-        if self.cancel.load(Ordering::SeqCst) {
-            return StepResult::Cancelled;
-        }
+    /// Runs one analysis step within the analysis budget (and `cap`, when shorter).
+    fn run(
+        &mut self,
+        at: &StepRef<'_>,
+        start_message: &str,
+        args: &[OsString],
+        cap: Option<Duration>,
+        tail_bytes: usize,
+    ) -> (StepResult, Duration) {
         let remaining = self.deadline.saturating_duration_since(Instant::now());
         let limit = cap.map_or(remaining, |cap| cap.min(remaining));
-        if limit.is_zero() {
-            return StepResult::TimedOut;
-        }
-        match run_contained_cancellable(
-            &self.launcher.program,
-            args,
-            &self.dirs.run,
-            self.env,
-            limit,
-            tail_bytes,
-            self.cancel,
-        ) {
-            Ok(run) if run.cancelled => StepResult::Cancelled,
-            Ok(run) if run.timed_out => {
-                if cap.is_some_and(|cap| cap < remaining) {
-                    StepResult::Done(run)
-                } else {
-                    StepResult::TimedOut
-                }
-            }
-            Ok(run) => StepResult::Done(run),
-            Err(e) => StepResult::SpawnFailed(e.to_string()),
-        }
+        let capped = cap.is_some_and(|cap| cap < remaining);
+        let (outcome, took) = self.runner.run(at, start_message, args, limit, tail_bytes);
+        let result = match outcome {
+            StepOutcome::Done(run) => StepResult::Done(run),
+            StepOutcome::TimedOut if capped => StepResult::CapReached,
+            StepOutcome::TimedOut => StepResult::TimedOut,
+            StepOutcome::Cancelled => StepResult::Cancelled,
+            StepOutcome::SpawnFailed(e) => StepResult::SpawnFailed(e),
+        };
+        (result, took)
     }
 
     fn cancel_error(mut self, during: &str) -> CodeQlHostError {
@@ -1237,12 +2019,12 @@ impl Session<'_> {
 
     fn timeout_error(mut self, during: &str) -> CodeQlHostError {
         self.report.warnings.push(format!(
-            "the time budget ran out during {during}; the CodeQL process tree was killed"
+            "the analysis time budget (--timeout-secs) ran out during {during}; the CodeQL process tree was killed"
         ));
         CodeQlHostError {
             kind: CodeQlHostErrorKind::Timeout,
             message: format!(
-                "CodeQL did not finish within the time budget (during {during}); the process tree was killed and partial results were discarded"
+                "CodeQL did not finish within the analysis time budget (during {during}); the process tree was killed and partial results were discarded"
             ),
             report: Some(Box::new(self.report)),
         }
@@ -1260,6 +2042,19 @@ pub fn analyze_workspace_with<I>(
     request: &CodeQlAnalyzeRequest,
     fs: &dyn LauncherFs,
     parent_env: I,
+) -> Result<CodeQlResultReport, CodeQlHostError>
+where
+    I: IntoIterator<Item = (OsString, OsString)>,
+{
+    analyze_workspace_with_progress(request, fs, parent_env, &mut |_| {})
+}
+
+/// [`analyze_workspace_with`] that reports its progress to `progress`.
+pub fn analyze_workspace_with_progress<I>(
+    request: &CodeQlAnalyzeRequest,
+    fs: &dyn LauncherFs,
+    parent_env: I,
+    progress: &mut dyn FnMut(&CodeQlProgressEvent),
 ) -> Result<CodeQlResultReport, CodeQlHostError>
 where
     I: IntoIterator<Item = (OsString, OsString)>,
@@ -1296,13 +2091,13 @@ where
     let launcher = validate_codeql_launcher_with(&request.codeql, LauncherPlatform::current(), fs)?;
     let work_dir = prepare_outside_dir(
         &request.work_dir,
-        &workspace,
+        Some(&workspace),
         CodeQlHostErrorKind::WorkDirInsideWorkspace,
         "work directory",
     )?;
     let pack_cache = prepare_outside_dir(
         &request.pack_cache,
-        &workspace,
+        Some(&workspace),
         CodeQlHostErrorKind::PackCacheInsideWorkspace,
         "pack cache",
     )?;
@@ -1326,34 +2121,43 @@ where
 
     check_private_dirs(&[(&work_dir, "work directory"), (&pack_cache, "pack cache")])?;
 
-    let dirs = CodeQlRunDirs::new(work_dir.join(format!(
+    let platform = LauncherPlatform::current();
+    let filters = index_filters(&request.exclude)?;
+    let parent_env: Vec<(OsString, OsString)> = parent_env.into_iter().collect();
+    let typescript_runtime = match &request.typescript_runtime {
+        Some(path) => Some(validate_typescript_runtime_with(
+            path, &workspace, platform, fs,
+        )?),
+        None => {
+            let path_value = parent_env
+                .iter()
+                .find(|(name, _)| {
+                    name.to_str().is_some_and(|n| match platform {
+                        LauncherPlatform::Windows => n.eq_ignore_ascii_case("PATH"),
+                        LauncherPlatform::Unix => n == "PATH",
+                    })
+                })
+                .map(|(_, value)| value.as_os_str());
+            find_bun_on_path(path_value, &workspace, platform, fs)
+        }
+    };
+
+    let dirs = create_run_dirs(work_dir.join(format!(
         "sentra-codeql-{}-{}",
         std::process::id(),
         unique_nanos()
-    )));
-    // The run directory must be new (never reused) and, on Unix, private.
-    if let Err(e) = private_dir_builder(false).create(&dirs.run) {
-        return Err(CodeQlHostError::new(
-            CodeQlHostErrorKind::Io,
-            format!("the run directory cannot be created: {e}"),
+    )))?;
+    let mut env = step_environment(parent_env, &dirs, Some(&workspace), platform);
+    // The only CodeQL-specific variables: set from validated input, never inherited.
+    if let Some(runtime) = &typescript_runtime {
+        env.push((
+            TYPESCRIPT_RUNTIME_ENV.into(),
+            runtime.as_os_str().to_os_string(),
         ));
     }
-    let mut created = vec![dirs.tmp.clone(), dirs.home.clone()];
-    if LauncherPlatform::current() == LauncherPlatform::Windows {
-        created.push(dirs.home.join("AppData"));
-        created.push(dirs.home.join("AppData").join("Roaming"));
-        created.push(dirs.home.join("AppData").join("Local"));
+    if let Some(filters) = &filters {
+        env.push((INDEX_FILTERS_ENV.into(), filters.into()));
     }
-    for dir in &created {
-        if let Err(e) = private_dir_builder(false).create(dir) {
-            let _ = std::fs::remove_dir_all(&dirs.run);
-            return Err(CodeQlHostError::new(
-                CodeQlHostErrorKind::Io,
-                format!("the run directory cannot be created: {e}"),
-            ));
-        }
-    }
-    let env = codeql_host_environment(parent_env, &dirs, &workspace, LauncherPlatform::current());
     let never = AtomicBool::new(false);
     let cancel: &AtomicBool = request.cancel.as_deref().unwrap_or(&never);
 
@@ -1369,11 +2173,16 @@ where
         ));
     }
     let session = Session {
-        launcher: &launcher,
-        dirs: &dirs,
-        env: &env,
+        runner: StepRunner {
+            program: &launcher.program,
+            cwd: &dirs.run,
+            env: &env,
+            cancel,
+            progress,
+            heartbeat: request.heartbeat.max(Duration::from_millis(100)),
+        },
         deadline: started + request.timeout,
-        cancel,
+        download_remaining: request.download_timeout,
         report: CodeQlResultReport {
             schema_version: 1,
             command: "codeql analyze",
@@ -1391,7 +2200,15 @@ where
             source_tool: None,
         },
     };
-    let outcome = run_session(session, request, &languages, &workspace, &pack_cache);
+    let outcome = run_session(
+        session,
+        request,
+        &launcher.distribution,
+        &languages,
+        &workspace,
+        &pack_cache,
+        typescript_runtime.as_deref(),
+    );
     let cleanup = std::fs::remove_dir_all(&dirs.run);
     match (outcome, cleanup) {
         (Ok(mut report), Err(e)) => {
@@ -1417,44 +2234,62 @@ where
 fn run_session(
     mut session: Session<'_>,
     request: &CodeQlAnalyzeRequest,
+    distribution: &Path,
     languages: &[CodeQlHostLanguage],
     workspace: &Path,
     pack_cache: &Path,
+    typescript_runtime: Option<&Path>,
 ) -> Result<CodeQlResultReport, CodeQlHostError> {
-    let distribution = session.launcher.distribution.clone();
+    let suite_label = request.suite.as_str();
 
     // 1. CLI version; also proves the launcher starts.
-    match session.run(
+    let version_step = StepRef {
+        step: CodeQlStep::Version,
+        language: None,
+        pack: None,
+    };
+    let (version, took) = session.run(
+        &version_step,
+        "Checking the CodeQL CLI (codeql version)",
         &codeql_version_args(pack_cache),
         Some(CODEQL_VERSION_TIMEOUT),
         CODEQL_VERSION_OUTPUT_BYTES,
-    ) {
+    );
+    match version {
         StepResult::SpawnFailed(e) => {
             return Err(CodeQlHostError::new(
                 CodeQlHostErrorKind::NotFound,
                 format!(
                     "the CodeQL launcher '{}' could not be started: {e}",
-                    display_path(&session.launcher.program)
+                    display_path(session.runner.program)
                 ),
             ));
         }
         StepResult::TimedOut => return Err(session.timeout_error("codeql version")),
         StepResult::Cancelled => return Err(session.cancel_error("codeql version")),
-        StepResult::Done(run) if run.exit_code == Some(0) && !run.timed_out => {
+        StepResult::Done(run) if run.exit_code == Some(0) => {
             session.report.codeql_version = parse_codeql_version(&run.stdout_tail);
-            if session.report.codeql_version.is_none() {
-                session
-                    .report
-                    .warnings
-                    .push("codeql version did not report a version".into());
-            }
+            let message = match &session.report.codeql_version {
+                Some(version) => format!("CodeQL CLI {version}"),
+                None => {
+                    session
+                        .report
+                        .warnings
+                        .push("codeql version did not report a version".into());
+                    "codeql version did not report a version".to_string()
+                }
+            };
+            session.runner.finished(&version_step, took, &message);
+        }
+        StepResult::CapReached => {
+            session
+                .report
+                .warnings
+                .push("codeql version did not answer within 120 seconds".to_string());
         }
         StepResult::Done(run) => {
-            let reason = if run.timed_out {
-                "codeql version did not answer within 120 seconds".to_string()
-            } else {
-                step_failure("codeql version", &run)
-            };
+            let reason = step_failure("codeql version", &run);
+            session.runner.failed(&version_step, took, &reason);
             session.report.warnings.push(reason);
         }
     }
@@ -1463,48 +2298,61 @@ fn run_session(
     let mut plans: Vec<(CodeQlHostLanguage, Plan)> = Vec::new();
     let mut pack_missing = 0_usize;
     for &language in languages {
-        let skip = |reason: String| CodeQlLanguageOutcome {
-            language: language.as_str().to_string(),
-            status: CodeQlLanguageStatus::Skipped,
-            reason: Some(reason),
-            results: 0,
-            duration_ms: None,
-            rules: Vec::new(),
-        };
-        if let Some(reason) = language.host_block_reason() {
-            session.report.languages.push(skip(reason.to_string()));
-            continue;
-        }
-        match extractor_build_modes(&distribution, language) {
-            None => {
-                session.report.languages.push(skip(format!(
+        let skip_reason = if let Some(reason) = language.host_block_reason() {
+            Some(reason.to_string())
+        } else {
+            match extractor_build_modes(distribution, language) {
+                None => Some(format!(
                     "the CodeQL distribution has no {language} extractor"
-                )));
-                continue;
+                )),
+                Some(modes) if !modes.iter().any(|m| m == "none") => {
+                    Some(NEEDS_BUILD_REASON.to_string())
+                }
+                Some(_) => {
+                    match find_query_suite(language, request.suite, distribution, pack_cache) {
+                        Some(suite_file) => {
+                            plans.push((language, Plan::Ready(suite_file)));
+                            None
+                        }
+                        None if request.allow_pack_download => {
+                            plans.push((language, Plan::NeedsDownload));
+                            None
+                        }
+                        None => {
+                            pack_missing += 1;
+                            Some(format!(
+                                "query pack codeql/{language}-queries (suite {}) is not in the CodeQL distribution or the pack cache, and pack download is not allowed",
+                                request.suite.file_name(language)
+                            ))
+                        }
+                    }
+                }
             }
-            Some(modes) if !modes.iter().any(|m| m == "none") => {
-                session
-                    .report
-                    .languages
-                    .push(skip(NEEDS_BUILD_REASON.to_string()));
-                continue;
-            }
-            Some(_) => {}
+        };
+        if language == CodeQlHostLanguage::Javascript
+            && skip_reason.is_none()
+            && typescript_runtime.is_none()
+        {
+            session
+                .report
+                .warnings
+                .push(NO_TYPESCRIPT_RUNTIME_WARNING.to_string());
         }
-        match find_query_suite(language, request.suite, &distribution, pack_cache) {
-            Some(suite_file) => plans.push((language, Plan::Ready(suite_file))),
-            None if request.allow_pack_download => plans.push((language, Plan::NeedsDownload)),
-            None => {
-                pack_missing += 1;
-                session.report.languages.push(skip(format!(
-                    "query pack codeql/{language}-queries (suite {}) is not in the CodeQL distribution or the pack cache, and pack download is not allowed",
-                    request.suite.file_name(language)
-                )));
-            }
+        if let Some(reason) = skip_reason {
+            session.runner.emit(&skipped_event(language, &reason));
+            session.report.languages.push(CodeQlLanguageOutcome {
+                language: language.as_str().to_string(),
+                status: CodeQlLanguageStatus::Skipped,
+                reason: Some(reason),
+                results: 0,
+                duration_ms: None,
+                rules: Vec::new(),
+            });
         }
     }
 
-    // 3. Downloads (only when allowed), then analysis per language.
+    // 3. Downloads (only when allowed, within their own budget), then analysis per
+    // language.
     let mut analyzed = 0_usize;
     let mut failed = 0_usize;
     for (language, plan) in plans {
@@ -1514,45 +2362,52 @@ fn run_session(
             status: CodeQlLanguageStatus::Failed,
             reason: Some(reason),
             results: 0,
-            duration_ms: Some(language_started.elapsed().as_millis() as u64),
+            duration_ms: Some(duration_ms(language_started.elapsed())),
             rules: Vec::new(),
         };
         let suite_file = match plan {
             Plan::Ready(path) => path,
             Plan::NeedsDownload => {
                 let pack = format!("codeql/{language}-queries");
-                match session.run(
-                    &codeql_pack_download_args(&pack, pack_cache),
-                    None,
-                    CODEQL_OUTPUT_TAIL_BYTES,
-                ) {
-                    StepResult::TimedOut => {
-                        session.report.languages.push(fail("timed out".into()));
-                        return Err(session.timeout_error(&format!("codeql pack download {pack}")));
-                    }
-                    StepResult::Cancelled => {
+                let mut budget = session.download_remaining;
+                let (outcome, spent) =
+                    download_query_pack(&mut session.runner, language, pack_cache, &mut budget);
+                session.download_remaining = budget;
+                // Downloads do not use the analysis budget.
+                session.deadline += spent;
+                match outcome {
+                    DownloadOutcome::Cancelled => {
                         session.report.languages.push(fail("cancelled".into()));
                         return Err(session.cancel_error(&format!("codeql pack download {pack}")));
                     }
-                    StepResult::SpawnFailed(e) => {
+                    DownloadOutcome::TimedOut | DownloadOutcome::NotStarted => {
                         failed += 1;
+                        let reason = if matches!(outcome, DownloadOutcome::TimedOut) {
+                            format!(
+                                "the query pack download did not finish within the download budget (--download-timeout-secs {} s); the CodeQL process tree was killed",
+                                request.download_timeout.as_secs()
+                            )
+                        } else {
+                            format!(
+                                "not downloaded: the download budget (--download-timeout-secs {} s) ran out before this pack's download could start",
+                                request.download_timeout.as_secs()
+                            )
+                        };
                         session
                             .report
-                            .languages
-                            .push(fail(format!("codeql pack download could not start: {e}")));
+                            .warnings
+                            .push(format!("{language}: {reason}"));
+                        session.report.languages.push(fail(reason));
                         continue;
                     }
-                    StepResult::Done(run) if run.exit_code != Some(0) => {
+                    DownloadOutcome::Failed(reason) => {
                         failed += 1;
-                        session
-                            .report
-                            .languages
-                            .push(fail(step_failure("codeql pack download", &run)));
+                        session.report.languages.push(fail(reason));
                         continue;
                     }
-                    StepResult::Done(_) => {}
+                    DownloadOutcome::Downloaded => {}
                 }
-                match find_query_suite(language, request.suite, &distribution, pack_cache) {
+                match find_query_suite(language, request.suite, distribution, pack_cache) {
                     Some(path) => path,
                     None => {
                         failed += 1;
@@ -1566,19 +2421,38 @@ fn run_session(
             }
         };
 
-        let database = session.dirs.run.join(format!("db-{language}"));
-        let sarif = session.dirs.run.join(format!("results-{language}.sarif"));
+        let database = session.runner.cwd.join(format!("db-{language}"));
+        let sarif = session.runner.cwd.join(format!("results-{language}.sarif"));
         let create = codeql_database_create_args(&DatabaseCreateSpec {
             database: &database,
             language,
             source_root: workspace,
-            distribution: &distribution,
+            distribution,
             pack_cache,
             threads: request.threads,
             ram_mb: request.ram_mb,
         });
-        match session.run(&create, None, CODEQL_OUTPUT_TAIL_BYTES) {
-            StepResult::TimedOut => {
+        let create_step = StepRef {
+            step: CodeQlStep::DatabaseCreate,
+            language: Some(language),
+            pack: None,
+        };
+        let create_message = match (language, typescript_runtime) {
+            (CodeQlHostLanguage::Javascript, Some(runtime)) => format!(
+                "Creating the {language} database (build mode none; TypeScript is parsed with {})",
+                display_path(runtime)
+            ),
+            _ => format!("Creating the {language} database (build mode none)"),
+        };
+        let (created, took) = session.run(
+            &create_step,
+            &create_message,
+            &create,
+            None,
+            CODEQL_OUTPUT_TAIL_BYTES,
+        );
+        match created {
+            StepResult::TimedOut | StepResult::CapReached => {
                 session.report.languages.push(fail("timed out".into()));
                 return Err(session.timeout_error(&format!("codeql database create ({language})")));
             }
@@ -1596,28 +2470,44 @@ fn run_session(
             }
             StepResult::Done(run) if run.exit_code != Some(0) => {
                 failed += 1;
-                session
-                    .report
-                    .languages
-                    .push(fail(step_failure("codeql database create", &run)));
+                let reason = step_failure("codeql database create", &run);
+                session.runner.failed(&create_step, took, &reason);
+                session.report.languages.push(fail(reason));
                 let _ = std::fs::remove_dir_all(&database);
                 continue;
             }
-            StepResult::Done(_) => {}
+            StepResult::Done(_) => {
+                session.runner.finished(
+                    &create_step,
+                    took,
+                    &format!("{language} database created"),
+                );
+            }
         }
         let analyze = codeql_database_analyze_args(&DatabaseAnalyzeSpec {
             database: &database,
             suite_file: &suite_file,
             sarif: &sarif,
-            distribution: &distribution,
+            distribution,
             pack_cache,
             threads: request.threads,
             ram_mb: request.ram_mb,
         });
-        let analyzed_run = session.run(&analyze, None, CODEQL_OUTPUT_TAIL_BYTES);
+        let analyze_step = StepRef {
+            step: CodeQlStep::DatabaseAnalyze,
+            language: Some(language),
+            pack: None,
+        };
+        let (analyzed_run, took) = session.run(
+            &analyze_step,
+            &format!("Analyzing {language} ({suite_label} suite)"),
+            &analyze,
+            None,
+            CODEQL_OUTPUT_TAIL_BYTES,
+        );
         let _ = std::fs::remove_dir_all(&database);
         match analyzed_run {
-            StepResult::TimedOut => {
+            StepResult::TimedOut | StepResult::CapReached => {
                 session.report.languages.push(fail("timed out".into()));
                 return Err(session.timeout_error(&format!("codeql database analyze ({language})")));
             }
@@ -1634,10 +2524,9 @@ fn run_session(
             }
             StepResult::Done(run) if run.exit_code != Some(0) => {
                 failed += 1;
-                session
-                    .report
-                    .languages
-                    .push(fail(step_failure("codeql database analyze", &run)));
+                let reason = step_failure("codeql database analyze", &run);
+                session.runner.failed(&analyze_step, took, &reason);
+                session.report.languages.push(fail(reason));
                 continue;
             }
             StepResult::Done(_) => {}
@@ -1659,13 +2548,22 @@ fn run_session(
             Ok(summary) => summary,
             Err(e) => {
                 failed += 1;
-                session.report.languages.push(fail(format!(
-                    "the SARIF written by CodeQL could not be read: {e}"
-                )));
+                let reason = format!("the SARIF written by CodeQL could not be read: {e}");
+                session.runner.failed(&analyze_step, took, &reason);
+                session.report.languages.push(fail(reason));
                 continue;
             }
         };
         analyzed += 1;
+        let results = summary.findings.len();
+        session.runner.finished(
+            &analyze_step,
+            took,
+            &format!(
+                "{language} analyzed: {results} result{} ({suite_label} suite)",
+                if results == 1 { "" } else { "s" }
+            ),
+        );
         let report = &mut session.report;
         if report.source_tool.is_none() {
             report.source_tool = summary.source_tool.clone();
@@ -1682,8 +2580,8 @@ fn run_session(
             language: language.as_str().to_string(),
             status: CodeQlLanguageStatus::Analyzed,
             reason: None,
-            results: summary.findings.len(),
-            duration_ms: Some(language_started.elapsed().as_millis() as u64),
+            results,
+            duration_ms: Some(duration_ms(language_started.elapsed())),
             rules: rules.into_iter().collect(),
         });
         report.findings.extend(summary.findings);
@@ -1708,7 +2606,7 @@ fn run_session(
     if analyzed == 0 && failed == 0 && pack_missing > 0 {
         return Err(CodeQlHostError {
             kind: CodeQlHostErrorKind::QueryPackMissing,
-            message: "no language could be analysed: the CodeQL query packs are not in the CodeQL distribution or the pack cache, and pack download is not allowed (install the CodeQL bundle, which includes the packs, or allow pack download)".into(),
+            message: "no language could be analysed: the CodeQL query packs are not in the CodeQL distribution or the pack cache, and pack download is not allowed (install the CodeQL bundle, which includes the packs, download them with sentra codeql packs --download, or allow pack download)".into(),
             report: Some(Box::new(report)),
         });
     }
@@ -2333,5 +3231,277 @@ mod tests {
             "unsafe_directory"
         );
         assert_eq!(CodeQlHostErrorKind::Cancelled.code(), "codeql_cancelled");
+        assert_eq!(
+            CodeQlHostErrorKind::PackDownloadFailed.code(),
+            "codeql_pack_download_failed"
+        );
+    }
+
+    #[test]
+    fn progress_events_serialize_with_the_contract_keys() {
+        let at = StepRef {
+            step: CodeQlStep::PackDownload,
+            language: Some(CodeQlHostLanguage::Javascript),
+            pack: Some("codeql/javascript-queries"),
+        };
+        let beat = at.event(
+            CodeQlProgressKind::Heartbeat,
+            Some(Duration::from_millis(135_000)),
+            false,
+            &at.heartbeat_message(),
+        );
+        assert_eq!(
+            serde_json::to_string(&beat).unwrap(),
+            r#"{"progress":true,"event":"heartbeat","step":"pack_download","language":"javascript","pack":"codeql/javascript-queries","elapsed_ms":135000,"duration_ms":null,"message":"Still downloading codeql/javascript-queries"}"#
+        );
+        let finished = at.event(
+            CodeQlProgressKind::StepFinished,
+            Some(Duration::from_millis(1_500)),
+            true,
+            "done\u{1b}[0m\r\nok",
+        );
+        assert_eq!(finished.elapsed_ms, Some(1_500));
+        assert_eq!(finished.duration_ms, Some(1_500));
+        assert_eq!(finished.message.as_deref(), Some("done[0mok"));
+        let started = at.event(CodeQlProgressKind::StepStarted, None, false, "x");
+        assert_eq!((started.elapsed_ms, started.duration_ms), (None, None));
+        let long = at.event(
+            CodeQlProgressKind::StepFailed,
+            None,
+            true,
+            &"e".repeat(5_000),
+        );
+        assert_eq!(long.message.unwrap().chars().count(), 1_003);
+
+        let skipped =
+            serde_json::to_value(skipped_event(CodeQlHostLanguage::Rust, RUST_REASON)).unwrap();
+        assert_eq!(skipped["event"], "language_skipped");
+        assert!(skipped["step"].is_null() && skipped["pack"].is_null());
+        assert_eq!(skipped["language"], "rust");
+        for (step, label) in [
+            (CodeQlStep::Version, "version"),
+            (CodeQlStep::PackDownload, "pack_download"),
+            (CodeQlStep::DatabaseCreate, "database_create"),
+            (CodeQlStep::DatabaseAnalyze, "database_analyze"),
+        ] {
+            assert_eq!(step.as_str(), label);
+            assert_eq!(serde_json::to_value(step).unwrap(), label);
+        }
+    }
+
+    #[test]
+    fn heartbeat_messages_name_the_running_step() {
+        let python = Some(CodeQlHostLanguage::Python);
+        for (step, expected) in [
+            (CodeQlStep::Version, "Still waiting for codeql version"),
+            (
+                CodeQlStep::DatabaseCreate,
+                "Still creating the python database",
+            ),
+            (CodeQlStep::DatabaseAnalyze, "Still analyzing python"),
+        ] {
+            let at = StepRef {
+                step,
+                language: python,
+                pack: None,
+            };
+            assert_eq!(at.heartbeat_message(), expected);
+        }
+    }
+
+    #[test]
+    fn exclude_globs_become_index_filter_lines() {
+        assert_eq!(index_filters(&[]).unwrap(), None);
+        assert_eq!(
+            index_filters(&["**/node_modules".into(), "web/dist".into()])
+                .unwrap()
+                .as_deref(),
+            Some("exclude:**/node_modules\nexclude:web/dist")
+        );
+        let long = "x".repeat(201);
+        for bad in [
+            "",
+            "  ",
+            "../x",
+            "a/../b",
+            "/x",
+            "C:/x",
+            "c:x",
+            "\\\\server\\x",
+            "a\\b",
+            "a\nb",
+            "a\rexclude:x",
+            long.as_str(),
+        ] {
+            assert!(validate_exclude_glob(bad).is_err(), "{bad:?} accepted");
+        }
+        for good in [
+            "**/target",
+            "web/dist",
+            "*.min.js",
+            "docs/**/*.html",
+            "a..b",
+            ".git",
+        ] {
+            assert!(validate_exclude_glob(good).is_ok(), "{good:?} refused");
+        }
+        let many: Vec<String> = (0..51).map(|i| format!("d{i}")).collect();
+        assert_eq!(
+            index_filters(&many).unwrap_err().kind,
+            CodeQlHostErrorKind::InvalidExclude
+        );
+        assert_eq!(
+            index_filters(&many[..50]).unwrap().unwrap().lines().count(),
+            50
+        );
+        let error = index_filters(&["ok".into(), "../no".into()]).unwrap_err();
+        assert!(
+            error.message.contains("exclude glob 2"),
+            "{}",
+            error.message
+        );
+    }
+
+    #[test]
+    fn typescript_runtime_must_be_a_native_executable_outside_the_workspace() {
+        let mut unix = FakeFs::default();
+        for (path, head, exec) in [
+            ("/opt/bun/bin/bun", vec![0x7f, b'E', b'L', b'F', 2], true),
+            ("/opt/mac/bun", vec![0xcf, 0xfa, 0xed, 0xfe, 7], true),
+            ("/opt/bun/bin/bun.sh", b"#!/bin/sh\n".to_vec(), true),
+            ("/opt/noexec/bun", vec![0x7f, b'E', b'L', b'F'], false),
+            ("/work/ws/tools/bun", vec![0x7f, b'E', b'L', b'F'], true),
+        ] {
+            unix.files.insert(path.into(), head);
+            if exec {
+                unix.executable.insert(path.into());
+            }
+        }
+        let ws = Path::new("/work/ws");
+        let check = |fs: &FakeFs, path: &str, platform| {
+            validate_typescript_runtime_with(Path::new(path), ws, platform, fs)
+        };
+        for ok in ["/opt/bun/bin/bun", "/opt/mac/bun"] {
+            assert_eq!(
+                check(&unix, ok, LauncherPlatform::Unix).unwrap(),
+                PathBuf::from(ok)
+            );
+        }
+        for (bad, why) in [
+            ("/opt/bun/bin/bun.sh", "not a native executable"),
+            ("/opt/noexec/bun", "not executable"),
+            ("opt/bun/bin/bun", "absolute path"),
+            ("/opt/missing/bun", "does not exist"),
+            ("/work/ws/tools/bun", "inside the workspace"),
+        ] {
+            let error = check(&unix, bad, LauncherPlatform::Unix).unwrap_err();
+            assert_eq!(error.kind, CodeQlHostErrorKind::InvalidTypescriptRuntime);
+            assert!(error.message.contains(why), "{bad}: {}", error.message);
+        }
+
+        let mut windows = FakeFs::default();
+        for (path, head) in [
+            ("C:/Bun/bun.exe", b"MZ\x90\x00".to_vec()),
+            ("C:/Bun/bun.cmd", b"@echo off".to_vec()),
+            ("C:/Bun/script.exe", b"#!/bin/sh".to_vec()),
+            ("C:/R&D/bun.exe", b"MZ".to_vec()),
+        ] {
+            windows.files.insert(path.into(), head);
+        }
+        assert_eq!(
+            check(&windows, "C:/Bun/bun.exe", LauncherPlatform::Windows).unwrap(),
+            PathBuf::from("C:/Bun/bun.exe")
+        );
+        for (bad, why) in [
+            ("C:/Bun/bun.cmd", ".exe program"),
+            ("C:/Bun/script.exe", "no PE header"),
+            ("C:/R&D/bun.exe", "'&'"),
+            ("//server/share/bun.exe", "network"),
+            ("\\\\server\\share\\bun.exe", "network"),
+            ("/Bun/bun.exe", "absolute path"),
+            ("bun.exe", "absolute path"),
+        ] {
+            let error = check(&windows, bad, LauncherPlatform::Windows).unwrap_err();
+            assert_eq!(error.kind, CodeQlHostErrorKind::InvalidTypescriptRuntime);
+            assert!(error.message.contains(why), "{bad}: {}", error.message);
+        }
+    }
+
+    #[test]
+    fn bun_is_found_on_path_outside_the_workspace() {
+        let platform = LauncherPlatform::current();
+        let (root, name, head) = if cfg!(windows) {
+            ("C:/t", "bun.exe", b"MZ".to_vec())
+        } else {
+            ("/t", "bun", vec![0x7f, b'E', b'L', b'F'])
+        };
+        let mut fs = FakeFs::default();
+        for dir in ["ws/bin", "script", "real"] {
+            let file = format!("{root}/{dir}/{name}");
+            let content = if dir == "script" {
+                b"#!/bin/sh".to_vec()
+            } else {
+                head.clone()
+            };
+            fs.files.insert(file.clone(), content);
+            fs.executable.insert(file);
+        }
+        let ws = PathBuf::from(format!("{root}/ws"));
+        let path = std::env::join_paths([
+            PathBuf::from("relative"),
+            PathBuf::from(format!("{root}/ws/bin")),
+            PathBuf::from(format!("{root}/empty")),
+            PathBuf::from(format!("{root}/script")),
+            PathBuf::from(format!("{root}/real")),
+        ])
+        .unwrap();
+        assert_eq!(
+            find_bun_on_path(Some(&path), &ws, platform, &fs).map(|p| key(&p)),
+            Some(format!("{root}/real/{name}"))
+        );
+        assert_eq!(find_bun_on_path(None, &ws, platform, &fs), None);
+        let only_workspace =
+            std::env::join_paths([PathBuf::from(format!("{root}/ws/bin"))]).unwrap();
+        assert_eq!(
+            find_bun_on_path(Some(&only_workspace), &ws, platform, &fs),
+            None
+        );
+    }
+
+    #[test]
+    fn staged_packs_move_into_the_pack_cache_complete_or_not_at_all() {
+        // Regression: CodeQL unpacks straight into its --common-caches; a download killed
+        // while unpacking left a partial pack in the pack cache that later runs took as
+        // installed or could not download over. Only complete versions are moved.
+        let root = std::env::temp_dir().join(format!(
+            "sentra-staging-{}-{}",
+            std::process::id(),
+            unique_nanos()
+        ));
+        let staging = root.join("cache").join(".sentra-staging-1");
+        let cache = root.join("cache");
+        let staged = staging
+            .join("packages")
+            .join("codeql")
+            .join("python-queries");
+        std::fs::create_dir_all(staged.join("1.9.0").join("codeql-suites")).unwrap();
+        std::fs::write(staged.join("1.9.0").join("qlpack.yml"), "name: x\n").unwrap();
+        std::fs::write(staged.join("1.9.0").join("Query.qlx"), "new").unwrap();
+        // Unpacking had not reached qlpack.yml: never moved.
+        std::fs::create_dir_all(staged.join("2.0.0")).unwrap();
+        std::fs::write(staged.join("2.0.0").join("Half.qlx"), "x").unwrap();
+        // An unusable directory of the same version in the pack cache is replaced.
+        let target = cache.join("packages").join("codeql").join("python-queries");
+        std::fs::create_dir_all(target.join("1.9.0")).unwrap();
+        std::fs::write(target.join("1.9.0").join("Stale.qlx"), "old").unwrap();
+
+        assert_eq!(install_staged_packs(&staging, &cache), Ok(1));
+        assert!(target.join("1.9.0").join("qlpack.yml").is_file());
+        assert!(target.join("1.9.0").join("Query.qlx").is_file());
+        assert!(!target.join("1.9.0").join("Stale.qlx").exists());
+        assert!(!target.join("2.0.0").exists());
+        // Nothing staged (a download that never got far): nothing moved.
+        assert_eq!(install_staged_packs(&root.join("empty"), &cache), Ok(0));
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

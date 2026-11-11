@@ -388,8 +388,8 @@ mod hardening {
         plugin::{
             ADAPTER_ENV_ALLOWLIST, CONTAINMENT_ENV, DiagnosticSeverity, PluginHost,
             adapter_environment, default_plugin_dir_from, is_valid_evidence_ref,
-            resolve_adapter_command, resolve_plugin, run_contained, scan_plugin_dirs,
-            split_command_line, validate_workspace_root,
+            resolve_adapter_command, resolve_plugin, run_contained, run_contained_observed,
+            scan_plugin_dirs, split_command_line, validate_workspace_root,
         },
     };
 
@@ -774,6 +774,37 @@ wait();
             writer_stopped(&heartbeat),
             "detached child outlived the contained run"
         );
+    }
+
+    #[test]
+    fn run_contained_observed_calls_back_while_the_program_runs() {
+        if !bun_available() {
+            return;
+        }
+        // The CodeQL heartbeat is sent from this callback while a step runs.
+        let root = TempDir::new("observed");
+        let env = adapter_environment(std::env::vars_os());
+        let bun = resolve_adapter_command(&["bun".to_string()], root.path(), &env)
+            .unwrap()
+            .program;
+        let never = std::sync::atomic::AtomicBool::new(false);
+        let mut polls = 0_usize;
+        let started = Instant::now();
+        let run = run_contained_observed(
+            &bun,
+            &["-e".into(), "setTimeout(() => {}, 600)".into()],
+            root.path(),
+            &env,
+            Duration::from_secs(20),
+            4096,
+            &never,
+            &mut || polls += 1,
+        )
+        .unwrap();
+        assert_eq!(run.exit_code, Some(0), "{run:?}");
+        assert!(started.elapsed() >= Duration::from_millis(600));
+        // About one poll per 20 ms while the program ran.
+        assert!(polls >= 10, "{polls} polls");
     }
 
     #[test]

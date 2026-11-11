@@ -16,7 +16,7 @@ import { HostPlatform } from "../host-platform.ts";
 import { HttpError } from "../http-error.ts";
 import type { Router } from "../http.ts";
 import { createApp, handleRequest } from "../main.ts";
-import { cliFailure, MAX_CORE_MESSAGE_CHARS, sanitizeCoreMessage, SentraCli, type CliResult, type CliRunOptions } from "../sentra-cli.ts";
+import { cliFailure, cliValue, MAX_CORE_MESSAGE_CHARS, sanitizeCoreMessage, SentraCli, type CliResult, type CliRunOptions } from "../sentra-cli.ts";
 import { sseResponse } from "../http.ts";
 import { codeqlAnalysisOutcome, codeqlOriginBreakdown, codeqlOutcomeLabel } from "../../src/components/dashboard/findings-format.ts";
 import {
@@ -26,6 +26,9 @@ import {
   createCodeqlService,
   cweFromTags,
   defaultCodeqlSettings,
+  EXCLUDE_PATH_MAX_CHARS,
+  excludeGlobProblem,
+  extractionNote,
   GITHUB_ALERTS_CAP,
   interpretAnalysis,
   languageScope,
@@ -44,6 +47,7 @@ import { SettingsStore } from "../services/settings-store.ts";
 import type { TenantRecord } from "../services/workspaces.ts";
 import { ToolPathStore } from "../tool-paths.ts";
 import { elfHeader, ELF_X64, hostExecutableName, hostNativeHeader, peHeader, PE_X64 } from "./native-header.ts";
+import { excludeGlobProblem as clientExcludeGlobProblem, parseExcludeText } from "../../src/components/dashboard/codeql-text.ts";
 
 const cleanup: { dirs: string[]; dbs: Database[] } = { dirs: [], dbs: [] };
 
@@ -219,8 +223,10 @@ describe("CodeQL settings", () => {
       allowPackDownload: false,
       suite: "code-scanning",
       timeoutMinutes: 30,
+      downloadTimeoutMinutes: 30,
       threads: 4,
       ramMb: null,
+      excludePaths: ["**/node_modules", "**/target", "**/dist", "**/.git"],
     });
     expect(defaultCodeqlSettings({ cpus: 2, memoryMb: 4096 }).threads).toBe(2);
     // A stored "enabled" without a recorded acceptance is read as disabled; out-of-range values fall back.
@@ -260,6 +266,59 @@ describe("CodeQL settings", () => {
     expect(service.analysisEnabled()).toBe(true);
     expect(service.update({ enabled: false }, "admin")).toMatchObject({ enabled: false, termsAcceptedBy: "admin" });
     expect(service.packCache.endsWith("codeql-packages")).toBe(true);
+  });
+
+  test("exclude globs: relative, / as separator, no '..', no control characters, at most 50 of 200 characters", () => {
+    const refused = ["", "   ", "../x", "a/../b", "/abs", "C:/x", "c:x", "\\\\server\\x", "a\\b", "a\nb", "a\rexclude:x", "-x", "x".repeat(201)];
+    const accepted = ["**/node_modules", "**/target", "web/dist", "*.min.js", "docs/**/*.html", "a..b", ".git"];
+    for (const glob of refused) {
+      expect(excludeGlobProblem(glob)).not.toBeNull();
+      // The console checks the same rules before it saves.
+      expect(clientExcludeGlobProblem(glob)).not.toBeNull();
+    }
+    for (const glob of accepted) {
+      expect(excludeGlobProblem(glob)).toBeNull();
+      expect(clientExcludeGlobProblem(glob)).toBeNull();
+    }
+    expect(parseExcludeText("**/target\n\n  web/dist  \n**/target\n", { maxEntries: 50, maxChars: 200 })).toEqual({ globs: ["**/target", "web/dist"], problem: null });
+    expect(parseExcludeText("ok\n../no", { maxEntries: 50, maxChars: 200 }).problem).toContain("'..'");
+
+    expect(parseCodeqlSettingsUpdate({ excludePaths: ["**/target", "**/target", "web/dist"] }, LIMITS)).toEqual({ excludePaths: ["**/target", "web/dist"] });
+    expect(parseCodeqlSettingsUpdate({ excludePaths: [] }, LIMITS)).toEqual({ excludePaths: [] });
+    for (const body of [{ excludePaths: "**/target" }, { excludePaths: [1] }, { excludePaths: ["../x"] }, { excludePaths: Array.from({ length: 51 }, (_, i) => `d${i}`) }]) {
+      expect(() => parseCodeqlSettingsUpdate(body, LIMITS)).toThrow(HttpError);
+    }
+    // Stored values: invalid entries are dropped, a non-list falls back to the defaults, [] stays empty.
+    expect(parseCodeqlSettings({ excludePaths: ["**/target", "../x", 5, "**/target"] }, LIMITS).excludePaths).toEqual(["**/target"]);
+    expect(parseCodeqlSettings({ excludePaths: "x" }, LIMITS).excludePaths).toEqual(["**/node_modules", "**/target", "**/dist", "**/.git"]);
+    expect(parseCodeqlSettings({ excludePaths: [] }, LIMITS).excludePaths).toEqual([]);
+
+    const service = createCodeqlService(new SettingsStore(tempDb()), { dataDir: tempDir("sentra-codeql-data-") }, LIMITS);
+    expect(service.update({ excludePaths: ["vendor/**"] }, "admin").excludePaths).toEqual(["vendor/**"]);
+    expect(extractionNote({ excludePaths: ["vendor/**"] }, { path: "/opt/bun/bin/bun", note: "TypeScript is parsed with Bun." })).toBe(
+      "Excluded from extraction: vendor/**. TypeScript is parsed with Bun.",
+    );
+    expect(extractionNote({ excludePaths: [] }, undefined)).toContain("Nothing is excluded");
+  });
+
+  test("exclude glob length is counted in UTF-16 units, as a scan passes the glob on", () => {
+    // Regression: saving counted code points ([...glob].length) and the scan counted UTF-16 units
+    // (cliValue), so "assets/" + 150 emoji (157 code points, 307 units) was saved and then failed
+    // every CodeQL stage with "'excludePaths' exceeds 200 characters".
+    const astral = `assets/${"\u{1F600}".repeat(150)}`;
+    expect([...astral].length).toBe(157);
+    expect(astral.length).toBe(307);
+    expect(excludeGlobProblem(astral)).toContain("at most 200 characters");
+    expect(clientExcludeGlobProblem(astral)).toContain("at most 200 characters");
+    expect(parseExcludeText(astral, { maxEntries: 50, maxChars: 200 }).problem).toContain("at most 200 characters");
+    expect(() => parseCodeqlSettingsUpdate({ excludePaths: [astral] }, LIMITS)).toThrow(HttpError);
+    // A stored value from before is dropped on read instead of breaking every scan.
+    expect(parseCodeqlSettings({ excludePaths: ["**/target", astral] }, LIMITS).excludePaths).toEqual(["**/target"]);
+    // What the settings accept, a scan passes on: 100 emoji are 200 units.
+    const fits = "\u{1F600}".repeat(100);
+    expect(excludeGlobProblem(fits)).toBeNull();
+    expect(clientExcludeGlobProblem(fits)).toBeNull();
+    expect(cliValue(fits, "excludePaths", EXCLUDE_PATH_MAX_CHARS)).toBe(fits);
   });
 
   test("skip reasons before the lock: disabled, terms, core and launcher", () => {
@@ -574,7 +633,7 @@ function stageHarness(handler: CliHandler, options: { codeqlBin?: string | null;
     config: { cliLongTimeoutMs: 5_000, cliTimeoutMs: 5_000, ghBin: null, codeqlBin: options.codeqlBin ?? null, tmpDir, dataDir },
     codeql,
     executables,
-    hostPlatform: new HostPlatform({ run: async () => ({ code: 1, stdout: "", timedOut: false }), readTextFile: async () => null }),
+    hostPlatform: new HostPlatform({ run: async () => ({ code: 1, stdout: "", timedOut: false }), readTextFile: async () => null, freemem: () => 6 * 1024 * 1024 * 1024 }),
     toolPaths: new ToolPathStore(settings),
     workspaces: {
       get: (tenantId: string) => {
@@ -637,18 +696,30 @@ describe("scan CodeQL stage", () => {
     expect(flag("--threads")).toBe("2");
     expect(flag("--ram")).toBe("2048");
     expect(flag("--timeout-secs")).toBe("600");
+    // Pack downloads get their own budget (default 30 minutes), outside --timeout-secs.
+    expect(flag("--download-timeout-secs")).toBe("1800");
     expect(analyze).toContain("--accept-codeql-terms");
     expect(analyze).toContain("--allow-pack-download");
+    expect(analyze).toContain("--progress");
     expect(analyze).toContain("--json");
     // Cancelling the scan closes the core's stdin, so the core stops CodeQL before the lock is released.
     expect(analyze).toContain("--cancel-on-stdin-eof");
     expect(cancelViaStdinEof).toBe(true);
-    expect(analyze.some((arg) => /build-mode|autobuild|--command/.test(arg))).toBe(false);
+    expect(analyze.some((arg) => /build-mode|autobuild|--command|codescanning-config/.test(arg))).toBe(false);
+    // TypeScript is parsed with the Bun the bridge runs on; build and dependency output is excluded.
+    const runtime = flag("--typescript-runtime");
+    expect(path.isAbsolute(runtime)).toBe(true);
+    expect(path.basename(runtime).toLowerCase().startsWith("bun")).toBe(true);
+    const excludes = analyze.flatMap((arg, index) => (arg === "--exclude" ? [analyze[index + 1]] : []));
+    expect(excludes).toEqual(["**/node_modules", "**/target", "**/dist", "**/.git"]);
+    const starting = events.find((event) => event.type === "stage" && event.stage === "codeql" && event.status === "started" && event.message.includes("--ram"));
+    expect(starting && starting.type === "stage" ? starting.message : "").toContain("Excluded from extraction: **/node_modules, **/target, **/dist, **/.git.");
+    expect(starting && starting.type === "stage" ? starting.message : "").toContain("TypeScript is parsed with Bun");
     expect(path.dirname(workDir)).toBe(h.tmpDir);
     expect(workDirExisted).toBe(true);
     expect(fs.existsSync(workDir)).toBe(false);
-    // The bridge gives the core its own timeout plus a margin before stopping it.
-    expect(timeoutMs).toBe(600_000 + 120_000);
+    // The bridge gives the core the analysis and the download budget plus a margin before stopping it.
+    expect(timeoutMs).toBe(600_000 + 1_800_000 + 120_000);
     expect(run.summary?.codeqlAnalysis).toMatchObject({ outcome: "analyzed", attempted: true, skipReason: null, codeqlVersion: "2.27.4", resultsTotal: 1 });
     expect(codeqlStage(events)).toMatchObject({ status: "completed" });
     expect(codeqlStage(events).message).toContain("target code was not executed");
@@ -656,12 +727,15 @@ describe("scan CodeQL stage", () => {
     const [finding] = listFindings(h.db, "t1", h.tenants.get("t1")!.workspace, { state: "open" });
     expect(finding).toMatchObject({ source: "codeql", origin: "host_analysis", ruleId: "js/sql-injection", severity: "High" });
 
-    // Without download permission and RAM limit the flags are left out.
+    // Without download permission the download flags are left out and only the analysis budget
+    // counts; without a RAM setting the bridge passes half of the available memory (6 GiB here).
     h.codeql.update({ allowPackDownload: false, ramMb: null }, "admin");
     await h.service.run({ tenantId: "t1", kind: "codeql", trigger: "operator", actor });
     const second = h.calls.filter((args) => args[1] === "analyze")[1];
     expect(second).not.toContain("--allow-pack-download");
-    expect(second).not.toContain("--ram");
+    expect(second).not.toContain("--download-timeout-secs");
+    expect(second[second.indexOf("--ram") + 1]).toBe("3072");
+    expect(timeoutMs).toBe(600_000 + 120_000);
   });
 
   test("missing query packs, languages that need a build and a missing launcher are skips, not failures", async () => {
@@ -784,7 +858,6 @@ describe("scan CodeQL stage", () => {
         }),
       ),
       defaultCodeqlSettings(LIMITS),
-      1800,
       10,
     );
     expect(outcome.status).toBe("completed");

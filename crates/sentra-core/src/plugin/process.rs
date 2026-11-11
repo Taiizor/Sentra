@@ -1081,6 +1081,33 @@ pub fn run_contained_cancellable(
     tail_bytes: usize,
     cancel: &AtomicBool,
 ) -> std::io::Result<ContainedRun> {
+    run_contained_observed(
+        program,
+        args,
+        cwd,
+        env,
+        timeout,
+        tail_bytes,
+        cancel,
+        &mut || {},
+    )
+}
+
+/// [`run_contained_cancellable`] that also calls `on_poll` each time it checks the exit
+/// status while the program runs (about every 20 milliseconds), on the calling thread,
+/// so a caller can report progress without a thread of its own. A slow `on_poll`
+/// delays the deadline and cancellation checks by the time it takes.
+#[allow(clippy::too_many_arguments)]
+pub fn run_contained_observed(
+    program: &Path,
+    args: &[OsString],
+    cwd: &Path,
+    env: &[(OsString, OsString)],
+    timeout: Duration,
+    tail_bytes: usize,
+    cancel: &AtomicBool,
+    on_poll: &mut dyn FnMut(),
+) -> std::io::Result<ContainedRun> {
     let mut builder = Command::new(program);
     builder
         .args(args)
@@ -1120,7 +1147,10 @@ pub fn run_contained_cancellable(
                 cancelled = true;
                 break;
             }
-            Ok(None) if Instant::now() < deadline => thread::sleep(EXIT_POLL_INTERVAL),
+            Ok(None) if Instant::now() < deadline => {
+                on_poll();
+                thread::sleep(EXIT_POLL_INTERVAL);
+            }
             Ok(None) => {
                 timed_out = true;
                 break;

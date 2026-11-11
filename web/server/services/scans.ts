@@ -17,7 +17,7 @@ import { codeqlLauncherChoice, hostToolsDeps } from "../host-tools.ts";
 import { HttpError } from "../http-error.ts";
 import { log } from "../logger.ts";
 import { cliFailure, cliValue, type CliResult } from "../sentra-cli.ts";
-import { analysisPrecondition, busySkip, emptyAnalysis, runHostAnalysis, type CodeqlSkip, type HostAnalysisOutcome } from "./codeql.ts";
+import { analysisPrecondition, busySkip, emptyAnalysis, runHostAnalysis, typescriptRuntimeChoice, type CodeqlSkip, type HostAnalysisOutcome } from "./codeql.ts";
 import { emptySeverityCounts, parseScanOutput, reconcileFindings, sastCandidates, type CandidateFinding, type ReconcileScope } from "./findings.ts";
 import { auditDependencies, OSV_ENDPOINT, OsvClient, readInventory, type OsvFetcher } from "./osv.ts";
 import type { ActorRef, ScanRunInput, ScanService } from "./types.ts";
@@ -327,12 +327,21 @@ class ScanExecution {
     if (!release) return this.codeqlSkipped(probeText, running ? busySkip(running) : { reason: "analysis_busy", message: "Another CodeQL analysis is running on this bridge." }, where);
     let outcome: HostAnalysisOutcome;
     try {
+      // TypeScript is parsed with the Bun the bridge runs on (no Node.js on the host is needed).
+      const typescriptRuntime = await typescriptRuntimeChoice(hostToolsDeps(this.app), snapshot);
       outcome = await runHostAnalysis(this.app, {
         workspace: this.workspace,
         launcher: launcher.path as string,
         signal: this.input.signal,
+        typescriptRuntime,
+        onLimits: (text) => {
+          // The stage card shows which memory limit and budgets this analysis got, and why.
+          this.emit({ type: "stage", stage: "codeql", status: "started", message: `${probeText} CodeQL host analysis is starting. ${text}` });
+          this.bridge(text);
+        },
         onCommand: (args) => this.bridge(`Running: sentra ${args.join(" ")}`),
-        onStderr: (text) => this.emit({ type: "log", stream: "stderr", text, ts: nowIso() }),
+        onProgress: (progress) => this.emit({ type: "progress", stage: "codeql", progress, ts: nowIso() }),
+        onStderr: (line) => this.emit({ type: "log", stream: "stderr", text: line, ts: nowIso() }),
       });
     } finally {
       release();

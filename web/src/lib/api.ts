@@ -1,7 +1,11 @@
 import type {
   AiSettingsView,
   CodeqlIngestView,
+  CodeqlPacksDownloadView,
+  CodeqlPacksStreamEvent,
+  CodeqlPacksView,
   CodeqlSettingsView,
+  DownloadCodeqlPacksRequest,
   FindingOrigin,
   UpdateCodeqlSettingsRequest,
   AuditLogPage,
@@ -204,6 +208,26 @@ async function streamScan(
     if (error instanceof DOMException && error.name === 'AbortError') throw error
     throw new ApiError(0, 'network_error', 'The Sentra bridge is unreachable.')
   }
+  let finalRun: ScanRunView | null = null
+  let streamError: ApiError | null = null
+  await readEventStream<ScanStreamEvent>(res, (event) => {
+    onEvent(event)
+    if (event.type === 'complete') finalRun = event.run
+    if (event.type === 'error') {
+      // Older bridges sent no status; treat that as an unexpected server error.
+      streamError = new ApiError(typeof event.status === 'number' ? event.status : 500, event.code, event.message)
+    }
+  })
+  if (finalRun) return finalRun
+  throw streamError ?? new ApiError(500, 'stream_incomplete', 'The scan stream ended without a result')
+}
+
+/**
+ * Reads a Server-Sent Events response and passes each event's JSON data to `onEvent`. Comment
+ * lines (the bridge's keep-alive) and frames that are not JSON are skipped. Throws the bridge's
+ * error when the response is not a stream.
+ */
+async function readEventStream<E>(res: Response, onEvent: (event: E) => void): Promise<void> {
   if (!res.ok || !res.body) {
     const error = await parseError(res)
     if (res.status === 401) window.dispatchEvent(new CustomEvent(UNAUTHENTICATED_EVENT))
@@ -212,8 +236,6 @@ async function streamScan(
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
-  let finalRun: ScanRunView | null = null
-  let streamError: ApiError | null = null
   for (;;) {
     const { value, done } = await reader.read()
     if (done) break
@@ -226,22 +248,49 @@ async function streamScan(
         .filter((line) => line.startsWith('data:'))
         .map((line) => line.slice(5).trimStart())
       if (dataLines.length === 0) continue
-      let event: ScanStreamEvent
+      let event: E
       try {
-        event = JSON.parse(dataLines.join('\n')) as ScanStreamEvent
+        event = JSON.parse(dataLines.join('\n')) as E
       } catch {
         continue
       }
       onEvent(event)
-      if (event.type === 'complete') finalRun = event.run
-      if (event.type === 'error') {
-        // Older bridges sent no status; treat that as an unexpected server error.
-        streamError = new ApiError(typeof event.status === 'number' ? event.status : 500, event.code, event.message)
-      }
     }
   }
-  if (finalRun) return finalRun
-  throw streamError ?? new ApiError(500, 'stream_incomplete', 'The scan stream ended without a result')
+}
+
+/**
+ * Downloads missing CodeQL query packs and streams the progress. Resolves with the result (also
+ * when some packs failed: see its outcome) or rejects with the bridge's error (busy, no launcher,
+ * permission). Aborting the signal closes the stream and the bridge stops the download.
+ */
+async function streamPackDownload(
+  body: DownloadCodeqlPacksRequest,
+  onEvent: (event: CodeqlPacksStreamEvent) => void,
+  signal?: AbortSignal,
+): Promise<CodeqlPacksDownloadView> {
+  let res: Response
+  try {
+    res = await fetch('/api/settings/codeql/packs/download', {
+      method: 'POST',
+      headers: { Accept: 'text/event-stream', 'Content-Type': 'application/json', ...CSRF_HEADERS },
+      body: JSON.stringify(body),
+      credentials: 'same-origin',
+      signal,
+    })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw error
+    throw new ApiError(0, 'network_error', 'The Sentra bridge is unreachable.')
+  }
+  let result: CodeqlPacksDownloadView | null = null
+  let streamError: ApiError | null = null
+  await readEventStream<CodeqlPacksStreamEvent>(res, (event) => {
+    onEvent(event)
+    if (event.type === 'complete') result = event.result
+    if (event.type === 'error') streamError = new ApiError(typeof event.status === 'number' ? event.status : 500, event.code, event.message)
+  })
+  if (result) return result
+  throw streamError ?? new ApiError(500, 'stream_incomplete', 'The download stream ended without a result')
 }
 
 export const api = {
@@ -316,6 +365,10 @@ export const api = {
     importSarif: (tenantId: string, sarifText: string) => postJsonText<CodeqlIngestView>(`${t(tenantId)}/codeql/import`, sarifText),
     /** Reads open GitHub code scanning alerts of tool CodeQL for the workspace's repository (read-only on GitHub). */
     githubSync: (tenantId: string) => post<CodeqlIngestView>(`${t(tenantId)}/codeql/github-sync`),
+    /** Query packs of the configured suite per language (never downloads); refresh skips the bridge's 30 s reuse. */
+    packs: (signal?: AbortSignal, refresh = false) => get<CodeqlPacksView>(`/api/settings/codeql/packs${refresh ? '?refresh=1' : ''}`, { signal }),
+    /** Downloads missing query packs (settings:write), streaming progress. */
+    downloadPacks: streamPackDownload,
   },
 
   intel: {
