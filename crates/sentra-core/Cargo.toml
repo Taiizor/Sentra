@@ -15,7 +15,7 @@ keywords = ["security", "sast", "taint-analysis", "vulnerability", "audit"]
 categories = ["development-tools", "command-line-utilities"]
 
 [dependencies]
-rusqlite = { version = "0.41.1", default-features = false, features = ["bundled"] }
+rusqlite = { version = "0.42.0", default-features = false, features = ["bundled"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sha2 = { version = "0.11", default-features = false, features = ["alloc"] }
@@ -25,4 +25,4 @@ sha2 = { version = "0.11", default-features = false, features = ["alloc"] }
 # FFI, so this safe wrapper is the only way to guarantee that an adapter's
 # descendants die with the session (see src/plugin/process.rs).
 [target.'cfg(windows)'.dependencies]
-win32job = "=2.0.3"
+win32job = "=2.1.0"
